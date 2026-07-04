@@ -1,4 +1,5 @@
 use crate::canvas::{Canvas, Viewport};
+use crate::ui::dock::Dock;
 use crate::ui::StatusBar;
 use leptos::*;
 
@@ -12,6 +13,7 @@ pub fn App() -> impl IntoView {
         <div class="w-screen h-screen bg-bg text-fg">
             <Canvas cursor_screen=cursor_screen cursor_world=cursor_world viewport=viewport/>
             <StatusBar cursor_screen=cursor_screen cursor_world=cursor_world viewport=viewport/>
+            <Dock/>
         </div>
     }
 }
