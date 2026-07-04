@@ -9,9 +9,8 @@ use leptos::*;
 pub fn Canvas(
     cursor_screen: RwSignal<(f64, f64)>,
     cursor_world: RwSignal<(f64, f64)>,
+    viewport: RwSignal<Viewport>,
 ) -> impl IntoView {
-    let viewport = create_rw_signal(Viewport::default());
-
     fn window_size() -> (f64, f64) {
         let window = web_sys::window().expect("no global `window` exists");
         let w = window
@@ -41,6 +40,20 @@ pub fn Canvas(
         cursor_world.set(world);
     };
 
+    let on_wheel = move |ev: ev::WheelEvent| {
+        ev.prevent_default();
+        let screen = cursor_screen.get();
+        let (sw, sh) = screen_size.get();
+        let factor = if ev.delta_y() < 0.0 { 1.1 } else { 1.0 / 1.1 };
+
+        viewport.update(|vp| {
+            let world = vp.screen_to_world(screen, (sw, sh));
+            vp.zoom = (vp.zoom * factor).clamp(0.1, 20.0);
+            vp.offset_x = world.0 - (screen.0 - sw / 2.0) / vp.zoom;
+            vp.offset_y = world.1 - (screen.1 - sh / 2.0) / vp.zoom;
+        });
+    };
+
     let view_box = move || {
         let (w, h) = screen_size.get();
         viewport.get().to_view_box(w, h)
@@ -54,25 +67,15 @@ pub fn Canvas(
             style="display: block;"
             viewBox=view_box
             on:pointermove=on_pointer_move
+            on:wheel=on_wheel
         >
             <defs>
-                <pattern
-                    id="grid"
-                    width="40"
-                    height="40"
-                    patternUnits="userSpaceOnUse"
-                >
+                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
                     <circle cx="1" cy="1" r="1" fill="#d1d5db" />
                 </pattern>
             </defs>
 
-            <rect
-                x="-100000"
-                y="-100000"
-                width="200000"
-                height="200000"
-                fill="url(#grid)"
-            />
+            <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#grid)" />
 
             <rect
                 x="-60"
