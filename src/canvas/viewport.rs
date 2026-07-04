@@ -6,8 +6,11 @@
 /// offset is (0.0, 0.0) and zoom is 1.0.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Viewport {
+    /// World-space X coordinate currently centered on screen.
     pub offset_x: f64,
+    /// World-space Y coordinate currently centered on screen.
     pub offset_y: f64,
+    /// Scale multiplier. 1.0 = 100%, 2.0 = 200% zoomed in.
     pub zoom: f64,
 }
 
