@@ -71,21 +71,13 @@ pub fn Canvas(
         >
             <defs>
                 <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                    <circle cx="1" cy="1" r="1" fill="#d1d5db" />
+                    <circle cx="0" cy="0" r="1.5" fill="#d1d5db" fill-opacity="0.25" />
                 </pattern>
             </defs>
 
             <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#grid)" />
 
-            <rect
-                x="-60"
-                y="-40"
-                width="120"
-                height="80"
-                fill="#3b82f6"
-                stroke="#1e40af"
-                stroke-width="2"
-            />
+            <path d="M-12,0 L12,0 M0,-12 L0,12" stroke="#7aa2f7" stroke-width="2" />
         </svg>
     }
 }
