@@ -119,7 +119,7 @@ pub fn line() -> impl IntoView {
             stroke-linejoin="round"
             class="w-5 h-5"
         >
-            <line x1="4" y1="20" x2="20" y2="4" />
+            <line x1="3" y1="21" x2="21" y2="3" />
         </svg>
     }
 }
@@ -136,8 +136,8 @@ pub fn arrow() -> impl IntoView {
             stroke-linejoin="round"
             class="w-5 h-5"
         >
-            <line x1="4" y1="20" x2="20" y2="4" />
-            <polyline points="14 4 20 4 20 10" />
+            <line x1="3" y1="21" x2="17" y2="7" />
+            <polyline points="12 7 17 7 17 12" />
         </svg>
     }
 }
@@ -154,9 +154,9 @@ pub fn text() -> impl IntoView {
             stroke-linejoin="round"
             class="w-5 h-5"
         >
-            <polyline points="4 7 4 4 20 4 20 7" />
-            <line x1="12" y1="4" x2="12" y2="20" />
-            <line x1="8" y1="20" x2="16" y2="20" />
+            <polyline points="4 6 4 3 20 3 20 6" />
+            <line x1="12" y1="3" x2="12" y2="21" />
+            <line x1="7" y1="21" x2="17" y2="21" />
         </svg>
     }
 }
@@ -173,7 +173,7 @@ pub fn freehand() -> impl IntoView {
             stroke-linejoin="round"
             class="w-5 h-5"
         >
-            <path d="M3 17c3-2 5-6 7-6s4 4 6 4 4-3 5-4" />
+            <path d="M3 19c4-4 6-2 8 0s4-4 6-6 4 2 5 0" />
         </svg>
     }
 }

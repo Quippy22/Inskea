@@ -4,7 +4,7 @@ mod group;
 mod pages;
 
 pub use colors::ColorsPanel;
-pub use drawing::DrawingPanel;
+pub use drawing::{DrawingPanel, Tool};
 pub use group::GroupPanel;
 pub use pages::PagesPanel;
 
@@ -21,12 +21,11 @@ enum Category {
 }
 
 #[component]
-pub fn Dock() -> impl IntoView {
+pub fn Dock(selected_tool: RwSignal<Tool>, selected_color: RwSignal<ShapeColor>) -> impl IntoView {
     let collapsed = create_rw_signal(true);
     let active = create_rw_signal(Category::Drawing);
     let show_panel = create_rw_signal(false);
     let eraser_active = create_rw_signal(false);
-    let selected_color = create_rw_signal(ShapeColor::White);
 
     let toggle_collapse = move |_| {
         let was_collapsed = collapsed.get();
@@ -52,7 +51,7 @@ pub fn Dock() -> impl IntoView {
     let panel_visible = move || !collapsed.get() || show_panel.get();
 
     let panel = move || match active.get() {
-        Category::Drawing => view! { <DrawingPanel /> }.into_view(),
+        Category::Drawing => view! { <DrawingPanel selected_tool=selected_tool /> }.into_view(),
         Category::Colors => view! { <ColorsPanel selected_color=selected_color /> }.into_view(),
         Category::Group => view! { <GroupPanel /> }.into_view(),
         Category::Pages => view! { <PagesPanel /> }.into_view(),
@@ -108,7 +107,13 @@ pub fn Dock() -> impl IntoView {
                         class=move || btn_class(Category::Colors)
                         on:click=move |_| select_category(Category::Colors)
                         title="Colors"
-                        style=move || format!("color: {}", selected_color.get().to_hex())
+                        style=move || {
+                            if selected_color.get() != ShapeColor::White {
+                                format!("color: {}", selected_color.get().to_hex())
+                            } else {
+                                String::new()
+                            }
+                        }
                     >
                         {icon::palette()}
                     </button>
