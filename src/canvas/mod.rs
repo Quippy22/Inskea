@@ -1,18 +1,17 @@
 mod viewport;
 pub use viewport::Viewport;
 
+use leptos::ev;
 use leptos::svg::Svg;
 use leptos::*;
 
 #[component]
-pub fn Canvas() -> impl IntoView {
+pub fn Canvas(
+    cursor_screen: RwSignal<(f64, f64)>,
+    cursor_world: RwSignal<(f64, f64)>,
+) -> impl IntoView {
     let viewport = create_rw_signal(Viewport::default());
 
-    // Screen size in pixels. The SVG is deliberately sized to 100% of a
-    // `w-screen h-screen` parent (see Phase 1, step 1), so the window's
-    // inner size IS the SVG's screen size — no need to measure the DOM
-    // element itself, which sidesteps needing the `DomRect` web-sys
-    // feature flag enabled just for this.
     fn window_size() -> (f64, f64) {
         let window = web_sys::window().expect("no global `window` exists");
         let w = window
@@ -31,12 +30,17 @@ pub fn Canvas() -> impl IntoView {
     let screen_size = create_rw_signal(window_size());
     let svg_ref = create_node_ref::<Svg>();
 
-    // Kept in sync on every window resize.
     let _ = window_event_listener(ev::resize, move |_| {
         screen_size.set(window_size());
     });
 
-    // Reactive viewBox string: recomputes whenever viewport or screen_size change.
+    let on_pointer_move = move |ev: ev::PointerEvent| {
+        let screen = (ev.offset_x() as f64, ev.offset_y() as f64);
+        cursor_screen.set(screen);
+        let world = viewport.get().screen_to_world(screen, screen_size.get());
+        cursor_world.set(world);
+    };
+
     let view_box = move || {
         let (w, h) = screen_size.get();
         viewport.get().to_view_box(w, h)
@@ -49,6 +53,7 @@ pub fn Canvas() -> impl IntoView {
             height="100%"
             style="display: block;"
             viewBox=view_box
+            on:pointermove=on_pointer_move
         >
             <defs>
                 <pattern
@@ -61,9 +66,6 @@ pub fn Canvas() -> impl IntoView {
                 </pattern>
             </defs>
 
-            // Background — sized generously past any reasonable viewBox so
-            // panning doesn't run off the edge of it. Revisit if this ever
-            // becomes a real limit on how far the user can pan.
             <rect
                 x="-100000"
                 y="-100000"
@@ -72,8 +74,6 @@ pub fn Canvas() -> impl IntoView {
                 fill="url(#grid)"
             />
 
-            // Temporary: proves world (0,0) really is screen-centered.
-            // Remove once Phase 2's real element rendering (`<For>` loop) is in.
             <rect
                 x="-60"
                 y="-40"
