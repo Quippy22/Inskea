@@ -1,1 +1,22 @@
-/target
+# Rust / Cargo (frontend + backend crates)
+/target/
+**/target/
+src-tauri/target/
+
+# Trunk build output
+/dist/
+
+# Tauri generated/bundled artifacts
+/src-tauri/gen/
+/src-tauri/Cargo.lock
+
+# Tailwind (npm dev tooling)
+node_modules/
+/output.css
+
+# Editor / OS
+.DS_Store
+*.swp
+
+# Env / secrets
+.env
