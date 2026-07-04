@@ -1,6 +1,7 @@
 mod app;
 mod canvas;
 mod model;
+mod tauri_bridge;
 
 use app::App;
 use leptos::*;
