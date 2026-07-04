@@ -17,7 +17,7 @@ pub fn App() -> impl IntoView {
     };
 
     view! {
-        <button on:click=on_click class="bg-emerald-500 text-white px-4 py-2 rounded">
+        <button on:click=on_click class="bg-sky-500 text-white px-4 py-2 rounded">
             "Say hello to Rust console"
         </button>
     }
