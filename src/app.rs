@@ -11,9 +11,9 @@ pub fn App() -> impl IntoView {
 
     view! {
         <div class="w-screen h-screen bg-bg text-fg">
-            <Canvas cursor_screen=cursor_screen cursor_world=cursor_world viewport=viewport/>
-            <StatusBar cursor_screen=cursor_screen cursor_world=cursor_world viewport=viewport/>
-            <Dock/>
+            <Canvas cursor_screen=cursor_screen cursor_world=cursor_world viewport=viewport />
+            <StatusBar cursor_screen=cursor_screen cursor_world=cursor_world viewport=viewport />
+            <Dock />
         </div>
     }
 }

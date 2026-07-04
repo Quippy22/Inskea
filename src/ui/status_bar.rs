@@ -13,13 +13,17 @@ pub fn StatusBar(
                 <span>
                     "screen: "
                     <span class="text-accent">
-                        {move || format!("{:.1}, {:.1}", cursor_screen.get().0, cursor_screen.get().1)}
+                        {move || {
+                            format!("{:.1}, {:.1}", cursor_screen.get().0, cursor_screen.get().1)
+                        }}
                     </span>
                 </span>
                 <span>
                     "world: "
                     <span class="text-green">
-                        {move || format!("{:.1}, {:.1}", cursor_world.get().0, cursor_world.get().1)}
+                        {move || {
+                            format!("{:.1}, {:.1}", cursor_world.get().0, cursor_world.get().1)
+                        }}
                     </span>
                 </span>
                 <span>
