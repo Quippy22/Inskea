@@ -64,4 +64,4 @@ pub const SEP_V: &str = "w-px h-5 bg-border mx-1";
 pub const MENU_DROPDOWN: &str = "absolute top-full right-0 mt-1 z-50 min-w-[160px] rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1 pointer-events-auto";
 
 /// Menu dropdown item.
-pub const MENU_ITEM: &str = "w-full text-left px-4 py-1.5 text-sm text-fg hover:bg-accent/10 transition-colors";
+pub const MENU_ITEM: &str = "flex items-center justify-between w-full text-left px-4 py-1.5 text-sm text-fg hover:bg-accent/10 transition-colors";
