@@ -172,7 +172,18 @@ fn render_rect(data: &ElementData) -> leptos::View {
     let sw = data.stroke_width;
     let fill = fill_hex(&data.fill_color);
     let stroke = stroke_hex(data.stroke_color);
-    view! { <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw /> }.into_view()
+    view! {
+        <rect
+            x=x
+            y=y
+            width=w
+            height=h
+            fill=fill
+            stroke=stroke
+            stroke-width=sw
+            pointer-events="none"
+        />
+    }.into_view()
 }
 
 fn render_ellipse(data: &ElementData) -> leptos::View {
@@ -187,7 +198,18 @@ fn render_ellipse(data: &ElementData) -> leptos::View {
     let cy = y + h / 2.0;
     let rx = w / 2.0;
     let ry = h / 2.0;
-    view! { <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw /> }
+    view! {
+        <ellipse
+            cx=cx
+            cy=cy
+            rx=rx
+            ry=ry
+            fill=fill
+            stroke=stroke
+            stroke-width=sw
+            pointer-events="none"
+        />
+    }
         .into_view()
 }
 
@@ -196,7 +218,8 @@ fn render_line(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
     let stroke = stroke_hex(data.stroke_color);
     let (x1, y1) = (a.x, a.y);
     let (x2, y2) = (b.x, b.y);
-    view! { <line x1=x1 y1=y1 x2=x2 y2=y2 stroke=stroke stroke-width=sw /> }.into_view()
+    view! { <line x1=x1 y1=y1 x2=x2 y2=y2 stroke=stroke stroke-width=sw pointer-events="none" /> }
+        .into_view()
 }
 
 fn render_arrow(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
@@ -221,7 +244,7 @@ fn render_arrow(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
     let (bx, by) = (b.x, b.y);
     let points = format!("{},{} {},{} {},{}", tip_x, tip_y, lx, ly, rx, ry);
     view! {
-        <g stroke=hex stroke-width=sw fill=hex>
+        <g stroke=hex stroke-width=sw fill=hex pointer-events="none">
             <line x1=ax y1=ay x2=bx y2=by />
             <polyline points=points />
         </g>
@@ -239,7 +262,15 @@ fn render_text(data: &ElementData, content: &str) -> leptos::View {
         .unwrap_or_else(|| data.stroke_color.to_hex());
     let content = content.to_string();
     view! {
-        <text x=x y=y fill=fill font-size=font_size font-family="sans-serif">
+        <text
+            x=x
+            y=y
+            fill=fill
+            font-size=font_size
+            font-family="sans-serif"
+            pointer-events="none"
+            style="user-select: none;"
+        >
             {content}
         </text>
     }
@@ -259,7 +290,8 @@ fn render_freehand(data: &ElementData, pts: &[Point]) -> leptos::View {
         }
         d
     };
-    view! { <path d=d fill="none" stroke=stroke stroke-width=sw /> }.into_view()
+    view! { <path d=d fill="none" stroke=stroke stroke-width=sw pointer-events="none" /> }
+        .into_view()
 }
 
 #[component]
@@ -552,7 +584,7 @@ pub fn Canvas(
             _ref=svg_ref
             width="100%"
             height="100%"
-            style="display: block;"
+            style="display: block; user-select: none;"
             viewBox=view_box
             on:pointerdown=on_pointer_down
             on:pointermove=on_pointer_move
