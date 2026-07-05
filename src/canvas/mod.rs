@@ -290,8 +290,19 @@ pub fn Canvas(
     let svg_ref = create_node_ref::<Svg>();
     let drawing = create_rw_signal(None::<DrawingState>);
     let freehand_anchor = create_rw_signal(None::<(f64, f64)>);
+    let shift_pressed = create_rw_signal(false);
 
     let _ = window_event_listener(ev::resize, move |_| screen_size.set(window_size()));
+    let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
+        if ev.key() == "Shift" {
+            shift_pressed.set(true);
+        }
+    });
+    let _ = window_event_listener(ev::keyup, move |ev: ev::KeyboardEvent| {
+        if ev.key() == "Shift" {
+            shift_pressed.set(false);
+        }
+    });
 
     let update_world = move |ev: &ev::PointerEvent| {
         let screen = (ev.offset_x() as f64, ev.offset_y() as f64);
@@ -390,7 +401,13 @@ pub fn Canvas(
             }
 
             let world = update_world(&ev);
-            let el = build_element(state.anchor, world, state.tool, state.color, ev.shift_key());
+            let el = build_element(
+                state.anchor,
+                world,
+                state.tool,
+                state.color,
+                shift_pressed.get(),
+            );
             scene.update(|s| {
                 let mut el = el;
                 let id = s.next_id();
@@ -414,7 +431,8 @@ pub fn Canvas(
             return None;
         }
         let world = cursor_world.get();
-        let el = build_element(state.anchor, world, state.tool, state.color, false);
+        let shift = shift_pressed.get();
+        let el = build_element(state.anchor, world, state.tool, state.color, shift);
         Some(render_element(&el))
     };
 
@@ -441,7 +459,8 @@ pub fn Canvas(
                     opacity="0.6"
                     pointer-events="none"
                 />
-            }.into_view(),
+            }
+            .into_view(),
             Tool::Ellipse => view! {
                 <ellipse
                     cx=px + s / 2.0
@@ -454,7 +473,8 @@ pub fn Canvas(
                     opacity="0.6"
                     pointer-events="none"
                 />
-            }.into_view(),
+            }
+            .into_view(),
             Tool::Line => view! {
                 <line
                     x1=px
@@ -466,7 +486,8 @@ pub fn Canvas(
                     opacity="0.6"
                     pointer-events="none"
                 />
-            }.into_view(),
+            }
+            .into_view(),
             Tool::Arrow => view! {
                 <g
                     opacity="0.6"
@@ -486,7 +507,8 @@ pub fn Canvas(
                         py + 3.0,
                     ) />
                 </g>
-            }.into_view(),
+            }
+            .into_view(),
             Tool::Text => view! {
                 <text
                     x=px + s / 2.0
@@ -501,7 +523,8 @@ pub fn Canvas(
                 >
                     "Aa"
                 </text>
-            }.into_view(),
+            }
+            .into_view(),
             Tool::Freehand => view! {
                 <path
                     d=format!(
@@ -519,7 +542,8 @@ pub fn Canvas(
                     opacity="0.6"
                     pointer-events="none"
                 />
-            }.into_view(),
+            }
+            .into_view(),
         }
     };
 
