@@ -1,5 +1,5 @@
 use crate::canvas::{Canvas, Viewport};
-use crate::model::ShapeColor;
+use crate::model::{Scene, ShapeColor};
 use crate::ui::dock::{Dock, Tool};
 use crate::ui::StatusBar;
 use leptos::*;
@@ -13,6 +13,8 @@ pub fn App() -> impl IntoView {
     let selected_tool = create_rw_signal(Tool::Rectangle);
     let selected_color = create_rw_signal(ShapeColor::White);
 
+    let scene = create_rw_signal(Scene::new());
+
     view! {
         <div class="w-screen h-screen bg-bg text-fg">
             <Canvas
@@ -20,6 +22,8 @@ pub fn App() -> impl IntoView {
                 cursor_world=cursor_world
                 viewport=viewport
                 selected_tool=selected_tool
+                selected_color=selected_color
+                scene=scene
             />
             <StatusBar cursor_screen=cursor_screen cursor_world=cursor_world viewport=viewport />
             <Dock selected_tool=selected_tool selected_color=selected_color />

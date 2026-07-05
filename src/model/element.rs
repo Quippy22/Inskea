@@ -32,6 +32,19 @@ pub struct ElementData {
     pub stroke_width: f64,
 }
 
+impl Element {
+    pub fn id(&self) -> ElementId {
+        match self {
+            Element::Rectangle(d)
+            | Element::Ellipse(d)
+            | Element::Line(d, ..)
+            | Element::Arrow(d, ..)
+            | Element::Text(d, ..)
+            | Element::Freehand(d, ..) => d.id,
+        }
+    }
+}
+
 impl ElementData {
     /// Create an `ElementData` with sensible defaults.
     ///
