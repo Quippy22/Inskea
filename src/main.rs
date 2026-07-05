@@ -1,6 +1,7 @@
 mod app;
 mod canvas;
 mod model;
+mod skea;
 mod tauri_bridge;
 mod ui;
 

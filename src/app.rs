@@ -27,7 +27,7 @@ pub fn App() -> impl IntoView {
                 canvas_mode=canvas_mode
                 scene=scene
             />
-            <ToolBar viewport=viewport canvas_mode=canvas_mode />
+            <ToolBar scene=scene viewport=viewport canvas_mode=canvas_mode />
             <Dock selected_tool=selected_tool selected_color=selected_color />
         </div>
     }

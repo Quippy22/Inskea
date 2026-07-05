@@ -5,6 +5,7 @@
 //   BTN_*          Button base classes (use _ACTIVE / _INACTIVE suffix for states)
 //   CONTAINER_*    Outer layout wrappers (fixed positioning, etc.)
 //   SEP_*          Separator / divider
+//   MENU_*         Menu dropdown
 // ──────────────────────────────────────────────────────────────────────────
 
 /// Frosted-glass floating panel.
@@ -58,3 +59,9 @@ pub const BTN_SWATCH_OFF: &str =
 
 /// Separator line (vertical).
 pub const SEP_V: &str = "w-px h-5 bg-border mx-1";
+
+/// Menu dropdown container (frosted panel anchored below the menu button).
+pub const MENU_DROPDOWN: &str = "absolute top-full right-0 mt-1 z-50 min-w-[160px] rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1 pointer-events-auto";
+
+/// Menu dropdown item.
+pub const MENU_ITEM: &str = "w-full text-left px-4 py-1.5 text-sm text-fg hover:bg-accent/10 transition-colors";
