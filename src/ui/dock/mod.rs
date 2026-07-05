@@ -14,6 +14,7 @@ pub use group::GroupPanel;
 pub use pages::PagesPanel;
 
 use crate::model::ShapeColor;
+use crate::ui::classes;
 use crate::ui::icon;
 use leptos::*;
 
@@ -65,12 +66,11 @@ pub fn Dock(selected_tool: RwSignal<Tool>, selected_color: RwSignal<ShapeColor>)
         Category::Pages => view! { <PagesPanel /> }.into_view(),
     };
 
-    let btn_class = move |cat: Category| -> String {
-        let base = "flex items-center justify-center h-9 w-9 transition-colors";
+    let btn_class = move |cat: Category| -> &'static str {
         if !eraser_active.get() && panel_visible() && active.get() == cat {
-            format!("{base} text-accent bg-accent/10 border-l-2 border-accent")
+            classes::BTN_CAT_ACTIVE
         } else {
-            format!("{base} text-subtle hover:text-fg hover:bg-surface/50 border-l-2 border-transparent")
+            classes::BTN_CAT_INACTIVE
         }
     };
 
@@ -84,13 +84,10 @@ pub fn Dock(selected_tool: RwSignal<Tool>, selected_color: RwSignal<ShapeColor>)
 
     view! {
         // Wrapper centers everything
-        <div class="fixed left-4 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-0.5">
+        <div class=classes::CONTAINER_DOCK>
             // Collapse button — separate floating object above the dock
-            <div class="rounded-lg bg-panel/80 backdrop-blur-sm border border-border shadow-lg pointer-events-auto">
-                <button
-                    class="flex items-center justify-center h-9 w-9 text-subtle hover:text-fg hover:bg-surface/50 transition-colors"
-                    on:click=toggle_collapse
-                >
+            <div class=classes::PANEL>
+                <button class=classes::BTN_COLLAPSE on:click=toggle_collapse>
                     {move || {
                         if collapsed.get() {
                             icon::chevron_right().into_view()
@@ -103,7 +100,7 @@ pub fn Dock(selected_tool: RwSignal<Tool>, selected_color: RwSignal<ShapeColor>)
 
             // Main dock
             <div class="relative flex">
-                <div class="flex flex-col rounded-lg bg-panel/80 backdrop-blur-sm border border-border shadow-lg pointer-events-auto">
+                <div class=classes::PANEL>
                     <button
                         class=move || btn_class(Category::Drawing)
                         on:click=move |_| select_category(Category::Drawing)
@@ -143,13 +140,10 @@ pub fn Dock(selected_tool: RwSignal<Tool>, selected_color: RwSignal<ShapeColor>)
                     // Eraser
                     <button
                         class=move || {
-                            let base = "flex items-center justify-center h-9 w-9 transition-colors";
                             if eraser_active.get() {
-                                format!("{base} text-accent bg-accent/10 border-l-2 border-accent")
+                                classes::BTN_CAT_ACTIVE
                             } else {
-                                format!(
-                                    "{base} text-subtle hover:text-fg hover:bg-surface/50 border-l-2 border-transparent",
-                                )
+                                classes::BTN_CAT_INACTIVE
                             }
                         }
                         on:click=toggle_eraser

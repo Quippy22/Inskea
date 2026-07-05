@@ -1,4 +1,5 @@
 use crate::model::ShapeColor;
+use crate::ui::classes;
 use leptos::*;
 
 /// Vertical panel of colour swatches representing the ShapeColor palette.
@@ -30,11 +31,10 @@ pub fn ColorsPanel(selected_color: RwSignal<ShapeColor>) -> impl IntoView {
                     view! {
                         <button
                             class=move || {
-                                let base = "w-7 h-7 rounded-md border transition-transform hover:scale-110";
                                 if selected_color.get() == c_for_sel {
-                                    format!("{base} border-accent ring-2 ring-accent/50")
+                                    classes::BTN_SWATCH_SEL
                                 } else {
-                                    format!("{base} border-border")
+                                    classes::BTN_SWATCH_OFF
                                 }
                             }
                             style=format!("background-color: {hex}")

@@ -1,3 +1,4 @@
+use crate::ui::classes;
 use crate::ui::icon;
 use leptos::*;
 
@@ -12,20 +13,17 @@ pub enum Tool {
     Freehand,
 }
 
-/// Vertical panel of drawing-tool buttons (Rectangle, Ellipse, Line, etc.).
-///
-/// The currently selected tool is highlighted with the accent colour.
+/// Vertical panel of drawing-tool buttons.
 #[component]
 pub fn DrawingPanel(selected_tool: RwSignal<Tool>) -> impl IntoView {
     view! {
         <div class="flex flex-col p-1 gap-0.5">
             <button
                 class=move || {
-                    let base = "flex items-center justify-center h-9 w-9 rounded-md transition-colors";
                     if selected_tool.get() == Tool::Rectangle {
-                        format!("{base} text-accent bg-accent/10")
+                        classes::BTN_TOOL_ACTIVE
                     } else {
-                        format!("{base} text-subtle hover:text-fg hover:bg-surface/50")
+                        classes::BTN_TOOL_INACTIVE
                     }
                 }
                 on:click=move |_| selected_tool.set(Tool::Rectangle)
@@ -35,11 +33,10 @@ pub fn DrawingPanel(selected_tool: RwSignal<Tool>) -> impl IntoView {
             </button>
             <button
                 class=move || {
-                    let base = "flex items-center justify-center h-9 w-9 rounded-md transition-colors";
                     if selected_tool.get() == Tool::Ellipse {
-                        format!("{base} text-accent bg-accent/10")
+                        classes::BTN_TOOL_ACTIVE
                     } else {
-                        format!("{base} text-subtle hover:text-fg hover:bg-surface/50")
+                        classes::BTN_TOOL_INACTIVE
                     }
                 }
                 on:click=move |_| selected_tool.set(Tool::Ellipse)
@@ -49,11 +46,10 @@ pub fn DrawingPanel(selected_tool: RwSignal<Tool>) -> impl IntoView {
             </button>
             <button
                 class=move || {
-                    let base = "flex items-center justify-center h-9 w-9 rounded-md transition-colors";
                     if selected_tool.get() == Tool::Line {
-                        format!("{base} text-accent bg-accent/10")
+                        classes::BTN_TOOL_ACTIVE
                     } else {
-                        format!("{base} text-subtle hover:text-fg hover:bg-surface/50")
+                        classes::BTN_TOOL_INACTIVE
                     }
                 }
                 on:click=move |_| selected_tool.set(Tool::Line)
@@ -63,11 +59,10 @@ pub fn DrawingPanel(selected_tool: RwSignal<Tool>) -> impl IntoView {
             </button>
             <button
                 class=move || {
-                    let base = "flex items-center justify-center h-9 w-9 rounded-md transition-colors";
                     if selected_tool.get() == Tool::Arrow {
-                        format!("{base} text-accent bg-accent/10")
+                        classes::BTN_TOOL_ACTIVE
                     } else {
-                        format!("{base} text-subtle hover:text-fg hover:bg-surface/50")
+                        classes::BTN_TOOL_INACTIVE
                     }
                 }
                 on:click=move |_| selected_tool.set(Tool::Arrow)
@@ -77,11 +72,10 @@ pub fn DrawingPanel(selected_tool: RwSignal<Tool>) -> impl IntoView {
             </button>
             <button
                 class=move || {
-                    let base = "flex items-center justify-center h-9 w-9 rounded-md transition-colors";
                     if selected_tool.get() == Tool::Text {
-                        format!("{base} text-accent bg-accent/10")
+                        classes::BTN_TOOL_ACTIVE
                     } else {
-                        format!("{base} text-subtle hover:text-fg hover:bg-surface/50")
+                        classes::BTN_TOOL_INACTIVE
                     }
                 }
                 on:click=move |_| selected_tool.set(Tool::Text)
@@ -91,11 +85,10 @@ pub fn DrawingPanel(selected_tool: RwSignal<Tool>) -> impl IntoView {
             </button>
             <button
                 class=move || {
-                    let base = "flex items-center justify-center h-9 w-9 rounded-md transition-colors";
                     if selected_tool.get() == Tool::Freehand {
-                        format!("{base} text-accent bg-accent/10")
+                        classes::BTN_TOOL_ACTIVE
                     } else {
-                        format!("{base} text-subtle hover:text-fg hover:bg-surface/50")
+                        classes::BTN_TOOL_INACTIVE
                     }
                 }
                 on:click=move |_| selected_tool.set(Tool::Freehand)

@@ -1,25 +1,23 @@
 use crate::canvas::{CanvasMode, Viewport};
+use crate::ui::classes;
 use crate::ui::icon;
 use leptos::*;
 
 #[component]
 pub fn StatusBar(viewport: RwSignal<Viewport>, canvas_mode: RwSignal<CanvasMode>) -> impl IntoView {
-    let on_home = move |_| {
-        viewport.set(Viewport::default());
-    };
+    let on_home = move |_| viewport.set(Viewport::default());
 
-    let btn = move |mode: CanvasMode| -> String {
-        let base = "flex items-center justify-center h-8 w-8 rounded-md transition-colors";
+    let btn = move |mode: CanvasMode| -> &'static str {
         if canvas_mode.get() == mode {
-            format!("{base} text-accent bg-accent/10")
+            classes::BTN_TBAR_ACTIVE
         } else {
-            format!("{base} text-subtle hover:text-fg hover:bg-surface/50")
+            classes::BTN_TBAR_INACTIVE
         }
     };
 
     view! {
-        <div class="fixed top-4 inset-x-0 flex justify-center pointer-events-none z-50">
-            <div class="flex items-center gap-0.5 rounded-lg bg-panel/80 backdrop-blur-sm border border-border shadow-[0_6px_12px_-4px_rgba(122,162,247,0.35)] pointer-events-auto p-0.5">
+        <div class=classes::CONTAINER_STATUSBAR>
+            <div class=classes::TBAR_INNER>
                 <button
                     class=move || btn(CanvasMode::Hand)
                     on:click=move |_| canvas_mode.set(CanvasMode::Hand)
@@ -41,31 +39,18 @@ pub fn StatusBar(viewport: RwSignal<Viewport>, canvas_mode: RwSignal<CanvasMode>
                 >
                     {icon::pencil()}
                 </button>
-                <div class="w-px h-5 bg-border mx-1" />
-                <button
-                    class="flex items-center justify-center h-8 w-8 rounded-md text-subtle hover:text-fg hover:bg-surface/50 transition-colors"
-                    on:click=on_home
-                    title="Home"
-                >
+                <div class=classes::SEP_V />
+                <button class=classes::BTN_GHOST on:click=on_home title="Home">
                     {icon::home()}
                 </button>
-                <button
-                    class="flex items-center justify-center h-8 w-8 rounded-md text-subtle hover:text-fg hover:bg-surface/50 transition-colors"
-                    title="Undo"
-                >
+                <button class=classes::BTN_GHOST title="Undo">
                     {icon::undo()}
                 </button>
-                <button
-                    class="flex items-center justify-center h-8 w-8 rounded-md text-subtle hover:text-fg hover:bg-surface/50 transition-colors"
-                    title="Redo"
-                >
+                <button class=classes::BTN_GHOST title="Redo">
                     {icon::redo()}
                 </button>
-                <div class="w-px h-5 bg-border mx-1" />
-                <button
-                    class="flex items-center justify-center h-8 w-8 rounded-md text-subtle hover:text-fg hover:bg-surface/50 transition-colors"
-                    title="Menu"
-                >
+                <div class=classes::SEP_V />
+                <button class=classes::BTN_GHOST title="Menu">
                     {icon::menu()}
                 </button>
             </div>
