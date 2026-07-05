@@ -247,9 +247,9 @@ fn render_arrow(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
     let ry = tip_y - uy * head_size - ux * head_size * 0.4;
     let (ax, ay) = (a.x, a.y);
     let (bx, by) = (b.x, b.y);
-    let points = format!("{},{} {},{} {},{}", tip_x, tip_y, lx, ly, rx, ry);
+    let points = format!("{},{} {},{} {},{}", lx, ly, tip_x, tip_y, rx, ry);
     view! {
-        <g stroke=hex stroke-width=sw fill=hex pointer-events="none">
+        <g stroke=hex stroke-width=sw fill="none" pointer-events="none" stroke-linejoin="round">
             <line x1=ax y1=ay x2=bx y2=by />
             <polyline points=points />
         </g>
@@ -560,7 +560,7 @@ pub fn Canvas(
         >
             <defs>
                 <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                    <circle cx="0" cy="0" r="1.5" fill="#d1d5db" fill-opacity="0.25" />
+                    <circle cx="20" cy="20" r="1.5" fill="#d1d5db" fill-opacity="0.25" />
                 </pattern>
             </defs>
 

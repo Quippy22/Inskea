@@ -148,8 +148,8 @@ pub fn arrow() -> impl IntoView {
             stroke-linejoin="round"
             class="w-5 h-5"
         >
-            <line x1="3" y1="21" x2="17" y2="7" />
-            <polyline points="12 7 17 7 17 12" />
+            <line x1="7" y1="17" x2="17" y2="7" />
+            <polyline points="7 7 17 7 17 17" />
         </svg>
     }
 }
@@ -323,8 +323,8 @@ pub fn undo() -> impl IntoView {
             stroke-linejoin="round"
             class="w-5 h-5"
         >
-            <path d="M3 7v6h6" />
-            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+            <path d="M7 6l-4 6 4 6" />
+            <path d="M3 12h10a4 4 0 0 1 4 4v2" />
         </svg>
     }
 }
@@ -342,8 +342,8 @@ pub fn redo() -> impl IntoView {
             stroke-linejoin="round"
             class="w-5 h-5"
         >
-            <path d="M21 13v6h-6" />
-            <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
+            <path d="M17 6l4 6-4 6" />
+            <path d="M21 12H11a4 4 0 0 0-4 4v2" />
         </svg>
     }
 }
