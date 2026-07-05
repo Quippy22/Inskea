@@ -37,12 +37,9 @@ pub fn Dock(selected_tool: RwSignal<Tool>, selected_color: RwSignal<ShapeColor>)
     let select_category = move |cat: Category| {
         eraser_active.set(false);
         if collapsed.get() {
-            if active.get() == cat {
-                show_panel.update(|s| *s = !*s);
-            } else {
-                active.set(cat);
-                show_panel.set(true);
-            }
+            active.set(cat);
+            collapsed.set(false);
+            show_panel.set(true);
         } else {
             active.set(cat);
         }
