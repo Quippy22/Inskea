@@ -13,6 +13,7 @@ pub use drawing::{DrawingPanel, Tool};
 pub use group::GroupPanel;
 pub use pages::PagesPanel;
 
+use crate::canvas::CanvasMode;
 use crate::model::ShapeColor;
 use crate::ui::classes;
 use crate::ui::icon;
@@ -33,11 +34,15 @@ enum Category {
 /// category's panel. The eraser button sits at the bottom of the category
 /// list with the same highlight style.
 #[component]
-pub fn Dock(selected_tool: RwSignal<Tool>, selected_color: RwSignal<ShapeColor>) -> impl IntoView {
+pub fn Dock(
+    selected_tool: RwSignal<Tool>,
+    selected_color: RwSignal<ShapeColor>,
+    canvas_mode: RwSignal<CanvasMode>,
+    eraser_active: RwSignal<bool>,
+) -> impl IntoView {
     let collapsed = create_rw_signal(true);
     let active = create_rw_signal(Category::Drawing);
     let show_panel = create_rw_signal(false);
-    let eraser_active = create_rw_signal(false);
 
     let toggle_collapse = move |_| {
         let was_collapsed = collapsed.get();
@@ -60,7 +65,7 @@ pub fn Dock(selected_tool: RwSignal<Tool>, selected_color: RwSignal<ShapeColor>)
     let panel_visible = move || !collapsed.get() || show_panel.get();
 
     let panel = move || match active.get() {
-        Category::Drawing => view! { <DrawingPanel selected_tool=selected_tool /> }.into_view(),
+        Category::Drawing => view! { <DrawingPanel selected_tool=selected_tool canvas_mode=canvas_mode /> }.into_view(),
         Category::Colors => view! { <ColorsPanel selected_color=selected_color /> }.into_view(),
         Category::Group => view! { <GroupPanel /> }.into_view(),
         Category::Pages => view! { <PagesPanel /> }.into_view(),
@@ -78,7 +83,9 @@ pub fn Dock(selected_tool: RwSignal<Tool>, selected_color: RwSignal<ShapeColor>)
         let new = !eraser_active.get();
         eraser_active.set(new);
         if new {
+            collapsed.set(true);
             show_panel.set(false);
+            canvas_mode.set(CanvasMode::Draw);
         }
     };
 

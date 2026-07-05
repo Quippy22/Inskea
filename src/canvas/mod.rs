@@ -168,6 +168,88 @@ fn stroke_hex(stroke: ShapeColor) -> &'static str {
     stroke.to_hex()
 }
 
+/// Check if a world-space point hits an element.
+fn hit_test(point: (f64, f64), el: &Element) -> bool {
+    let margin = 6.0;
+    let (px, py) = point;
+
+    match el {
+        Element::Rectangle(data) | Element::Ellipse(data) => {
+            let has_fill = data.fill_color.is_some();
+            if has_fill {
+                px >= data.x - margin
+                    && px <= data.x + data.width + margin
+                    && py >= data.y - margin
+                    && py <= data.y + data.height + margin
+            } else {
+                let cx = data.x + data.width / 2.0;
+                let cy = data.y + data.height / 2.0;
+                let hw = data.width / 2.0;
+                let hh = data.height / 2.0;
+                if matches!(el, Element::Rectangle(_)) {
+                    let dl = (px - data.x).abs();
+                    let dr = (px - (data.x + data.width)).abs();
+                    let dt = (py - data.y).abs();
+                    let db = (py - (data.y + data.height)).abs();
+                    let near_edge = dl.min(dr).min(dt).min(db);
+                    near_edge <= margin + data.stroke_width
+                        && px >= data.x - margin
+                        && px <= data.x + data.width + margin
+                        && py >= data.y - margin
+                        && py <= data.y + data.height + margin
+                } else {
+                    let dx = (px - cx) / hw.max(1.0);
+                    let dy = (py - cy) / hh.max(1.0);
+                    let dist = (dx * dx + dy * dy).sqrt();
+                    let edge_dist = (dist - 1.0).abs() * hw.min(hh).max(1.0);
+                    edge_dist <= margin + data.stroke_width
+                }
+            }
+        }
+        Element::Line(data, a, b) | Element::Arrow(data, a, b) => {
+            let dx = b.x - a.x;
+            let dy = b.y - a.y;
+            let len = (dx * dx + dy * dy).sqrt();
+            if len < 1.0 {
+                return (px - a.x).hypot(py - a.y) <= margin + data.stroke_width;
+            }
+            let t = ((px - a.x) * dx + (py - a.y) * dy) / (len * len);
+            let t = t.clamp(0.0, 1.0);
+            let near_x = a.x + t * dx;
+            let near_y = a.y + t * dy;
+            (px - near_x).hypot(py - near_y) <= margin + data.stroke_width
+        }
+        Element::Text(data, _) => {
+            (px - data.x).hypot(py - data.y) <= margin + data.width.max(12.0) * 0.5
+        }
+        Element::Freehand(data, pts) => {
+            if pts.is_empty() {
+                return false;
+            }
+            for p in pts {
+                if (px - p.x).hypot(py - p.y) <= margin + data.stroke_width {
+                    return true;
+                }
+            }
+            false
+        }
+    }
+}
+
+/// Erase the topmost element at a world-space point.
+fn hit_and_erase(point: (f64, f64), scene: RwSignal<Scene>) {
+    let id = scene.with(|s| {
+        s.elements
+            .iter()
+            .rev()
+            .find(|el| hit_test(point, el))
+            .map(|el| el.id())
+    });
+    if let Some(id) = id {
+        scene.update(|s| s.elements.retain(|e| e.id() != id));
+    }
+}
+
 fn render_rect(data: &ElementData) -> leptos::View {
     let x = data.x;
     let y = data.y;
@@ -185,7 +267,6 @@ fn render_rect(data: &ElementData) -> leptos::View {
             fill=fill
             stroke=stroke
             stroke-width=sw
-            pointer-events="none"
         />
     }
     .into_view()
@@ -212,7 +293,6 @@ fn render_ellipse(data: &ElementData) -> leptos::View {
             fill=fill
             stroke=stroke
             stroke-width=sw
-            pointer-events="none"
         />
     }
     .into_view()
@@ -223,7 +303,7 @@ fn render_line(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
     let stroke = stroke_hex(data.stroke_color);
     let (x1, y1) = (a.x, a.y);
     let (x2, y2) = (b.x, b.y);
-    view! { <line x1=x1 y1=y1 x2=x2 y2=y2 stroke=stroke stroke-width=sw pointer-events="none" /> }
+    view! { <line x1=x1 y1=y1 x2=x2 y2=y2 stroke=stroke stroke-width=sw /> }
         .into_view()
 }
 
@@ -249,7 +329,7 @@ fn render_arrow(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
     let (bx, by) = (b.x, b.y);
     let points = format!("{},{} {},{} {},{}", lx, ly, tip_x, tip_y, rx, ry);
     view! {
-        <g stroke=hex stroke-width=sw fill="none" pointer-events="none" stroke-linejoin="round">
+        <g stroke=hex stroke-width=sw fill="none" stroke-linejoin="round">
             <line x1=ax y1=ay x2=bx y2=by />
             <polyline points=points />
         </g>
@@ -274,7 +354,7 @@ fn render_text(data: &ElementData, content: &str) -> leptos::View {
             font-size=font_size
             font-family="sans-serif"
             pointer-events="none"
-            style="user-select: none;"
+            style="user-select: none; -webkit-user-select: none;"
         >
             {content}
         </text>
@@ -295,7 +375,7 @@ fn render_freehand(data: &ElementData, pts: &[Point]) -> leptos::View {
         }
         d
     };
-    view! { <path d=d fill="none" stroke=stroke stroke-width=sw pointer-events="none" /> }
+    view! { <path d=d fill="none" stroke=stroke stroke-width=sw /> }
         .into_view()
 }
 
@@ -308,6 +388,7 @@ pub fn Canvas(
     selected_color: RwSignal<ShapeColor>,
     canvas_mode: RwSignal<CanvasMode>,
     scene: RwSignal<Scene>,
+    eraser_active: RwSignal<bool>,
 ) -> impl IntoView {
     fn window_size() -> (f64, f64) {
         let window = web_sys::window().expect("no global `window` exists");
@@ -331,6 +412,7 @@ pub fn Canvas(
     let shift_pressed = create_rw_signal(false);
     let pan_anchor = create_rw_signal(None::<(f64, f64)>);
     let select_anchor = create_rw_signal(None::<(f64, f64)>);
+    let erasing = create_rw_signal(false);
 
     let _ = window_event_listener(ev::resize, move |_| screen_size.set(window_size()));
     let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
@@ -355,6 +437,10 @@ pub fn Canvas(
     let on_pointer_move = move |ev: ev::PointerEvent| {
         let mode = canvas_mode.get();
         let world = update_world(&ev);
+
+        if eraser_active.get() && erasing.get() {
+            hit_and_erase(world, scene);
+        }
 
         match mode {
             CanvasMode::Hand => {
@@ -407,6 +493,11 @@ pub fn Canvas(
     let on_pointer_down = move |ev: ev::PointerEvent| {
         let mode = canvas_mode.get();
         let world = update_world(&ev);
+
+        if eraser_active.get() {
+            erasing.set(true);
+            return;
+        }
 
         match mode {
             CanvasMode::Hand => {
@@ -462,7 +553,13 @@ pub fn Canvas(
         }
     };
 
-    let on_pointer_up = move |ev: ev::PointerEvent| match canvas_mode.get() {
+    let on_pointer_up = move |ev: ev::PointerEvent| {
+        if eraser_active.get() {
+            let world = update_world(&ev);
+            hit_and_erase(world, scene);
+        }
+        erasing.set(false);
+        match canvas_mode.get() {
         CanvasMode::Hand => {
             pan_anchor.set(None);
         }
@@ -501,6 +598,7 @@ pub fn Canvas(
                 drawing.set(None);
             }
         }
+    }
     };
 
     let drawing_preview = move || {
@@ -551,7 +649,7 @@ pub fn Canvas(
             _ref=svg_ref
             width="100%"
             height="100%"
-            style="display: block; user-select: none;"
+            style="display: block; user-select: none; -webkit-user-select: none;"
             viewBox=view_box
             on:pointerdown=on_pointer_down
             on:pointermove=on_pointer_move
@@ -568,7 +666,16 @@ pub fn Canvas(
 
             <path d="M-12,0 L12,0 M0,-12 L0,12" stroke="#7aa2f7" stroke-width="2" />
 
-            {move || scene.get().elements.iter().map(render_element).collect_view()}
+            {move || {
+                scene.get().elements.iter().map(|el| {
+                    let view = render_element(el);
+                    view! {
+                        <g pointer-events="none">
+                            {view}
+                        </g>
+                    }.into_view()
+                }).collect_view()
+            }}
 
             {move || drawing_preview()}
 

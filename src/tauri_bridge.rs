@@ -53,7 +53,13 @@ pub async fn get_app_data_dir() -> Result<String, String> {
 }
 
 /// Save scene content to a file at the given path.
+/// Auto-appends `.skea` extension if missing.
 pub async fn save_skea(path: &str, content: &str) -> Result<(), String> {
+    let path = if path.ends_with(".skea") {
+        path.to_string()
+    } else {
+        format!("{path}.skea")
+    };
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
         "path": path,
         "content": content,

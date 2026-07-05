@@ -12,9 +12,10 @@ pub fn App() -> impl IntoView {
 
     let selected_tool = create_rw_signal(Tool::Rectangle);
     let selected_color = create_rw_signal(ShapeColor::White);
-    let canvas_mode = create_rw_signal(CanvasMode::Draw);
+    let canvas_mode = create_rw_signal(CanvasMode::Hand);
 
     let scene = create_rw_signal(Scene::new());
+    let eraser_active = create_rw_signal(false);
 
     view! {
         <div class="w-screen h-screen bg-bg text-fg">
@@ -26,9 +27,10 @@ pub fn App() -> impl IntoView {
                 selected_color=selected_color
                 canvas_mode=canvas_mode
                 scene=scene
+                eraser_active=eraser_active
             />
             <ToolBar scene=scene viewport=viewport canvas_mode=canvas_mode />
-            <Dock selected_tool=selected_tool selected_color=selected_color />
+            <Dock selected_tool=selected_tool selected_color=selected_color canvas_mode=canvas_mode eraser_active=eraser_active />
         </div>
     }
 }
