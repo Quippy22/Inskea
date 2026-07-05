@@ -1,7 +1,7 @@
 mod viewport;
 pub use viewport::Viewport;
 
-use crate::model::{Element, ElementData, Point, Scene, ShapeColor};
+use crate::model::{Element, ElementData, ElementId, Point, Scene, ShapeColor};
 use crate::ui::dock::Tool;
 use leptos::ev;
 use leptos::svg::Svg;
@@ -250,6 +250,99 @@ fn hit_and_erase(point: (f64, f64), scene: RwSignal<Scene>) {
     }
 }
 
+fn element_bounds(el: &Element) -> (f64, f64, f64, f64) {
+    match el {
+        Element::Rectangle(data) | Element::Ellipse(data) => {
+            (data.x, data.y, data.width, data.height)
+        }
+        Element::Line(_, a, b) | Element::Arrow(_, a, b) => {
+            let x = a.x.min(b.x);
+            let y = a.y.min(b.y);
+            let w = (b.x - a.x).abs();
+            let h = (b.y - a.y).abs();
+            (x, y, w, h)
+        }
+        Element::Text(data, _content) => {
+            let h = data.width.max(12.0);
+            (data.x, data.y, data.width, h)
+        }
+        Element::Freehand(_, pts) => {
+            if pts.is_empty() {
+                return (0.0, 0.0, 0.0, 0.0);
+            }
+            let min_x = pts.iter().map(|p| p.x).reduce(f64::min).unwrap();
+            let min_y = pts.iter().map(|p| p.y).reduce(f64::min).unwrap();
+            let max_x = pts.iter().map(|p| p.x).reduce(f64::max).unwrap();
+            let max_y = pts.iter().map(|p| p.y).reduce(f64::max).unwrap();
+            (min_x, min_y, max_x - min_x, max_y - min_y)
+        }
+    }
+}
+
+fn rect_fully_contains_element(rx: f64, ry: f64, rw: f64, rh: f64, el: &Element) -> bool {
+    let (ex, ey, ew, eh) = element_bounds(el);
+    ex >= rx && ey >= ry && (ex + ew) <= (rx + rw) && (ey + eh) <= (ry + rh)
+}
+
+fn combined_bounds(ids: &[ElementId], elements: &[Element]) -> Option<(f64, f64, f64, f64)> {
+    let mut out: Option<(f64, f64, f64, f64)> = None;
+    for el in elements {
+        if ids.contains(&el.id()) {
+            let (ex, ey, ew, eh) = element_bounds(el);
+            let (x1, y1, x2, y2) = (ex, ey, ex + ew, ey + eh);
+            match out {
+                None => out = Some((x1, y1, x2, y2)),
+                Some((min_x, min_y, max_x, max_y)) => {
+                    out = Some((min_x.min(x1), min_y.min(y1), max_x.max(x2), max_y.max(y2)));
+                }
+            }
+        }
+    }
+    out.map(|(x1, y1, x2, y2)| (x1, y1, x2 - x1, y2 - y1))
+}
+
+fn hit_test_topmost(point: (f64, f64), elements: &[Element]) -> Option<ElementId> {
+    elements
+        .iter()
+        .rev()
+        .find(|el| hit_test(point, el))
+        .map(|el| el.id())
+}
+
+fn point_inside_any_element(point: (f64, f64), elements: &[Element]) -> bool {
+    let margin = 12.0;
+    elements.iter().any(|el| {
+        let (ex, ey, ew, eh) = element_bounds(el);
+        let (px, py) = point;
+        px >= ex - margin && px <= ex + ew + margin && py >= ey - margin && py <= ey + eh + margin
+    })
+}
+
+fn offset_element(el: &mut Element, dx: f64, dy: f64) {
+    match el {
+        Element::Rectangle(data) | Element::Ellipse(data) | Element::Text(data, ..) => {
+            data.x += dx;
+            data.y += dy;
+        }
+        Element::Line(data, a, b) | Element::Arrow(data, a, b) => {
+            data.x += dx;
+            data.y += dy;
+            a.x += dx;
+            a.y += dy;
+            b.x += dx;
+            b.y += dy;
+        }
+        Element::Freehand(data, pts) => {
+            data.x += dx;
+            data.y += dy;
+            for p in pts {
+                p.x += dx;
+                p.y += dy;
+            }
+        }
+    }
+}
+
 fn render_rect(data: &ElementData) -> leptos::View {
     let x = data.x;
     let y = data.y;
@@ -258,8 +351,7 @@ fn render_rect(data: &ElementData) -> leptos::View {
     let sw = data.stroke_width;
     let fill = fill_hex(&data.fill_color);
     let stroke = stroke_hex(data.stroke_color);
-    view! { <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw /> }
-    .into_view()
+    view! { <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw /> }.into_view()
 }
 
 fn render_ellipse(data: &ElementData) -> leptos::View {
@@ -275,7 +367,7 @@ fn render_ellipse(data: &ElementData) -> leptos::View {
     let rx = w / 2.0;
     let ry = h / 2.0;
     view! { <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw /> }
-    .into_view()
+        .into_view()
 }
 
 fn render_line(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
@@ -391,6 +483,8 @@ pub fn Canvas(
     let pan_anchor = create_rw_signal(None::<(f64, f64)>);
     let select_anchor = create_rw_signal(None::<(f64, f64)>);
     let erasing = create_rw_signal(false);
+    let selected_ids = create_rw_signal(Vec::<ElementId>::new());
+    let moving_anchor = create_rw_signal(None::<(f64, f64)>);
 
     let _ = window_event_listener(ev::resize, move |_| screen_size.set(window_size()));
     let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
@@ -432,7 +526,21 @@ pub fn Canvas(
                     pan_anchor.set(Some((ev.client_x() as f64, ev.client_y() as f64)));
                 }
             }
-            CanvasMode::Select => {}
+            CanvasMode::Select => {
+                if let Some(anchor) = moving_anchor.get() {
+                    let dx = world.0 - anchor.0;
+                    let dy = world.1 - anchor.1;
+                    let ids = selected_ids.get();
+                    scene.update(|s| {
+                        for el in s.elements.iter_mut() {
+                            if ids.contains(&el.id()) {
+                                offset_element(el, dx, dy);
+                            }
+                        }
+                    });
+                    moving_anchor.set(Some(world));
+                }
+            }
             CanvasMode::Draw => {
                 if let Some(ref state) = drawing.get() {
                     if state.tool == Tool::Freehand {
@@ -482,6 +590,35 @@ pub fn Canvas(
                 pan_anchor.set(Some((ev.client_x() as f64, ev.client_y() as f64)));
             }
             CanvasMode::Select => {
+                let ids = selected_ids.get();
+                let els = scene.get().elements;
+
+                if !ids.is_empty() {
+                    if let Some((bx, by, bw, bh)) = combined_bounds(&ids, &els) {
+                        let cx = bx + bw / 2.0;
+                        let cy = by + bh / 2.0;
+                        let dist = ((world.0 - cx).powi(2) + (world.1 - cy).powi(2)).sqrt();
+                        if dist <= 10.0 {
+                            moving_anchor.set(Some(world));
+                            select_anchor.set(None);
+                            return;
+                        }
+                    }
+                }
+
+                if let Some(id) = hit_test_topmost(world, &els) {
+                    selected_ids.set(vec![id]);
+                    select_anchor.set(None);
+                    return;
+                }
+
+                if point_inside_any_element(world, &els) {
+                    selected_ids.set(Vec::new());
+                    select_anchor.set(None);
+                    return;
+                }
+
+                selected_ids.set(Vec::new());
                 select_anchor.set(Some(world));
             }
             CanvasMode::Draw => {
@@ -542,7 +679,31 @@ pub fn Canvas(
                 pan_anchor.set(None);
             }
             CanvasMode::Select => {
-                select_anchor.set(None);
+                if moving_anchor.get().is_some() {
+                    moving_anchor.set(None);
+                    select_anchor.set(None);
+                    return;
+                }
+
+                if let Some(anchor) = select_anchor.get() {
+                    let world = cursor_world.get();
+                    let dx = world.0 - anchor.0;
+                    let dy = world.1 - anchor.1;
+                    if dx.hypot(dy) >= 3.0 {
+                        let rx = anchor.0.min(world.0);
+                        let ry = anchor.1.min(world.1);
+                        let rw = (world.0 - anchor.0).abs();
+                        let rh = (world.1 - anchor.1).abs();
+                        let els = scene.get().elements;
+                        let contained: Vec<ElementId> = els
+                            .iter()
+                            .filter(|el| rect_fully_contains_element(rx, ry, rw, rh, el))
+                            .map(|el| el.id())
+                            .collect();
+                        selected_ids.set(contained);
+                    }
+                    select_anchor.set(None);
+                }
             }
             CanvasMode::Draw => {
                 if let Some(state) = drawing.get() {
@@ -567,17 +728,7 @@ pub fn Canvas(
                         shift_pressed.get(),
                     );
                     scene.update(|s| {
-                        let mut el = el;
-                        let id = s.next_id();
-                        match &mut el {
-                            Element::Rectangle(d)
-                            | Element::Ellipse(d)
-                            | Element::Line(d, ..)
-                            | Element::Arrow(d, ..)
-                            | Element::Text(d, ..)
-                            | Element::Freehand(d, ..) => d.id = id,
-                        }
-                        s.elements.push(el);
+                        s.add_element(el);
                     });
                     drawing.set(None);
                 }
@@ -601,10 +752,7 @@ pub fn Canvas(
             return None;
         }
         let el = build_element(state.anchor, world, state.tool, state.color, shift);
-        Some(
-            view! { <g stroke-dasharray="4 2">{render_element(&el)}</g> }
-            .into_view(),
-        )
+        Some(view! { <g stroke-dasharray="4 2">{render_element(&el)}</g> }.into_view())
     };
 
     let selection_preview = move || {
@@ -673,6 +821,92 @@ pub fn Canvas(
             {move || drawing_preview()}
 
             {move || selection_preview()}
+
+            {move || {
+                let ids = selected_ids.get();
+                if ids.is_empty() {
+                    return None;
+                }
+                let els = scene.get().elements;
+                let (bx, by, bw, bh) = combined_bounds(&ids, &els)?;
+                let hex = ShapeColor::Blue.to_hex();
+                let hr = 5.0;
+                let mr = 6.0;
+                let cx = bx + bw / 2.0;
+                let cy = by + bh / 2.0;
+                let rx = cx;
+                let ry = by - 25.0;
+                let corners = [
+                    (bx, by),
+                    (bx + bw / 2.0, by),
+                    (bx + bw, by),
+                    (bx, by + bh / 2.0),
+                    (bx + bw, by + bh / 2.0),
+                    (bx, by + bh),
+                    (bx + bw / 2.0, by + bh),
+                    (bx + bw, by + bh),
+                ];
+                Some(
+                    view! {
+                        <rect
+                            x=bx
+                            y=by
+                            width=bw
+                            height=bh
+                            fill="none"
+                            stroke=hex
+                            stroke-width="1"
+                            stroke-dasharray="3 2"
+                            pointer-events="none"
+                        />
+                        <line
+                            x1=cx
+                            y1=by
+                            x2=rx
+                            y2=ry
+                            stroke=hex
+                            stroke-width="1"
+                            pointer-events="none"
+                        />
+                        {corners
+                            .iter()
+                            .map(|&(hx, hy)| {
+                                view! {
+                                    <circle
+                                        cx=hx
+                                        cy=hy
+                                        r=hr
+                                        fill="white"
+                                        stroke=hex
+                                        stroke-width="1.5"
+                                        pointer-events="none"
+                                    />
+                                }
+                                    .into_view()
+                            })
+                            .collect_view()}
+                        <circle
+                            cx=cx
+                            cy=cy
+                            r=mr
+                            fill="white"
+                            stroke=hex
+                            stroke-width="1.5"
+                            pointer-events="none"
+                        />
+                        <circle
+                            cx=rx
+                            cy=ry
+                            r=hr
+                            fill="white"
+                            stroke=hex
+                            stroke-width="1.5"
+                            pointer-events="none"
+                        />
+                    }
+                        .into_view(),
+                )
+            }}
         </svg>
     }
 }
