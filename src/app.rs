@@ -1,4 +1,4 @@
-use crate::canvas::{Canvas, Viewport};
+use crate::canvas::{Canvas, CanvasMode, Viewport};
 use crate::model::{Scene, ShapeColor};
 use crate::ui::dock::{Dock, Tool};
 use crate::ui::StatusBar;
@@ -12,6 +12,7 @@ pub fn App() -> impl IntoView {
 
     let selected_tool = create_rw_signal(Tool::Rectangle);
     let selected_color = create_rw_signal(ShapeColor::White);
+    let canvas_mode = create_rw_signal(CanvasMode::Draw);
 
     let scene = create_rw_signal(Scene::new());
 
@@ -23,9 +24,10 @@ pub fn App() -> impl IntoView {
                 viewport=viewport
                 selected_tool=selected_tool
                 selected_color=selected_color
+                canvas_mode=canvas_mode
                 scene=scene
             />
-            <StatusBar cursor_screen=cursor_screen cursor_world=cursor_world viewport=viewport />
+            <StatusBar viewport=viewport canvas_mode=canvas_mode />
             <Dock selected_tool=selected_tool selected_color=selected_color />
         </div>
     }

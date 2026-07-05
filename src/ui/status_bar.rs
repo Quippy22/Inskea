@@ -1,38 +1,73 @@
-use crate::canvas::Viewport;
+use crate::canvas::{CanvasMode, Viewport};
+use crate::ui::icon;
 use leptos::*;
 
-/// Floating bar at the top of the screen showing cursor position and zoom level.
 #[component]
-pub fn StatusBar(
-    cursor_screen: RwSignal<(f64, f64)>,
-    cursor_world: RwSignal<(f64, f64)>,
-    viewport: RwSignal<Viewport>,
-) -> impl IntoView {
+pub fn StatusBar(viewport: RwSignal<Viewport>, canvas_mode: RwSignal<CanvasMode>) -> impl IntoView {
+    let on_home = move |_| {
+        viewport.set(Viewport::default());
+    };
+
+    let btn = move |mode: CanvasMode| -> String {
+        let base = "flex items-center justify-center h-8 w-8 rounded-md transition-colors";
+        if canvas_mode.get() == mode {
+            format!("{base} text-accent bg-accent/10")
+        } else {
+            format!("{base} text-subtle hover:text-fg hover:bg-surface/50")
+        }
+    };
+
     view! {
-        <div class="fixed top-0 inset-x-0 flex justify-center pointer-events-none z-50 p-4">
-            <div class="flex gap-6 rounded-lg bg-surface/80 px-6 py-2.5 text-sm font-mono text-subtle backdrop-blur-sm border border-border pointer-events-auto select-none">
-                <span>
-                    "screen: "
-                    <span class="text-accent">
-                        {move || {
-                            format!("{:.1}, {:.1}", cursor_screen.get().0, cursor_screen.get().1)
-                        }}
-                    </span>
-                </span>
-                <span>
-                    "world: "
-                    <span class="text-green">
-                        {move || {
-                            format!("{:.1}, {:.1}", cursor_world.get().0, cursor_world.get().1)
-                        }}
-                    </span>
-                </span>
-                <span>
-                    "zoom: "
-                    <span class="text-yellow">
-                        {move || format!("{:.0}%", viewport.get().zoom * 100.0)}
-                    </span>
-                </span>
+        <div class="fixed top-4 inset-x-0 flex justify-center pointer-events-none z-50">
+            <div class="flex items-center gap-0.5 rounded-lg bg-panel/80 backdrop-blur-sm border border-border shadow-[0_6px_12px_-4px_rgba(122,162,247,0.35)] pointer-events-auto p-0.5">
+                <button
+                    class=move || btn(CanvasMode::Hand)
+                    on:click=move |_| canvas_mode.set(CanvasMode::Hand)
+                    title="Hand / Pan"
+                >
+                    {icon::hand()}
+                </button>
+                <button
+                    class=move || btn(CanvasMode::Select)
+                    on:click=move |_| canvas_mode.set(CanvasMode::Select)
+                    title="Select"
+                >
+                    {icon::cursor()}
+                </button>
+                <button
+                    class=move || btn(CanvasMode::Draw)
+                    on:click=move |_| canvas_mode.set(CanvasMode::Draw)
+                    title="Draw"
+                >
+                    {icon::pencil()}
+                </button>
+                <div class="w-px h-5 bg-border mx-1" />
+                <button
+                    class="flex items-center justify-center h-8 w-8 rounded-md text-subtle hover:text-fg hover:bg-surface/50 transition-colors"
+                    on:click=on_home
+                    title="Home"
+                >
+                    {icon::home()}
+                </button>
+                <button
+                    class="flex items-center justify-center h-8 w-8 rounded-md text-subtle hover:text-fg hover:bg-surface/50 transition-colors"
+                    title="Undo"
+                >
+                    {icon::undo()}
+                </button>
+                <button
+                    class="flex items-center justify-center h-8 w-8 rounded-md text-subtle hover:text-fg hover:bg-surface/50 transition-colors"
+                    title="Redo"
+                >
+                    {icon::redo()}
+                </button>
+                <div class="w-px h-5 bg-border mx-1" />
+                <button
+                    class="flex items-center justify-center h-8 w-8 rounded-md text-subtle hover:text-fg hover:bg-surface/50 transition-colors"
+                    title="Menu"
+                >
+                    {icon::menu()}
+                </button>
             </div>
         </div>
     }

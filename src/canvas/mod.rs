@@ -7,6 +7,13 @@ use leptos::ev;
 use leptos::svg::Svg;
 use leptos::*;
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum CanvasMode {
+    Select,
+    Hand,
+    Draw,
+}
+
 #[derive(Clone)]
 struct DrawingState {
     anchor: (f64, f64),
@@ -299,6 +306,7 @@ pub fn Canvas(
     viewport: RwSignal<Viewport>,
     selected_tool: RwSignal<Tool>,
     selected_color: RwSignal<ShapeColor>,
+    canvas_mode: RwSignal<CanvasMode>,
     scene: RwSignal<Scene>,
 ) -> impl IntoView {
     fn window_size() -> (f64, f64) {
@@ -321,6 +329,8 @@ pub fn Canvas(
     let drawing = create_rw_signal(None::<DrawingState>);
     let freehand_anchor = create_rw_signal(None::<(f64, f64)>);
     let shift_pressed = create_rw_signal(false);
+    let pan_anchor = create_rw_signal(None::<(f64, f64)>);
+    let select_anchor = create_rw_signal(None::<(f64, f64)>);
 
     let _ = window_event_listener(ev::resize, move |_| screen_size.set(window_size()));
     let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
@@ -343,15 +353,33 @@ pub fn Canvas(
     };
 
     let on_pointer_move = move |ev: ev::PointerEvent| {
+        let mode = canvas_mode.get();
         let world = update_world(&ev);
-        if let Some(ref state) = drawing.get() {
-            if state.tool == Tool::Freehand {
-                if let Some(anchor) = freehand_anchor.get() {
-                    scene.update(|s| {
-                        if let Some(el) = s.elements.last_mut() {
-                            update_drawing(el, world, anchor, ev.shift_key());
-                        }
+
+        match mode {
+            CanvasMode::Hand => {
+                if let Some((ax, ay)) = pan_anchor.get() {
+                    let dx = ev.client_x() as f64 - ax;
+                    let dy = ev.client_y() as f64 - ay;
+                    viewport.update(|vp| {
+                        vp.offset_x -= dx / vp.zoom;
+                        vp.offset_y -= dy / vp.zoom;
                     });
+                    pan_anchor.set(Some((ev.client_x() as f64, ev.client_y() as f64)));
+                }
+            }
+            CanvasMode::Select => {}
+            CanvasMode::Draw => {
+                if let Some(ref state) = drawing.get() {
+                    if state.tool == Tool::Freehand {
+                        if let Some(anchor) = freehand_anchor.get() {
+                            scene.update(|s| {
+                                if let Some(el) = s.elements.last_mut() {
+                                    update_drawing(el, world, anchor, ev.shift_key());
+                                }
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -377,85 +405,108 @@ pub fn Canvas(
     };
 
     let on_pointer_down = move |ev: ev::PointerEvent| {
+        let mode = canvas_mode.get();
         let world = update_world(&ev);
-        let tool = selected_tool.get();
-        let color = selected_color.get();
 
-        if tool == Tool::Text {
-            scene.update(|s| {
-                let id = s.next_id();
-                let mut data = ElementData::new(id);
-                data.x = world.0;
-                data.y = world.1;
-                data.stroke_color = color;
-                s.add_element(Element::Text(data, "Text".into()));
-            });
-            return;
+        match mode {
+            CanvasMode::Hand => {
+                pan_anchor.set(Some((ev.client_x() as f64, ev.client_y() as f64)));
+            }
+            CanvasMode::Select => {
+                select_anchor.set(Some(world));
+            }
+            CanvasMode::Draw => {
+                let tool = selected_tool.get();
+                let color = selected_color.get();
+
+                if tool == Tool::Text {
+                    scene.update(|s| {
+                        let id = s.next_id();
+                        let mut data = ElementData::new(id);
+                        data.x = world.0;
+                        data.y = world.1;
+                        data.stroke_color = color;
+                        s.add_element(Element::Text(data, "Text".into()));
+                    });
+                    return;
+                }
+
+                if tool == Tool::Freehand {
+                    freehand_anchor.set(Some(world));
+                    scene.update(|s| {
+                        let id = s.next_id();
+                        let mut data = ElementData::new(id);
+                        data.stroke_color = color;
+                        s.add_element(Element::Freehand(
+                            data,
+                            vec![Point {
+                                x: world.0,
+                                y: world.1,
+                            }],
+                        ));
+                    });
+                    drawing.set(Some(DrawingState {
+                        anchor: world,
+                        tool,
+                        color,
+                    }));
+                    return;
+                }
+
+                drawing.set(Some(DrawingState {
+                    anchor: world,
+                    tool,
+                    color,
+                }));
+            }
         }
-
-        if tool == Tool::Freehand {
-            freehand_anchor.set(Some(world));
-            scene.update(|s| {
-                let id = s.next_id();
-                let mut data = ElementData::new(id);
-                data.stroke_color = color;
-                s.add_element(Element::Freehand(
-                    data,
-                    vec![Point {
-                        x: world.0,
-                        y: world.1,
-                    }],
-                ));
-            });
-            drawing.set(Some(DrawingState {
-                anchor: world,
-                tool,
-                color,
-            }));
-            return;
-        }
-
-        drawing.set(Some(DrawingState {
-            anchor: world,
-            tool,
-            color,
-        }));
     };
 
-    let on_pointer_up = move |ev: ev::PointerEvent| {
-        if let Some(state) = drawing.get() {
-            if state.tool == Tool::Freehand {
-                freehand_anchor.set(None);
-                drawing.set(None);
-                return;
-            }
-
-            let world = update_world(&ev);
-            let el = build_element(
-                state.anchor,
-                world,
-                state.tool,
-                state.color,
-                shift_pressed.get(),
-            );
-            scene.update(|s| {
-                let mut el = el;
-                let id = s.next_id();
-                match &mut el {
-                    Element::Rectangle(d)
-                    | Element::Ellipse(d)
-                    | Element::Line(d, ..)
-                    | Element::Arrow(d, ..)
-                    | Element::Text(d, ..)
-                    | Element::Freehand(d, ..) => d.id = id,
+    let on_pointer_up = move |ev: ev::PointerEvent| match canvas_mode.get() {
+        CanvasMode::Hand => {
+            pan_anchor.set(None);
+        }
+        CanvasMode::Select => {
+            select_anchor.set(None);
+        }
+        CanvasMode::Draw => {
+            if let Some(state) = drawing.get() {
+                if state.tool == Tool::Freehand {
+                    freehand_anchor.set(None);
+                    drawing.set(None);
+                    return;
                 }
-                s.elements.push(el);
-            });
-            drawing.set(None);
+
+                let world = update_world(&ev);
+                let el = build_element(
+                    state.anchor,
+                    world,
+                    state.tool,
+                    state.color,
+                    shift_pressed.get(),
+                );
+                scene.update(|s| {
+                    let mut el = el;
+                    let id = s.next_id();
+                    match &mut el {
+                        Element::Rectangle(d)
+                        | Element::Ellipse(d)
+                        | Element::Line(d, ..)
+                        | Element::Arrow(d, ..)
+                        | Element::Text(d, ..)
+                        | Element::Freehand(d, ..) => d.id = id,
+                    }
+                    s.elements.push(el);
+                });
+                drawing.set(None);
+            }
         }
     };
 
     let drawing_preview = move || {
+        if canvas_mode.get() != CanvasMode::Draw {
+            return None;
+        }
         let state = drawing.get()?;
         if state.tool == Tool::Freehand {
             return None;
@@ -464,6 +515,35 @@ pub fn Canvas(
         let shift = shift_pressed.get();
         let el = build_element(state.anchor, world, state.tool, state.color, shift);
         Some(render_element(&el))
+    };
+
+    let selection_preview = move || {
+        let anchor = select_anchor.get()?;
+        let world = cursor_world.get();
+        let x = anchor.0.min(world.0);
+        let y = anchor.1.min(world.1);
+        let w = (world.0 - anchor.0).abs();
+        let h = (world.1 - anchor.1).abs();
+        if w < 1.0 || h < 1.0 {
+            return None;
+        }
+        let hex = ShapeColor::Blue.to_hex();
+        Some(
+            view! {
+                <rect
+                    x=x
+                    y=y
+                    width=w
+                    height=h
+                    fill=format!("{}33", hex)
+                    stroke=hex
+                    stroke-width="1"
+                    stroke-dasharray="4 2"
+                    pointer-events="none"
+                />
+            }
+            .into_view(),
+        )
     };
 
     view! {
@@ -491,6 +571,8 @@ pub fn Canvas(
             {move || scene.get().elements.iter().map(render_element).collect_view()}
 
             {move || drawing_preview()}
+
+            {move || selection_preview()}
         </svg>
     }
 }
