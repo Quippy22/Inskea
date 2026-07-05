@@ -1,3 +1,8 @@
+/// Floating tool dock with categories and panels.
+///
+/// The dock sits on the left side of the screen and provides access to
+/// drawing tools, colours, grouping, and page management via expandable
+/// category panels.
 mod colors;
 mod drawing;
 mod group;
@@ -12,6 +17,7 @@ use crate::model::ShapeColor;
 use crate::ui::icon;
 use leptos::*;
 
+/// Dock category variant used to select which panel is shown.
 #[derive(Clone, Copy, PartialEq)]
 enum Category {
     Drawing,
@@ -20,6 +26,11 @@ enum Category {
     Pages,
 }
 
+/// Floating dock with tool categories, colour palette, and eraser.
+///
+/// Clicking a category while collapsed expands the dock and opens that
+/// category's panel. The eraser button sits at the bottom of the category
+/// list with the same highlight style.
 #[component]
 pub fn Dock(selected_tool: RwSignal<Tool>, selected_color: RwSignal<ShapeColor>) -> impl IntoView {
     let collapsed = create_rw_signal(true);

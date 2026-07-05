@@ -1,6 +1,10 @@
 use crate::model::ShapeColor;
 use leptos::*;
 
+/// Vertical panel of colour swatches representing the ShapeColor palette.
+///
+/// The selected colour gets a ring-accent border. Each swatch is rendered
+/// as a small coloured square button.
 #[component]
 pub fn ColorsPanel(selected_color: RwSignal<ShapeColor>) -> impl IntoView {
     let colors = [

@@ -1,6 +1,7 @@
 use crate::ui::icon;
 use leptos::*;
 
+/// Available drawing tool types.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Tool {
     Rectangle,
@@ -11,6 +12,9 @@ pub enum Tool {
     Freehand,
 }
 
+/// Vertical panel of drawing-tool buttons (Rectangle, Ellipse, Line, etc.).
+///
+/// The currently selected tool is highlighted with the accent colour.
 #[component]
 pub fn DrawingPanel(selected_tool: RwSignal<Tool>) -> impl IntoView {
     view! {

@@ -1,5 +1,10 @@
+/// SVG icon components used throughout the UI.
+///
+/// Each function returns a small inline SVG element (20×20 px) styled with
+/// `currentColor` so they inherit the text colour of their parent.
 use leptos::*;
 
+/// Palette / colours icon.
 pub fn palette() -> impl IntoView {
     view! {
         <svg
@@ -21,6 +26,7 @@ pub fn palette() -> impl IntoView {
     }
 }
 
+/// Pencil / drawing icon.
 pub fn pencil() -> impl IntoView {
     view! {
         <svg
@@ -39,6 +45,7 @@ pub fn pencil() -> impl IntoView {
     }
 }
 
+/// Chevron pointing left (collapse).
 pub fn chevron_left() -> impl IntoView {
     view! {
         <svg
@@ -56,6 +63,7 @@ pub fn chevron_left() -> impl IntoView {
     }
 }
 
+/// Chevron pointing right (expand).
 pub fn chevron_right() -> impl IntoView {
     view! {
         <svg
@@ -73,6 +81,7 @@ pub fn chevron_right() -> impl IntoView {
     }
 }
 
+/// Rectangle shape icon.
 pub fn rect() -> impl IntoView {
     view! {
         <svg
@@ -90,6 +99,7 @@ pub fn rect() -> impl IntoView {
     }
 }
 
+/// Ellipse / circle shape icon.
 pub fn ellipse() -> impl IntoView {
     view! {
         <svg
@@ -107,6 +117,7 @@ pub fn ellipse() -> impl IntoView {
     }
 }
 
+/// Diagonal line shape icon.
 pub fn line() -> impl IntoView {
     view! {
         <svg
@@ -124,6 +135,7 @@ pub fn line() -> impl IntoView {
     }
 }
 
+/// Arrow shape icon.
 pub fn arrow() -> impl IntoView {
     view! {
         <svg
@@ -142,6 +154,7 @@ pub fn arrow() -> impl IntoView {
     }
 }
 
+/// Text / type tool icon.
 pub fn text() -> impl IntoView {
     view! {
         <svg
@@ -161,6 +174,7 @@ pub fn text() -> impl IntoView {
     }
 }
 
+/// Freehand / scribble shape icon.
 pub fn freehand() -> impl IntoView {
     view! {
         <svg
@@ -178,6 +192,7 @@ pub fn freehand() -> impl IntoView {
     }
 }
 
+/// Group / layers icon.
 pub fn group() -> impl IntoView {
     view! {
         <svg
@@ -196,6 +211,7 @@ pub fn group() -> impl IntoView {
     }
 }
 
+/// Pages / multi-page icon.
 pub fn pages() -> impl IntoView {
     view! {
         <svg
@@ -216,6 +232,7 @@ pub fn pages() -> impl IntoView {
     }
 }
 
+/// Eraser tool icon.
 pub fn eraser() -> impl IntoView {
     view! {
         <svg

@@ -1,6 +1,7 @@
 use crate::canvas::Viewport;
 use leptos::*;
 
+/// Floating bar at the top of the screen showing cursor position and zoom level.
 #[component]
 pub fn StatusBar(
     cursor_screen: RwSignal<(f64, f64)>,
