@@ -30,7 +30,12 @@ pub fn App() -> impl IntoView {
                 eraser_active=eraser_active
             />
             <ToolBar scene=scene viewport=viewport canvas_mode=canvas_mode />
-            <Dock selected_tool=selected_tool selected_color=selected_color canvas_mode=canvas_mode eraser_active=eraser_active />
+            <Dock
+                selected_tool=selected_tool
+                selected_color=selected_color
+                canvas_mode=canvas_mode
+                eraser_active=eraser_active
+            />
         </div>
     }
 }

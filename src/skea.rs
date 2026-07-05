@@ -27,7 +27,10 @@ pub fn save_to_string(scene: &Scene) -> String {
     for el in &scene.elements {
         match el {
             Element::Rectangle(d) => {
-                let fill = d.fill_color.map(|c| format!("{c:?}")).unwrap_or("none".into());
+                let fill = d
+                    .fill_color
+                    .map(|c| format!("{c:?}"))
+                    .unwrap_or("none".into());
                 writeln!(
                     out,
                     "rect {} {} {} {} {} {:?} {fill}",
@@ -36,7 +39,10 @@ pub fn save_to_string(scene: &Scene) -> String {
                 .ok();
             }
             Element::Ellipse(d) => {
-                let fill = d.fill_color.map(|c| format!("{c:?}")).unwrap_or("none".into());
+                let fill = d
+                    .fill_color
+                    .map(|c| format!("{c:?}"))
+                    .unwrap_or("none".into());
                 writeln!(
                     out,
                     "ellipse {} {} {} {} {} {:?} {fill}",
@@ -61,7 +67,10 @@ pub fn save_to_string(scene: &Scene) -> String {
                 .ok();
             }
             Element::Text(d, content) => {
-                let fill = d.fill_color.map(|c| format!("{c:?}")).unwrap_or("none".into());
+                let fill = d
+                    .fill_color
+                    .map(|c| format!("{c:?}"))
+                    .unwrap_or("none".into());
                 writeln!(
                     out,
                     "text {} {} {} {:?} {fill} {content}",
@@ -70,9 +79,17 @@ pub fn save_to_string(scene: &Scene) -> String {
                 .ok();
             }
             Element::Freehand(d, pts) => {
-                let points: String =
-                    pts.iter().map(|p| format!("{},{}", p.x, p.y)).collect::<Vec<_>>().join(" ");
-                writeln!(out, "freehand {} {:?} {points}", d.stroke_width, d.stroke_color).ok();
+                let points: String = pts
+                    .iter()
+                    .map(|p| format!("{},{}", p.x, p.y))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                writeln!(
+                    out,
+                    "freehand {} {:?} {points}",
+                    d.stroke_width, d.stroke_color
+                )
+                .ok();
             }
         }
     }
@@ -123,10 +140,7 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                 let fill = if parts[7] == "none" {
                     None
                 } else {
-                    Some(
-                        ShapeColor::from_name(parts[7])
-                            .ok_or_else(|| err("invalid fill color"))?,
-                    )
+                    Some(ShapeColor::from_name(parts[7]).ok_or_else(|| err("invalid fill color"))?)
                 };
                 let mut data = ElementData::new(0);
                 data.x = x;
@@ -176,10 +190,7 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                 let fill = if parts[5] == "none" {
                     None
                 } else {
-                    Some(
-                        ShapeColor::from_name(parts[5])
-                            .ok_or_else(|| err("invalid fill color"))?,
-                    )
+                    Some(ShapeColor::from_name(parts[5]).ok_or_else(|| err("invalid fill color"))?)
                 };
                 let content = if parts.len() > 6 {
                     let prefix_len: usize = parts[..6].iter().map(|p| p.len() + 1).sum();
@@ -204,9 +215,9 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                     ShapeColor::from_name(parts[2]).ok_or_else(|| err("invalid stroke color"))?;
                 let mut pts = Vec::new();
                 for p in &parts[3..] {
-                    let (xs, ys) = p.split_once(',').ok_or_else(|| {
-                        err("invalid point, expected x,y without spaces")
-                    })?;
+                    let (xs, ys) = p
+                        .split_once(',')
+                        .ok_or_else(|| err("invalid point, expected x,y without spaces"))?;
                     let x: f64 = xs.parse().map_err(|_| err("invalid point x"))?;
                     let y: f64 = ys.parse().map_err(|_| err("invalid point y"))?;
                     pts.push(Point { x, y });
@@ -231,13 +242,19 @@ mod tests {
     fn make_scene() -> Scene {
         let mut s = Scene::new();
         let mut rd = ElementData::new(0);
-        rd.x = 10.0; rd.y = 20.0; rd.width = 100.0; rd.height = 50.0;
+        rd.x = 10.0;
+        rd.y = 20.0;
+        rd.width = 100.0;
+        rd.height = 50.0;
         rd.stroke_color = ShapeColor::Blue;
         rd.fill_color = Some(ShapeColor::Cyan);
         s.add_element(Element::Rectangle(rd));
 
         let mut ed = ElementData::new(0);
-        ed.x = 5.0; ed.y = 5.0; ed.width = 60.0; ed.height = 60.0;
+        ed.x = 5.0;
+        ed.y = 5.0;
+        ed.width = 60.0;
+        ed.height = 60.0;
         ed.stroke_color = ShapeColor::Red;
         s.add_element(Element::Ellipse(ed));
 
@@ -259,7 +276,8 @@ mod tests {
         ));
 
         let mut td = ElementData::new(0);
-        td.x = 30.0; td.y = 40.0;
+        td.x = 30.0;
+        td.y = 40.0;
         td.fill_color = Some(ShapeColor::White);
         s.add_element(Element::Text(td, "hello world".into()));
 

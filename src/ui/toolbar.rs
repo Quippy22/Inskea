@@ -23,8 +23,7 @@ fn browser_export(scene: Scene) {
     let content = skea::save_to_string(&scene);
     let parts = js_sys::Array::new();
     parts.push(&JsValue::from_str(&content));
-    let blob =
-        web_sys::Blob::new_with_str_sequence(&parts).expect("failed to create Blob");
+    let blob = web_sys::Blob::new_with_str_sequence(&parts).expect("failed to create Blob");
     let url = web_sys::Url::create_object_url_with_blob(&blob).expect("failed to create URL");
     let document = web_sys::window().unwrap().document().unwrap();
     let anchor = document.create_element("a").unwrap();
@@ -32,7 +31,9 @@ fn browser_export(scene: Scene) {
     anchor.set_attribute("download", "untitled.skea").ok();
     anchor.set_attribute("style", "display:none").ok();
     document.body().unwrap().append_child(&anchor).ok();
-    let _ = anchor.dyn_ref::<web_sys::HtmlElement>().map(|el| el.click());
+    let _ = anchor
+        .dyn_ref::<web_sys::HtmlElement>()
+        .map(|el| el.click());
     document.body().unwrap().remove_child(&anchor).ok();
     web_sys::Url::revoke_object_url(&url).ok();
 }
@@ -58,8 +59,7 @@ fn browser_import(scene: RwSignal<Scene>) {
         let input_el = input_el.clone();
         let doc = doc.clone();
         if let Some(file) = input_el.files().and_then(|f| f.item(0)) {
-            let reader =
-                web_sys::FileReader::new().expect("failed to create FileReader");
+            let reader = web_sys::FileReader::new().expect("failed to create FileReader");
             let reader_c = reader.clone();
             let scene_c = scene;
             let on_load = Closure::wrap(Box::new(move || {
@@ -68,9 +68,7 @@ fn browser_import(scene: RwSignal<Scene>) {
                         match skea::load_from_str(&text) {
                             Ok(loaded) => scene_c.set(loaded),
                             Err(e) => {
-                                web_sys::console::error_1(
-                                    &format!("parse error: {e}").into(),
-                                );
+                                web_sys::console::error_1(&format!("parse error: {e}").into());
                             }
                         }
                     }
@@ -185,15 +183,11 @@ pub fn ToolBar(
                         Ok(content) => match skea::load_from_str(&content) {
                             Ok(loaded) => scene.set(loaded),
                             Err(e) => {
-                                web_sys::console::error_1(
-                                    &format!("parse error: {e}").into(),
-                                );
+                                web_sys::console::error_1(&format!("parse error: {e}").into());
                             }
                         },
                         Err(e) => {
-                            web_sys::console::error_1(
-                                &format!("load failed: {e}").into(),
-                            );
+                            web_sys::console::error_1(&format!("load failed: {e}").into());
                         }
                     }
                 }
@@ -214,9 +208,7 @@ pub fn ToolBar(
                     Ok(content) => match skea::load_from_str(&content) {
                         Ok(loaded) => scene.set(loaded),
                         Err(e) => {
-                            web_sys::console::error_1(
-                                &format!("parse error: {e}").into(),
-                            );
+                            web_sys::console::error_1(&format!("parse error: {e}").into());
                         }
                     },
                     Err(e) => {

@@ -65,7 +65,10 @@ pub fn Dock(
     let panel_visible = move || !collapsed.get() || show_panel.get();
 
     let panel = move || match active.get() {
-        Category::Drawing => view! { <DrawingPanel selected_tool=selected_tool canvas_mode=canvas_mode /> }.into_view(),
+        Category::Drawing => {
+            view! { <DrawingPanel selected_tool=selected_tool canvas_mode=canvas_mode /> }
+                .into_view()
+        }
         Category::Colors => view! { <ColorsPanel selected_color=selected_color /> }.into_view(),
         Category::Group => view! { <GroupPanel /> }.into_view(),
         Category::Pages => view! { <PagesPanel /> }.into_view(),

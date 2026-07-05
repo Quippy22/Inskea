@@ -258,17 +258,7 @@ fn render_rect(data: &ElementData) -> leptos::View {
     let sw = data.stroke_width;
     let fill = fill_hex(&data.fill_color);
     let stroke = stroke_hex(data.stroke_color);
-    view! {
-        <rect
-            x=x
-            y=y
-            width=w
-            height=h
-            fill=fill
-            stroke=stroke
-            stroke-width=sw
-        />
-    }
+    view! { <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw /> }
     .into_view()
 }
 
@@ -284,17 +274,7 @@ fn render_ellipse(data: &ElementData) -> leptos::View {
     let cy = y + h / 2.0;
     let rx = w / 2.0;
     let ry = h / 2.0;
-    view! {
-        <ellipse
-            cx=cx
-            cy=cy
-            rx=rx
-            ry=ry
-            fill=fill
-            stroke=stroke
-            stroke-width=sw
-        />
-    }
+    view! { <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw /> }
     .into_view()
 }
 
@@ -303,8 +283,7 @@ fn render_line(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
     let stroke = stroke_hex(data.stroke_color);
     let (x1, y1) = (a.x, a.y);
     let (x2, y2) = (b.x, b.y);
-    view! { <line x1=x1 y1=y1 x2=x2 y2=y2 stroke=stroke stroke-width=sw /> }
-        .into_view()
+    view! { <line x1=x1 y1=y1 x2=x2 y2=y2 stroke=stroke stroke-width=sw /> }.into_view()
 }
 
 fn render_arrow(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
@@ -375,8 +354,7 @@ fn render_freehand(data: &ElementData, pts: &[Point]) -> leptos::View {
         }
         d
     };
-    view! { <path d=d fill="none" stroke=stroke stroke-width=sw /> }
-        .into_view()
+    view! { <path d=d fill="none" stroke=stroke stroke-width=sw /> }.into_view()
 }
 
 #[component]
@@ -560,45 +538,51 @@ pub fn Canvas(
         }
         erasing.set(false);
         match canvas_mode.get() {
-        CanvasMode::Hand => {
-            pan_anchor.set(None);
-        }
-        CanvasMode::Select => {
-            select_anchor.set(None);
-        }
-        CanvasMode::Draw => {
-            if let Some(state) = drawing.get() {
-                if state.tool == Tool::Freehand {
-                    freehand_anchor.set(None);
-                    drawing.set(None);
-                    return;
-                }
-
-                let world = update_world(&ev);
-                let el = build_element(
-                    state.anchor,
-                    world,
-                    state.tool,
-                    state.color,
-                    shift_pressed.get(),
-                );
-                scene.update(|s| {
-                    let mut el = el;
-                    let id = s.next_id();
-                    match &mut el {
-                        Element::Rectangle(d)
-                        | Element::Ellipse(d)
-                        | Element::Line(d, ..)
-                        | Element::Arrow(d, ..)
-                        | Element::Text(d, ..)
-                        | Element::Freehand(d, ..) => d.id = id,
+            CanvasMode::Hand => {
+                pan_anchor.set(None);
+            }
+            CanvasMode::Select => {
+                select_anchor.set(None);
+            }
+            CanvasMode::Draw => {
+                if let Some(state) = drawing.get() {
+                    if state.tool == Tool::Freehand {
+                        freehand_anchor.set(None);
+                        drawing.set(None);
+                        return;
                     }
-                    s.elements.push(el);
-                });
-                drawing.set(None);
+
+                    let world = update_world(&ev);
+                    let dx = world.0 - state.anchor.0;
+                    let dy = world.1 - state.anchor.1;
+                    if dx.hypot(dy) < 3.0 {
+                        drawing.set(None);
+                        return;
+                    }
+                    let el = build_element(
+                        state.anchor,
+                        world,
+                        state.tool,
+                        state.color,
+                        shift_pressed.get(),
+                    );
+                    scene.update(|s| {
+                        let mut el = el;
+                        let id = s.next_id();
+                        match &mut el {
+                            Element::Rectangle(d)
+                            | Element::Ellipse(d)
+                            | Element::Line(d, ..)
+                            | Element::Arrow(d, ..)
+                            | Element::Text(d, ..)
+                            | Element::Freehand(d, ..) => d.id = id,
+                        }
+                        s.elements.push(el);
+                    });
+                    drawing.set(None);
+                }
             }
         }
-    }
     };
 
     let drawing_preview = move || {
@@ -611,8 +595,16 @@ pub fn Canvas(
         }
         let world = cursor_world.get();
         let shift = shift_pressed.get();
+        let dx = world.0 - state.anchor.0;
+        let dy = world.1 - state.anchor.1;
+        if dx.hypot(dy) < 3.0 {
+            return None;
+        }
         let el = build_element(state.anchor, world, state.tool, state.color, shift);
-        Some(render_element(&el))
+        Some(
+            view! { <g stroke-dasharray="4 2">{render_element(&el)}</g> }
+            .into_view(),
+        )
     };
 
     let selection_preview = move || {
@@ -667,14 +659,15 @@ pub fn Canvas(
             <path d="M-12,0 L12,0 M0,-12 L0,12" stroke="#7aa2f7" stroke-width="2" />
 
             {move || {
-                scene.get().elements.iter().map(|el| {
-                    let view = render_element(el);
-                    view! {
-                        <g pointer-events="none">
-                            {view}
-                        </g>
-                    }.into_view()
-                }).collect_view()
+                scene
+                    .get()
+                    .elements
+                    .iter()
+                    .map(|el| {
+                        let view = render_element(el);
+                        view! { <g pointer-events="none">{view}</g> }.into_view()
+                    })
+                    .collect_view()
             }}
 
             {move || drawing_preview()}
