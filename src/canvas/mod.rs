@@ -7,9 +7,6 @@ use leptos::ev;
 use leptos::svg::Svg;
 use leptos::*;
 
-const PREVIEW_SIZE: f64 = 10.0;
-const PREVIEW_OFFSET: f64 = 6.0;
-
 #[derive(Clone)]
 struct DrawingState {
     anchor: (f64, f64),
@@ -183,7 +180,8 @@ fn render_rect(data: &ElementData) -> leptos::View {
             stroke-width=sw
             pointer-events="none"
         />
-    }.into_view()
+    }
+    .into_view()
 }
 
 fn render_ellipse(data: &ElementData) -> leptos::View {
@@ -210,7 +208,7 @@ fn render_ellipse(data: &ElementData) -> leptos::View {
             pointer-events="none"
         />
     }
-        .into_view()
+    .into_view()
 }
 
 fn render_line(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
@@ -468,117 +466,6 @@ pub fn Canvas(
         Some(render_element(&el))
     };
 
-    let cursor_preview = move || {
-        if drawing.get().is_some() {
-            return ().into_view();
-        }
-        let tool = selected_tool.get();
-        let (cx, cy) = cursor_world.get();
-        let px = cx + PREVIEW_OFFSET;
-        let py = cy - PREVIEW_OFFSET;
-        let s = PREVIEW_SIZE;
-
-        match tool {
-            Tool::Rectangle => view! {
-                <rect
-                    x=px
-                    y=py
-                    width=s
-                    height=s
-                    fill="none"
-                    stroke="#7aa2f7"
-                    stroke-width="1.5"
-                    opacity="0.6"
-                    pointer-events="none"
-                />
-            }
-            .into_view(),
-            Tool::Ellipse => view! {
-                <ellipse
-                    cx=px + s / 2.0
-                    cy=py + s / 2.0
-                    rx=s / 2.0
-                    ry=s / 2.0
-                    fill="none"
-                    stroke="#7aa2f7"
-                    stroke-width="1.5"
-                    opacity="0.6"
-                    pointer-events="none"
-                />
-            }
-            .into_view(),
-            Tool::Line => view! {
-                <line
-                    x1=px
-                    y1=py + s
-                    x2=px + s
-                    y2=py
-                    stroke="#7aa2f7"
-                    stroke-width="1.5"
-                    opacity="0.6"
-                    pointer-events="none"
-                />
-            }
-            .into_view(),
-            Tool::Arrow => view! {
-                <g
-                    opacity="0.6"
-                    pointer-events="none"
-                    stroke="#7aa2f7"
-                    stroke-width="1.5"
-                    fill="none"
-                >
-                    <line x1=px y1=py + s x2=px + s y2=py />
-                    <polyline points=format!(
-                        "{},{} {},{} {},{}",
-                        px + s,
-                        py,
-                        px + s - 3.0,
-                        py,
-                        px + s,
-                        py + 3.0,
-                    ) />
-                </g>
-            }
-            .into_view(),
-            Tool::Text => view! {
-                <text
-                    x=px + s / 2.0
-                    y=py + s / 2.0
-                    fill="#7aa2f7"
-                    opacity="0.6"
-                    pointer-events="none"
-                    font-size="8"
-                    font-family="sans-serif"
-                    dominant-baseline="central"
-                    text-anchor="middle"
-                >
-                    "Aa"
-                </text>
-            }
-            .into_view(),
-            Tool::Freehand => view! {
-                <path
-                    d=format!(
-                        "M{} {} Q{} {} {} {}",
-                        px,
-                        py + s,
-                        px + s / 2.0,
-                        py,
-                        px + s,
-                        py + s / 2.0,
-                    )
-                    fill="none"
-                    stroke="#7aa2f7"
-                    stroke-width="1.5"
-                    opacity="0.6"
-                    pointer-events="none"
-                />
-            }
-            .into_view(),
-        }
-    };
-
     view! {
         <svg
             _ref=svg_ref
@@ -604,8 +491,6 @@ pub fn Canvas(
             {move || scene.get().elements.iter().map(render_element).collect_view()}
 
             {move || drawing_preview()}
-
-            {cursor_preview}
         </svg>
     }
 }
