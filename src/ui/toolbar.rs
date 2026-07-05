@@ -4,7 +4,7 @@ use crate::ui::icon;
 use leptos::*;
 
 #[component]
-pub fn StatusBar(viewport: RwSignal<Viewport>, canvas_mode: RwSignal<CanvasMode>) -> impl IntoView {
+pub fn ToolBar(viewport: RwSignal<Viewport>, canvas_mode: RwSignal<CanvasMode>) -> impl IntoView {
     let on_home = move |_| viewport.set(Viewport::default());
 
     let btn = move |mode: CanvasMode| -> &'static str {

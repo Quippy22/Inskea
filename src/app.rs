@@ -1,7 +1,7 @@
 use crate::canvas::{Canvas, CanvasMode, Viewport};
 use crate::model::{Scene, ShapeColor};
 use crate::ui::dock::{Dock, Tool};
-use crate::ui::StatusBar;
+use crate::ui::ToolBar;
 use leptos::*;
 
 #[component]
@@ -27,7 +27,7 @@ pub fn App() -> impl IntoView {
                 canvas_mode=canvas_mode
                 scene=scene
             />
-            <StatusBar viewport=viewport canvas_mode=canvas_mode />
+            <ToolBar viewport=viewport canvas_mode=canvas_mode />
             <Dock selected_tool=selected_tool selected_color=selected_color />
         </div>
     }
