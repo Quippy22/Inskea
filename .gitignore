@@ -20,3 +20,7 @@ node_modules/
 
 # Env / secrets
 .env
+
+# Local launcher/desktop files (user-specific paths)
+inskea.desktop
+inskea.sh
