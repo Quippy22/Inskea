@@ -220,14 +220,36 @@ fn hit_test(point: (f64, f64), el: &Element) -> bool {
             (px - near_x).hypot(py - near_y) <= margin + data.stroke_width
         }
         Element::Text(data, _) => {
-            (px - data.x).hypot(py - data.y) <= margin + data.width.max(12.0) * 0.5
+            let font_size = data.width.max(12.0);
+            px >= data.x - margin
+                && px <= data.x + data.width + margin
+                && py >= data.y - font_size
+                && py <= data.y + margin
         }
         Element::Freehand(data, pts) => {
             if pts.is_empty() {
                 return false;
             }
+            let tolerance = margin + data.stroke_width;
             for p in pts {
-                if (px - p.x).hypot(py - p.y) <= margin + data.stroke_width {
+                if (px - p.x).hypot(py - p.y) <= tolerance {
+                    return true;
+                }
+            }
+            for i in 1..pts.len() {
+                let a = &pts[i - 1];
+                let b = &pts[i];
+                let dx = b.x - a.x;
+                let dy = b.y - a.y;
+                let len = (dx * dx + dy * dy).sqrt();
+                if len < 1.0 {
+                    continue;
+                }
+                let t = ((px - a.x) * dx + (py - a.y) * dy) / (len * len);
+                let t = t.clamp(0.0, 1.0);
+                let nx = a.x + t * dx;
+                let ny = a.y + t * dy;
+                if (px - nx).hypot(py - ny) <= tolerance {
                     return true;
                 }
             }
@@ -264,7 +286,7 @@ fn element_bounds(el: &Element) -> (f64, f64, f64, f64) {
         }
         Element::Text(data, _content) => {
             let h = data.width.max(12.0);
-            (data.x, data.y, data.width, h)
+            (data.x, data.y - h, data.width, h)
         }
         Element::Freehand(_, pts) => {
             if pts.is_empty() {
@@ -343,6 +365,246 @@ fn offset_element(el: &mut Element, dx: f64, dy: f64) {
     }
 }
 
+/// Which handle a drag operation is acting on.
+#[derive(Clone, Copy, PartialEq)]
+enum Handle {
+    /// Resize corner (0-3) or edge (4-7) handle.
+    Resize(usize),
+    /// Move via the centre crosshair.
+    Move,
+    /// Rotate via the top handle.
+    Rotate,
+}
+
+/// Returns the 10 handle positions for the given bounding box.
+///
+/// Indices 0-7 are the resize corners/edges in order:
+///   top-left, top-centre, top-right, middle-left, middle-right, bottom-left, bottom-centre, bottom-right.
+/// Index 8 is the move handle (centre). Index 9 is the rotate handle (above the box).
+fn handle_positions(bx: f64, by: f64, bw: f64, bh: f64) -> [(f64, f64); 10] {
+    [
+        (bx, by),
+        (bx + bw / 2.0, by),
+        (bx + bw, by),
+        (bx, by + bh / 2.0),
+        (bx + bw, by + bh / 2.0),
+        (bx, by + bh),
+        (bx + bw / 2.0, by + bh),
+        (bx + bw, by + bh),
+        (bx + bw / 2.0, by + bh / 2.0),
+        (bx + bw / 2.0, by - 25.0),
+    ]
+}
+
+/// Snap `angle` to the nearest `divisions`-th of a full turn.
+fn snap_angle(angle: f64, divisions: f64) -> f64 {
+    (angle / (std::f64::consts::TAU / divisions)).round() * (std::f64::consts::TAU / divisions)
+}
+
+/// Resize `el` so its bounding box changes from `(bx,by,bw,bh)` by the mouse delta `(dx,dy)`.
+///
+/// `handle` selects which corner/edge is being dragged:
+/// - 0 (top-left), 2 (top-right), 5 (bottom-left), 7 (bottom-right): resize on both axes.
+/// - 1 (top-centre), 3 (middle-left), 4 (middle-right), 6 (bottom-centre): resize on one axis.
+///
+/// `fdx`/`fdy` is the per-frame mouse delta (for line endpoint movement).
+///
+/// When `shift` is held the original aspect ratio is preserved (the handle-opposite corner
+/// or edge is pinned).
+///
+/// When `multi` is true all elements are proportionally scaled from the combined bounds;
+/// when false each variant uses its own resize behaviour (e.g. lines move only the dragged endpoint).
+///
+/// `orig` is a clone of the element captured once at drag-start (used to prevent
+/// the scale factor from compounding across frames).
+fn resize_element(
+    el: &mut Element,
+    orig: &Element,
+    bx: f64,
+    by: f64,
+    bw: f64,
+    bh: f64,
+    dx: f64,
+    dy: f64,
+    fdx: f64,
+    fdy: f64,
+    handle: usize,
+    shift: bool,
+    multi: bool,
+) {
+    let (mut nx, mut ny, mut nw, mut nh) = match handle {
+        0 => (bx + dx, by + dy, bw - dx, bh - dy),
+        1 => (bx, by + dy, bw, bh - dy),
+        2 => (bx, by + dy, bw + dx, bh - dy),
+        3 => (bx + dx, by, bw - dx, bh),
+        4 => (bx, by, bw + dx, bh),
+        5 => (bx + dx, by, bw - dx, bh + dy),
+        6 => (bx, by, bw, bh + dy),
+        7 => (bx, by, bw + dx, bh + dy),
+        _ => return,
+    };
+    if shift {
+        let ratio = bw / bh;
+        let nratio = nw / nh;
+        if nratio > ratio {
+            nh = nw / ratio;
+        } else {
+            nw = nh * ratio;
+        }
+        match handle {
+            0 => {
+                nx = bx + bw - nw;
+                ny = by + bh - nh;
+            }
+            1 => {
+                ny = by + bh - nh;
+            }
+            2 => {
+                ny = by + bh - nh;
+            }
+            3 => {
+                nx = bx + bw - nw;
+            }
+            5 => {
+                nx = bx + bw - nw;
+            }
+            _ => {}
+        }
+    }
+    if nw < 5.0 || nh < 5.0 {
+        return;
+    }
+    let obw = bw.max(1.0);
+    let obh = bh.max(1.0);
+    let sx = nw / obw;
+    let sy = nh / obh;
+    if multi {
+        // Multi-select: proportionally scale every element as one group
+        // from the combined-bounds anchor.  Per-frame snapshots prevent
+        // the scale factor from compounding.
+        match (el, orig) {
+            (Element::Rectangle(data) | Element::Ellipse(data),
+             Element::Rectangle(od) | Element::Ellipse(od)) => {
+                data.x = (od.x - bx) * sx + nx;
+                data.y = (od.y - by) * sy + ny;
+                data.width = (od.width * sx).max(5.0);
+                data.height = (od.height * sy).max(5.0);
+            }
+            (Element::Line(_, a, b) | Element::Arrow(_, a, b),
+             Element::Line(_, oa, ob) | Element::Arrow(_, oa, ob)) => {
+                a.x = (oa.x - bx) * sx + nx;
+                a.y = (oa.y - by) * sy + ny;
+                b.x = (ob.x - bx) * sx + nx;
+                b.y = (ob.y - by) * sy + ny;
+            }
+            (Element::Freehand(_, pts), Element::Freehand(_, opts)) => {
+                for (p, op) in pts.iter_mut().zip(opts.iter()) {
+                    p.x = (op.x - bx) * sx + nx;
+                    p.y = (op.y - by) * sy + ny;
+                }
+            }
+            (Element::Text(data, _), Element::Text(od, _)) => {
+                data.x = (od.x - bx) * sx + nx;
+                data.y = (od.y - by) * sy + ny;
+                data.width = (od.width * sx).max(5.0);
+            }
+            _ => {}
+        }
+    } else {
+        // Single selection: use element-specific resize behaviour.
+        match el {
+            Element::Rectangle(data) | Element::Ellipse(data) => {
+                data.x = nx;
+                data.y = ny;
+                data.width = nw;
+                data.height = nh;
+            }
+            Element::Line(_, a, b) | Element::Arrow(_, a, b) => {
+                let hpos = handle_positions(bx, by, bw, bh);
+                let (hx, hy) = hpos[handle];
+                let dist_a = (a.x - hx).hypot(a.y - hy);
+                let dist_b = (b.x - hx).hypot(b.y - hy);
+                if dist_a < dist_b {
+                    a.x += fdx;
+                    a.y += fdy;
+                } else {
+                    b.x += fdx;
+                    b.y += fdy;
+                }
+            }
+            Element::Freehand(_, pts) => {
+                for p in pts {
+                    p.x = (p.x - bx) * sx + nx;
+                    p.y = (p.y - by) * sy + ny;
+                }
+            }
+            Element::Text(data, _) => {
+                data.x = nx;
+                data.y = ny;
+                data.width = nw;
+            }
+        }
+    }
+}
+
+/// Snap an element's position to the nearest `grid`-sized increment.
+fn snap_element_to_grid(el: &mut Element, grid: f64) {
+    match el {
+        Element::Rectangle(d) | Element::Ellipse(d) | Element::Text(d, _) => {
+            let cx = d.x + d.width / 2.0;
+            let cy = d.y + d.height / 2.0;
+            let snapped_cx = (cx / grid).round() * grid;
+            let snapped_cy = (cy / grid).round() * grid;
+            d.x += snapped_cx - cx;
+            d.y += snapped_cy - cy;
+        }
+        Element::Line(_, a, b) | Element::Arrow(_, a, b) => {
+            a.x = (a.x / grid).round() * grid;
+            a.y = (a.y / grid).round() * grid;
+            b.x = (b.x / grid).round() * grid;
+            b.y = (b.y / grid).round() * grid;
+        }
+        Element::Freehand(_, pts) => {
+            for p in pts {
+                p.x = (p.x / grid).round() * grid;
+                p.y = (p.y / grid).round() * grid;
+            }
+        }
+    }
+}
+
+/// Apply an incremental rotation `delta` (radians) to `el` around `(cx,cy)`.
+///
+/// Rectangles, ellipses and text add `delta` to `data.rotation`.
+/// Lines, arrows and freehand points are rotated in-place by `delta`.
+fn rotate_element(el: &mut Element, cx: f64, cy: f64, delta: f64) {
+    let cos = delta.cos();
+    let sin = delta.sin();
+    match el {
+        Element::Rectangle(data) | Element::Ellipse(data) | Element::Text(data, _) => {
+            data.rotation += delta;
+        }
+        Element::Line(_, a, b) | Element::Arrow(_, a, b) => {
+            let dx1 = a.x - cx;
+            let dy1 = a.y - cy;
+            let dx2 = b.x - cx;
+            let dy2 = b.y - cy;
+            a.x = cx + dx1 * cos - dy1 * sin;
+            a.y = cy + dx1 * sin + dy1 * cos;
+            b.x = cx + dx2 * cos - dy2 * sin;
+            b.y = cy + dx2 * sin + dy2 * cos;
+        }
+        Element::Freehand(_, pts) => {
+            for p in pts {
+                let dx = p.x - cx;
+                let dy = p.y - cy;
+                p.x = cx + dx * cos - dy * sin;
+                p.y = cy + dx * sin + dy * cos;
+            }
+        }
+    }
+}
+
 fn render_rect(data: &ElementData) -> leptos::View {
     let x = data.x;
     let y = data.y;
@@ -351,7 +613,20 @@ fn render_rect(data: &ElementData) -> leptos::View {
     let sw = data.stroke_width;
     let fill = fill_hex(&data.fill_color);
     let stroke = stroke_hex(data.stroke_color);
-    view! { <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw /> }.into_view()
+    if data.rotation == 0.0 {
+        view! { <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw /> }
+            .into_view()
+    } else {
+        let cx = x + w / 2.0;
+        let cy = y + h / 2.0;
+        let deg = data.rotation.to_degrees();
+        view! {
+            <g transform={format!("rotate({} {} {})", deg, cx, cy)}>
+                <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw />
+            </g>
+        }
+        .into_view()
+    }
 }
 
 fn render_ellipse(data: &ElementData) -> leptos::View {
@@ -366,8 +641,18 @@ fn render_ellipse(data: &ElementData) -> leptos::View {
     let cy = y + h / 2.0;
     let rx = w / 2.0;
     let ry = h / 2.0;
-    view! { <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw /> }
+    if data.rotation == 0.0 {
+        view! { <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw /> }
+            .into_view()
+    } else {
+        let deg = data.rotation.to_degrees();
+        view! {
+            <g transform={format!("rotate({} {} {})", deg, cx, cy)}>
+                <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw />
+            </g>
+        }
         .into_view()
+    }
 }
 
 fn render_line(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
@@ -389,7 +674,7 @@ fn render_arrow(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
     } else {
         (1.0, 0.0)
     };
-    let head_size = 8.0;
+    let head_size = (sw * 4.0).max(4.0);
     let tip_x = b.x;
     let tip_y = b.y;
     let lx = tip_x - ux * head_size - uy * head_size * 0.4;
@@ -417,7 +702,7 @@ fn render_text(data: &ElementData, content: &str) -> leptos::View {
         .map(|c| c.to_hex())
         .unwrap_or_else(|| data.stroke_color.to_hex());
     let content = content.to_string();
-    view! {
+    let inner = view! {
         <text
             x=x
             y=y
@@ -429,8 +714,15 @@ fn render_text(data: &ElementData, content: &str) -> leptos::View {
         >
             {content}
         </text>
+    };
+    if data.rotation == 0.0 {
+        inner.into_view()
+    } else {
+        let cx = x + data.width / 2.0;
+        let cy = y + font_size / 2.0;
+        let deg = data.rotation.to_degrees();
+        view! { <g transform={format!("rotate({} {} {})", deg, cx, cy)}>{inner}</g> }.into_view()
     }
-    .into_view()
 }
 
 fn render_freehand(data: &ElementData, pts: &[Point]) -> leptos::View {
@@ -484,7 +776,12 @@ pub fn Canvas(
     let select_anchor = create_rw_signal(None::<(f64, f64)>);
     let erasing = create_rw_signal(false);
     let selected_ids = create_rw_signal(Vec::<ElementId>::new());
-    let moving_anchor = create_rw_signal(None::<(f64, f64)>);
+    let moving_anchor = create_rw_signal(None::<(f64, f64)>); // world position when a drag started
+    let drag_action = create_rw_signal(None::<Handle>); // which handle is being dragged
+    let drag_bounds = create_rw_signal(None::<(f64, f64, f64, f64)>); // initial combined bounds at drag start
+    let drag_angle = create_rw_signal(None::<f64>); // initial mouse angle from centre (for rotation)
+    let last_world = create_rw_signal(None::<(f64, f64)>); // world position on the previous pointer-move (for per-frame deltas)
+    let drag_originals = create_rw_signal(Vec::<Element>::new()); // clones of selected elements at drag start
 
     let _ = window_event_listener(ev::resize, move |_| screen_size.set(window_size()));
     let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
@@ -531,14 +828,65 @@ pub fn Canvas(
                     let dx = world.0 - anchor.0;
                     let dy = world.1 - anchor.1;
                     let ids = selected_ids.get();
-                    scene.update(|s| {
-                        for el in s.elements.iter_mut() {
-                            if ids.contains(&el.id()) {
-                                offset_element(el, dx, dy);
+                    match drag_action.get() {
+                        Some(Handle::Resize(idx)) => {
+                            if let Some((bx, by, bw, bh)) = drag_bounds.get() {
+                                let frame_dx = world.0 - last_world.get().unwrap_or(world).0;
+                                let frame_dy = world.1 - last_world.get().unwrap_or(world).1;
+                                last_world.set(Some(world));
+                                let multi = ids.len() > 1;
+                                let originals = drag_originals.get();
+                                scene.update(|s| {
+                                    for el in s.elements.iter_mut() {
+                                        if ids.contains(&el.id()) {
+                                            if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
+                                                resize_element(
+                                                    el, orig,
+                                                    bx, by, bw, bh,
+                                                    dx, dy,
+                                                    frame_dx, frame_dy,
+                                                    idx,
+                                                    shift_pressed.get(),
+                                                    multi,
+                                                );
+                                            }
+                                        }
+                                    }
+                                });
                             }
                         }
-                    });
-                    moving_anchor.set(Some(world));
+                        Some(Handle::Rotate) => {
+                            if let Some((bx, by, bw, bh)) = drag_bounds.get() {
+                                let cx = bx + bw / 2.0;
+                                let cy = by + bh / 2.0;
+                                if let Some(prev) = drag_angle.get() {
+                                    let mut cur = (world.1 - cy).atan2(world.0 - cx);
+                                    if shift_pressed.get() {
+                                        cur = snap_angle(cur, 24.0);
+                                    }
+                                    let delta = cur - prev;
+                                    drag_angle.set(Some(cur));
+                                    scene.update(|s| {
+                                        for el in s.elements.iter_mut() {
+                                            if ids.contains(&el.id()) {
+                                                rotate_element(el, cx, cy, delta);
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                        _ => {
+                            scene.update(|s| {
+                                for el in s.elements.iter_mut() {
+                                    if ids.contains(&el.id()) {
+                                        offset_element(el, dx, dy);
+                                    }
+                                }
+                            });
+                            moving_anchor.set(Some(world));
+                        }
+                    }
                 }
             }
             CanvasMode::Draw => {
@@ -594,12 +942,44 @@ pub fn Canvas(
                 let els = scene.get().elements;
 
                 if !ids.is_empty() {
-                    if let Some((bx, by, bw, bh)) = combined_bounds(&ids, &els) {
-                        let cx = bx + bw / 2.0;
-                        let cy = by + bh / 2.0;
-                        let dist = ((world.0 - cx).powi(2) + (world.1 - cy).powi(2)).sqrt();
-                        if dist <= 10.0 {
+                    if let Some(bounds @ (bx, by, bw, bh)) = combined_bounds(&ids, &els) {
+                        let hpos = handle_positions(bx, by, bw, bh); // all 10 handle positions
+                                                                     // resize handles (indices 0–7)
+                        for (i, &(hx, hy)) in hpos[..8].iter().enumerate() {
+                            if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= 5.0 {
+                                drag_action.set(Some(Handle::Resize(i)));
+                                moving_anchor.set(Some(world));
+                                drag_bounds.set(Some(bounds));
+                                last_world.set(Some(world));
+                                drag_originals.set(
+                                    els.iter()
+                                        .filter(|el| ids.contains(&el.id()))
+                                        .cloned()
+                                        .collect(),
+                                );
+                                select_anchor.set(None);
+                                return;
+                            }
+                        }
+                        // move handle (index 8, centre)
+                        let (hx, hy) = hpos[8];
+                        if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= 6.0 {
+                            drag_action.set(Some(Handle::Move));
                             moving_anchor.set(Some(world));
+                            drag_bounds.set(Some(bounds));
+                            last_world.set(Some(world));
+                            select_anchor.set(None);
+                            return;
+                        }
+                        // rotate handle (index 9, above the box)
+                        let (hx, hy) = hpos[9];
+                        if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= 7.0 {
+                            let cx = bx + bw / 2.0;
+                            let cy = by + bh / 2.0;
+                            drag_action.set(Some(Handle::Rotate));
+                            drag_angle.set(Some((world.1 - cy).atan2(world.0 - cx)));
+                            moving_anchor.set(Some(world));
+                            drag_bounds.set(Some(bounds));
                             select_anchor.set(None);
                             return;
                         }
@@ -607,13 +987,25 @@ pub fn Canvas(
                 }
 
                 if let Some(id) = hit_test_topmost(world, &els) {
-                    selected_ids.set(vec![id]);
+                    if shift_pressed.get() {
+                        let mut ids = selected_ids.get();
+                        if let Some(pos) = ids.iter().position(|&x| x == id) {
+                            ids.remove(pos);
+                        } else {
+                            ids.push(id);
+                        }
+                        selected_ids.set(ids);
+                    } else {
+                        selected_ids.set(vec![id]);
+                    }
                     select_anchor.set(None);
                     return;
                 }
 
                 if point_inside_any_element(world, &els) {
-                    selected_ids.set(Vec::new());
+                    if !shift_pressed.get() {
+                        selected_ids.set(Vec::new());
+                    }
                     select_anchor.set(None);
                     return;
                 }
@@ -680,7 +1072,22 @@ pub fn Canvas(
             }
             CanvasMode::Select => {
                 if moving_anchor.get().is_some() {
+                    if shift_pressed.get() {
+                        let ids = selected_ids.get();
+                        scene.update(|s| {
+                            for el in s.elements.iter_mut() {
+                                if ids.contains(&el.id()) {
+                                    snap_element_to_grid(el, 40.0);
+                                }
+                            }
+                        });
+                    }
                     moving_anchor.set(None);
+                    drag_action.set(None);
+                    drag_bounds.set(None);
+                    drag_angle.set(None);
+                    last_world.set(None);
+                    drag_originals.set(Vec::new());
                     select_anchor.set(None);
                     return;
                 }
@@ -828,83 +1235,113 @@ pub fn Canvas(
                     return None;
                 }
                 let els = scene.get().elements;
-                let (bx, by, bw, bh) = combined_bounds(&ids, &els)?;
+                let (bx, by, bw, bh) = if ids.len() == 1 {
+                    els.iter()
+                        .find(|el| el.id() == ids[0])
+                        .map(|el| match el {
+                            Element::Rectangle(d) | Element::Ellipse(d) | Element::Text(d, _) => {
+                                (d.x, d.y, d.width, d.height)
+                            }
+                            Element::Line(_, a, b) | Element::Arrow(_, a, b) => {
+                                (a.x.min(b.x), a.y.min(b.y), (a.x - b.x).abs(), (a.y - b.y).abs())
+                            }
+                            Element::Freehand(d, pts) => {
+                                // For freehand, we might have to use bounds. For simplicity, just use combined_bounds
+                                combined_bounds(&ids, &els).unwrap_or((0.0, 0.0, 0.0, 0.0))
+                            }
+                        })
+                        .unwrap_or_else(|| combined_bounds(&ids, &els).unwrap_or((0.0, 0.0, 0.0, 0.0)))
+                } else {
+                    combined_bounds(&ids, &els).unwrap_or((0.0, 0.0, 0.0, 0.0))
+                };
                 let hex = ShapeColor::Blue.to_hex();
                 let hr = 5.0;
-                let mr = 6.0;
                 let cx = bx + bw / 2.0;
                 let cy = by + bh / 2.0;
-                let rx = cx;
-                let ry = by - 25.0;
-                let corners = [
-                    (bx, by),
-                    (bx + bw / 2.0, by),
-                    (bx + bw, by),
-                    (bx, by + bh / 2.0),
-                    (bx + bw, by + bh / 2.0),
-                    (bx, by + bh),
-                    (bx + bw / 2.0, by + bh),
-                    (bx + bw, by + bh),
-                ];
-                Some(
+
+                // determine rotation angle for a single-element selection
+                let rot: f64 = (ids.len() == 1)
+                    .then(|| {
+                        els.iter().find(|el| el.id() == ids[0]).and_then(|el| match el {
+                            Element::Rectangle(d) | Element::Ellipse(d)
+                            | Element::Text(d, _) if d.rotation != 0.0 => Some(d.rotation),
+                            _ => None,
+                        })
+                    })
+                    .flatten()
+                    .unwrap_or(0.0);
+                
+                // Vector from center to handle: (0, - (bh / 2.0 + 25.0))
+                let handle_vec_x = 0.0;
+                let handle_vec_y = -(bh / 2.0 + 25.0);
+                
+                // Rotate vector
+                let rx = cx + handle_vec_x * rot.cos() - handle_vec_y * rot.sin();
+                let ry = cy + handle_vec_x * rot.sin() + handle_vec_y * rot.cos();
+
+
+                let inner = {
+                    let corners = [
+                        (bx, by),
+                        (bx + bw / 2.0, by),
+                        (bx + bw, by),
+                        (bx, by + bh / 2.0),
+                        (bx + bw, by + bh / 2.0),
+                        (bx, by + bh),
+                        (bx + bw / 2.0, by + bh),
+                        (bx + bw, by + bh),
+                    ];
                     view! {
-                        <rect
-                            x=bx
-                            y=by
-                            width=bw
-                            height=bh
-                            fill="none"
-                            stroke=hex
-                            stroke-width="1"
-                            stroke-dasharray="3 2"
-                            pointer-events="none"
-                        />
-                        <line
-                            x1=cx
-                            y1=by
-                            x2=rx
-                            y2=ry
-                            stroke=hex
-                            stroke-width="1"
-                            pointer-events="none"
-                        />
-                        {corners
-                            .iter()
-                            .map(|&(hx, hy)| {
-                                view! {
-                                    <circle
-                                        cx=hx
-                                        cy=hy
-                                        r=hr
-                                        fill="white"
-                                        stroke=hex
-                                        stroke-width="1.5"
-                                        pointer-events="none"
-                                    />
-                                }
-                                    .into_view()
-                            })
-                            .collect_view()}
-                        <circle
-                            cx=cx
-                            cy=cy
-                            r=mr
-                            fill="white"
-                            stroke=hex
-                            stroke-width="1.5"
-                            pointer-events="none"
-                        />
-                        <circle
-                            cx=rx
-                            cy=ry
-                            r=hr
-                            fill="white"
-                            stroke=hex
-                            stroke-width="1.5"
-                            pointer-events="none"
-                        />
+                        <rect x=bx y=by width=bw height=bh fill="none"
+                            stroke=hex stroke-width="1"
+                            stroke-dasharray="3 2" pointer-events="none" />
+                        <line x1=cx y1=by x2=rx y2=ry
+                            stroke=hex stroke-width="1" pointer-events="none" />
+                        {corners.iter().map(|&(hx, hy)| {
+                            view! {
+                                <circle cx=hx cy=hy r=hr fill="white" stroke=hex
+                                    stroke-width="1.5" pointer-events="none" />
+                            }.into_view()
+                        }).collect_view()}
                     }
-                        .into_view(),
+                    .into_view()
+                };
+
+                let icons = view! {
+                    <g stroke=hex stroke-width="1.5" fill="none"
+                        transform=format!("translate({} {}) scale(0.75)", cx - 9.0, cy - 9.0)
+                        pointer-events="none">
+                        <circle cx="12" cy="12" r="9.25" fill="white" stroke=hex stroke-width="1.5" />
+                        <path d="M12 3 L12 21 M3 12 L21 12" />
+                        <path d="M9 6 L12 3 L15 6" />
+                        <path d="M9 18 L12 21 L15 18" />
+                        <path d="M6 9 L3 12 L6 15" />
+                        <path d="M18 9 L21 12 L18 15" />
+                    </g>
+                    <g stroke=hex stroke-width="1.5" fill="none"
+                        transform=format!("translate({} {}) scale(0.75)", rx - 9.0, ry - 9.0)
+                        pointer-events="none">
+                        <circle cx="12" cy="12" r="9.25" fill="white" stroke=hex stroke-width="1.5" />
+                        <path d="M12 4 A8 8 0 1 1 4 12" />
+                        <path d="M1.8 11.6 L4 9 L6.2 11.6" />
+                    </g>
+                };
+
+                Some(
+                    if rot != 0.0 {
+                        let deg = rot.to_degrees();
+                        view! {
+                            <g transform={format!("rotate({} {} {})", deg, cx, cy)}>
+                                {inner}
+                                {icons}
+                            </g>
+                        }.into_view()
+                    } else {
+                        view! {
+                            {inner}
+                            {icons}
+                        }.into_view()
+                    }
                 )
             }}
         </svg>
