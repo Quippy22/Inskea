@@ -7,6 +7,7 @@ use crate::ui::settings::{CenterStyle, GridSize, GridStyle};
 use leptos::ev;
 use leptos::svg::Svg;
 use leptos::*;
+use std::rc::Rc;
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const HIT_MARGIN: f64 = 6.0;
@@ -773,6 +774,7 @@ pub fn Canvas(
     center_style: RwSignal<CenterStyle>,
     grid_style: RwSignal<GridStyle>,
     grid_size: RwSignal<GridSize>,
+    push_snapshot: Rc<dyn Fn()>,
 ) -> impl IntoView {
     fn window_size() -> (f64, f64) {
         let window = web_sys::window().expect("no global `window` exists");
@@ -944,11 +946,13 @@ pub fn Canvas(
         viewport.get().to_view_box(w, h)
     };
 
+    let ps_down = push_snapshot.clone();
     let on_pointer_down = move |ev: ev::PointerEvent| {
         let mode = canvas_mode.get();
         let world = update_world(&ev);
 
         if eraser_active.get() {
+            ps_down();
             erasing.set(true);
             let world = update_world(&ev);
             hit_and_erase(world, scene);
@@ -969,6 +973,7 @@ pub fn Canvas(
                                                                      // resize handles (indices 0–7)
                         for (i, &(hx, hy)) in hpos[..8].iter().enumerate() {
                             if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
+                                ps_down();
                                 drag_action.set(Some(Handle::Resize(i)));
                                 moving_anchor.set(Some(world));
                                 drag_bounds.set(Some(bounds));
@@ -985,6 +990,7 @@ pub fn Canvas(
                         // move handle (index 8, centre)
                         let (hx, hy) = hpos[8];
                         if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+                            ps_down();
                             drag_action.set(Some(Handle::Move));
                             moving_anchor.set(Some(world));
                             drag_bounds.set(Some(bounds));
@@ -994,6 +1000,7 @@ pub fn Canvas(
                         // rotate handle (index 9, above the box)
                         let (hx, hy) = hpos[9];
                         if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
+                            ps_down();
                             let cx = bx + bw / 2.0;
                             let cy = by + bh / 2.0;
                             drag_action.set(Some(Handle::Rotate));
@@ -1035,6 +1042,7 @@ pub fn Canvas(
                 let color = selected_color.get();
 
                 if tool == Tool::Text {
+                    ps_down();
                     scene.update(|s| {
                         let mut data = ElementData::new(0);
                         data.x = world.0;
@@ -1046,6 +1054,7 @@ pub fn Canvas(
                 }
 
                 if tool == Tool::Freehand {
+                    ps_down();
                     scene.update(|s| {
                         let mut data = ElementData::new(0);
                         data.stroke_color = color;
@@ -1065,6 +1074,7 @@ pub fn Canvas(
                     return;
                 }
 
+                ps_down();
                 drawing.set(Some(DrawingState {
                     anchor: world,
                     tool,
@@ -1074,6 +1084,7 @@ pub fn Canvas(
         }
     };
 
+    let ps_up = push_snapshot.clone();
     let on_pointer_up = move |ev: ev::PointerEvent| {
         if eraser_active.get() {
             let world = update_world(&ev);
@@ -1147,6 +1158,7 @@ pub fn Canvas(
                         state.color,
                         shift_pressed.get(),
                     );
+                    ps_up();
                     scene.update(|s| {
                         s.add_element(el);
                     });

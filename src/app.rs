@@ -1,9 +1,12 @@
+use std::rc::Rc;
+
 use crate::canvas::{Canvas, CanvasMode, Viewport};
 use crate::model::{Scene, ShapeColor};
 use crate::tauri_bridge;
 use crate::ui::dock::{Dock, Tool};
 use crate::ui::settings::{from_toml, to_toml, CenterStyle, GridSize, GridStyle};
 use crate::ui::{SettingsPanel, ToolBar};
+use leptos::ev;
 use leptos::*;
 use wasm_bindgen_futures::spawn_local;
 
@@ -25,6 +28,54 @@ pub fn App() -> impl IntoView {
     let grid_size = create_rw_signal(GridSize::Px30);
     let autosave = create_rw_signal(false);
 
+    // ── Undo / Redo ────────────────────────────────────────────────────────
+    let undo_stack = create_rw_signal(Vec::<Scene>::new());
+    let redo_stack = create_rw_signal(Vec::<Scene>::new());
+
+    let push_snapshot = Rc::new(move || {
+        undo_stack.update(|s| {
+            s.push(scene.get());
+            if s.len() > 100 {
+                s.remove(0);
+            }
+        });
+        redo_stack.set(Vec::new());
+    });
+
+    let do_undo = move || {
+        let mut prev = None;
+        undo_stack.update(|s| prev = s.pop());
+        if let Some(prev) = prev {
+            let current = scene.get();
+            scene.set(prev);
+            redo_stack.update(|s| s.push(current));
+        }
+    };
+
+    let do_redo = move || {
+        let mut next = None;
+        redo_stack.update(|s| next = s.pop());
+        if let Some(next) = next {
+            let current = scene.get();
+            scene.set(next);
+            undo_stack.update(|s| s.push(current));
+        }
+    };
+
+    let can_undo = Signal::derive(move || !undo_stack.get().is_empty());
+    let can_redo = Signal::derive(move || !redo_stack.get().is_empty());
+
+    let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
+        if ev.ctrl_key() && ev.key() == "z" {
+            if ev.shift_key() {
+                do_redo();
+            } else {
+                do_undo();
+            }
+        }
+    });
+
+    // ── Settings persistence ───────────────────────────────────────────────
     let initialized = create_rw_signal(false);
     let is_tauri = tauri_bridge::is_tauri();
 
@@ -78,8 +129,17 @@ pub fn App() -> impl IntoView {
                 center_style=center_style
                 grid_style=grid_style
                 grid_size=grid_size
+                push_snapshot=push_snapshot
             />
-            <ToolBar scene=scene viewport=viewport canvas_mode=canvas_mode />
+            <ToolBar
+                scene=scene
+                viewport=viewport
+                canvas_mode=canvas_mode
+                on_undo=do_undo
+                on_redo=do_redo
+                can_undo=can_undo
+                can_redo=can_redo
+            />
             <Dock
                 selected_tool=selected_tool
                 selected_color=selected_color

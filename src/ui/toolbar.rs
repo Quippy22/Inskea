@@ -87,11 +87,19 @@ fn browser_import(scene: RwSignal<Scene>) {
 }
 
 #[component]
-pub fn ToolBar(
+pub fn ToolBar<F1, F2>(
     scene: RwSignal<Scene>,
     viewport: RwSignal<Viewport>,
     canvas_mode: RwSignal<CanvasMode>,
-) -> impl IntoView {
+    on_undo: F1,
+    on_redo: F2,
+    can_undo: Signal<bool>,
+    can_redo: Signal<bool>,
+) -> impl IntoView
+where
+    F1: Fn() + 'static,
+    F2: Fn() + 'static,
+{
     let menu_open = create_rw_signal(false);
     let submenu_open = create_rw_signal(false);
     let saved_path = create_rw_signal::<Option<String>>(None);
@@ -255,10 +263,22 @@ pub fn ToolBar(
                 <button class=classes::BTN_GHOST on:click=on_home title="Home">
                     {icon::home()}
                 </button>
-                <button class=classes::BTN_GHOST title="Undo">
+                <button
+                    class=classes::BTN_GHOST
+                    class:opacity-40=move || !can_undo.get()
+                    class:cursor-not-allowed=move || !can_undo.get()
+                    on:click=move |_| on_undo()
+                    title="Undo"
+                >
                     {icon::undo()}
                 </button>
-                <button class=classes::BTN_GHOST title="Redo">
+                <button
+                    class=classes::BTN_GHOST
+                    class:opacity-40=move || !can_redo.get()
+                    class:cursor-not-allowed=move || !can_redo.get()
+                    on:click=move |_| on_redo()
+                    title="Redo"
+                >
                     {icon::redo()}
                 </button>
                 <div class=classes::SEP_V />
