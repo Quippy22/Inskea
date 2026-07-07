@@ -24,6 +24,8 @@ pub struct ElementData {
     pub height: f64,
     /// Clockwise rotation in radians around the element's center.
     pub rotation: f64,
+    /// Font size in world-space units (used by Text elements).
+    pub font_size: f64,
     /// Stroke (outline) colour.
     pub stroke_color: ShapeColor,
     /// Optional fill colour — `None` means transparent.
@@ -58,6 +60,7 @@ impl ElementData {
             width: 100.0,
             height: 100.0,
             rotation: 0.0,
+            font_size: 24.0,
             stroke_color: ShapeColor::default(),
             fill_color: None,
             stroke_width: 2.0,

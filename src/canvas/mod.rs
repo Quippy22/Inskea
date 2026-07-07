@@ -8,6 +8,8 @@ use leptos::ev;
 use leptos::svg::Svg;
 use leptos::*;
 use std::rc::Rc;
+use std::sync::OnceLock;
+use wasm_bindgen::JsCast;
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const HIT_MARGIN: f64 = 6.0;
@@ -21,6 +23,8 @@ const HANDLE_ROTATE_RADIUS: f64 = 7.0;
 const ROTATE_HANDLE_OFFSET: f64 = 25.0;
 const ARROW_HEAD_MULT: f64 = 4.0;
 const MIN_FONT_SIZE: f64 = 12.0;
+const DEFAULT_FONT_SIZE: f64 = 24.0;
+const TEXT_ASCENT_RATIO: f64 = 0.85;
 const ZOOM_FACTOR: f64 = 1.1;
 const ZOOM_MIN: f64 = 0.1;
 const ZOOM_MAX: f64 = 20.0;
@@ -170,13 +174,13 @@ fn update_drawing(element: &mut Element, current: (f64, f64), anchor: (f64, f64)
     }
 }
 
-fn render_element(element: &Element) -> leptos::View {
+fn render_element(element: &Element, zoom: f64) -> leptos::View {
     match element {
         Element::Rectangle(data) => render_rect(data),
         Element::Ellipse(data) => render_ellipse(data),
         Element::Line(data, a, b) => render_line(data, a, b),
         Element::Arrow(data, a, b) => render_arrow(data, a, b),
-        Element::Text(data, content) => render_text(data, content),
+        Element::Text(data, content) => render_text(data, content, zoom),
         Element::Freehand(data, pts) => render_freehand(data, pts),
     }
 }
@@ -244,11 +248,10 @@ fn hit_test(point: (f64, f64), el: &Element) -> bool {
             (px - near_x).hypot(py - near_y) <= margin + data.stroke_width
         }
         Element::Text(data, _) => {
-            let font_size = data.width.max(MIN_FONT_SIZE);
             px >= data.x - margin
                 && px <= data.x + data.width + margin
-                && py >= data.y - font_size
-                && py <= data.y + margin
+                && py >= data.y - margin
+                && py <= data.y + data.height + margin
         }
         Element::Freehand(data, pts) => {
             if pts.is_empty() {
@@ -309,8 +312,7 @@ fn element_bounds(el: &Element) -> (f64, f64, f64, f64) {
             (x, y, w, h)
         }
         Element::Text(data, _content) => {
-            let h = data.width.max(MIN_FONT_SIZE);
-            (data.x, data.y - h, data.width, h)
+            (data.x, data.y, data.width, data.height)
         }
         Element::Freehand(_, pts) => {
             if pts.is_empty() {
@@ -528,6 +530,7 @@ fn resize_element(el: &mut Element, ctx: &ResizeContext) {
                 data.x = (od.x - ctx.bx) * sx + nx;
                 data.y = (od.y - ctx.by) * sy + ny;
                 data.width = (od.width * sx).max(MIN_ELEMENT_SIZE);
+                data.height = (od.height * sy).max(MIN_ELEMENT_SIZE);
             }
             _ => {}
         }
@@ -562,6 +565,7 @@ fn resize_element(el: &mut Element, ctx: &ResizeContext) {
                 data.x = nx;
                 data.y = ny;
                 data.width = nw;
+                data.height = nh;
             }
         }
     }
@@ -713,33 +717,117 @@ fn render_arrow(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
     .into_view()
 }
 
-fn render_text(data: &ElementData, content: &str) -> leptos::View {
+fn text_ctx() -> &'static web_sys::CanvasRenderingContext2d {
+    static CTX: OnceLock<web_sys::CanvasRenderingContext2d> = OnceLock::new();
+    CTX.get_or_init(|| {
+        let canvas = document()
+            .create_element("canvas")
+            .expect("create canvas")
+            .unchecked_into::<web_sys::HtmlCanvasElement>();
+        canvas
+            .get_context("2d")
+            .ok()
+            .flatten()
+            .expect("get 2d context")
+            .unchecked_into::<web_sys::CanvasRenderingContext2d>()
+    })
+}
+
+fn text_width_px(text: &str, font_size: f64) -> f64 {
+    let ctx = text_ctx();
+    ctx.set_font(&format!("{}px sans-serif", font_size));
+    ctx.measure_text(text)
+        .ok()
+        .map(|m| m.width())
+        .unwrap_or_else(|| text.len() as f64 * font_size * 0.55)
+}
+
+fn wrap_lines(content: &str, max_world_width: f64, font_size: f64, zoom: f64) -> Vec<String> {
+    if max_world_width <= 0.0 {
+        return content.split('\n').map(|s| s.to_string()).collect();
+    }
+    let max_px = max_world_width * zoom;
+    let mut out = Vec::new();
+    for line in content.split('\n') {
+        if line.is_empty() {
+            out.push(String::new());
+            continue;
+        }
+        let mut cur = String::new();
+        for word in line.split(' ') {
+            if cur.is_empty() {
+                cur = word.to_string();
+            } else if text_width_px(&format!("{} {}", cur, word), font_size) <= max_px {
+                cur.push(' ');
+                cur.push_str(word);
+            } else {
+                out.push(cur);
+                cur = word.to_string();
+            }
+        }
+        if !cur.is_empty() {
+            out.push(cur);
+        }
+    }
+    out
+}
+
+fn render_text(data: &ElementData, content: &str, zoom: f64) -> leptos::View {
     let x = data.x;
-    let y = data.y;
-    let font_size = data.width.max(MIN_FONT_SIZE);
+    let font_size = data.font_size.max(MIN_FONT_SIZE);
+    let baseline = data.y + font_size * TEXT_ASCENT_RATIO;
     let fill = data
         .fill_color
         .map(|c| c.to_hex())
         .unwrap_or_else(|| data.stroke_color.to_hex());
-    let content = content.to_string();
-    let inner = view! {
-        <text
-            x=x
-            y=y
-            fill=fill
-            font-size=font_size
-            font-family="sans-serif"
-            pointer-events="none"
-            style="user-select: none; -webkit-user-select: none;"
-        >
-            {content}
-        </text>
+    let lines = wrap_lines(content, data.width, font_size, zoom);
+    let inner = if lines.len() <= 1 {
+        view! {
+            <text
+                x={x.to_string()}
+                y={baseline.to_string()}
+                fill=fill
+                font-size={font_size.to_string()}
+                font-family="sans-serif"
+                pointer-events="none"
+                style="user-select: none; -webkit-user-select: none;"
+            >
+                {lines.first().cloned().unwrap_or_default()}
+            </text>
+        }
+            .into_view()
+    } else {
+        view! {
+            <text
+                x={x.to_string()}
+                y={baseline.to_string()}
+                fill=fill
+                font-size={font_size.to_string()}
+                font-family="sans-serif"
+                pointer-events="none"
+                style="user-select: none; -webkit-user-select: none;"
+            >
+                {lines
+                    .iter()
+                    .enumerate()
+                    .map(|(i, line)| {
+                        let dy = if i == 0 { "0" } else { "1.2em" };
+                        view! {
+                            <tspan x={x.to_string()} dy=dy>
+                                {line.to_string()}
+                            </tspan>
+                        }
+                    })
+                    .collect_view()}
+            </text>
+        }
+            .into_view()
     };
     if data.rotation == 0.0 {
-        inner.into_view()
+        inner
     } else {
         let cx = x + data.width / 2.0;
-        let cy = y + font_size / 2.0;
+        let cy = data.y + data.height / 2.0;
         let deg = data.rotation.to_degrees();
         view! { <g transform={format!("rotate({} {} {})", deg, cx, cy)}>{inner}</g> }.into_view()
     }
@@ -805,6 +893,37 @@ pub fn Canvas(
     let drag_angle = create_rw_signal(None::<f64>); // initial mouse angle from centre (for rotation)
     let last_world = create_rw_signal(None::<(f64, f64)>); // world position on the previous pointer-move (for per-frame deltas)
     let drag_originals = create_rw_signal(Vec::<Element>::new()); // clones of selected elements at drag start
+
+    // ── Text editing ─────────────────────────────────────────────────────
+    let editing_id = create_rw_signal(None::<ElementId>);
+    let edit_text = create_rw_signal(String::new());
+    let textarea_ref = create_node_ref::<leptos::html::Textarea>();
+
+    let commit_edit = Rc::new(move || {
+        if let Some(id) = editing_id.get() {
+            let text = edit_text.get();
+            scene.update(|s| {
+                if text.is_empty() {
+                    s.elements.retain(|e| e.id() != id);
+                } else if let Some(el) = s.elements.iter_mut().find(|e| e.id() == id) {
+                    if let Element::Text(data, ref mut content) = el {
+                        *content = text;
+                        if let Some(ta) = textarea_ref.get() {
+                            let cw = ta.client_width() as f64;
+                            let sh = ta.scroll_height() as f64;
+                            let zoom = viewport.get().zoom;
+                            if zoom > 0.0 {
+                                data.width = cw / zoom;
+                                data.height = sh / zoom;
+                            }
+                        }
+                    }
+                }
+            });
+            editing_id.set(None);
+            edit_text.set(String::new());
+        }
+    });
 
     let _ = window_event_listener(ev::resize, move |_| screen_size.set(window_size()));
     let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
@@ -948,6 +1067,10 @@ pub fn Canvas(
 
     let ps_down = push_snapshot.clone();
     let on_pointer_down = move |ev: ev::PointerEvent| {
+        // If a text edit is active, let the blur handler commit and bail
+        if editing_id.get().is_some() {
+            return;
+        }
         let mode = canvas_mode.get();
         let world = update_world(&ev);
 
@@ -964,6 +1087,18 @@ pub fn Canvas(
                 pan_anchor.set(Some((ev.client_x() as f64, ev.client_y() as f64)));
             }
             CanvasMode::Select => {
+                // Double-click on existing text → edit
+                if ev.detail() >= 2 {
+                    let els = scene.get().elements;
+                    if let Some(id) = hit_test_topmost(world, &els) {
+                        if let Some(Element::Text(_, content)) = els.iter().find(|e| e.id() == id) {
+                            editing_id.set(Some(id));
+                            edit_text.set(content.clone());
+                            return;
+                        }
+                    }
+                }
+
                 let ids = selected_ids.get();
                 let els = scene.get().elements;
 
@@ -1043,13 +1178,19 @@ pub fn Canvas(
 
                 if tool == Tool::Text {
                     ps_down();
+                    let mut data = ElementData::new(0);
+                    data.x = world.0;
+                    data.y = world.1;
+                    data.font_size = DEFAULT_FONT_SIZE;
+                    data.width = 0.0;
+                    data.height = 0.0;
+                    data.stroke_color = color;
+                    let id = scene.with(|s| s.next_id);
                     scene.update(|s| {
-                        let mut data = ElementData::new(0);
-                        data.x = world.0;
-                        data.y = world.1;
-                        data.stroke_color = color;
-                        s.add_element(Element::Text(data, "Text".into()));
+                        s.add_element(Element::Text(data, String::new()));
                     });
+                    editing_id.set(Some(id));
+                    edit_text.set(String::new());
                     return;
                 }
 
@@ -1184,7 +1325,7 @@ pub fn Canvas(
             return None;
         }
         let el = build_element(state.anchor, world, state.tool, state.color, shift);
-        Some(view! { <g stroke-dasharray={DASH_PREVIEW}>{render_element(&el)}</g> }.into_view())
+        Some(view! { <g stroke-dasharray={DASH_PREVIEW}>{render_element(&el, viewport.get().zoom)}</g> }.into_view())
     };
 
     let selection_preview = move || {
@@ -1321,7 +1462,8 @@ pub fn Canvas(
                     .elements
                     .iter()
                     .map(|el| {
-                        let view = render_element(el);
+                        let zoom = viewport.get().zoom;
+                        let view = render_element(el, zoom);
                         view! { <g pointer-events="none">{view}</g> }.into_view()
                     })
                     .collect_view()
@@ -1447,5 +1589,93 @@ pub fn Canvas(
                 )
             }}
         </svg>
+
+        {move || {
+            let id = editing_id.get()?;
+            let (data, _content) = scene.with(|s| {
+                s.elements.iter().find(|e| e.id() == id).and_then(|e| {
+                    if let Element::Text(d, c) = e {
+                        Some((d.clone(), c.clone()))
+                    } else {
+                        None
+                    }
+                })
+            })?;
+            let zoom = viewport.get().zoom;
+            let font_size = data.font_size.max(MIN_FONT_SIZE);
+            let (sw, sh) = screen_size.get();
+            let (sx, sy) = viewport.get().world_to_screen((data.x, data.y), (sw, sh));
+            let fill = data
+                .fill_color
+                .map(|c| c.to_hex())
+                .unwrap_or_else(|| data.stroke_color.to_hex());
+
+            // initial textarea size: use stored bounds, or default (~30 chars)
+            let default_ta_w = (30.0_f64 * font_size * 0.6).max(120.0);
+            let ta_w = if data.width > 0.0 {
+                (data.width * zoom).max(default_ta_w)
+            } else {
+                default_ta_w
+            };
+            let ta_h = if data.height > 0.0 {
+                (data.height * zoom).max(font_size * zoom * 1.2)
+            } else {
+                (font_size * 1.2).max(50.0)
+            };
+
+            let ce_blur = commit_edit.clone();
+            let ce_esc = commit_edit.clone();
+
+            Some(
+                view! {
+                    <textarea
+                        autofocus="true"
+                        _ref=textarea_ref
+                        style={format!(
+                            "position:fixed;left:{}px;top:{}px;\
+                             width:{}px;height:{}px;\
+                             font-size:{}px;font-family:sans-serif;\
+                             color:{};\
+                             background:rgba(122,162,247,0.05);\
+                             border:1px dashed {};\
+                             outline:none;resize:none;\
+                             overflow:hidden;\
+                             white-space:pre-wrap;overflow-wrap:break-word;\
+                             padding:0;margin:0;z-index:100;\
+                             line-height:1.2;",
+                            sx, sy, ta_w, ta_h, font_size * zoom, fill, fill
+                        )}
+                        prop:value=move || edit_text.get()
+                        on:input=move |ev| {
+                            edit_text.set(event_target_value(&ev));
+                            let ta = event_target::<web_sys::HtmlTextAreaElement>(&ev);
+                            ta.style().set_property("height", "auto").ok();
+                            ta.style().set_property("height", &format!("{}px", ta.scroll_height())).ok();
+                        }
+                        on:blur=move |_| ce_blur()
+                        on:keydown=move |ev: ev::KeyboardEvent| {
+                            if ev.key() == "Escape" {
+                                ce_esc();
+                            }
+                            if ev.key() == "Tab" {
+                                ev.prevent_default();
+                                let target = event_target::<web_sys::HtmlTextAreaElement>(&ev);
+                                let cursor = target
+                                    .selection_start()
+                                    .ok()
+                                    .flatten()
+                                    .unwrap_or(0) as usize;
+                                let mut val = edit_text.get();
+                                val.insert(cursor, '\t');
+                                edit_text.set(val);
+                                let pos = (cursor + 1) as u32;
+                                let _ = target.set_selection_start(Some(pos));
+                                let _ = target.set_selection_end(Some(pos));
+                            }
+                        }
+                    ></textarea>
+                },
+            )
+        }}
     }
 }
