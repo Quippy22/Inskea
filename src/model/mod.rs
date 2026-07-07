@@ -7,8 +7,8 @@ pub use element::{Element, ElementData, ElementId, Point};
 /// The single source of truth for everything on the canvas.
 #[derive(Clone, Debug)]
 pub struct Scene {
-    pub elements: Vec<Element>,
-    pub next_id: u64,
+    pub(crate) elements: Vec<Element>,
+    pub(crate) next_id: u64,
 }
 
 impl Scene {
@@ -34,9 +34,6 @@ impl Scene {
         self.elements.push(element);
     }
 
-    pub fn next_id(&self) -> u64 {
-        self.next_id
-    }
 }
 
 impl Default for Scene {

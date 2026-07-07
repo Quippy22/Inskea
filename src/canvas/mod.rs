@@ -368,9 +368,7 @@ fn offset_element(el: &mut Element, dx: f64, dy: f64) {
             data.x += dx;
             data.y += dy;
         }
-        Element::Line(data, a, b) | Element::Arrow(data, a, b) => {
-            data.x += dx;
-            data.y += dy;
+        Element::Line(_, a, b) | Element::Arrow(_, a, b) => {
             a.x += dx;
             a.y += dy;
             b.x += dx;
@@ -948,6 +946,8 @@ pub fn Canvas(
 
         if eraser_active.get() {
             erasing.set(true);
+            let world = update_world(&ev);
+            hit_and_erase(world, scene);
             return;
         }
 
@@ -1032,8 +1032,7 @@ pub fn Canvas(
 
                 if tool == Tool::Text {
                     scene.update(|s| {
-                        let id = s.next_id();
-                        let mut data = ElementData::new(id);
+                        let mut data = ElementData::new(0);
                         data.x = world.0;
                         data.y = world.1;
                         data.stroke_color = color;
@@ -1044,8 +1043,7 @@ pub fn Canvas(
 
                 if tool == Tool::Freehand {
                     scene.update(|s| {
-                        let id = s.next_id();
-                        let mut data = ElementData::new(id);
+                        let mut data = ElementData::new(0);
                         data.stroke_color = color;
                         s.add_element(Element::Freehand(
                             data,
