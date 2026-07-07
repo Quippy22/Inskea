@@ -179,7 +179,7 @@ fn render_element(element: &Element) -> leptos::View {
     }
 }
 
-fn fill_hex(fill: &Option<ShapeColor>) -> &'static str {
+fn fill_paint(fill: &Option<ShapeColor>) -> &'static str {
     match fill {
         Some(_) => "currentColor",
         None => "none",
@@ -631,7 +631,7 @@ fn render_rect(data: &ElementData) -> leptos::View {
     let w = data.width;
     let h = data.height;
     let sw = data.stroke_width;
-    let fill = fill_hex(&data.fill_color);
+    let fill = fill_paint(&data.fill_color);
     let stroke = stroke_hex(data.stroke_color);
     if data.rotation == 0.0 {
         view! { <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw /> }
@@ -655,7 +655,7 @@ fn render_ellipse(data: &ElementData) -> leptos::View {
     let w = data.width;
     let h = data.height;
     let sw = data.stroke_width;
-    let fill = fill_hex(&data.fill_color);
+    let fill = fill_paint(&data.fill_color);
     let stroke = stroke_hex(data.stroke_color);
     let cx = x + w / 2.0;
     let cy = y + h / 2.0;
@@ -790,7 +790,6 @@ pub fn Canvas(
     let screen_size = create_rw_signal(window_size());
     let svg_ref = create_node_ref::<Svg>();
     let drawing = create_rw_signal(None::<DrawingState>);
-    let freehand_anchor = create_rw_signal(None::<(f64, f64)>);
     let shift_pressed = create_rw_signal(false);
     let pan_anchor = create_rw_signal(None::<(f64, f64)>);
     let select_anchor = create_rw_signal(None::<(f64, f64)>);
@@ -913,13 +912,11 @@ pub fn Canvas(
             CanvasMode::Draw => {
                 if let Some(ref state) = drawing.get() {
                     if state.tool == Tool::Freehand {
-                        if let Some(anchor) = freehand_anchor.get() {
-                            scene.update(|s| {
-                                if let Some(el) = s.elements.last_mut() {
-                                    update_drawing(el, world, anchor, ev.shift_key());
-                                }
-                            });
-                        }
+                        scene.update(|s| {
+                            if let Some(el) = s.elements.last_mut() {
+                                update_drawing(el, world, state.anchor, ev.shift_key());
+                            }
+                        });
                     }
                 }
             }
@@ -978,7 +975,6 @@ pub fn Canvas(
                                         .cloned()
                                         .collect(),
                                 );
-                                select_anchor.set(None);
                                 return;
                             }
                         }
@@ -989,7 +985,6 @@ pub fn Canvas(
                             moving_anchor.set(Some(world));
                             drag_bounds.set(Some(bounds));
                             last_world.set(Some(world));
-                            select_anchor.set(None);
                             return;
                         }
                         // rotate handle (index 9, above the box)
@@ -1001,7 +996,6 @@ pub fn Canvas(
                             drag_angle.set(Some((world.1 - cy).atan2(world.0 - cx)));
                             moving_anchor.set(Some(world));
                             drag_bounds.set(Some(bounds));
-                            select_anchor.set(None);
                             return;
                         }
                     }
@@ -1019,7 +1013,6 @@ pub fn Canvas(
                     } else {
                         selected_ids.set(vec![id]);
                     }
-                    select_anchor.set(None);
                     return;
                 }
 
@@ -1027,7 +1020,6 @@ pub fn Canvas(
                     if !shift_pressed.get() {
                         selected_ids.set(Vec::new());
                     }
-                    select_anchor.set(None);
                     return;
                 }
 
@@ -1051,7 +1043,6 @@ pub fn Canvas(
                 }
 
                 if tool == Tool::Freehand {
-                    freehand_anchor.set(Some(world));
                     scene.update(|s| {
                         let id = s.next_id();
                         let mut data = ElementData::new(id);
@@ -1136,7 +1127,6 @@ pub fn Canvas(
             CanvasMode::Draw => {
                 if let Some(state) = drawing.get() {
                     if state.tool == Tool::Freehand {
-                        freehand_anchor.set(None);
                         drawing.set(None);
                         return;
                     }

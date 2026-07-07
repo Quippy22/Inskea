@@ -2,22 +2,6 @@ use std::fmt::Write;
 
 use crate::model::{Element, ElementData, Point, Scene, ShapeColor};
 
-impl ShapeColor {
-    pub fn from_name(s: &str) -> Option<Self> {
-        match s {
-            "Purple" => Some(Self::Purple),
-            "Blue" => Some(Self::Blue),
-            "Cyan" => Some(Self::Cyan),
-            "Green" => Some(Self::Green),
-            "Yellow" => Some(Self::Yellow),
-            "Orange" => Some(Self::Orange),
-            "Red" => Some(Self::Red),
-            "White" => Some(Self::White),
-            _ => None,
-        }
-    }
-}
-
 const FORMAT_VERSION: u32 = 1;
 
 /// Serialise the scene to the .skea line-based format.
