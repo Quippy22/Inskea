@@ -1,3 +1,4 @@
+use crate::model::elements::text::WrappedText;
 use crate::model::{Arrow, Element, ElementData, Ellipse, Freehand, FromDrag, Line, Point, Rectangle, Text};
 use crate::ui::dock::Tool;
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, SignalWith};
@@ -42,7 +43,9 @@ pub fn draw_pointer_down(
         data.stroke_color = color;
         let id = props.scene.with(|s| s.next_id);
         props.scene.update(|s| {
-            s.add_element(Element::Text(Text { data, content: String::new() }));
+            let w = data.width;
+            let fs = data.font_size;
+            s.add_element(Element::Text(Text { data, wrapped: WrappedText::new("", w, fs) }));
         });
         st.editing_id.set(Some(id));
         st.edit_text.set(String::new());

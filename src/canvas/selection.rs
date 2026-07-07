@@ -153,7 +153,7 @@ pub fn select_pointer_down(
         if let Some(id) = hit_test_topmost(world, &els) {
             if let Some(Element::Text(text_elem)) = els.iter().find(|e| e.id() == id) {
                 st.editing_id.set(Some(id));
-                st.edit_text.set(text_elem.content.clone());
+                st.edit_text.set(text_elem.wrapped.raw.clone());
                 return;
             }
         }

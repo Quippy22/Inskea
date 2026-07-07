@@ -1,4 +1,5 @@
 use super::viewport::Viewport;
+use crate::model::elements::text::CHAR_WIDTH_RATIO;
 use crate::model::{Element, ElementId, Scene};
 use leptos::*;
 use std::rc::Rc;
@@ -19,11 +20,14 @@ pub fn make_commit_edit(
                     s.elements.retain(|e| e.id() != id);
                 } else if let Some(el) = s.elements.iter_mut().find(|e| e.id() == id) {
                     if let Element::Text(text_elem) = el {
-                        text_elem.content = text;
-                        if let Some(ta) = textarea_ref.get() {
-                            text_elem.data.width = ta.client_width() as f64 / viewport.get().zoom;
-                            text_elem.data.height = ta.scroll_height() as f64 / viewport.get().zoom;
-                        }
+                        let wrap_width = if text_elem.data.width > 0.0 {
+                            text_elem.data.width
+                        } else {
+                            textarea_ref.get()
+                                .map(|ta| ta.client_width() as f64 / viewport.get().zoom)
+                                .unwrap_or(200.0)
+                        };
+                        text_elem.set_content(&text, wrap_width);
                     }
                 }
             });
@@ -61,7 +65,7 @@ pub fn text_edit_overlay(
             .map(|c| c.to_hex())
             .unwrap_or_else(|| text_elem.data.stroke_color.to_hex());
 
-        let default_ta_w = (30.0_f64 * font_size * 0.6).max(120.0);
+        let default_ta_w = (20.0_f64 * font_size * CHAR_WIDTH_RATIO).max(120.0);
         let ta_w = if text_elem.data.width > 0.0 {
             (text_elem.data.width * zoom).max(default_ta_w)
         } else {

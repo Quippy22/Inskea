@@ -1,5 +1,6 @@
 use std::fmt::Write;
 
+use crate::model::elements::text::WrappedText;
 use crate::model::{
     Arrow, Element, ElementData, Ellipse, Freehand, Line, Point, Rectangle,
     Scene, ShapeColor, Text,
@@ -57,11 +58,11 @@ pub fn save_to_string(scene: &Scene) -> String {
                     .fill_color
                     .map(|c| format!("{c}"))
                     .unwrap_or("none".into());
-                let content_len = t.content.len();
+                let content_len = t.wrapped.raw.len();
                 _ = writeln!(
                     out,
                     "text {} {} {} {} {fill} {content_len}:{}",
-                    d.x, d.y, d.stroke_width, d.stroke_color, t.content
+                    d.x, d.y, d.stroke_width, d.stroke_color, t.wrapped.raw
                 );
             }
             Element::Freehand(f) => {
@@ -202,7 +203,12 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                 data.stroke_color = stroke;
                 data.fill_color = fill;
                 next_id += 1;
-                elements.push(Element::Text(Text { data, content }));
+                let w = data.width;
+                let fs = data.font_size;
+                elements.push(Element::Text(Text {
+                    data,
+                    wrapped: WrappedText::new(&content, w, fs),
+                }));
             }
             "freehand" => {
                 if parts.len() < 4 {
@@ -279,7 +285,7 @@ mod tests {
         td.fill_color = Some(ShapeColor::White);
         s.add_element(Element::Text(Text {
             data: td,
-            content: "hello world".into(),
+            wrapped: WrappedText::new("hello world", 0.0, 24.0),
         }));
 
         let mut fd = ElementData::new(0);
@@ -348,7 +354,7 @@ mod tests {
                     assert_eq!(ta.data.x, tb.data.x);
                     assert_eq!(ta.data.y, tb.data.y);
                     assert_eq!(ta.data.fill_color, tb.data.fill_color);
-                    assert_eq!(ta.content, tb.content);
+                    assert_eq!(ta.wrapped.raw, tb.wrapped.raw);
                 }
                 (Element::Freehand(fa), Element::Freehand(fb)) => {
                     assert_eq!(fa.data.stroke_width, fb.data.stroke_width);
