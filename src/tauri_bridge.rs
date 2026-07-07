@@ -12,6 +12,17 @@ extern "C" {
     pub async fn open(options: JsValue) -> JsValue;
 }
 
+/// Check whether the app is running inside a Tauri webview.
+pub fn is_tauri() -> bool {
+    let window = match web_sys::window() {
+        Some(w) => w,
+        None => return false,
+    };
+    js_sys::Reflect::get(&window, &JsValue::from_str("__TAURI__"))
+        .map(|v| !v.is_undefined() && !v.is_null())
+        .unwrap_or(false)
+}
+
 /// Open a native save-file dialog and return the chosen path, or `None` if cancelled.
 /// If `default_dir` is provided, the dialog starts in that directory.
 pub async fn pick_save_path(default_name: &str, default_dir: Option<&str>) -> Option<String> {
@@ -67,6 +78,26 @@ pub async fn save_skea(path: &str, content: &str) -> Result<(), String> {
     .map_err(|e| format!("serialization error: {e}"))?;
     invoke("save_skea", args).await;
     Ok(())
+}
+
+/// Save settings (TOML string) to the app data directory.
+pub async fn save_settings(content: &str) -> Result<(), String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({
+        "content": content,
+    }))
+    .map_err(|e| format!("serialization error: {e}"))?;
+    invoke("save_settings", args).await;
+    Ok(())
+}
+
+/// Load settings (TOML string) from the app data directory.
+pub async fn load_settings() -> Result<String, String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({}))
+        .map_err(|e| format!("serialization error: {e}"))?;
+    let result = invoke("load_settings", args).await;
+    result
+        .as_string()
+        .ok_or_else(|| "failed to load settings".into())
 }
 
 /// Load scene content from a file at the given path.

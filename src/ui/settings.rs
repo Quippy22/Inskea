@@ -1,24 +1,25 @@
 use crate::ui::classes;
 use crate::ui::icon;
 use leptos::*;
+use serde::{Deserialize, Serialize};
 
 // ── Settings types ──────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum CenterStyle {
     Crosshair,
     Dot,
     Off,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum GridStyle {
     Dot,
     Line,
     Off,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum GridSize {
     Px10,
     Px20,
@@ -33,6 +34,43 @@ impl GridSize {
             GridSize::Px30 => 30.0,
         }
     }
+}
+
+// ── Persistence ─────────────────────────────────────────────────────────────
+
+/// TOML-serializable snapshot of all settings.
+#[derive(Serialize, Deserialize)]
+struct PersistentSettings {
+    center_style: CenterStyle,
+    grid_style: GridStyle,
+    grid_size: GridSize,
+    autosave: bool,
+}
+
+/// Serialize the four settings to a TOML string.
+pub fn to_toml(
+    center_style: CenterStyle,
+    grid_style: GridStyle,
+    grid_size: GridSize,
+    autosave: bool,
+) -> String {
+    let s = PersistentSettings {
+        center_style,
+        grid_style,
+        grid_size,
+        autosave,
+    };
+    toml::to_string(&s).unwrap_or_default()
+}
+
+/// Deserialize a TOML string back into the four settings.
+/// Returns `None` if the content is empty or malformed.
+pub fn from_toml(content: &str) -> Option<(CenterStyle, GridStyle, GridSize, bool)> {
+    if content.is_empty() {
+        return None;
+    }
+    let s: PersistentSettings = toml::from_str(content).ok()?;
+    Some((s.center_style, s.grid_style, s.grid_size, s.autosave))
 }
 
 // ── Settings panel ──────────────────────────────────────────────────────────
