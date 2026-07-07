@@ -3,6 +3,7 @@ pub use viewport::Viewport;
 
 use crate::model::{Element, ElementData, ElementId, Point, Scene, ShapeColor};
 use crate::ui::dock::Tool;
+use crate::ui::settings::{CenterStyle, GridSize, GridStyle};
 use leptos::ev;
 use leptos::svg::Svg;
 use leptos::*;
@@ -769,6 +770,9 @@ pub fn Canvas(
     canvas_mode: RwSignal<CanvasMode>,
     scene: RwSignal<Scene>,
     eraser_active: RwSignal<bool>,
+    center_style: RwSignal<CenterStyle>,
+    grid_style: RwSignal<GridStyle>,
+    grid_size: RwSignal<GridSize>,
 ) -> impl IntoView {
     fn window_size() -> (f64, f64) {
         let window = web_sys::window().expect("no global `window` exists");
@@ -1212,15 +1216,92 @@ pub fn Canvas(
             on:pointerup=on_pointer_up
             on:wheel=on_wheel
         >
-            <defs>
-                <pattern id="grid" width={GRID_SIZE.to_string()} height={GRID_SIZE.to_string()} patternUnits="userSpaceOnUse">
-                    <circle cx="20" cy="20" r="1.5" fill="#d1d5db" fill-opacity="0.25" />
-                </pattern>
-            </defs>
+            {move || {
+                let gs = grid_style.get();
+                let sz = grid_size.get().px();
+                let half = sz / 2.0;
 
-            <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#grid)" />
+                let pattern = match gs {
+                    GridStyle::Dot => {
+                        view! {
+                            <pattern
+                                id="grid-dot"
+                                width={sz.to_string()}
+                                height={sz.to_string()}
+                                patternUnits="userSpaceOnUse"
+                                patternTransform={format!("translate({}, {})", -half, -half)}
+                            >
+                                <circle cx={half.to_string()} cy={half.to_string()} r="1.5" fill="#d1d5db" fill-opacity="0.25" />
+                            </pattern>
+                        }
+                            .into_view()
+                    }
+                    GridStyle::Line => {
+                        view! {
+                            <pattern
+                                id="grid-line"
+                                width={sz.to_string()}
+                                height={sz.to_string()}
+                                patternUnits="userSpaceOnUse"
+                            >
+                                <path
+                                    d={format!("M {} 0 L 0 0 0 {}", sz, sz)}
+                                    fill="none"
+                                    stroke="#d1d5db"
+                                    stroke-opacity="0.25"
+                                    stroke-width="1"
+                                />
+                            </pattern>
+                        }
+                            .into_view()
+                    }
+                    GridStyle::Off => view! {}.into_view(),
+                };
 
-            <path d="M-12,0 L12,0 M0,-12 L0,12" stroke="#7aa2f7" stroke-width="2" />
+                let rect = match gs {
+                    GridStyle::Off => view! {}.into_view(),
+                    _ => {
+                        let fill_id = match gs {
+                            GridStyle::Dot => "url(#grid-dot)",
+                            GridStyle::Line => "url(#grid-line)",
+                            _ => "",
+                        };
+                        view! {
+                            <rect
+                                x="-100000"
+                                y="-100000"
+                                width="200000"
+                                height="200000"
+                                fill=fill_id
+                            />
+                        }
+                            .into_view()
+                    }
+                };
+
+                let center = match center_style.get() {
+                    CenterStyle::Crosshair => {
+                        view! {
+                            <path d="M-12,0 L12,0 M0,-12 L0,12" stroke="#7aa2f7" stroke-width="2" />
+                        }
+                            .into_view()
+                    }
+                    CenterStyle::Dot => {
+                        view! {
+                            <circle cx="0" cy="0" r="3" fill="#7aa2f7" />
+                        }
+                            .into_view()
+                    }
+                    CenterStyle::Off => view! {}.into_view(),
+                };
+
+                view! {
+                    <defs>{pattern}</defs>
+                    {rect}
+                    {center}
+                }
+                    .into_view()
+            }}
 
             {move || {
                 scene

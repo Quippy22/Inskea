@@ -1,7 +1,8 @@
 use crate::canvas::{Canvas, CanvasMode, Viewport};
 use crate::model::{Scene, ShapeColor};
 use crate::ui::dock::{Dock, Tool};
-use crate::ui::ToolBar;
+use crate::ui::{SettingsPanel, ToolBar};
+use crate::ui::settings::{CenterStyle, GridSize, GridStyle};
 use leptos::*;
 
 #[component]
@@ -17,6 +18,11 @@ pub fn App() -> impl IntoView {
     let scene = create_rw_signal(Scene::new());
     let eraser_active = create_rw_signal(false);
 
+    let center_style = create_rw_signal(CenterStyle::Crosshair);
+    let grid_style = create_rw_signal(GridStyle::Dot);
+    let grid_size = create_rw_signal(GridSize::Px30);
+    let autosave = create_rw_signal(false);
+
     view! {
         <div class="w-screen h-screen bg-bg text-fg">
             <Canvas
@@ -28,6 +34,9 @@ pub fn App() -> impl IntoView {
                 canvas_mode=canvas_mode
                 scene=scene
                 eraser_active=eraser_active
+                center_style=center_style
+                grid_style=grid_style
+                grid_size=grid_size
             />
             <ToolBar scene=scene viewport=viewport canvas_mode=canvas_mode />
             <Dock
@@ -35,6 +44,12 @@ pub fn App() -> impl IntoView {
                 selected_color=selected_color
                 canvas_mode=canvas_mode
                 eraser_active=eraser_active
+            />
+            <SettingsPanel
+                center_style=center_style
+                grid_style=grid_style
+                grid_size=grid_size
+                autosave=autosave
             />
         </div>
     }

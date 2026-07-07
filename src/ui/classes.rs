@@ -62,3 +62,15 @@ pub const MENU_DROPDOWN: &str = "absolute top-full right-0 mt-1 z-50 min-w-[160p
 
 /// Menu dropdown item.
 pub const MENU_ITEM: &str = "flex items-center justify-between w-full text-left px-4 py-1.5 text-sm text-fg hover:bg-accent/10 transition-colors";
+
+/// Settings panel window (dropdown anchored below gear button).
+pub const SETTINGS_WINDOW: &str = "absolute top-full right-0 mt-2 z-50 w-64 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-3 px-4 pointer-events-auto";
+
+/// Settings section label.
+pub const SETTINGS_LABEL: &str = "text-xs text-subtle shrink-0";
+
+/// Segmented control button — active state.
+pub const SEG_BTN_ACTIVE: &str = "px-2.5 py-1 text-xs transition-colors bg-accent/10 text-accent";
+
+/// Segmented control button — inactive state.
+pub const SEG_BTN_INACTIVE: &str = "px-2.5 py-1 text-xs transition-colors text-subtle hover:text-fg hover:bg-surface/50";
