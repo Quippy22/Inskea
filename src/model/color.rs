@@ -2,7 +2,7 @@
 /// well with the Tokyo-Night-based dark theme.
 ///
 /// Each variant maps to the Tailwind 500‑shade hex value.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum ShapeColor {
     Purple,
     Blue,
@@ -11,18 +11,13 @@ pub enum ShapeColor {
     Yellow,
     Orange,
     Red,
+    #[default]
     White,
-}
-
-impl Default for ShapeColor {
-    fn default() -> Self {
-        Self::White
-    }
 }
 
 impl ShapeColor {
     /// Return the Tailwind 500‑shade hex string for this color.
-    pub fn to_hex(&self) -> &'static str {
+    pub fn to_hex(self) -> &'static str {
         match self {
             Self::Purple => "#a855f7",
             Self::Blue => "#3b82f6",

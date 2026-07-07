@@ -26,7 +26,7 @@ pub fn ColorsPanel(selected_color: RwSignal<ShapeColor>) -> impl IntoView {
                 .map(|c| {
                     let hex = c.to_hex();
                     let label = format!("{c:?}");
-                    let c_for_click = c.clone();
+                    let c_for_click = c;
                     let c_for_sel = c;
                     view! {
                         <button
@@ -39,7 +39,7 @@ pub fn ColorsPanel(selected_color: RwSignal<ShapeColor>) -> impl IntoView {
                             }
                             style=format!("background-color: {hex}")
                             title=label
-                            on:click=move |_| selected_color.set(c_for_click.clone())
+                            on:click=move |_| selected_color.set(c_for_click)
                         />
                     }
                 })

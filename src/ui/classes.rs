@@ -12,9 +12,6 @@
 pub const PANEL: &str =
     "rounded-lg bg-panel/80 backdrop-blur-sm border border-border shadow-lg pointer-events-auto";
 
-/// Frosted-glass panel with blue underglow (toolbar).
-pub const PANEL_GLOW: &str = "rounded-lg bg-panel/80 backdrop-blur-sm border border-border shadow-[0_6px_12px_-4px_rgba(122,162,247,0.35)] pointer-events-auto";
-
 /// Toolbar inner container (horizontal button row with glow).
 pub const TBAR_INNER: &str = "flex items-center gap-0.5 rounded-lg bg-panel/80 backdrop-blur-sm border border-border shadow-[0_6px_12px_-4px_rgba(122,162,247,0.35)] pointer-events-auto p-0.5";
 

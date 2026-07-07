@@ -401,6 +401,22 @@ fn snap_angle(angle: f64, divisions: f64) -> f64 {
     (angle / (std::f64::consts::TAU / divisions)).round() * (std::f64::consts::TAU / divisions)
 }
 
+/// Context struct grouping all parameters for `resize_element`.
+struct ResizeContext<'a> {
+    orig: &'a Element,
+    bx: f64,
+    by: f64,
+    bw: f64,
+    bh: f64,
+    dx: f64,
+    dy: f64,
+    fdx: f64,
+    fdy: f64,
+    handle: usize,
+    shift: bool,
+    multi: bool,
+}
+
 /// Resize `el` so its bounding box changes from `(bx,by,bw,bh)` by the mouse delta `(dx,dy)`.
 ///
 /// `handle` selects which corner/edge is being dragged:
@@ -417,56 +433,42 @@ fn snap_angle(angle: f64, divisions: f64) -> f64 {
 ///
 /// `orig` is a clone of the element captured once at drag-start (used to prevent
 /// the scale factor from compounding across frames).
-fn resize_element(
-    el: &mut Element,
-    orig: &Element,
-    bx: f64,
-    by: f64,
-    bw: f64,
-    bh: f64,
-    dx: f64,
-    dy: f64,
-    fdx: f64,
-    fdy: f64,
-    handle: usize,
-    shift: bool,
-    multi: bool,
-) {
-    let (mut nx, mut ny, mut nw, mut nh) = match handle {
-        0 => (bx + dx, by + dy, bw - dx, bh - dy),
-        1 => (bx, by + dy, bw, bh - dy),
-        2 => (bx, by + dy, bw + dx, bh - dy),
-        3 => (bx + dx, by, bw - dx, bh),
-        4 => (bx, by, bw + dx, bh),
-        5 => (bx + dx, by, bw - dx, bh + dy),
-        6 => (bx, by, bw, bh + dy),
-        7 => (bx, by, bw + dx, bh + dy),
+fn resize_element(el: &mut Element, ctx: &ResizeContext) {
+    let (mut nx, mut ny, mut nw, mut nh) = match ctx.handle {
+        0 => (ctx.bx + ctx.dx, ctx.by + ctx.dy, ctx.bw - ctx.dx, ctx.bh - ctx.dy),
+        1 => (ctx.bx, ctx.by + ctx.dy, ctx.bw, ctx.bh - ctx.dy),
+        2 => (ctx.bx, ctx.by + ctx.dy, ctx.bw + ctx.dx, ctx.bh - ctx.dy),
+        3 => (ctx.bx + ctx.dx, ctx.by, ctx.bw - ctx.dx, ctx.bh),
+        4 => (ctx.bx, ctx.by, ctx.bw + ctx.dx, ctx.bh),
+        5 => (ctx.bx + ctx.dx, ctx.by, ctx.bw - ctx.dx, ctx.bh + ctx.dy),
+        6 => (ctx.bx, ctx.by, ctx.bw, ctx.bh + ctx.dy),
+        7 => (ctx.bx, ctx.by, ctx.bw + ctx.dx, ctx.bh + ctx.dy),
         _ => return,
     };
-    if shift {
-        let ratio = bw / bh;
+    if ctx.shift {
+        let ratio = ctx.bw / ctx.bh;
         let nratio = nw / nh;
         if nratio > ratio {
             nh = nw / ratio;
         } else {
             nw = nh * ratio;
         }
-        match handle {
+        match ctx.handle {
             0 => {
-                nx = bx + bw - nw;
-                ny = by + bh - nh;
+                nx = ctx.bx + ctx.bw - nw;
+                ny = ctx.by + ctx.bh - nh;
             }
             1 => {
-                ny = by + bh - nh;
+                ny = ctx.by + ctx.bh - nh;
             }
             2 => {
-                ny = by + bh - nh;
+                ny = ctx.by + ctx.bh - nh;
             }
             3 => {
-                nx = bx + bw - nw;
+                nx = ctx.bx + ctx.bw - nw;
             }
             5 => {
-                nx = bx + bw - nw;
+                nx = ctx.bx + ctx.bw - nw;
             }
             _ => {}
         }
@@ -474,44 +476,40 @@ fn resize_element(
     if nw < 5.0 || nh < 5.0 {
         return;
     }
-    let obw = bw.max(1.0);
-    let obh = bh.max(1.0);
+    let obw = ctx.bw.max(1.0);
+    let obh = ctx.bh.max(1.0);
     let sx = nw / obw;
     let sy = nh / obh;
-    if multi {
-        // Multi-select: proportionally scale every element as one group
-        // from the combined-bounds anchor.  Per-frame snapshots prevent
-        // the scale factor from compounding.
-        match (el, orig) {
+    if ctx.multi {
+        match (el, ctx.orig) {
             (Element::Rectangle(data) | Element::Ellipse(data),
              Element::Rectangle(od) | Element::Ellipse(od)) => {
-                data.x = (od.x - bx) * sx + nx;
-                data.y = (od.y - by) * sy + ny;
+                data.x = (od.x - ctx.bx) * sx + nx;
+                data.y = (od.y - ctx.by) * sy + ny;
                 data.width = (od.width * sx).max(5.0);
                 data.height = (od.height * sy).max(5.0);
             }
             (Element::Line(_, a, b) | Element::Arrow(_, a, b),
              Element::Line(_, oa, ob) | Element::Arrow(_, oa, ob)) => {
-                a.x = (oa.x - bx) * sx + nx;
-                a.y = (oa.y - by) * sy + ny;
-                b.x = (ob.x - bx) * sx + nx;
-                b.y = (ob.y - by) * sy + ny;
+                a.x = (oa.x - ctx.bx) * sx + nx;
+                a.y = (oa.y - ctx.by) * sy + ny;
+                b.x = (ob.x - ctx.bx) * sx + nx;
+                b.y = (ob.y - ctx.by) * sy + ny;
             }
             (Element::Freehand(_, pts), Element::Freehand(_, opts)) => {
                 for (p, op) in pts.iter_mut().zip(opts.iter()) {
-                    p.x = (op.x - bx) * sx + nx;
-                    p.y = (op.y - by) * sy + ny;
+                    p.x = (op.x - ctx.bx) * sx + nx;
+                    p.y = (op.y - ctx.by) * sy + ny;
                 }
             }
             (Element::Text(data, _), Element::Text(od, _)) => {
-                data.x = (od.x - bx) * sx + nx;
-                data.y = (od.y - by) * sy + ny;
+                data.x = (od.x - ctx.bx) * sx + nx;
+                data.y = (od.y - ctx.by) * sy + ny;
                 data.width = (od.width * sx).max(5.0);
             }
             _ => {}
         }
     } else {
-        // Single selection: use element-specific resize behaviour.
         match el {
             Element::Rectangle(data) | Element::Ellipse(data) => {
                 data.x = nx;
@@ -520,22 +518,22 @@ fn resize_element(
                 data.height = nh;
             }
             Element::Line(_, a, b) | Element::Arrow(_, a, b) => {
-                let hpos = handle_positions(bx, by, bw, bh);
-                let (hx, hy) = hpos[handle];
+                let hpos = handle_positions(ctx.bx, ctx.by, ctx.bw, ctx.bh);
+                let (hx, hy) = hpos[ctx.handle];
                 let dist_a = (a.x - hx).hypot(a.y - hy);
                 let dist_b = (b.x - hx).hypot(b.y - hy);
                 if dist_a < dist_b {
-                    a.x += fdx;
-                    a.y += fdy;
+                    a.x += ctx.fdx;
+                    a.y += ctx.fdy;
                 } else {
-                    b.x += fdx;
-                    b.y += fdy;
+                    b.x += ctx.fdx;
+                    b.y += ctx.fdy;
                 }
             }
             Element::Freehand(_, pts) => {
                 for p in pts {
-                    p.x = (p.x - bx) * sx + nx;
-                    p.y = (p.y - by) * sy + ny;
+                    p.x = (p.x - ctx.bx) * sx + nx;
+                    p.y = (p.y - ctx.by) * sy + ny;
                 }
             }
             Element::Text(data, _) => {
@@ -840,15 +838,16 @@ pub fn Canvas(
                                     for el in s.elements.iter_mut() {
                                         if ids.contains(&el.id()) {
                                             if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
-                                                resize_element(
-                                                    el, orig,
+                                                let ctx = ResizeContext {
+                                                    orig,
                                                     bx, by, bw, bh,
                                                     dx, dy,
-                                                    frame_dx, frame_dy,
-                                                    idx,
-                                                    shift_pressed.get(),
+                                                    fdx: frame_dx, fdy: frame_dy,
+                                                    handle: idx,
+                                                    shift: shift_pressed.get(),
                                                     multi,
-                                                );
+                                                };
+                                                resize_element(el, &ctx);
                                             }
                                         }
                                     }
@@ -1245,7 +1244,7 @@ pub fn Canvas(
                             Element::Line(_, a, b) | Element::Arrow(_, a, b) => {
                                 (a.x.min(b.x), a.y.min(b.y), (a.x - b.x).abs(), (a.y - b.y).abs())
                             }
-                            Element::Freehand(d, pts) => {
+                            Element::Freehand(..) => {
                                 // For freehand, we might have to use bounds. For simplicity, just use combined_bounds
                                 combined_bounds(&ids, &els).unwrap_or((0.0, 0.0, 0.0, 0.0))
                             }
