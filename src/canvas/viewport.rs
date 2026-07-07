@@ -30,7 +30,7 @@ impl Viewport {
     ///
     /// This is what actually shifts world (0,0) to the visual center of
     /// the screen, since SVG's native viewBox convention is top-left-origin.
-    pub fn to_view_box(&self, screen_width: f64, screen_height: f64) -> String {
+    pub fn to_view_box(self, screen_width: f64, screen_height: f64) -> String {
         let view_width = screen_width / self.zoom;
         let view_height = screen_height / self.zoom;
         let min_x = self.offset_x - view_width / 2.0;
@@ -53,6 +53,7 @@ impl Viewport {
     /// Convert a world-space point into a screen-space point (e.g. to
     /// position an HTML overlay like the text-edit textarea on top of a
     /// world-space element).
+    #[allow(dead_code)]
     pub fn world_to_screen(&self, world: (f64, f64), screen_size: (f64, f64)) -> (f64, f64) {
         let (wx, wy) = world;
         let (sw, sh) = screen_size;

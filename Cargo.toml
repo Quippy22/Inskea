@@ -1,6 +1,9 @@
 [package]
 name = "inskea"
 version = "0.1.0"
+authors = ["Quippy22"]
+license = "MIT"
+repository = "https://github.com/Quippy22/Inskea"
 edition = "2021"
 
 [dependencies]

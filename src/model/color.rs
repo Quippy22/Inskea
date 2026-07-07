@@ -2,7 +2,7 @@
 /// well with the Tokyo-Night-based dark theme.
 ///
 /// Each variant maps to the Tailwind 500‑shade hex value.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum ShapeColor {
     Purple,
     Blue,
@@ -11,18 +11,43 @@ pub enum ShapeColor {
     Yellow,
     Orange,
     Red,
+    #[default]
     White,
 }
 
-impl Default for ShapeColor {
-    fn default() -> Self {
-        Self::White
+impl std::fmt::Display for ShapeColor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Purple => write!(f, "Purple"),
+            Self::Blue => write!(f, "Blue"),
+            Self::Cyan => write!(f, "Cyan"),
+            Self::Green => write!(f, "Green"),
+            Self::Yellow => write!(f, "Yellow"),
+            Self::Orange => write!(f, "Orange"),
+            Self::Red => write!(f, "Red"),
+            Self::White => write!(f, "White"),
+        }
     }
 }
 
 impl ShapeColor {
+    /// Parse a variant name (as serialised by Display) back into a color.
+    pub fn from_name(s: &str) -> Option<Self> {
+        match s {
+            "Purple" => Some(Self::Purple),
+            "Blue" => Some(Self::Blue),
+            "Cyan" => Some(Self::Cyan),
+            "Green" => Some(Self::Green),
+            "Yellow" => Some(Self::Yellow),
+            "Orange" => Some(Self::Orange),
+            "Red" => Some(Self::Red),
+            "White" => Some(Self::White),
+            _ => None,
+        }
+    }
+
     /// Return the Tailwind 500‑shade hex string for this color.
-    pub fn to_hex(&self) -> &'static str {
+    pub fn to_hex(self) -> &'static str {
         match self {
             Self::Purple => "#a855f7",
             Self::Blue => "#3b82f6",
