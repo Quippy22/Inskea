@@ -1,8 +1,11 @@
 mod color;
-mod element;
+pub mod elements;
 
 pub use color::ShapeColor;
-pub use element::{Element, ElementData, ElementId, Point};
+pub use elements::{
+    Arrow, Element, ElementData, ElementId, Ellipse, Freehand, Line, Point, Rectangle, Text,
+};
+pub use elements::{Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag};
 
 /// The single source of truth for everything on the canvas.
 #[derive(Clone, Debug)]
@@ -12,6 +15,7 @@ pub struct Scene {
 }
 
 impl Scene {
+    /// Creates an empty scene with no elements (IDs start at 1).
     pub fn new() -> Self {
         Self {
             elements: Vec::new(),
@@ -19,21 +23,14 @@ impl Scene {
         }
     }
 
+    /// Adds an element to the scene, assigning it a unique ID.
+    ///
+    /// The element's previous ID is overwritten.
     pub fn add_element(&mut self, mut element: Element) {
-        match &mut element {
-            Element::Rectangle(d)
-            | Element::Ellipse(d)
-            | Element::Line(d, ..)
-            | Element::Arrow(d, ..)
-            | Element::Text(d, ..)
-            | Element::Freehand(d, ..) => {
-                d.id = self.next_id;
-            }
-        }
+        element.data_mut().id = self.next_id;
         self.next_id += 1;
         self.elements.push(element);
     }
-
 }
 
 impl Default for Scene {
