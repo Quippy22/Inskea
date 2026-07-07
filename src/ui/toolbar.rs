@@ -95,7 +95,7 @@ pub fn ToolBar(
     let menu_open = create_rw_signal(false);
     let submenu_open = create_rw_signal(false);
     let saved_path = create_rw_signal::<Option<String>>(None);
-    let tauri = create_rw_signal(is_tauri());
+    let tauri = is_tauri();
 
     let on_home = move |_| viewport.set(Viewport::default());
 
@@ -156,7 +156,7 @@ pub fn ToolBar(
     let on_export = move |_| {
         close_menu();
         let scene = scene.get();
-        if tauri.get() {
+        if tauri {
             spawn_local(async move {
                 let dir = tauri_bridge::get_app_data_dir().await.ok();
                 let path = tauri_bridge::pick_save_path("untitled.skea", dir.as_deref()).await;
@@ -174,7 +174,7 @@ pub fn ToolBar(
 
     let on_import = move |_| {
         close_menu();
-        if tauri.get() {
+        if tauri {
             spawn_local(async move {
                 let path = tauri_bridge::pick_open_path(None).await;
                 if let Some(path) = path {
@@ -298,7 +298,7 @@ pub fn ToolBar(
                                                             <button class=classes::MENU_ITEM on:click=on_new>
                                                                 "New"
                                                             </button>
-                                                            {move || tauri.get().then(|| view! {
+                                                            {move || tauri.then(|| view! {
                                                                 <button class=classes::MENU_ITEM on:click=on_save>
                                                                     "Save"
                                                                 </button>

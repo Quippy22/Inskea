@@ -7,6 +7,28 @@ use leptos::ev;
 use leptos::svg::Svg;
 use leptos::*;
 
+// ── Constants ──────────────────────────────────────────────────────────────
+const HIT_MARGIN: f64 = 6.0;
+const CLICK_MARGIN: f64 = 12.0;
+const MIN_DRAG_DIST: f64 = 3.0;
+const GRID_SIZE: f64 = 40.0;
+const MIN_ELEMENT_SIZE: f64 = 5.0;
+const HANDLE_RESIZE_RADIUS: f64 = 5.0;
+const HANDLE_MOVE_RADIUS: f64 = 6.0;
+const HANDLE_ROTATE_RADIUS: f64 = 7.0;
+const ROTATE_HANDLE_OFFSET: f64 = 25.0;
+const ARROW_HEAD_MULT: f64 = 4.0;
+const MIN_FONT_SIZE: f64 = 12.0;
+const ZOOM_FACTOR: f64 = 1.1;
+const ZOOM_MIN: f64 = 0.1;
+const ZOOM_MAX: f64 = 20.0;
+const DASH_PREVIEW: &str = "4 2";
+const DASH_BOUNDS: &str = "3 2";
+const MIN_DIMENSION: f64 = 1.0;
+const SNAP_DIVISIONS: f64 = 8.0;
+const ROTATE_SNAP_DIVISIONS: f64 = 24.0;
+// ────────────────────────────────────────────────────────────────────────────
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum CanvasMode {
     Select,
@@ -50,11 +72,11 @@ fn build_element(
                     y = ay - s;
                 }
             }
-            if w < 1.0 {
-                w = 1.0;
+            if w < MIN_DIMENSION {
+                w = MIN_DIMENSION;
             }
-            if h < 1.0 {
-                h = 1.0;
+            if h < MIN_DIMENSION {
+                h = MIN_DIMENSION;
             }
             data.x = x;
             data.y = y;
@@ -73,7 +95,7 @@ fn build_element(
                 let dy = cy - ay;
                 let angle = dy.atan2(dx);
                 let snapped =
-                    (angle / (std::f64::consts::TAU / 8.0)).round() * (std::f64::consts::TAU / 8.0);
+                    (angle / (std::f64::consts::TAU / SNAP_DIVISIONS)).round() * (std::f64::consts::TAU / SNAP_DIVISIONS);
                 let dist = (dx * dx + dy * dy).sqrt();
                 ex = ax + dist * snapped.cos();
                 ey = ay + dist * snapped.sin();
@@ -111,11 +133,11 @@ fn update_drawing(element: &mut Element, current: (f64, f64), anchor: (f64, f64)
                     y = ay - s;
                 }
             }
-            if w < 1.0 {
-                w = 1.0;
+            if w < MIN_DIMENSION {
+                w = MIN_DIMENSION;
             }
-            if h < 1.0 {
-                h = 1.0;
+            if h < MIN_DIMENSION {
+                h = MIN_DIMENSION;
             }
             data.x = x;
             data.y = y;
@@ -129,7 +151,7 @@ fn update_drawing(element: &mut Element, current: (f64, f64), anchor: (f64, f64)
                 let dy = cy - ay;
                 let angle = dy.atan2(dx);
                 let snapped =
-                    (angle / (std::f64::consts::TAU / 8.0)).round() * (std::f64::consts::TAU / 8.0);
+                    (angle / (std::f64::consts::TAU / SNAP_DIVISIONS)).round() * (std::f64::consts::TAU / SNAP_DIVISIONS);
                 let dist = (dx * dx + dy * dy).sqrt();
                 ex = ax + dist * snapped.cos();
                 ey = ay + dist * snapped.sin();
@@ -170,7 +192,7 @@ fn stroke_hex(stroke: ShapeColor) -> &'static str {
 
 /// Check if a world-space point hits an element.
 fn hit_test(point: (f64, f64), el: &Element) -> bool {
-    let margin = 6.0;
+    let margin = HIT_MARGIN;
     let (px, py) = point;
 
     match el {
@@ -220,7 +242,7 @@ fn hit_test(point: (f64, f64), el: &Element) -> bool {
             (px - near_x).hypot(py - near_y) <= margin + data.stroke_width
         }
         Element::Text(data, _) => {
-            let font_size = data.width.max(12.0);
+            let font_size = data.width.max(MIN_FONT_SIZE);
             px >= data.x - margin
                 && px <= data.x + data.width + margin
                 && py >= data.y - font_size
@@ -285,7 +307,7 @@ fn element_bounds(el: &Element) -> (f64, f64, f64, f64) {
             (x, y, w, h)
         }
         Element::Text(data, _content) => {
-            let h = data.width.max(12.0);
+            let h = data.width.max(MIN_FONT_SIZE);
             (data.x, data.y - h, data.width, h)
         }
         Element::Freehand(_, pts) => {
@@ -332,7 +354,7 @@ fn hit_test_topmost(point: (f64, f64), elements: &[Element]) -> Option<ElementId
 }
 
 fn point_inside_any_element(point: (f64, f64), elements: &[Element]) -> bool {
-    let margin = 12.0;
+    let margin = CLICK_MARGIN;
     elements.iter().any(|el| {
         let (ex, ey, ew, eh) = element_bounds(el);
         let (px, py) = point;
@@ -392,7 +414,7 @@ fn handle_positions(bx: f64, by: f64, bw: f64, bh: f64) -> [(f64, f64); 10] {
         (bx + bw / 2.0, by + bh),
         (bx + bw, by + bh),
         (bx + bw / 2.0, by + bh / 2.0),
-        (bx + bw / 2.0, by - 25.0),
+        (bx + bw / 2.0, by - ROTATE_HANDLE_OFFSET),
     ]
 }
 
@@ -473,11 +495,11 @@ fn resize_element(el: &mut Element, ctx: &ResizeContext) {
             _ => {}
         }
     }
-    if nw < 5.0 || nh < 5.0 {
+    if nw < MIN_ELEMENT_SIZE || nh < MIN_ELEMENT_SIZE {
         return;
     }
-    let obw = ctx.bw.max(1.0);
-    let obh = ctx.bh.max(1.0);
+    let obw = ctx.bw.max(MIN_ELEMENT_SIZE);
+    let obh = ctx.bh.max(MIN_ELEMENT_SIZE);
     let sx = nw / obw;
     let sy = nh / obh;
     if ctx.multi {
@@ -486,8 +508,8 @@ fn resize_element(el: &mut Element, ctx: &ResizeContext) {
              Element::Rectangle(od) | Element::Ellipse(od)) => {
                 data.x = (od.x - ctx.bx) * sx + nx;
                 data.y = (od.y - ctx.by) * sy + ny;
-                data.width = (od.width * sx).max(5.0);
-                data.height = (od.height * sy).max(5.0);
+                data.width = (od.width * sx).max(MIN_ELEMENT_SIZE);
+                data.height = (od.height * sy).max(MIN_ELEMENT_SIZE);
             }
             (Element::Line(_, a, b) | Element::Arrow(_, a, b),
              Element::Line(_, oa, ob) | Element::Arrow(_, oa, ob)) => {
@@ -505,7 +527,7 @@ fn resize_element(el: &mut Element, ctx: &ResizeContext) {
             (Element::Text(data, _), Element::Text(od, _)) => {
                 data.x = (od.x - ctx.bx) * sx + nx;
                 data.y = (od.y - ctx.by) * sy + ny;
-                data.width = (od.width * sx).max(5.0);
+                data.width = (od.width * sx).max(MIN_ELEMENT_SIZE);
             }
             _ => {}
         }
@@ -672,7 +694,7 @@ fn render_arrow(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
     } else {
         (1.0, 0.0)
     };
-    let head_size = (sw * 4.0).max(4.0);
+    let head_size = (sw * ARROW_HEAD_MULT).max(4.0);
     let tip_x = b.x;
     let tip_y = b.y;
     let lx = tip_x - ux * head_size - uy * head_size * 0.4;
@@ -694,7 +716,7 @@ fn render_arrow(data: &ElementData, a: &Point, b: &Point) -> leptos::View {
 fn render_text(data: &ElementData, content: &str) -> leptos::View {
     let x = data.x;
     let y = data.y;
-    let font_size = data.width.max(12.0);
+    let font_size = data.width.max(MIN_FONT_SIZE);
     let fill = data
         .fill_color
         .map(|c| c.to_hex())
@@ -861,7 +883,7 @@ pub fn Canvas(
                                 if let Some(prev) = drag_angle.get() {
                                     let mut cur = (world.1 - cy).atan2(world.0 - cx);
                                     if shift_pressed.get() {
-                                        cur = snap_angle(cur, 24.0);
+                                        cur = snap_angle(cur, ROTATE_SNAP_DIVISIONS);
                                     }
                                     let delta = cur - prev;
                                     drag_angle.set(Some(cur));
@@ -908,11 +930,11 @@ pub fn Canvas(
         ev.prevent_default();
         let screen = cursor_screen.get();
         let (sw, sh) = screen_size.get();
-        let factor = if ev.delta_y() < 0.0 { 1.1 } else { 1.0 / 1.1 };
+        let factor = if ev.delta_y() < 0.0 { ZOOM_FACTOR } else { 1.0 / ZOOM_FACTOR };
 
         viewport.update(|vp| {
             let world = vp.screen_to_world(screen, (sw, sh));
-            vp.zoom = (vp.zoom * factor).clamp(0.1, 20.0);
+            vp.zoom = (vp.zoom * factor).clamp(ZOOM_MIN, ZOOM_MAX);
             vp.offset_x = world.0 - (screen.0 - sw / 2.0) / vp.zoom;
             vp.offset_y = world.1 - (screen.1 - sh / 2.0) / vp.zoom;
         });
@@ -945,7 +967,7 @@ pub fn Canvas(
                         let hpos = handle_positions(bx, by, bw, bh); // all 10 handle positions
                                                                      // resize handles (indices 0–7)
                         for (i, &(hx, hy)) in hpos[..8].iter().enumerate() {
-                            if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= 5.0 {
+                            if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
                                 drag_action.set(Some(Handle::Resize(i)));
                                 moving_anchor.set(Some(world));
                                 drag_bounds.set(Some(bounds));
@@ -962,7 +984,7 @@ pub fn Canvas(
                         }
                         // move handle (index 8, centre)
                         let (hx, hy) = hpos[8];
-                        if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= 6.0 {
+                        if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
                             drag_action.set(Some(Handle::Move));
                             moving_anchor.set(Some(world));
                             drag_bounds.set(Some(bounds));
@@ -972,7 +994,7 @@ pub fn Canvas(
                         }
                         // rotate handle (index 9, above the box)
                         let (hx, hy) = hpos[9];
-                        if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= 7.0 {
+                        if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
                             let cx = bx + bw / 2.0;
                             let cy = by + bh / 2.0;
                             drag_action.set(Some(Handle::Rotate));
@@ -1076,7 +1098,7 @@ pub fn Canvas(
                         scene.update(|s| {
                             for el in s.elements.iter_mut() {
                                 if ids.contains(&el.id()) {
-                                    snap_element_to_grid(el, 40.0);
+                                    snap_element_to_grid(el, GRID_SIZE);
                                 }
                             }
                         });
@@ -1095,7 +1117,7 @@ pub fn Canvas(
                     let world = cursor_world.get();
                     let dx = world.0 - anchor.0;
                     let dy = world.1 - anchor.1;
-                    if dx.hypot(dy) >= 3.0 {
+                    if dx.hypot(dy) >= MIN_DRAG_DIST {
                         let rx = anchor.0.min(world.0);
                         let ry = anchor.1.min(world.1);
                         let rw = (world.0 - anchor.0).abs();
@@ -1122,7 +1144,7 @@ pub fn Canvas(
                     let world = update_world(&ev);
                     let dx = world.0 - state.anchor.0;
                     let dy = world.1 - state.anchor.1;
-                    if dx.hypot(dy) < 3.0 {
+                    if dx.hypot(dy) < MIN_DRAG_DIST {
                         drawing.set(None);
                         return;
                     }
@@ -1154,11 +1176,11 @@ pub fn Canvas(
         let shift = shift_pressed.get();
         let dx = world.0 - state.anchor.0;
         let dy = world.1 - state.anchor.1;
-        if dx.hypot(dy) < 3.0 {
+        if dx.hypot(dy) < MIN_DRAG_DIST {
             return None;
         }
         let el = build_element(state.anchor, world, state.tool, state.color, shift);
-        Some(view! { <g stroke-dasharray="4 2">{render_element(&el)}</g> }.into_view())
+        Some(view! { <g stroke-dasharray={DASH_PREVIEW}>{render_element(&el)}</g> }.into_view())
     };
 
     let selection_preview = move || {
@@ -1182,7 +1204,7 @@ pub fn Canvas(
                     fill=format!("{}33", hex)
                     stroke=hex
                     stroke-width="1"
-                    stroke-dasharray="4 2"
+                    stroke-dasharray={DASH_PREVIEW}
                     pointer-events="none"
                 />
             }
@@ -1203,7 +1225,7 @@ pub fn Canvas(
             on:wheel=on_wheel
         >
             <defs>
-                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <pattern id="grid" width={GRID_SIZE.to_string()} height={GRID_SIZE.to_string()} patternUnits="userSpaceOnUse">
                     <circle cx="20" cy="20" r="1.5" fill="#d1d5db" fill-opacity="0.25" />
                 </pattern>
             </defs>
@@ -1272,7 +1294,7 @@ pub fn Canvas(
                 
                 // Vector from center to handle: (0, - (bh / 2.0 + 25.0))
                 let handle_vec_x = 0.0;
-                let handle_vec_y = -(bh / 2.0 + 25.0);
+                let handle_vec_y = -(bh / 2.0 + ROTATE_HANDLE_OFFSET);
                 
                 // Rotate vector
                 let rx = cx + handle_vec_x * rot.cos() - handle_vec_y * rot.sin();
@@ -1293,7 +1315,7 @@ pub fn Canvas(
                     view! {
                         <rect x=bx y=by width=bw height=bh fill="none"
                             stroke=hex stroke-width="1"
-                            stroke-dasharray="3 2" pointer-events="none" />
+                            stroke-dasharray={DASH_BOUNDS} pointer-events="none" />
                         <line x1=cx y1=by x2=rx y2=ry
                             stroke=hex stroke-width="1" pointer-events="none" />
                         {corners.iter().map(|&(hx, hy)| {

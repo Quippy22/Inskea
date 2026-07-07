@@ -17,11 +17,11 @@ pub const TBAR_INNER: &str = "flex items-center gap-0.5 rounded-lg bg-panel/80 b
 
 /// Dock wrapper: fixed left-centre column.
 pub const CONTAINER_DOCK: &str =
-    "fixed left-4 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-0.5";
+    "fixed left-4 max-sm:left-2 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-0.5";
 
 /// Status bar wrapper: fixed top-centre row.
 pub const CONTAINER_STATUSBAR: &str =
-    "fixed top-4 inset-x-0 flex justify-center pointer-events-none z-50";
+    "fixed max-sm:top-2 top-4 inset-x-0 flex justify-center pointer-events-none z-50";
 
 /// Active state for a dock category / eraser button.
 pub const BTN_CAT_ACTIVE: &str = "flex items-center justify-center h-9 w-9 transition-colors text-accent bg-accent/10 border-l-2 border-accent";
