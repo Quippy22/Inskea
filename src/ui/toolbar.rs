@@ -272,33 +272,33 @@ pub fn ToolBar(
                     </button>
                     {move || {
                         if menu_open.get() {
-                            if tauri.get() {
-                                view! {
-                                    <>
+                            view! {
+                                <>
+                                    <div
+                                        class="fixed inset-0 z-40"
+                                        on:click=move |_| close_menu()
+                                    ></div>
+                                    <div class=classes::MENU_DROPDOWN>
                                         <div
-                                            class="fixed inset-0 z-40"
-                                            on:click=move |_| close_menu()
-                                        ></div>
-                                        <div class=classes::MENU_DROPDOWN>
-                                            <div
-                                                class="relative"
-                                                on:mouseenter=move |_| submenu_open.set(true)
-                                                on:mouseleave=move |_| submenu_open.set(false)
-                                            >
-                                                <button class=classes::MENU_ITEM>
-                                                    <span>"File"</span>
-                                                    {icon::chevron_right()}
-                                                </button>
-                                                {move || {
-                                                    if submenu_open.get() {
-                                                        view! {
-                                                            <div
-                                                                class=classes::MENU_DROPDOWN
-                                                                style="left: 100%; top: -4px;"
-                                                            >
-                                                                <button class=classes::MENU_ITEM on:click=on_new>
-                                                                    "New"
-                                                                </button>
+                                            class="relative"
+                                            on:mouseenter=move |_| submenu_open.set(true)
+                                            on:mouseleave=move |_| submenu_open.set(false)
+                                        >
+                                            <button class=classes::MENU_ITEM>
+                                                <span>"File"</span>
+                                                {icon::chevron_right()}
+                                            </button>
+                                            {move || {
+                                                if submenu_open.get() {
+                                                    view! {
+                                                        <div
+                                                            class=classes::MENU_DROPDOWN
+                                                            style="left: 100%; top: -4px;"
+                                                        >
+                                                            <button class=classes::MENU_ITEM on:click=on_new>
+                                                                "New"
+                                                            </button>
+                                                            {move || tauri.get().then(|| view! {
                                                                 <button class=classes::MENU_ITEM on:click=on_save>
                                                                     "Save"
                                                                 </button>
@@ -308,70 +308,25 @@ pub fn ToolBar(
                                                                 <button class=classes::MENU_ITEM on:click=on_open>
                                                                     "Open"
                                                                 </button>
-                                                                <button class=classes::MENU_ITEM on:click=on_export>
-                                                                    "Export"
-                                                                </button>
-                                                                <button class=classes::MENU_ITEM on:click=on_import>
-                                                                    "Import"
-                                                                </button>
-                                                            </div>
-                                                        }
-                                                            .into_view()
-                                                    } else {
-                                                        view! {}.into_view()
+                                                            })}
+                                                            <button class=classes::MENU_ITEM on:click=on_export>
+                                                                "Export"
+                                                            </button>
+                                                            <button class=classes::MENU_ITEM on:click=on_import>
+                                                                "Import"
+                                                            </button>
+                                                        </div>
                                                     }
-                                                }}
-                                            </div>
+                                                        .into_view()
+                                                } else {
+                                                    view! {}.into_view()
+                                                }
+                                            }}
                                         </div>
-                                    </>
-                                }
-                                    .into_view()
-                            } else {
-                                view! {
-                                    <>
-                                        <div
-                                            class="fixed inset-0 z-40"
-                                            on:click=move |_| close_menu()
-                                        ></div>
-                                        <div class=classes::MENU_DROPDOWN>
-                                            <div
-                                                class="relative"
-                                                on:mouseenter=move |_| submenu_open.set(true)
-                                                on:mouseleave=move |_| submenu_open.set(false)
-                                            >
-                                                <button class=classes::MENU_ITEM>
-                                                    <span>"File"</span>
-                                                    {icon::chevron_right()}
-                                                </button>
-                                                {move || {
-                                                    if submenu_open.get() {
-                                                        view! {
-                                                            <div
-                                                                class=classes::MENU_DROPDOWN
-                                                                style="left: 100%; top: -4px;"
-                                                            >
-                                                                <button class=classes::MENU_ITEM on:click=on_new>
-                                                                    "New"
-                                                                </button>
-                                                                <button class=classes::MENU_ITEM on:click=on_export>
-                                                                    "Export"
-                                                                </button>
-                                                                <button class=classes::MENU_ITEM on:click=on_import>
-                                                                    "Import"
-                                                                </button>
-                                                            </div>
-                                                        }
-                                                            .into_view()
-                                                    } else {
-                                                        view! {}.into_view()
-                                                    }
-                                                }}
-                                            </div>
-                                        </div>
-                                    </>
-                                }
-                                    .into_view()
+                                    </div>
+                                </>
                             }
+                                .into_view()
                         } else {
                             view! {}.into_view()
                         }
