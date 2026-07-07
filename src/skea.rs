@@ -67,9 +67,10 @@ pub fn save_to_string(scene: &Scene) -> String {
                     .fill_color
                     .map(|c| format!("{c}"))
                     .unwrap_or("none".into());
+                let content_len = content.len();
                 _ = writeln!(
                     out,
-                    "text {} {} {} {} {fill} {content}",
+                    "text {} {} {} {} {fill} {content_len}:{content}",
                     d.x, d.y, d.stroke_width, d.stroke_color
                 );
             }
@@ -95,7 +96,6 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
     let mut elements = Vec::new();
     let mut lines = input.lines().peekable();
 
-    // First line must be the version header
     let header = lines.next().ok_or("empty file")?.trim();
     if !header.starts_with("v ") {
         return Err("missing format version header (expected `v 1`)".into());
@@ -107,6 +107,8 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
     if version != 1 {
         return Err(format!("unsupported format version: {version}"));
     }
+
+    let mut next_id: u64 = 1;
 
     for (lineno, line) in lines.enumerate() {
         let line = line.trim();
@@ -136,7 +138,7 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                 } else {
                     Some(ShapeColor::from_name(parts[7]).ok_or_else(|| err("invalid fill color"))?)
                 };
-                let mut data = ElementData::new(0);
+                let mut data = ElementData::new(next_id);
                 data.x = x;
                 data.y = y;
                 data.width = w;
@@ -144,6 +146,7 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                 data.stroke_width = sw;
                 data.stroke_color = stroke;
                 data.fill_color = fill;
+                next_id += 1;
                 elements.push(if parts[0] == "rect" {
                     Element::Rectangle(data)
                 } else {
@@ -161,9 +164,10 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                 let sw: f64 = parts[5].parse().map_err(|_| err("invalid stroke_width"))?;
                 let stroke =
                     ShapeColor::from_name(parts[6]).ok_or_else(|| err("invalid stroke color"))?;
-                let mut data = ElementData::new(0);
+                let mut data = ElementData::new(next_id);
                 data.stroke_width = sw;
                 data.stroke_color = stroke;
+                next_id += 1;
                 let a = Point { x: x1, y: y1 };
                 let b = Point { x: x2, y: y2 };
                 elements.push(if parts[0] == "line" {
@@ -174,7 +178,7 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
             }
             "text" => {
                 if parts.len() < 6 {
-                    return Err(err("expected: tag x y sw stroke fill <content>"));
+                    return Err(err("expected: tag x y sw stroke fill <len>:<content>"));
                 }
                 let x: f64 = parts[1].parse().map_err(|_| err("invalid x"))?;
                 let y: f64 = parts[2].parse().map_err(|_| err("invalid y"))?;
@@ -187,17 +191,27 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                     Some(ShapeColor::from_name(parts[5]).ok_or_else(|| err("invalid fill color"))?)
                 };
                 let content = if parts.len() > 6 {
-                    let prefix_len: usize = parts[..6].iter().map(|p| p.len() + 1).sum();
-                    line[prefix_len..].to_string()
+                    let field_end: usize = parts[..6].iter().map(|p| p.len() + 1).sum();
+                    let rest = &line[field_end..];
+                    let (len_str, remaining) = rest.split_once(':')
+                        .ok_or_else(|| err("expected len:content format"))?;
+                    let content_len: usize = len_str.trim().parse()
+                        .map_err(|_| err("invalid content length"))?;
+                    let content_start = remaining.trim_start();
+                    if content_start.len() < content_len {
+                        return Err(err("content length exceeds line length"));
+                    }
+                    content_start[..content_len].to_string()
                 } else {
                     String::new()
                 };
-                let mut data = ElementData::new(0);
+                let mut data = ElementData::new(next_id);
                 data.x = x;
                 data.y = y;
                 data.stroke_width = sw;
                 data.stroke_color = stroke;
                 data.fill_color = fill;
+                next_id += 1;
                 elements.push(Element::Text(data, content));
             }
             "freehand" => {
@@ -216,16 +230,16 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                     let y: f64 = ys.parse().map_err(|_| err("invalid point y"))?;
                     pts.push(Point { x, y });
                 }
-                let mut data = ElementData::new(0);
+                let mut data = ElementData::new(next_id);
                 data.stroke_width = sw;
                 data.stroke_color = stroke;
+                next_id += 1;
                 elements.push(Element::Freehand(data, pts));
             }
             other => return Err(err(&format!("unknown element type: {other}"))),
         }
     }
 
-    let next_id = elements.len() as u64 + 1;
     Ok(Scene { elements, next_id })
 }
 
