@@ -23,60 +23,55 @@ const FORMAT_VERSION: u32 = 1;
 /// Serialise the scene to the .skea line-based format.
 pub fn save_to_string(scene: &Scene) -> String {
     let mut out = String::new();
-    writeln!(out, "v {FORMAT_VERSION}").ok();
+    _ = writeln!(out, "v {FORMAT_VERSION}");
     for el in &scene.elements {
         match el {
             Element::Rectangle(d) => {
                 let fill = d
                     .fill_color
-                    .map(|c| format!("{c:?}"))
+                    .map(|c| format!("{c}"))
                     .unwrap_or("none".into());
-                writeln!(
+                _ = writeln!(
                     out,
-                    "rect {} {} {} {} {} {:?} {fill}",
+                    "rect {} {} {} {} {} {} {fill}",
                     d.x, d.y, d.width, d.height, d.stroke_width, d.stroke_color
-                )
-                .ok();
+                );
             }
             Element::Ellipse(d) => {
                 let fill = d
                     .fill_color
-                    .map(|c| format!("{c:?}"))
+                    .map(|c| format!("{c}"))
                     .unwrap_or("none".into());
-                writeln!(
+                _ = writeln!(
                     out,
-                    "ellipse {} {} {} {} {} {:?} {fill}",
+                    "ellipse {} {} {} {} {} {} {fill}",
                     d.x, d.y, d.width, d.height, d.stroke_width, d.stroke_color
-                )
-                .ok();
+                );
             }
             Element::Line(d, a, b) => {
-                writeln!(
+                _ = writeln!(
                     out,
-                    "line {} {} {} {} {} {:?}",
+                    "line {} {} {} {} {} {}",
                     a.x, a.y, b.x, b.y, d.stroke_width, d.stroke_color
-                )
-                .ok();
+                );
             }
             Element::Arrow(d, a, b) => {
-                writeln!(
+                _ = writeln!(
                     out,
-                    "arrow {} {} {} {} {} {:?}",
+                    "arrow {} {} {} {} {} {}",
                     a.x, a.y, b.x, b.y, d.stroke_width, d.stroke_color
-                )
-                .ok();
+                );
             }
             Element::Text(d, content) => {
                 let fill = d
                     .fill_color
-                    .map(|c| format!("{c:?}"))
+                    .map(|c| format!("{c}"))
                     .unwrap_or("none".into());
-                writeln!(
+                _ = writeln!(
                     out,
-                    "text {} {} {} {:?} {fill} {content}",
+                    "text {} {} {} {} {fill} {content}",
                     d.x, d.y, d.stroke_width, d.stroke_color
-                )
-                .ok();
+                );
             }
             Element::Freehand(d, pts) => {
                 let points: String = pts
@@ -84,12 +79,11 @@ pub fn save_to_string(scene: &Scene) -> String {
                     .map(|p| format!("{},{}", p.x, p.y))
                     .collect::<Vec<_>>()
                     .join(" ");
-                writeln!(
+                _ = writeln!(
                     out,
-                    "freehand {} {:?} {points}",
+                    "freehand {} {} {points}",
                     d.stroke_width, d.stroke_color
-                )
-                .ok();
+                );
             }
         }
     }

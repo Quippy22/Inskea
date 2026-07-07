@@ -15,6 +15,21 @@ pub enum ShapeColor {
     White,
 }
 
+impl std::fmt::Display for ShapeColor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Purple => write!(f, "Purple"),
+            Self::Blue => write!(f, "Blue"),
+            Self::Cyan => write!(f, "Cyan"),
+            Self::Green => write!(f, "Green"),
+            Self::Yellow => write!(f, "Yellow"),
+            Self::Orange => write!(f, "Orange"),
+            Self::Red => write!(f, "Red"),
+            Self::White => write!(f, "White"),
+        }
+    }
+}
+
 impl ShapeColor {
     /// Return the Tailwind 500‑shade hex string for this color.
     pub fn to_hex(self) -> &'static str {

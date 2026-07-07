@@ -25,7 +25,7 @@ pub fn ColorsPanel(selected_color: RwSignal<ShapeColor>) -> impl IntoView {
                 .into_iter()
                 .map(|c| {
                     let hex = c.to_hex();
-                    let label = format!("{c:?}");
+                    let label = format!("{c}");
                     let c_for_click = c;
                     let c_for_sel = c;
                     view! {
