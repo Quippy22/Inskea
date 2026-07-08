@@ -382,20 +382,20 @@ pub fn Canvas(
         >
             {grid::grid_overlay(props.grid_style, props.grid_size, props.center_style)}
 
-            <For
-                each={
-                    let props = props.clone();
-                    move || props.scene.get().elements
-                }
-                key=|el| el.id()
-                children={
-                    let props = props.clone();
-                    move |el| {
-                        let zoom = props.viewport.get().zoom;
-                        view! { <g pointer-events="none">{el.render(zoom)}</g> }
-                    }
-                }
-            />
+            // NB: this is deliberately NOT a <For> loop keyed by ElementId.
+            // Leptos's <For> only re-invokes `children` for a newly-inserted
+            // key, not for an existing key whose data mutated in place — and
+            // every drag, resize, and text-commit in this app mutates an
+            // existing element by id without changing its key. A real
+            // fine-grained fix would need each element behind its own signal
+            // (e.g. Vec<RwSignal<Element>> instead of RwSignal<Scene>), which
+            // is a model restructuring, not a one-line change.
+            {let props = props.clone(); move || {
+                props.scene.get().elements.iter().map(|el| {
+                    let zoom = props.viewport.get().zoom;
+                    view! { <g pointer-events="none">{el.render(zoom)}</g> }.into_view()
+                }).collect_view()
+            }}
 
             {drawing_preview}
             {selection::selection_preview_overlay(st.select_anchor, props.cursor_world)}
