@@ -14,10 +14,10 @@ pub struct Rectangle {
 }
 
 impl Rectangle {
-    pub(crate) fn fill_paint(fill: &Option<ShapeColor>) -> &'static str {
+    pub(crate) fn fill_paint(fill: &Option<ShapeColor>) -> String {
         match fill {
-            Some(_) => "currentColor",
-            None => "none",
+            Some(c) => c.to_hex().to_string(),
+            None => "none".to_string(),
         }
     }
 

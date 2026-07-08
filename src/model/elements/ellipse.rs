@@ -12,10 +12,10 @@ pub struct Ellipse {
 }
 
 impl Ellipse {
-    fn fill_paint(fill: &Option<super::ShapeColor>) -> &'static str {
+    fn fill_paint(fill: &Option<super::ShapeColor>) -> String {
         match fill {
-            Some(_) => "currentColor",
-            None => "none",
+            Some(c) => c.to_hex().to_string(),
+            None => "none".to_string(),
         }
     }
 }
