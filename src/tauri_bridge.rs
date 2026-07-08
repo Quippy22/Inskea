@@ -2,14 +2,18 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
-    pub async fn invoke(cmd: &str, args: JsValue) -> JsValue;
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], catch)]
+    pub async fn invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
 
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "dialog"])]
     pub async fn save(options: JsValue) -> JsValue;
 
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "dialog"])]
     pub async fn open(options: JsValue) -> JsValue;
+}
+
+fn invoke_error(e: JsValue) -> String {
+    e.as_string().unwrap_or_else(|| format!("{e:?}"))
 }
 
 /// Check whether the app is running inside a Tauri webview.
@@ -57,7 +61,7 @@ pub async fn pick_open_path(default_dir: Option<&str>) -> Option<String> {
 pub async fn get_app_data_dir() -> Result<String, String> {
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({}))
         .map_err(|e| format!("serialization error: {e}"))?;
-    let result = invoke("get_app_data_dir", args).await;
+    let result = invoke("get_app_data_dir", args).await.map_err(invoke_error)?;
     result
         .as_string()
         .ok_or_else(|| "failed to get app data dir".into())
@@ -76,7 +80,7 @@ pub async fn save_skea(path: &str, content: &str) -> Result<(), String> {
         "content": content,
     }))
     .map_err(|e| format!("serialization error: {e}"))?;
-    invoke("save_skea", args).await;
+    invoke("save_skea", args).await.map_err(invoke_error)?;
     Ok(())
 }
 
@@ -86,7 +90,7 @@ pub async fn save_settings(content: &str) -> Result<(), String> {
         "content": content,
     }))
     .map_err(|e| format!("serialization error: {e}"))?;
-    invoke("save_settings", args).await;
+    invoke("save_settings", args).await.map_err(invoke_error)?;
     Ok(())
 }
 
@@ -94,7 +98,7 @@ pub async fn save_settings(content: &str) -> Result<(), String> {
 pub async fn load_settings() -> Result<String, String> {
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({}))
         .map_err(|e| format!("serialization error: {e}"))?;
-    let result = invoke("load_settings", args).await;
+    let result = invoke("load_settings", args).await.map_err(invoke_error)?;
     result
         .as_string()
         .ok_or_else(|| "failed to load settings".into())
@@ -106,7 +110,7 @@ pub async fn load_skea(path: &str) -> Result<String, String> {
         "path": path,
     }))
     .map_err(|e| format!("serialization error: {e}"))?;
-    let result = invoke("load_skea", args).await;
+    let result = invoke("load_skea", args).await.map_err(invoke_error)?;
     result
         .as_string()
         .ok_or_else(|| "failed to load file".into())
