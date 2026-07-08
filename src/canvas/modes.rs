@@ -95,6 +95,11 @@ pub fn draw_pointer_up(
 ) {
     if let Some(state) = st.drawing.get() {
         if state.tool == Tool::Freehand {
+            props.scene.update(|s| {
+                if let Some(Element::Freehand(fh)) = s.elements.last_mut() {
+                    fh.simplify(0.5);
+                }
+            });
             st.drawing.set(None);
             return;
         }
