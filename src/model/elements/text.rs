@@ -24,7 +24,7 @@ pub(crate) const CHAR_WIDTH_RATIO: f64 = 0.5;
 ///
 /// On resize, [`rewrap`](Self::rewrap) discards soft breaks and re-runs the wrapping
 /// algorithm against the new width, while keeping the raw content intact.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct WrappedText {
     /// Raw text with only hard line breaks (from user Enter presses).
     /// This is the string that mirrors what the textarea shows.
@@ -118,7 +118,7 @@ impl From<&WrappedText> for Vec<String> {
 /// Wrapping is character-count based (see [`WrappedText`]).
 /// The element is **self-sizing**: `data.width` and `data.height` are
 /// recomputed from the actual wrapped content whenever the text changes.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Text {
     /// Position, font size, and fill colour.
     pub data: ElementData,

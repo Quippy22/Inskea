@@ -10,7 +10,7 @@ const SNAP_DIVISIONS: f64 = 8.0;
 const ARROW_HEAD_MULT: f64 = 4.0;
 
 /// An arrow from point A (tail) to point B (tip), drawn with a V-shaped head.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Arrow {
     /// Stroke appearance (width, colour).
     pub data: ElementData,

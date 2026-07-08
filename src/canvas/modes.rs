@@ -22,7 +22,9 @@ const DEFAULT_FONT_SIZE: f64 = 24.0;
 /// - **All other tools** (Rectangle, Ellipse, Line, Arrow) – stores a
 ///   `DrawingState` with the anchor at the click position. The element is
 ///   created later in `draw_pointer_up` when the drag completes.
-///   A snapshot is taken before entering the drawing state.
+///   No snapshot is taken here — the snapshot fires once in
+///   `draw_pointer_up` right before the element is added, so a degenerate
+///   click (below MIN_DRAG_DIST) never pollutes the undo stack.
 pub fn draw_pointer_down(
     _ev: &ev::PointerEvent,
     world: (f64, f64),
@@ -66,7 +68,9 @@ pub fn draw_pointer_down(
         return;
     }
 
-    (props.push_snapshot)();
+    // No snapshot here — it fires once in draw_pointer_up, immediately
+    // before the element is added to the scene, so degenerate clicks
+    // below MIN_DRAG_DIST don't pollute the undo stack.
     st.drawing.set(Some(DrawingState { anchor: world, tool, color }));
 }
 

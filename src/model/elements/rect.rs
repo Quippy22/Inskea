@@ -7,17 +7,17 @@ pub(crate) const MIN_ELEMENT_SIZE: f64 = 5.0;
 pub(crate) const MIN_DIMENSION: f64 = 1.0;
 
 /// A rectangle shape defined by its top-left corner, width, and height.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Rectangle {
     /// Position, size, and appearance (stroke/fill/rotation).
     pub data: ElementData,
 }
 
 impl Rectangle {
-    pub(crate) fn fill_paint(fill: &Option<ShapeColor>) -> &'static str {
+    pub(crate) fn fill_paint(fill: &Option<ShapeColor>) -> String {
         match fill {
-            Some(_) => "currentColor",
-            None => "none",
+            Some(c) => c.to_hex().to_string(),
+            None => "none".to_string(),
         }
     }
 

@@ -8,7 +8,7 @@ pub use elements::{
 pub use elements::{Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag};
 
 /// The single source of truth for everything on the canvas.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Scene {
     pub(crate) elements: Vec<Element>,
     pub(crate) next_id: u64,

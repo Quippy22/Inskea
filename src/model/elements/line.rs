@@ -9,7 +9,7 @@ use super::snap_angle;
 const SNAP_DIVISIONS: f64 = 8.0;
 
 /// A straight line from point A to point B.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Line {
     /// Stroke appearance (width, colour).
     pub data: ElementData,

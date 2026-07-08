@@ -132,6 +132,41 @@ pub fn Canvas(
         st.editing_id, st.edit_text, props.scene, st.textarea_ref, props.viewport,
     );
 
+    // Switching mode (Select/Hand/Draw) or active tool used to leave whatever
+    // was in progress untouched: an active selection stayed highlighted after
+    // switching to a draw tool, and a just-opened, still-empty text box stayed
+    // on screen after switching away from the Text tool. Whenever the mode or
+    // tool changes, clear the selection, and either commit or discard whatever
+    // text edit was in progress — discard if nothing was typed (an empty Text
+    // element has no reason to exist), commit if the user had actually typed
+    // something (so switching tools mid-edit doesn't lose typed text).
+    {
+        let st = st;
+        let props = props.clone();
+        let commit_edit = commit_edit.clone();
+        create_effect(move |prev: Option<(CanvasMode, Tool)>| {
+            let mode = props.canvas_mode.get();
+            let tool = props.selected_tool.get();
+            if let Some(prev) = prev {
+                if prev != (mode, tool) {
+                    if !st.selected_ids.get_untracked().is_empty() {
+                        st.selected_ids.set(Vec::new());
+                    }
+                    if let Some(id) = st.editing_id.get_untracked() {
+                        if st.edit_text.get_untracked().is_empty() {
+                            props.scene.update(|s| s.elements.retain(|e| e.id() != id));
+                            st.editing_id.set(None);
+                            st.edit_text.set(String::new());
+                        } else {
+                            commit_edit();
+                        }
+                    }
+                }
+            }
+            (mode, tool)
+        });
+    }
+
     // ── Helper ───────────────────────────────────────────────────────────
     // Convert a DOM pointer event into world-space coordinates.
     // 1. Extracts `offset_x / offset_y` from the event (CSS pixels relative to the SVG).
@@ -382,7 +417,15 @@ pub fn Canvas(
         >
             {grid::grid_overlay(props.grid_style, props.grid_size, props.center_style)}
 
-            {move || {
+            // NB: this is deliberately NOT a <For> loop keyed by ElementId.
+            // Leptos's <For> only re-invokes `children` for a newly-inserted
+            // key, not for an existing key whose data mutated in place — and
+            // every drag, resize, and text-commit in this app mutates an
+            // existing element by id without changing its key. A real
+            // fine-grained fix would need each element behind its own signal
+            // (e.g. Vec<RwSignal<Element>> instead of RwSignal<Scene>), which
+            // is a model restructuring, not a one-line change.
+            {let props = props.clone(); move || {
                 props.scene.get().elements.iter().map(|el| {
                     let zoom = props.viewport.get().zoom;
                     view! { <g pointer-events="none">{el.render(zoom)}</g> }.into_view()
