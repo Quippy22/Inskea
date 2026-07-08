@@ -182,6 +182,33 @@ pub trait SnapToGrid {
 }
 
 /// Rotate the element around a pivot point.
+///
+/// # Conventions
+///
+/// There are two coexisting rotation strategies in this codebase,
+/// and every implementor of this trait follows exactly one of them:
+///
+/// **In-place rotation** (used by `Rectangle`, `Ellipse`, `Text`):
+/// Accumulate `delta` into `data.rotation` and never transform the
+/// element's position/size fields. The render method wraps the shape
+/// in an SVG `transform="rotate(…)"` centred on the element's own
+/// bounding-box centre. `data.rotation` is the single source of truth
+/// and is non-zero after any rotation drag.
+///
+/// **Point-based rotation** (used by `Line`, `Arrow`, `Freehand`):
+/// Apply the rotation matrix directly to every positional point
+/// (endpoints for Line/Arrow, sample points for Freehand) around the
+/// given pivot `(cx, cy)`. `data.rotation` is **never** touched and
+/// stays at `0.0` — there is no single "shape transform" to accumulate
+/// into, because the geometry is not a centred bounding box.
+///
+/// Both strategies produce the correct visual result. Code that reads
+/// `data.rotation` to decide whether a selection box should be rotated
+/// (e.g. `selection.rs`) must be aware of this split: it will correctly
+/// detect rotation for in-place types but will always see `0.0` for
+/// point-based types — do not "fix" that by also writing into
+/// `data.rotation` for point-based types, which would double-apply the
+/// rotation.
 pub trait Rotate {
     /// Rotate by `delta` radians around the point (`cx`, `cy`).
     fn rotate_around(&mut self, cx: f64, cy: f64, delta: f64);
