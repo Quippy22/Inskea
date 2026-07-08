@@ -5,7 +5,7 @@ use super::{Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Ro
 use super::rect::{self, MIN_ELEMENT_SIZE};
 
 /// An ellipse (oval) shape defined by its bounding-box top-left, width, and height.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Ellipse {
     /// Position, size, and appearance (stroke/fill/rotation).
     pub data: ElementData,

@@ -18,7 +18,7 @@ use super::ShapeColor;
 pub type ElementId = u64;
 
 /// A 2-D point in world space.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Point {
     /// Horizontal coordinate (positive right).
     pub x: f64,
@@ -27,7 +27,7 @@ pub struct Point {
 }
 
 /// Common data shared by every element type: position, size, and appearance.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ElementData {
     /// Unique identifier for this element, assigned when added to a Scene.
     pub id: ElementId,
@@ -71,7 +71,8 @@ impl ElementData {
 }
 
 /// Every drawable shape on the canvas.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type")]
 pub enum Element {
     /// A [`Rectangle`] shape.
     Rectangle(Rectangle),

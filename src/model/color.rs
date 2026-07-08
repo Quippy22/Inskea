@@ -2,7 +2,7 @@
 /// well with the Tokyo-Night-based dark theme.
 ///
 /// Each variant maps to the Tailwind 500‑shade hex value.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ShapeColor {
     Purple,
     Blue,

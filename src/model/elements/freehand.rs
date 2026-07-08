@@ -7,7 +7,7 @@ use super::{
 use super::rect::MIN_ELEMENT_SIZE;
 
 /// A free-hand stroke made up of a list of sampled points.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Freehand {
     /// Stroke appearance (width, colour).
     pub data: ElementData,
