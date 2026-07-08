@@ -1,3 +1,4 @@
+use crate::ui::components::SegmentedControl;
 use crate::ui::classes;
 use crate::ui::icon;
 use leptos::*;
@@ -36,6 +37,12 @@ impl GridSize {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum CanvasBg {
+    Dark,
+    Light,
+}
+
 // ── Persistence ─────────────────────────────────────────────────────────────
 
 /// TOML-serializable snapshot of all settings.
@@ -45,32 +52,41 @@ struct PersistentSettings {
     grid_style: GridStyle,
     grid_size: GridSize,
     autosave: bool,
+    canvas_bg: Option<CanvasBg>,
 }
 
-/// Serialize the four settings to a TOML string.
+/// Serialize settings to a TOML string.
 pub fn to_toml(
     center_style: CenterStyle,
     grid_style: GridStyle,
     grid_size: GridSize,
     autosave: bool,
+    canvas_bg: CanvasBg,
 ) -> String {
     let s = PersistentSettings {
         center_style,
         grid_style,
         grid_size,
         autosave,
+        canvas_bg: Some(canvas_bg),
     };
     toml::to_string(&s).unwrap_or_default()
 }
 
-/// Deserialize a TOML string back into the four settings.
+/// Deserialize a TOML string back into settings.
 /// Returns `None` if the content is empty or malformed.
-pub fn from_toml(content: &str) -> Option<(CenterStyle, GridStyle, GridSize, bool)> {
+pub fn from_toml(content: &str) -> Option<(CenterStyle, GridStyle, GridSize, bool, CanvasBg)> {
     if content.is_empty() {
         return None;
     }
     let s: PersistentSettings = toml::from_str(content).ok()?;
-    Some((s.center_style, s.grid_style, s.grid_size, s.autosave))
+    Some((
+        s.center_style,
+        s.grid_style,
+        s.grid_size,
+        s.autosave,
+        s.canvas_bg.unwrap_or(CanvasBg::Dark),
+    ))
 }
 
 // ── Settings panel ──────────────────────────────────────────────────────────
@@ -81,13 +97,14 @@ pub fn SettingsPanel(
     grid_style: RwSignal<GridStyle>,
     grid_size: RwSignal<GridSize>,
     autosave: RwSignal<bool>,
+    canvas_bg: RwSignal<CanvasBg>,
 ) -> impl IntoView {
     let open = create_rw_signal(false);
 
     let close = move || open.set(false);
     let toggle = move |_| open.update(|v| *v = !*v);
 
-    // ── Options arrays (label order matches user request) ──────────────────
+    // ── Options arrays ────────────────────────────────────
     let center_opts = &[
         (CenterStyle::Crosshair, "Crosshair"),
         (CenterStyle::Dot, "Dot"),
@@ -107,6 +124,11 @@ pub fn SettingsPanel(
     ];
 
     let toggle_opts = &[(true, "On"), (false, "Off")];
+
+    let bg_opts = &[
+        (CanvasBg::Dark, "Dark"),
+        (CanvasBg::Light, "Light"),
+    ];
 
     view! {
         <div class="fixed top-4 right-4 z-50 pointer-events-none">
@@ -128,11 +150,9 @@ pub fn SettingsPanel(
 
                     view! {
                         <>
-                            // backdrop
                             <div class="fixed inset-0 z-40" on:click=move |_| close()></div>
 
                             <div class=classes::SETTINGS_WINDOW>
-                                // ── Center ─────────────────────────────────
                                 <div class="flex items-center justify-between mb-3">
                                     <span class=classes::SETTINGS_LABEL>"Center"</span>
                                     <SegmentedControl
@@ -141,7 +161,6 @@ pub fn SettingsPanel(
                                     />
                                 </div>
 
-                                // ── Grid style ────────────────────────────
                                 <div class="flex items-center justify-between mb-3">
                                     <span class=classes::SETTINGS_LABEL>"Grid"</span>
                                     <SegmentedControl
@@ -150,7 +169,6 @@ pub fn SettingsPanel(
                                     />
                                 </div>
 
-                                // ── Grid size ─────────────────────────────
                                 <div class="flex items-center justify-between mb-3">
                                     <span class=classes::SETTINGS_LABEL>"Grid size"</span>
                                     <SegmentedControl
@@ -159,7 +177,14 @@ pub fn SettingsPanel(
                                     />
                                 </div>
 
-                                // ── Autosave ──────────────────────────────
+                                <div class="flex items-center justify-between mb-3">
+                                    <span class=classes::SETTINGS_LABEL>"Canvas bg"</span>
+                                    <SegmentedControl
+                                        options=bg_opts
+                                        active=canvas_bg
+                                    />
+                                </div>
+
                                 <div class="flex items-center justify-between">
                                     <span class=classes::SETTINGS_LABEL>"Autosave"</span>
                                     <SegmentedControl
@@ -173,47 +198,6 @@ pub fn SettingsPanel(
                         .into_view()
                 }}
             </div>
-        </div>
-    }
-}
-
-// ── Reusable segmented control ──────────────────────────────────────────────
-
-/// Renders a horizontal segmented button group (e.g. `[Crosshair | Dot | Off]`).
-///
-/// The active segment is highlighted; segments are visually separated by a
-/// border-right on all but the last item.
-#[component]
-fn SegmentedControl<T: PartialEq + Copy + 'static>(
-    options: &'static [(T, &'static str)],
-    active: RwSignal<T>,
-) -> impl IntoView {
-    let last = options.len() - 1;
-
-    view! {
-        <div class="flex rounded-md border border-border overflow-hidden">
-            {options
-                .iter()
-                .enumerate()
-                .map(|(i, (val, label))| {
-                    let is_last = i == last;
-                    let val = *val;
-                    view! {
-                        <button
-                            class=move || if active.get() == val {
-                                classes::SEG_BTN_ACTIVE
-                            } else {
-                                classes::SEG_BTN_INACTIVE
-                            }
-                            class:border-r=move || !is_last
-                            class:border-border=move || !is_last
-                            on:click=move |_| active.set(val)
-                        >
-                            {*label}
-                        </button>
-                    }
-                })
-                .collect_view()}
         </div>
     }
 }

@@ -1,5 +1,7 @@
-/// UI overlay components: toolbar, dock, settings, icons, and Tailwind class constants.
+/// UI overlay components: toolbar, dock, settings, icons, Tailwind class constants,
+/// and reusable UI building blocks.
 pub(crate) mod classes;
+pub mod components;
 pub mod dock;
 pub(crate) mod icon;
 pub(crate) mod settings;

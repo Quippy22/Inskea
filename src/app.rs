@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
 use crate::canvas::{Canvas, CanvasMode, Viewport};
-use crate::model::{Scene, ShapeColor};
+use crate::model::{ElementId, Scene, ShapeColor};
 use crate::tauri_bridge;
 use crate::ui::dock::{Dock, Tool};
-use crate::ui::settings::{from_toml, to_toml, CenterStyle, GridSize, GridStyle};
+use crate::ui::settings::{from_toml, to_toml, CanvasBg, CenterStyle, GridSize, GridStyle};
 use crate::ui::{SettingsPanel, ToolBar};
 use leptos::ev;
 use leptos::*;
@@ -22,11 +22,13 @@ pub fn App() -> impl IntoView {
 
     let scene = create_rw_signal(Scene::new());
     let eraser_active = create_rw_signal(false);
+    let selected_ids = create_rw_signal(Vec::<ElementId>::new());
 
     let center_style = create_rw_signal(CenterStyle::Crosshair);
     let grid_style = create_rw_signal(GridStyle::Dot);
     let grid_size = create_rw_signal(GridSize::Px30);
     let autosave = create_rw_signal(false);
+    let canvas_bg = create_rw_signal(CanvasBg::Dark);
 
     // ── Undo / Redo ────────────────────────────────────────────────────────
     let undo_stack = create_rw_signal(Vec::<Scene>::new());
@@ -82,11 +84,12 @@ pub fn App() -> impl IntoView {
     if is_tauri {
         spawn_local(async move {
             if let Ok(content) = tauri_bridge::load_settings().await {
-                if let Some((cs, gs, gz, auto)) = from_toml(&content) {
+                if let Some((cs, gs, gz, auto, bg)) = from_toml(&content) {
                     center_style.set(cs);
                     grid_style.set(gs);
                     grid_size.set(gz);
                     autosave.set(auto);
+                    canvas_bg.set(bg);
                 }
             }
             initialized.set(true);
@@ -101,6 +104,7 @@ pub fn App() -> impl IntoView {
             grid_style.get(),
             grid_size.get(),
             autosave.get(),
+            canvas_bg.get(),
         );
         if initialized.get() && is_tauri {
             let content = to_toml(
@@ -108,6 +112,7 @@ pub fn App() -> impl IntoView {
                 grid_style.get(),
                 grid_size.get(),
                 autosave.get(),
+                canvas_bg.get(),
             );
             spawn_local(async move {
                 let _ = tauri_bridge::save_settings(&content).await;
@@ -116,7 +121,10 @@ pub fn App() -> impl IntoView {
     });
 
     view! {
-        <div class="w-screen h-screen bg-bg text-fg">
+        <div class=move || {
+            let bg = if canvas_bg.get() == CanvasBg::Dark { "bg-bg" } else { "bg-white" };
+            format!("w-screen h-screen {bg} text-fg")
+        }>
             <Canvas
                 cursor_screen=cursor_screen
                 cursor_world=cursor_world
@@ -139,6 +147,7 @@ pub fn App() -> impl IntoView {
                 on_redo=do_redo
                 can_undo=can_undo
                 can_redo=can_redo
+                _selected_ids=selected_ids
             />
             <Dock
                 selected_tool=selected_tool
@@ -151,6 +160,7 @@ pub fn App() -> impl IntoView {
                 grid_style=grid_style
                 grid_size=grid_size
                 autosave=autosave
+                canvas_bg=canvas_bg
             />
         </div>
     }
