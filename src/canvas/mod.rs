@@ -382,12 +382,20 @@ pub fn Canvas(
         >
             {grid::grid_overlay(props.grid_style, props.grid_size, props.center_style)}
 
-            {move || {
-                props.scene.get().elements.iter().map(|el| {
-                    let zoom = props.viewport.get().zoom;
-                    view! { <g pointer-events="none">{el.render(zoom)}</g> }.into_view()
-                }).collect_view()
-            }}
+            <For
+                each={
+                    let props = props.clone();
+                    move || props.scene.get().elements
+                }
+                key=|el| el.id()
+                children={
+                    let props = props.clone();
+                    move |el| {
+                        let zoom = props.viewport.get().zoom;
+                        view! { <g pointer-events="none">{el.render(zoom)}</g> }
+                    }
+                }
+            />
 
             {drawing_preview}
             {selection::selection_preview_overlay(st.select_anchor, props.cursor_world)}
