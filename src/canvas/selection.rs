@@ -105,9 +105,8 @@ pub fn selection_handle_overlay(
 
                     let move_icon = view! {
                         <g stroke=hex stroke-width="1.5" fill="none"
-                            transform=format!("translate({} {}) scale(0.75)", mx - 9.0, my - 9.0)
+                            transform=format!("translate({} {}) scale(0.9375)", mx - 11.25, my - 11.25)
                             pointer-events="none">
-                            <circle cx="12" cy="12" r="9.25" fill="white" stroke=hex stroke-width="1.5" />
                             <path d="M12 3 L12 21 M3 12 L21 12" />
                             <path d="M9 6 L12 3 L15 6" />
                             <path d="M9 18 L12 21 L15 18" />
@@ -143,9 +142,8 @@ pub fn selection_handle_overlay(
                     .and_then(|el| { let r = el.data().rotation; if r != 0.0 { Some(r) } else { None } })
             }).flatten().unwrap_or(0.0);
 
-        let handle_vec_y = -(bh / 2.0 + ROTATE_HANDLE_OFFSET);
-        let rx = cx + handle_vec_x(rot, handle_vec_y);
-        let ry = cy + handle_vec_y_sin(rot, handle_vec_y);
+        let rx = cx;
+        let ry = by - ROTATE_HANDLE_OFFSET;
 
         let inner = {
             let corners = [
@@ -176,20 +174,6 @@ pub fn selection_handle_overlay(
     }
 }
 
-/// Rotate the vector `(0, vec_y)` by `rot` radians, returning its x component.
-///
-/// Used to position the rotate handle icon when the selection has non-zero
-/// rotation. The handle starts at `(cx, cy - (bh/2 + OFFSET))` and is rotated
-/// around `(cx, cy)`.
-fn handle_vec_x(rot: f64, vec_y: f64) -> f64 {
-    0.0 * rot.cos() - vec_y * rot.sin()
-}
-
-/// Rotate the vector `(0, vec_y)` by `rot` radians, returning its y component.
-fn handle_vec_y_sin(rot: f64, vec_y: f64) -> f64 {
-    0.0 * rot.sin() + vec_y * rot.cos()
-}
-
 /// Render the move (crosshair) and rotate (circular-arrow) icon groups.
 ///
 /// Both are rendered as 24×24 scaled-down SVG icons centred at `(cx, cy)`
@@ -197,9 +181,8 @@ fn handle_vec_y_sin(rot: f64, vec_y: f64) -> f64 {
 fn render_move_rotate_icons(hex: &'static str, cx: f64, cy: f64, rx: f64, ry: f64) -> leptos::View {
     let move_icon = view! {
         <g stroke=hex stroke-width="1.5" fill="none"
-            transform=format!("translate({} {}) scale(0.75)", cx - 9.0, cy - 9.0)
+            transform=format!("translate({} {}) scale(0.9375)", cx - 11.25, cy - 11.25)
             pointer-events="none">
-            <circle cx="12" cy="12" r="9.25" fill="white" stroke=hex stroke-width="1.5" />
             <path d="M12 3 L12 21 M3 12 L21 12" />
             <path d="M9 6 L12 3 L15 6" />
             <path d="M9 18 L12 21 L15 18" />
@@ -217,6 +200,21 @@ fn render_move_rotate_icons(hex: &'static str, cx: f64, cy: f64, rx: f64, ry: f6
         </g>
     };
     view! { {move_icon} {rotate_icon} }.into_view()
+}
+
+/// Transform a world-space point into the local frame of a rotated element
+/// by applying the inverse rotation around the element's centre.
+fn unrotate_for_element(point: (f64, f64), el: &Element) -> (f64, f64) {
+    let rot = el.data().rotation;
+    if rot == 0.0 { return point; }
+    let (bx, by, bw, bh) = el.bounds();
+    let cx = bx + bw / 2.0;
+    let cy = by + bh / 2.0;
+    let cos = (-rot).cos();
+    let sin = (-rot).sin();
+    let dx = point.0 - cx;
+    let dy = point.1 - cy;
+    (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos)
 }
 
 /// Handle a pointer-down event while in `Select` mode.
@@ -289,10 +287,23 @@ pub fn select_pointer_down(
     }
 
     if !ids.is_empty() {
+        // For single-selection with non-zero rotation, transform the click
+        // point into the element's local frame so handle hit-tests match
+        // the (unrotated) handle positions.  The visual handles are rotated
+        // by the SVG transform in the overlay, so we need to "un-rotate"
+        // the world coordinate to align with the logical handle positions.
+        let (test_x, test_y) = if ids.len() == 1 {
+            els.iter().find(|e| e.id() == ids[0])
+                .map(|el| unrotate_for_element(world, el))
+                .unwrap_or(world)
+        } else {
+            world
+        };
+
         if let Some(bounds @ (bx, by, bw, bh)) = combined_bounds(&ids, &els) {
             let hpos = handle_positions(bx, by, bw, bh);
             for (i, &(hx, hy)) in hpos[..8].iter().enumerate() {
-                if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
+                if ((test_x - hx).powi(2) + (test_y - hy).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
                     (props.push_snapshot)();
                     st.drag_action.set(Some(Handle::Resize(i)));
                     st.moving_anchor.set(Some(world));
@@ -305,7 +316,7 @@ pub fn select_pointer_down(
                 }
             }
             let (hx, hy) = hpos[8];
-            if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+            if ((test_x - hx).powi(2) + (test_y - hy).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
                 (props.push_snapshot)();
                 st.drag_action.set(Some(Handle::Move));
                 st.moving_anchor.set(Some(world));
@@ -313,8 +324,12 @@ pub fn select_pointer_down(
                 st.last_world.set(Some(world));
                 return;
             }
+            // Rotate handle: use the UNROTATED point for the hit-test
+            // distance (the handle sits in the local frame), but the
+            // ORIGINAL world point for the drag_angle so rotation
+            // follows the actual pointer.
             let (hx, hy) = hpos[9];
-            if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
+            if ((test_x - hx).powi(2) + (test_y - hy).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
                 (props.push_snapshot)();
                 let cx = bx + bw / 2.0;
                 let cy = by + bh / 2.0;
@@ -338,6 +353,14 @@ pub fn select_pointer_down(
             st.selected_ids.set(ids);
         } else {
             st.selected_ids.set(vec![id]);
+            // Start a move drag on the shape body so dragging moves it.
+            if let Some(bounds) = combined_bounds(&[id], &els) {
+                (props.push_snapshot)();
+                st.drag_action.set(Some(Handle::Move));
+                st.moving_anchor.set(Some(world));
+                st.drag_bounds.set(Some(bounds));
+                st.last_world.set(Some(world));
+            }
         }
         return;
     }

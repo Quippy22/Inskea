@@ -123,7 +123,17 @@ impl Render for Ellipse {
 
 impl HitTest for Ellipse {
     fn hit_test(&self, point: (f64, f64), margin: f64) -> bool {
-        let (px, py) = point;
+        let (px, py) = if self.data.rotation != 0.0 {
+            let cx = self.data.x + self.data.width / 2.0;
+            let cy = self.data.y + self.data.height / 2.0;
+            let cos = (-self.data.rotation).cos();
+            let sin = (-self.data.rotation).sin();
+            let dx = point.0 - cx;
+            let dy = point.1 - cy;
+            (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos)
+        } else {
+            point
+        };
         let has_fill = self.data.fill_color.is_some();
         if has_fill {
             px >= self.data.x - margin
