@@ -215,6 +215,44 @@ pub trait Rotate {
     fn rotate_around(&mut self, cx: f64, cy: f64, delta: f64);
 }
 
+/// Trait for element types that expose an editable path of points.
+///
+/// Used by the selection overlay to render draggable point handles and
+/// ghost midpoint inserters for `Line` and `Arrow`.
+pub trait PathPoints {
+    /// Shared reference to this element's path points, if it has them.
+    fn path_points(&self) -> Option<&Vec<Point>> { None }
+    /// Mutable reference to this element's path points, if it has them.
+    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> { None }
+}
+
+impl PathPoints for Line {
+    fn path_points(&self) -> Option<&Vec<Point>> { Some(&self.points) }
+    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> { Some(&mut self.points) }
+}
+
+impl PathPoints for Arrow {
+    fn path_points(&self) -> Option<&Vec<Point>> { Some(&self.points) }
+    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> { Some(&mut self.points) }
+}
+
+impl PathPoints for Element {
+    fn path_points(&self) -> Option<&Vec<Point>> {
+        match self {
+            Element::Line(e) => Some(&e.points),
+            Element::Arrow(e) => Some(&e.points),
+            _ => None,
+        }
+    }
+    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> {
+        match self {
+            Element::Line(e) => Some(&mut e.points),
+            Element::Arrow(e) => Some(&mut e.points),
+            _ => None,
+        }
+    }
+}
+
 /// Parameters for resizing an element via drag handles.
 #[derive(Clone, Copy)]
 pub struct ResizeContext<'a> {
