@@ -31,7 +31,7 @@ pub enum Handle {
     /// Dragging an existing path point at this index.
     PathPoint(usize),
     /// Grabbed the ghost handle between points[i] and points[i+1].
-    /// Resolved to PathPoint at grab-time, never carried as a drag action.
+    /// Resolved to PathPoint once the drag exceeds MIN_DRAG_DIST.
     PathMidpoint(usize),
 }
 
