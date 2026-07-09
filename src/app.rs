@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::canvas::{Canvas, CanvasMode, Viewport};
-use crate::model::{ElementId, Scene, ShapeColor};
+use crate::model::{Scene, ShapeColor};
 use crate::tauri_bridge;
 use crate::ui::dock::{Dock, Tool};
 use crate::ui::settings::{from_toml, to_toml, CanvasBg, CenterStyle, GridSize, GridStyle};
@@ -22,7 +22,11 @@ pub fn App() -> impl IntoView {
 
     let scene = create_rw_signal(Scene::new());
     let eraser_active = create_rw_signal(false);
-    let selected_ids = create_rw_signal(Vec::<ElementId>::new());
+
+    // Crop-export state: when active the canvas lets you drag a rectangle,
+    // and on release the region is exported via this callback.
+    let export_crop_active = create_rw_signal(false);
+    let on_crop_export = create_rw_signal::<Option<Rc<dyn Fn((f64, f64, f64, f64))>>>(None);
 
     let center_style = create_rw_signal(CenterStyle::Crosshair);
     let grid_style = create_rw_signal(GridStyle::Dot);
@@ -138,6 +142,8 @@ pub fn App() -> impl IntoView {
                 grid_style=grid_style
                 grid_size=grid_size
                 push_snapshot=push_snapshot
+                export_crop_active=export_crop_active
+                on_crop_export=on_crop_export
             />
             <ToolBar
                 scene=scene
@@ -147,7 +153,8 @@ pub fn App() -> impl IntoView {
                 on_redo=do_redo
                 can_undo=can_undo
                 can_redo=can_redo
-                _selected_ids=selected_ids
+                export_crop_active=export_crop_active
+                on_crop_export=on_crop_export
             />
             <Dock
                 selected_tool=selected_tool

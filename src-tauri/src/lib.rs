@@ -2,8 +2,18 @@ use std::fs;
 use tauri::Manager;
 
 #[tauri::command]
-fn save_skea(path: String, content: String) -> Result<(), String> {
+fn save_file(path: String, content: String) -> Result<(), String> {
     fs::write(&path, &content).map_err(|e| format!("failed to write file: {e}"))
+}
+
+#[tauri::command]
+fn save_file_binary(path: String, data: Vec<u8>) -> Result<(), String> {
+    fs::write(&path, &data).map_err(|e| format!("failed to write file: {e}"))
+}
+
+#[tauri::command]
+fn save_skea(path: String, content: String) -> Result<(), String> {
+    save_file(path, content)
 }
 
 #[tauri::command]
@@ -50,7 +60,7 @@ fn load_settings(app_handle: tauri::AppHandle) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![save_skea, load_skea, get_app_data_dir, save_settings, load_settings])
+        .invoke_handler(tauri::generate_handler![save_file, save_file_binary, save_skea, load_skea, get_app_data_dir, save_settings, load_settings])
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

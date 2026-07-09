@@ -106,6 +106,8 @@ pub struct CanvasInputs {
     pub grid_style: RwSignal<GridStyle>,
     pub grid_size: RwSignal<GridSize>,
     pub push_snapshot: Rc<dyn Fn()>,
+    pub export_crop_active: RwSignal<bool>,
+    pub on_crop_export: RwSignal<Option<Rc<dyn Fn((f64, f64, f64, f64))>>>,
 }
 
 // ── Helper functions used by pointer event handlers ──────────────────────

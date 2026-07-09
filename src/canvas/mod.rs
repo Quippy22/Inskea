@@ -8,6 +8,7 @@ mod modes;
 mod selection;
 
 pub use state::CanvasMode;
+pub use state::combined_bounds;
 use state::{
     CanvasInputs, CanvasState, hit_and_erase,
 };
@@ -93,6 +94,8 @@ pub fn Canvas(
     grid_style: RwSignal<GridStyle>,
     grid_size: RwSignal<GridSize>,
     push_snapshot: Rc<dyn Fn()>,
+    export_crop_active: RwSignal<bool>,
+    on_crop_export: RwSignal<Option<Rc<dyn Fn((f64, f64, f64, f64))>>>,
 ) -> impl IntoView {
     let st = CanvasState::new();
     let props = CanvasInputs {
@@ -108,6 +111,8 @@ pub fn Canvas(
         grid_style,
         grid_size,
         push_snapshot,
+        export_crop_active,
+        on_crop_export,
     };
 
     st.screen_size.set(window_size());
@@ -149,6 +154,12 @@ pub fn Canvas(
             let tool = props.selected_tool.get();
             if let Some(prev) = prev {
                 if prev != (mode, tool) {
+                    if props.export_crop_active.get_untracked() {
+                        props.export_crop_active.set(false);
+                        props.on_crop_export.set(None);
+                        st.select_anchor.set(None);
+                        st.last_world.set(None);
+                    }
                     if !st.selected_ids.get_untracked().is_empty() {
                         st.selected_ids.set(Vec::new());
                     }
@@ -219,6 +230,11 @@ pub fn Canvas(
                 return;
             }
 
+            if props.export_crop_active.get() {
+                st.select_anchor.set(Some(world));
+                return;
+            }
+
             match mode {
                 CanvasMode::Hand => {
                     st.pan_anchor.set(Some((ev.client_x() as f64, ev.client_y() as f64)));
@@ -260,6 +276,11 @@ pub fn Canvas(
 
             if props.eraser_active.get() && st.erasing.get() {
                 hit_and_erase(world, props.scene);
+            }
+
+            if props.export_crop_active.get() {
+                st.last_world.set(Some(world));
+                return;
             }
 
             match mode {
@@ -317,6 +338,28 @@ pub fn Canvas(
                 hit_and_erase(world, props.scene);
             }
             st.erasing.set(false);
+
+            if props.export_crop_active.get() {
+                if let Some(anchor) = st.select_anchor.get() {
+                    let current = st.last_world.get().unwrap_or(anchor);
+                    let dx = current.0 - anchor.0;
+                    let dy = current.1 - anchor.1;
+                    if dx.hypot(dy) >= MIN_DRAG_DIST {
+                        let x = anchor.0.min(current.0);
+                        let y = anchor.1.min(current.1);
+                        let w = (current.0 - anchor.0).abs().max(1.0);
+                        let h = (current.1 - anchor.1).abs().max(1.0);
+                        if let Some(cb) = props.on_crop_export.get() {
+                            cb((x, y, w, h));
+                            props.on_crop_export.set(None);
+                        }
+                    }
+                }
+                props.export_crop_active.set(false);
+                st.select_anchor.set(None);
+                st.last_world.set(None);
+                return;
+            }
 
             match props.canvas_mode.get() {
                 CanvasMode::Hand => {
@@ -441,5 +484,6 @@ pub fn Canvas(
             st.editing_id, st.edit_text, st.textarea_ref, props.scene,
             props.viewport, st.screen_size, commit_edit,
         )}
+
     }
 }
