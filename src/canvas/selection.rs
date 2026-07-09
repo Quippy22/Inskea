@@ -9,13 +9,21 @@ use super::state::{
 };
 use super::{DASH_PREVIEW, MIN_DRAG_DIST};
 
+/// Grid spacing (40 px) for shift-held snap.
 const GRID_SIZE: f64 = 40.0;
+/// Hit-test radius for resize corner/edge handles and path-point grabs.
 const HANDLE_RESIZE_RADIUS: f64 = 5.0;
+/// Hit-test radius for the centre move handle.
 const HANDLE_MOVE_RADIUS: f64 = 6.0;
+/// Hit-test radius for the rotate handle above the bounding box.
 const HANDLE_ROTATE_RADIUS: f64 = 7.0;
+/// Vertical distance from the bounding-box top to the rotate handle.
 const ROTATE_HANDLE_OFFSET: f64 = 25.0;
+/// Distance threshold for path-point merge-on-straighten (same as MIN_DRAG_DIST).
 const PATH_MERGE_DIST: f64 = 3.0;
+/// Dash pattern used for the selection-bounding-box rectangle.
 const DASH_BOUNDS: &str = "3 2";
+/// Number of snap divisions when shift-rotating (24 → 15° increments).
 const ROTATE_SNAP_DIVISIONS: f64 = 24.0;
 use crate::model::elements::{snap_angle, ResizeContext};
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, *};
@@ -168,14 +176,24 @@ pub fn selection_handle_overlay(
     }
 }
 
+/// Rotate the vector `(0, vec_y)` by `rot` radians, returning its x component.
+///
+/// Used to position the rotate handle icon when the selection has non-zero
+/// rotation. The handle starts at `(cx, cy - (bh/2 + OFFSET))` and is rotated
+/// around `(cx, cy)`.
 fn handle_vec_x(rot: f64, vec_y: f64) -> f64 {
     0.0 * rot.cos() - vec_y * rot.sin()
 }
 
+/// Rotate the vector `(0, vec_y)` by `rot` radians, returning its y component.
 fn handle_vec_y_sin(rot: f64, vec_y: f64) -> f64 {
     0.0 * rot.sin() + vec_y * rot.cos()
 }
 
+/// Render the move (crosshair) and rotate (circular-arrow) icon groups.
+///
+/// Both are rendered as 24×24 scaled-down SVG icons centred at `(cx, cy)`
+/// for move and `(rx, ry)` for rotate.
 fn render_move_rotate_icons(hex: &'static str, cx: f64, cy: f64, rx: f64, ry: f64) -> leptos::View {
     let move_icon = view! {
         <g stroke=hex stroke-width="1.5" fill="none"
