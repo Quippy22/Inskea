@@ -84,32 +84,38 @@ fn el_svg(el: &Element) -> String {
             )
         }
         Element::Line(l) => {
+            let d = crate::model::elements::path::path_d(&l.points, l.curve_mode);
             format!(
-                r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}"/>"#,
-                l.a.x, l.a.y, l.b.x, l.b.y, l.data.stroke_color.to_hex(), l.data.stroke_width,
+                r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
+                d, l.data.stroke_color.to_hex(), l.data.stroke_width,
             )
         }
         Element::Arrow(a) => {
+            let d = crate::model::elements::path::path_d(&a.points, a.curve_mode);
             let mut out = format!(
-                r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}"/>"#,
-                a.a.x, a.a.y, a.b.x, a.b.y, a.data.stroke_color.to_hex(), a.data.stroke_width,
+                r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
+                d, a.data.stroke_color.to_hex(), a.data.stroke_width,
             );
-            let dx = a.b.x - a.a.x;
-            let dy = a.b.y - a.a.y;
-            let len = dx.hypot(dy);
-            if len > 1.0 {
-                let ux = dx / len;
-                let uy = dy / len;
-                let hl = (a.data.stroke_width * 4.0).max(8.0);
-                let hw = hl * 0.4;
-                let bx = a.b.x - ux * hl;
-                let by = a.b.y - uy * hl;
-                let _ = write!(out, r#"<polyline points="{},{} {},{} {},{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
-                    a.b.x, a.b.y,
-                    bx - uy * hw, by + ux * hw,
-                    bx + uy * hw, by - ux * hw,
-                    a.data.stroke_color.to_hex(), a.data.stroke_width,
-                );
+            if a.points.len() >= 2 {
+                let tail = &a.points[a.points.len() - 2];
+                let tip = &a.points[a.points.len() - 1];
+                let dx = tip.x - tail.x;
+                let dy = tip.y - tail.y;
+                let len = dx.hypot(dy);
+                if len > 1.0 {
+                    let ux = dx / len;
+                    let uy = dy / len;
+                    let hl = (a.data.stroke_width * 4.0).max(8.0);
+                    let hw = hl * 0.4;
+                    let bx = tip.x - ux * hl;
+                    let by = tip.y - uy * hl;
+                    let _ = write!(out, r#"<polyline points="{},{} {},{} {},{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
+                        tip.x, tip.y,
+                        bx - uy * hw, by + ux * hw,
+                        bx + uy * hw, by - ux * hw,
+                        a.data.stroke_color.to_hex(), a.data.stroke_width,
+                    );
+                }
             }
             out
         }

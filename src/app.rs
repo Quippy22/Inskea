@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::canvas::{Canvas, CanvasMode, Viewport};
-use crate::model::{Scene, ShapeColor};
+use crate::model::{ElementId, Scene, ShapeColor};
 use crate::tauri_bridge;
 use crate::ui::dock::{Dock, Tool};
 use crate::ui::settings::{from_toml, to_toml, CanvasBg, CenterStyle, GridSize, GridStyle};
@@ -21,6 +21,7 @@ pub fn App() -> impl IntoView {
     let canvas_mode = create_rw_signal(CanvasMode::Hand);
 
     let scene = create_rw_signal(Scene::new());
+    let selected_ids = create_rw_signal(Vec::<ElementId>::new());
     let eraser_active = create_rw_signal(false);
 
     // Crop-export state: when active the canvas lets you drag a rectangle,
@@ -144,6 +145,7 @@ pub fn App() -> impl IntoView {
                 push_snapshot=push_snapshot
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
+                selected_ids=selected_ids
             />
             <ToolBar
                 scene=scene
@@ -161,6 +163,8 @@ pub fn App() -> impl IntoView {
                 selected_color=selected_color
                 canvas_mode=canvas_mode
                 eraser_active=eraser_active
+                scene=scene
+                selected_ids=selected_ids
             />
             <SettingsPanel
                 center_style=center_style

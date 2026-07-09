@@ -96,8 +96,10 @@ pub fn Canvas(
     push_snapshot: Rc<dyn Fn()>,
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<Rc<dyn Fn((f64, f64, f64, f64))>>>,
+    selected_ids: RwSignal<Vec<ElementId>>,
 ) -> impl IntoView {
-    let st = CanvasState::new();
+    let mut st = CanvasState::new();
+    st.selected_ids = selected_ids;
     let props = CanvasInputs {
         cursor_screen,
         cursor_world,

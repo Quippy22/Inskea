@@ -1,6 +1,7 @@
-use crate::model::elements::line::handle_positions;
+use crate::model::elements::path::{handle_positions, segment_midpoint};
 use crate::model::{
-    Bounds, Element, ElementId, Scene, ShapeColor, Offset, Resize, Rotate, SnapToGrid,
+    Bounds, Element, ElementId, Point, Scene, ShapeColor, Offset, PathPoints, Resize, Rotate,
+    SnapToGrid,
 };
 use super::state::{
     CanvasInputs, CanvasState, Handle, combined_bounds, hit_test_topmost,
@@ -8,12 +9,21 @@ use super::state::{
 };
 use super::{DASH_PREVIEW, MIN_DRAG_DIST};
 
+/// Grid spacing (40 px) for shift-held snap.
 const GRID_SIZE: f64 = 40.0;
+/// Hit-test radius for resize corner/edge handles and path-point grabs.
 const HANDLE_RESIZE_RADIUS: f64 = 5.0;
+/// Hit-test radius for the centre move handle.
 const HANDLE_MOVE_RADIUS: f64 = 6.0;
+/// Hit-test radius for the rotate handle above the bounding box.
 const HANDLE_ROTATE_RADIUS: f64 = 7.0;
+/// Vertical distance from the bounding-box top to the rotate handle.
 const ROTATE_HANDLE_OFFSET: f64 = 25.0;
+/// Distance threshold for path-point merge-on-straighten (same as MIN_DRAG_DIST).
+const PATH_MERGE_DIST: f64 = 3.0;
+/// Dash pattern used for the selection-bounding-box rectangle.
 const DASH_BOUNDS: &str = "3 2";
+/// Number of snap divisions when shift-rotating (24 → 15° increments).
 const ROTATE_SNAP_DIVISIONS: f64 = 24.0;
 use crate::model::elements::{snap_angle, ResizeContext};
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, *};
@@ -55,6 +65,12 @@ pub fn selection_preview_overlay(
 /// overlay (box + handles + icons) is wrapped in an SVG `rotate` transform.
 /// The move and rotate icons are always positioned at the centre and at
 /// the rotated handle position respectively.
+///
+/// **Path-element special case:** when exactly one `Line` or `Arrow` is
+/// selected, the bounding box, rotation line, and corner handles are
+/// replaced with draggable point handles at every path point and ghost
+/// (hollow) handles at each segment midpoint. The move handle sits at the
+/// point centroid rather than the bounding-box centre.
 pub fn selection_handle_overlay(
     selected_ids: RwSignal<Vec<ElementId>>,
     scene: RwSignal<Scene>,
@@ -63,6 +79,53 @@ pub fn selection_handle_overlay(
         let ids = selected_ids.get();
         if ids.is_empty() { return None; }
         let els = scene.get().elements;
+        let hex = ShapeColor::Blue.to_hex();
+
+        // Path-element single-selection: show point handles + ghost midpoints,
+        // no bounding box, no rotation handle, move handle at top-centre of
+        // the computed (purely mathematical, not visual) bounding box.
+        if ids.len() == 1 {
+            if let Some(el) = els.iter().find(|el| el.id() == ids[0]) {
+                if let Some(points) = el.path_points() {
+                    let n = points.len();
+                    let (bx, by, bw, _bh) = el.bounds();
+                    // Move handle position: centre-top of bounding box
+                    let mx = bx + bw / 2.0;
+                    let my = by - 25.0;
+
+                    let path_handles: Vec<_> = points.iter().map(|p| {
+                        view! { <circle cx=p.x cy=p.y r="5" fill="white" stroke=hex stroke-width="1.5" pointer-events="none" /> }.into_view()
+                    }).collect();
+
+                    let cm = el.curve_mode();
+                    let ghost_handles: Vec<_> = (0..n.saturating_sub(1)).filter_map(|i| {
+                        let (gx, gy) = segment_midpoint(points, cm, i)?;
+                        Some(view! { <circle cx=gx cy=gy r="3.5" fill="none" stroke=hex stroke-width="1" pointer-events="none" /> }.into_view())
+                    }).collect();
+
+                    let move_icon = view! {
+                        <g stroke=hex stroke-width="1.5" fill="none"
+                            transform=format!("translate({} {}) scale(0.75)", mx - 9.0, my - 9.0)
+                            pointer-events="none">
+                            <circle cx="12" cy="12" r="9.25" fill="white" stroke=hex stroke-width="1.5" />
+                            <path d="M12 3 L12 21 M3 12 L21 12" />
+                            <path d="M9 6 L12 3 L15 6" />
+                            <path d="M9 18 L12 21 L15 18" />
+                            <path d="M6 9 L3 12 L6 15" />
+                            <path d="M18 9 L21 12 L18 15" />
+                        </g>
+                    };
+
+                    return Some(view! {
+                        {path_handles}
+                        {ghost_handles}
+                        {move_icon}
+                    }.into_view());
+                }
+            }
+        }
+
+        // Generic multi/single-selection bounding-box overlay
         let (bx, by, bw, bh) = if ids.len() == 1 {
             els.iter().find(|el| el.id() == ids[0])
                 .map(|el| el.bounds())
@@ -70,7 +133,6 @@ pub fn selection_handle_overlay(
         } else {
             combined_bounds(&ids, &els).unwrap_or((0.0, 0.0, 0.0, 0.0))
         };
-        let hex = ShapeColor::Blue.to_hex();
         let hr = 5.0;
         let cx = bx + bw / 2.0;
         let cy = by + bh / 2.0;
@@ -81,10 +143,9 @@ pub fn selection_handle_overlay(
                     .and_then(|el| { let r = el.data().rotation; if r != 0.0 { Some(r) } else { None } })
             }).flatten().unwrap_or(0.0);
 
-        let handle_vec_x = 0.0;
         let handle_vec_y = -(bh / 2.0 + ROTATE_HANDLE_OFFSET);
-        let rx = cx + handle_vec_x * rot.cos() - handle_vec_y * rot.sin();
-        let ry = cy + handle_vec_x * rot.sin() + handle_vec_y * rot.cos();
+        let rx = cx + handle_vec_x(rot, handle_vec_y);
+        let ry = cy + handle_vec_y_sin(rot, handle_vec_y);
 
         let inner = {
             let corners = [
@@ -102,30 +163,7 @@ pub fn selection_handle_overlay(
             }.into_view()
         };
 
-        let icons = {
-            let move_icon = view! {
-                <g stroke=hex stroke-width="1.5" fill="none"
-                    transform=format!("translate({} {}) scale(0.75)", cx - 9.0, cy - 9.0)
-                    pointer-events="none">
-                    <circle cx="12" cy="12" r="9.25" fill="white" stroke=hex stroke-width="1.5" />
-                    <path d="M12 3 L12 21 M3 12 L21 12" />
-                    <path d="M9 6 L12 3 L15 6" />
-                    <path d="M9 18 L12 21 L15 18" />
-                    <path d="M6 9 L3 12 L6 15" />
-                    <path d="M18 9 L21 12 L18 15" />
-                </g>
-            };
-            let rotate_icon = view! {
-                <g stroke=hex stroke-width="1.5" fill="none"
-                    transform=format!("translate({} {}) scale(0.75)", rx - 9.0, ry - 9.0)
-                    pointer-events="none">
-                    <circle cx="12" cy="12" r="9.25" fill="white" stroke=hex stroke-width="1.5" />
-                    <path d="M12 4 A8 8 0 1 1 4 12" />
-                    <path d="M1.8 11.6 L4 9 L6.2 11.6" />
-                </g>
-            };
-            view! { {move_icon} {rotate_icon} }.into_view()
-        };
+        let icons = render_move_rotate_icons(hex, cx, cy, rx, ry);
 
         let content = if rot != 0.0 {
             let deg = rot.to_degrees();
@@ -136,6 +174,49 @@ pub fn selection_handle_overlay(
 
         Some(content)
     }
+}
+
+/// Rotate the vector `(0, vec_y)` by `rot` radians, returning its x component.
+///
+/// Used to position the rotate handle icon when the selection has non-zero
+/// rotation. The handle starts at `(cx, cy - (bh/2 + OFFSET))` and is rotated
+/// around `(cx, cy)`.
+fn handle_vec_x(rot: f64, vec_y: f64) -> f64 {
+    0.0 * rot.cos() - vec_y * rot.sin()
+}
+
+/// Rotate the vector `(0, vec_y)` by `rot` radians, returning its y component.
+fn handle_vec_y_sin(rot: f64, vec_y: f64) -> f64 {
+    0.0 * rot.sin() + vec_y * rot.cos()
+}
+
+/// Render the move (crosshair) and rotate (circular-arrow) icon groups.
+///
+/// Both are rendered as 24×24 scaled-down SVG icons centred at `(cx, cy)`
+/// for move and `(rx, ry)` for rotate.
+fn render_move_rotate_icons(hex: &'static str, cx: f64, cy: f64, rx: f64, ry: f64) -> leptos::View {
+    let move_icon = view! {
+        <g stroke=hex stroke-width="1.5" fill="none"
+            transform=format!("translate({} {}) scale(0.75)", cx - 9.0, cy - 9.0)
+            pointer-events="none">
+            <circle cx="12" cy="12" r="9.25" fill="white" stroke=hex stroke-width="1.5" />
+            <path d="M12 3 L12 21 M3 12 L21 12" />
+            <path d="M9 6 L12 3 L15 6" />
+            <path d="M9 18 L12 21 L15 18" />
+            <path d="M6 9 L3 12 L6 15" />
+            <path d="M18 9 L21 12 L18 15" />
+        </g>
+    };
+    let rotate_icon = view! {
+        <g stroke=hex stroke-width="1.5" fill="none"
+            transform=format!("translate({} {}) scale(0.75)", rx - 9.0, ry - 9.0)
+            pointer-events="none">
+            <circle cx="12" cy="12" r="9.25" fill="white" stroke=hex stroke-width="1.5" />
+            <path d="M12 4 A8 8 0 1 1 4 12" />
+            <path d="M1.8 11.6 L4 9 L6.2 11.6" />
+        </g>
+    };
+    view! { {move_icon} {rotate_icon} }.into_view()
 }
 
 /// Handle a pointer-down event while in `Select` mode.
@@ -161,6 +242,51 @@ pub fn select_pointer_down(
 
     let ids = st.selected_ids.get();
     let els = props.scene.get().elements;
+
+    // Path-element single-selection: check for point or ghost-midpoint grabs
+    if ids.len() == 1 {
+        if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
+            if let Some(points) = el.path_points() {
+                // Check real points first (higher priority)
+                for (i, p) in points.iter().enumerate() {
+                    let d = ((world.0 - p.x).powi(2) + (world.1 - p.y).powi(2)).sqrt();
+                    if d <= HANDLE_RESIZE_RADIUS {
+                        (props.push_snapshot)();
+                        st.drag_action.set(Some(Handle::PathPoint(i)));
+                        st.moving_anchor.set(Some(world));
+                        st.last_world.set(Some(world));
+                        return;
+                    }
+                }
+                // Check ghost midpoints — deferred insertion: grab starts the
+                // drag; the point is inserted only once the drag exceeds
+                // MIN_DRAG_DIST (handled in select_pointer_move).
+                let cm = el.curve_mode();
+                for i in 0..points.len().saturating_sub(1) {
+                    let Some((mx, my)) = segment_midpoint(points, cm, i) else { continue };
+                    let d = ((world.0 - mx).powi(2) + (world.1 - my).powi(2)).sqrt();
+                    if d <= HANDLE_RESIZE_RADIUS {
+                        st.drag_action.set(Some(Handle::PathMidpoint(i)));
+                        st.moving_anchor.set(Some(world));
+                        st.last_world.set(Some(world));
+                        return;
+                    }
+                }
+                // Move handle at top-centre of computed (purely mathematical) bounding box
+                let (bx, by, bw, _bh) = el.bounds();
+                let mx = bx + bw / 2.0;
+                let my = by - 25.0;
+                if ((world.0 - mx).powi(2) + (world.1 - my).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+                    (props.push_snapshot)();
+                    st.drag_action.set(Some(Handle::Move));
+                    st.moving_anchor.set(Some(world));
+                    st.drag_bounds.set(Some(el.bounds()));
+                    st.last_world.set(Some(world));
+                    return;
+                }
+            }
+        }
+    }
 
     if !ids.is_empty() {
         if let Some(bounds @ (bx, by, bw, bh)) = combined_bounds(&ids, &els) {
@@ -288,6 +414,51 @@ pub fn select_pointer_move(
                     }
                 }
             }
+            Some(Handle::PathPoint(idx)) => {
+                // Directly move the specific point to the current world pos
+                props.scene.update(|s| {
+                    if let Some(el) = s.elements.iter_mut().find(|e| e.id() == ids[0]) {
+                        if let Some(pts) = el.path_points_mut() {
+                            if idx < pts.len() {
+                                pts[idx].x = world.0;
+                                pts[idx].y = world.1;
+                            }
+                        }
+                    }
+                });
+                st.moving_anchor.set(Some(world));
+            }
+            Some(Handle::PathMidpoint(i)) => {
+                // Deferred insertion: only insert when total drag from the
+                // original click exceeds MIN_DRAG_DIST.  We keep moving_anchor
+                // unchanged so the distance accumulates across frames.
+                if let Some(click) = st.moving_anchor.get() {
+                    let dist = (world.0 - click.0).hypot(world.1 - click.1);
+                    if dist >= MIN_DRAG_DIST {
+                        let new_idx = i + 1;
+                        let (mx, my) = props.scene.with(|s| {
+                            s.elements.iter().find(|e| e.id() == ids[0]).and_then(|el| {
+                                let pts = el.path_points()?;
+                                let cm = el.curve_mode();
+                                segment_midpoint(pts, cm, i)
+                            }).unwrap_or((world.0, world.1))
+                        });
+                        (props.push_snapshot)();
+                        props.scene.update(|s| {
+                            if let Some(target) = s.elements.iter_mut().find(|e| e.id() == ids[0]) {
+                                if let Some(pts) = target.path_points_mut() {
+                                    pts.insert(new_idx, Point { x: mx, y: my });
+                                    pts[new_idx].x = world.0;
+                                    pts[new_idx].y = world.1;
+                                }
+                            }
+                        });
+                        st.drag_action.set(Some(Handle::PathPoint(new_idx)));
+                        st.moving_anchor.set(Some(world));
+                        st.last_world.set(Some(world));
+                    }
+                }
+            }
             _ => {
                 props.scene.update(|s| {
                     for el in s.elements.iter_mut() {
@@ -309,14 +480,67 @@ pub fn select_pointer_up(
     props: &mut CanvasInputs,
 ) {
     if st.moving_anchor.get().is_some() {
-        if st.shift_pressed.get() {
-            let ids = st.selected_ids.get();
-            props.scene.update(|s| {
-                for el in s.elements.iter_mut() {
-                    if ids.contains(&el.id()) { el.snap_to_grid(GRID_SIZE); }
-                }
-            });
+        let drag_action = st.drag_action.get();
+        let ids = st.selected_ids.get();
+
+        // Merge-on-straighten: if a dragged path point is within
+        // PATH_MERGE_DIST of the line between its neighbours, remove it
+        // (collapse two segments back into one).
+        if let Some(Handle::PathPoint(idx)) = drag_action {
+            let merged = props.scene.with(|s| {
+                let el = s.elements.iter().find(|e| e.id() == ids[0])?;
+                let pts = el.path_points()?;
+                if idx == 0 || idx + 1 >= pts.len() { return Some(false); }
+                let d = point_to_line_segment_dist(
+                    pts[idx].x, pts[idx].y,
+                    pts[idx - 1].x, pts[idx - 1].y,
+                    pts[idx + 1].x, pts[idx + 1].y,
+                );
+                Some(d < PATH_MERGE_DIST)
+            }).unwrap_or(false);
+
+            if merged {
+                (props.push_snapshot)();
+                props.scene.update(|s| {
+                    if let Some(el) = s.elements.iter_mut().find(|e| e.id() == ids[0]) {
+                        if let Some(pts) = el.path_points_mut() {
+                            if idx < pts.len() { pts.remove(idx); }
+                        }
+                    }
+                });
+            }
         }
+
+        // Grid snap (shift-held)
+        if st.shift_pressed.get() {
+            let drag_action = st.drag_action.get();
+            let ids = st.selected_ids.get();
+            if let Some(Handle::PathPoint(idx)) = drag_action {
+                // Check if the point STILL exists (wasn't merged above)
+                let exists = props.scene.with(|s| {
+                    s.elements.iter().find(|e| e.id() == ids[0])
+                        .and_then(|el| el.path_points())
+                        .map_or(false, |pts| idx < pts.len())
+                });
+                if exists {
+                    props.scene.update(|s| {
+                        if let Some(el) = s.elements.iter_mut().find(|e| e.id() == ids[0]) {
+                            if let Some(pts) = el.path_points_mut() {
+                                pts[idx].x = (pts[idx].x / GRID_SIZE).round() * GRID_SIZE;
+                                pts[idx].y = (pts[idx].y / GRID_SIZE).round() * GRID_SIZE;
+                            }
+                        }
+                    });
+                }
+            } else {
+                props.scene.update(|s| {
+                    for el in s.elements.iter_mut() {
+                        if ids.contains(&el.id()) { el.snap_to_grid(GRID_SIZE); }
+                    }
+                });
+            }
+        }
+
         st.moving_anchor.set(None);
         st.drag_action.set(None);
         st.drag_bounds.set(None);
@@ -345,4 +569,18 @@ pub fn select_pointer_up(
         }
         st.select_anchor.set(None);
     }
+}
+
+/// Minimum Euclidean distance from point P to the line segment AB.
+fn point_to_line_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
+    let abx = bx - ax;
+    let aby = by - ay;
+    let len2 = abx * abx + aby * aby;
+    if len2 == 0.0 {
+        return ((px - ax).powi(2) + (py - ay).powi(2)).sqrt();
+    }
+    let t = (((px - ax) * abx + (py - ay) * aby) / len2).clamp(0.0, 1.0);
+    let cx = ax + t * abx;
+    let cy = ay + t * aby;
+    ((px - cx).powi(2) + (py - cy).powi(2)).sqrt()
 }

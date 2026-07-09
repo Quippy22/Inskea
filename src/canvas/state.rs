@@ -28,6 +28,11 @@ pub enum Handle {
     Move,
     /// Rotate via the top handle.
     Rotate,
+    /// Dragging an existing path point at this index.
+    PathPoint(usize),
+    /// Grabbed the ghost handle between points[i] and points[i+1].
+    /// Resolved to PathPoint once the drag exceeds MIN_DRAG_DIST.
+    PathMidpoint(usize),
 }
 
 /// Tracks an in-progress draw operation.

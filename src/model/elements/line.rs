@@ -5,18 +5,24 @@ use super::{
     UpdateDrag,
 };
 use super::snap_angle;
+use super::path::{CurveMode, path_d, bounds_of_points, hit_test_path, offset_points,
+    rotate_points, scale_points, snap_points_to_grid};
 
 const SNAP_DIVISIONS: f64 = 8.0;
 
-/// A straight line from point A to point B.
+/// A line defined by an ordered list of path points.
+///
+/// When first created via `FromDrag` this always has exactly 2 points
+/// (the two endpoints). Additional points can be inserted via the
+/// node-editing UI (dragging a ghost midpoint handle) to create bends.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Line {
     /// Stroke appearance (width, colour).
     pub data: ElementData,
-    /// Start point of the line.
-    pub a: Point,
-    /// End point of the line.
-    pub b: Point,
+    /// Ordered path points. At minimum 2 endpoints.
+    pub points: Vec<Point>,
+    /// How the points are connected when rendering.
+    pub curve_mode: CurveMode,
 }
 
 impl FromDrag for Line {
@@ -43,8 +49,8 @@ impl FromDrag for Line {
                 stroke_color: color,
                 ..ElementData::new(0)
             },
-            a: Point { x: ax, y: ay },
-            b: Point { x: ex, y: ey },
+            points: vec![Point { x: ax, y: ay }, Point { x: ex, y: ey }],
+            curve_mode: CurveMode::default(),
         }
     }
 }
@@ -63,10 +69,13 @@ impl UpdateDrag for Line {
             ex = ax + dist * snapped.cos();
             ey = ay + dist * snapped.sin();
         }
-        self.a.x = ax;
-        self.a.y = ay;
-        self.b.x = ex;
-        self.b.y = ey;
+        // During initial draw, a fresh Line always has exactly 2 points.
+        if self.points.len() >= 2 {
+            self.points[0].x = ax;
+            self.points[0].y = ay;
+            self.points[1].x = ex;
+            self.points[1].y = ey;
+        }
     }
 }
 
@@ -74,10 +83,11 @@ impl Render for Line {
     fn render(&self, _zoom: f64) -> leptos::View {
         let sw = self.data.stroke_width;
         let stroke = ShapeColor::to_hex(self.data.stroke_color);
+        let d = path_d(&self.points, self.curve_mode);
         leptos::view! {
-            <line
-                x1=self.a.x y1=self.a.y
-                x2=self.b.x y2=self.b.y
+            <path
+                d=d
+                fill="none"
                 stroke=stroke stroke-width=sw
             />
         }
@@ -87,95 +97,43 @@ impl Render for Line {
 
 impl HitTest for Line {
     fn hit_test(&self, point: (f64, f64), margin: f64) -> bool {
-        let (px, py) = point;
-        let dx = self.b.x - self.a.x;
-        let dy = self.b.y - self.a.y;
-        let len = (dx * dx + dy * dy).sqrt();
-        if len < 1.0 {
-            return (px - self.a.x).hypot(py - self.a.y) <= margin + self.data.stroke_width;
-        }
-        let t = ((px - self.a.x) * dx + (py - self.a.y) * dy) / (len * len);
-        let t = t.clamp(0.0, 1.0);
-        let near_x = self.a.x + t * dx;
-        let near_y = self.a.y + t * dy;
-        (px - near_x).hypot(py - near_y) <= margin + self.data.stroke_width
+        hit_test_path(&self.points, self.curve_mode, point, margin + self.data.stroke_width)
     }
 }
 
 impl Bounds for Line {
     fn bounds(&self) -> (f64, f64, f64, f64) {
-        let x = self.a.x.min(self.b.x);
-        let y = self.a.y.min(self.b.y);
-        let w = (self.b.x - self.a.x).abs();
-        let h = (self.b.y - self.a.y).abs();
-        (x, y, w, h)
+        bounds_of_points(&self.points)
     }
 }
 
 impl Offset for Line {
     fn offset(&mut self, dx: f64, dy: f64) {
-        self.a.x += dx;
-        self.a.y += dy;
-        self.b.x += dx;
-        self.b.y += dy;
+        self.data.x += dx;
+        self.data.y += dy;
+        offset_points(&mut self.points, dx, dy);
     }
 }
 
 impl SnapToGrid for Line {
     fn snap_to_grid(&mut self, grid: f64) {
-        self.a.x = (self.a.x / grid).round() * grid;
-        self.a.y = (self.a.y / grid).round() * grid;
-        self.b.x = (self.b.x / grid).round() * grid;
-        self.b.y = (self.b.y / grid).round() * grid;
+        snap_points_to_grid(&mut self.points, grid);
     }
 }
 
 impl Rotate for Line {
     fn rotate_around(&mut self, cx: f64, cy: f64, delta: f64) {
-        let cos = delta.cos();
-        let sin = delta.sin();
-        let dx1 = self.a.x - cx;
-        let dy1 = self.a.y - cy;
-        let dx2 = self.b.x - cx;
-        let dy2 = self.b.y - cy;
-        self.a.x = cx + dx1 * cos - dy1 * sin;
-        self.a.y = cy + dx1 * sin + dy1 * cos;
-        self.b.x = cx + dx2 * cos - dy2 * sin;
-        self.b.y = cy + dx2 * sin + dy2 * cos;
+        rotate_points(&mut self.points, cx, cy, delta);
     }
 }
 
 impl Resize for Line {
     fn resize(&mut self, ctx: &ResizeContext) {
-        let hpos = handle_positions(ctx.bx, ctx.by, ctx.bw, ctx.bh);
-        let (hx, hy) = hpos[ctx.handle];
-        let dist_a = (self.a.x - hx).hypot(self.a.y - hy);
-        let dist_b = (self.b.x - hx).hypot(self.b.y - hy);
-        if dist_a < dist_b {
-            self.a.x += ctx.fdx;
-            self.a.y += ctx.fdy;
+        let orig_slice: Vec<Point> = if let super::Element::Line(orig) = ctx.orig {
+            orig.points.clone()
         } else {
-            self.b.x += ctx.fdx;
-            self.b.y += ctx.fdy;
-        }
+            self.points.clone()
+        };
+        scale_points(&mut self.points, ctx, &orig_slice);
     }
-}
-
-/// Returns the 10 handle positions for the given bounding box.
-///
-/// Indices 0–7 are resize corners/edges, 8 is the move handle (center),
-/// 9 is the rotate handle (above the box).
-pub(crate) fn handle_positions(bx: f64, by: f64, bw: f64, bh: f64) -> [(f64, f64); 10] {
-    [
-        (bx, by),
-        (bx + bw / 2.0, by),
-        (bx + bw, by),
-        (bx, by + bh / 2.0),
-        (bx + bw, by + bh / 2.0),
-        (bx, by + bh),
-        (bx + bw / 2.0, by + bh),
-        (bx + bw, by + bh),
-        (bx + bw / 2.0, by + bh / 2.0),
-        (bx + bw / 2.0, by - 25.0),
-    ]
 }

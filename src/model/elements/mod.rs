@@ -4,6 +4,7 @@ pub(crate) mod line;
 pub mod arrow;
 pub(crate) mod text;
 pub mod freehand;
+pub mod path;
 
 pub use rect::Rectangle;
 pub use ellipse::Ellipse;
@@ -12,6 +13,7 @@ pub use arrow::Arrow;
 pub use text::Text;
 pub use freehand::Freehand;
 
+use path::CurveMode;
 use super::ShapeColor;
 
 /// Unique identifier for an element in the scene.
@@ -212,6 +214,59 @@ pub trait SnapToGrid {
 pub trait Rotate {
     /// Rotate by `delta` radians around the point (`cx`, `cy`).
     fn rotate_around(&mut self, cx: f64, cy: f64, delta: f64);
+}
+
+/// Trait for element types that expose an editable path of points.
+///
+/// Used by the selection overlay to render draggable point handles and
+/// ghost midpoint inserters for `Line` and `Arrow`.
+///
+/// **Note:** `Freehand` does **not** implement this trait — a freehand
+/// stroke can have hundreds of sampled points and would be unusable with
+/// per-dot handles. Freehand keeps its current render-only behavior.
+pub trait PathPoints {
+    /// Shared reference to this element's path points, if it has them.
+    fn path_points(&self) -> Option<&Vec<Point>> { None }
+    /// Mutable reference to this element's path points, if it has them.
+    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> { None }
+    /// How the path is rendered (curve mode).
+    fn curve_mode(&self) -> CurveMode { CurveMode::Straight }
+}
+
+impl PathPoints for Line {
+    fn path_points(&self) -> Option<&Vec<Point>> { Some(&self.points) }
+    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> { Some(&mut self.points) }
+    fn curve_mode(&self) -> CurveMode { self.curve_mode }
+}
+
+impl PathPoints for Arrow {
+    fn path_points(&self) -> Option<&Vec<Point>> { Some(&self.points) }
+    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> { Some(&mut self.points) }
+    fn curve_mode(&self) -> CurveMode { self.curve_mode }
+}
+
+impl PathPoints for Element {
+    fn path_points(&self) -> Option<&Vec<Point>> {
+        match self {
+            Element::Line(e) => Some(&e.points),
+            Element::Arrow(e) => Some(&e.points),
+            _ => None,
+        }
+    }
+    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> {
+        match self {
+            Element::Line(e) => Some(&mut e.points),
+            Element::Arrow(e) => Some(&mut e.points),
+            _ => None,
+        }
+    }
+    fn curve_mode(&self) -> CurveMode {
+        match self {
+            Element::Line(e) => e.curve_mode,
+            Element::Arrow(e) => e.curve_mode,
+            _ => CurveMode::Straight,
+        }
+    }
 }
 
 /// Parameters for resizing an element via drag handles.
