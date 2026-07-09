@@ -178,6 +178,7 @@ impl HitTest for Freehand {
     fn hit_test(&self, point: (f64, f64), margin: f64) -> bool {
         crate::model::elements::path::hit_test_path(
             &self.points,
+            crate::model::elements::path::CurveMode::Straight,
             point,
             margin + self.data.stroke_width,
         )

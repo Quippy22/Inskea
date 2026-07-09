@@ -120,7 +120,7 @@ impl Render for Arrow {
 
 impl HitTest for Arrow {
     fn hit_test(&self, point: (f64, f64), margin: f64) -> bool {
-        hit_test_path(&self.points, point, margin + self.data.stroke_width)
+        hit_test_path(&self.points, self.curve_mode, point, margin + self.data.stroke_width)
     }
 }
 

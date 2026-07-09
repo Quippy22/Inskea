@@ -43,48 +43,83 @@ pub fn path_d(points: &[Point], mode: CurveMode) -> String {
         return d;
     }
 
-    // Catmull-Rom -> cubic Bezier conversion.
-    // For an open path, the first and last points are duplicated as their
-    // own "previous" and "next" neighbours so the formula applies everywhere.
-    //
-    // For each segment P[i] → P[i+1], with neighbours P[i-1] and P[i+2]:
-    //   B0 = P[i]
-    //   B1 = P[i] + (P[i+1] - P[i-1]) / 6
-    //   B2 = P[i+1] - (P[i+2] - P[i]) / 6
-    //   B3 = P[i+1]
     let mut d = format!("M{} {}", points[0].x, points[0].y);
     use std::fmt::Write;
-
-    // synthetic neighbours: first point acts as its own previous,
-    // last point acts as its own next
-    let prev = &points[0];
     for i in 0..n - 1 {
-        let p0 = &points[i];
-        let p1 = &points[i + 1];
-        let p_before = if i == 0 { prev } else { &points[i - 1] };
-        let p_after = if i + 2 >= n { &points[n - 1] } else { &points[i + 2] };
-
-        let b1x = p0.x + (p1.x - p_before.x) / 6.0;
-        let b1y = p0.y + (p1.y - p_before.y) / 6.0;
-        let b2x = p1.x - (p_after.x - p0.x) / 6.0;
-        let b2y = p1.y - (p_after.y - p0.y) / 6.0;
-
-        let _ = write!(d, " C{} {} {} {} {} {}", b1x, b1y, b2x, b2y, p1.x, p1.y);
+        let Some((_, b1, b2, p1)) = segment_cubic_bezier(points, i) else { continue };
+        let _ = write!(d, " C{} {} {} {} {} {}", b1.x, b1.y, b2.x, b2.y, p1.x, p1.y);
     }
-
     d
 }
 
-/// Hit-test a point against an open polyline path.
+/// Return the four cubic-Bezier control points for segment `i` (between
+/// `points[i]` and `points[i+1]`) of a Catmull-Rom spline.
 ///
-/// Checks distance to each point first, then perpendicular distance to each
-/// consecutive segment.
+/// Returns `None` when `i` is out of range.
+fn segment_cubic_bezier(points: &[Point], i: usize) -> Option<(Point, Point, Point, Point)> {
+    if i + 1 >= points.len() {
+        return None;
+    }
+    let p0 = &points[i];
+    let p3 = &points[i + 1];
+    let p_before = if i == 0 { &points[0] } else { &points[i - 1] };
+    let p_after = if i + 2 >= points.len() { &points[points.len() - 1] } else { &points[i + 2] };
+
+    let b1 = Point { x: p0.x + (p3.x - p_before.x) / 6.0, y: p0.y + (p3.y - p_before.y) / 6.0 };
+    let b2 = Point { x: p3.x - (p_after.x - p0.x) / 6.0, y: p3.y - (p_after.y - p0.y) / 6.0 };
+
+    Some((p0.clone(), b1, b2, p3.clone()))
+}
+
+/// Evaluate a cubic Bezier at parameter `t` (0.0 – 1.0).
+pub fn eval_cubic_bezier(p0: &Point, p1: &Point, p2: &Point, p3: &Point, t: f64) -> Point {
+    let t2 = t * t;
+    let t3 = t2 * t;
+    let mt = 1.0 - t;
+    let mt2 = mt * mt;
+    let mt3 = mt2 * mt;
+    Point {
+        x: mt3 * p0.x + 3.0 * mt2 * t * p1.x + 3.0 * mt * t2 * p2.x + t3 * p3.x,
+        y: mt3 * p0.y + 3.0 * mt2 * t * p1.y + 3.0 * mt * t2 * p2.y + t3 * p3.y,
+    }
+}
+
+/// Minimum distance from a query point `(px, py)` to the line segment
+/// `(ax, ay)` – `(bx, by)`.
+fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
+    let dx = bx - ax;
+    let dy = by - ay;
+    let len2 = dx * dx + dy * dy;
+    if len2 == 0.0 {
+        return ((px - ax).powi(2) + (py - ay).powi(2)).sqrt();
+    }
+    let t = (((px - ax) * dx + (py - ay) * dy) / len2).clamp(0.0, 1.0);
+    let nx = ax + t * dx;
+    let ny = ay + t * dy;
+    ((px - nx).powi(2) + (py - ny).powi(2)).sqrt()
+}
+
+/// Test a query point against a cubic Bezier curve by subdividing it into
+/// `subdivisions` straight-line segments.
+fn hit_test_cubic_bezier(p0: &Point, p1: &Point, p2: &Point, p3: &Point, q: (f64, f64), tolerance: f64, subdivisions: usize) -> bool {
+    let (qx, qy) = q;
+    let mut prev = eval_cubic_bezier(p0, p1, p2, p3, 0.0);
+    for i in 1..=subdivisions {
+        let t = i as f64 / subdivisions as f64;
+        let cur = eval_cubic_bezier(p0, p1, p2, p3, t);
+        if point_to_segment_dist(qx, qy, prev.x, prev.y, cur.x, cur.y) <= tolerance {
+            return true;
+        }
+        prev = cur;
+    }
+    false
+}
+
+/// Hit-test a point against a (possibly curved) path.
 ///
-/// **Known limitation:** this always uses straight-line segments between
-/// consecutive points as an approximation, even when the path is rendered
-/// in `Curved` mode. The visual curve and the hit-test region will differ
-/// slightly near bends. This is an acceptable simplification for now.
-pub fn hit_test_path(points: &[Point], point: (f64, f64), tolerance: f64) -> bool {
+/// Checks distance to each point first, then checks segments (straight line
+/// in `Straight` mode; subdivided Bezier in `Curved` mode).
+pub fn hit_test_path(points: &[Point], mode: CurveMode, point: (f64, f64), tolerance: f64) -> bool {
     let (px, py) = point;
     if points.is_empty() {
         return false;
@@ -94,24 +129,38 @@ pub fn hit_test_path(points: &[Point], point: (f64, f64), tolerance: f64) -> boo
             return true;
         }
     }
-    for i in 1..points.len() {
-        let a = &points[i - 1];
-        let b = &points[i];
-        let dx = b.x - a.x;
-        let dy = b.y - a.y;
-        let len = (dx * dx + dy * dy).sqrt();
-        if len < 1.0 {
-            continue;
+    if points.len() <= 2 || mode == CurveMode::Straight {
+        for i in 1..points.len() {
+            let a = &points[i - 1];
+            let b = &points[i];
+            if point_to_segment_dist(px, py, a.x, a.y, b.x, b.y) <= tolerance {
+                return true;
+            }
         }
-        let t = ((px - a.x) * dx + (py - a.y) * dy) / (len * len);
-        let t = t.clamp(0.0, 1.0);
-        let nx = a.x + t * dx;
-        let ny = a.y + t * dy;
-        if (px - nx).hypot(py - ny) <= tolerance {
-            return true;
+    } else {
+        for i in 0..points.len() - 1 {
+            if let Some((p0, p1, p2, p3)) = segment_cubic_bezier(points, i) {
+                if hit_test_cubic_bezier(&p0, &p1, &p2, &p3, point, tolerance, 12) {
+                    return true;
+                }
+            }
         }
     }
     false
+}
+
+/// Return the position along a path segment at t = 0.5 for ghost-midpoint
+/// placement. In `Straight` mode this is the linear midpoint; in `Curved`
+/// mode it is the midpoint of the cubic Bezier.
+pub fn segment_midpoint(points: &[Point], mode: CurveMode, i: usize) -> Option<(f64, f64)> {
+    if i + 1 >= points.len() { return None; }
+    if points.len() <= 2 || mode == CurveMode::Straight {
+        Some(((points[i].x + points[i + 1].x) / 2.0, (points[i].y + points[i + 1].y) / 2.0))
+    } else {
+        let (p0, p1, p2, p3) = segment_cubic_bezier(points, i)?;
+        let mid = eval_cubic_bezier(&p0, &p1, &p2, &p3, 0.5);
+        Some((mid.x, mid.y))
+    }
 }
 
 /// Compute the axis-aligned bounding box of a list of points.
@@ -294,11 +343,11 @@ mod tests {
     #[test]
     fn hit_test_path_hits_point() {
         let pts = [Point { x: 0.0, y: 0.0 }, Point { x: 100.0, y: 100.0 }];
-        assert!(hit_test_path(&pts, (0.0, 0.0), 5.0));
+        assert!(hit_test_path(&pts, CurveMode::Straight, (0.0, 0.0), 5.0));
         // On the line with generous tolerance
-        assert!(hit_test_path(&pts, (50.0, 50.0), 5.0));
+        assert!(hit_test_path(&pts, CurveMode::Straight, (50.0, 50.0), 5.0));
         // Off the line by ~2.8 units, tolerance 1.0 — should miss
-        assert!(!hit_test_path(&pts, (50.0, 54.0), 1.0));
+        assert!(!hit_test_path(&pts, CurveMode::Straight, (50.0, 54.0), 1.0));
     }
 
     #[test]

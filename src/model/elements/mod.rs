@@ -13,6 +13,7 @@ pub use arrow::Arrow;
 pub use text::Text;
 pub use freehand::Freehand;
 
+use path::CurveMode;
 use super::ShapeColor;
 
 /// Unique identifier for an element in the scene.
@@ -228,16 +229,20 @@ pub trait PathPoints {
     fn path_points(&self) -> Option<&Vec<Point>> { None }
     /// Mutable reference to this element's path points, if it has them.
     fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> { None }
+    /// How the path is rendered (curve mode).
+    fn curve_mode(&self) -> CurveMode { CurveMode::Straight }
 }
 
 impl PathPoints for Line {
     fn path_points(&self) -> Option<&Vec<Point>> { Some(&self.points) }
     fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> { Some(&mut self.points) }
+    fn curve_mode(&self) -> CurveMode { self.curve_mode }
 }
 
 impl PathPoints for Arrow {
     fn path_points(&self) -> Option<&Vec<Point>> { Some(&self.points) }
     fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> { Some(&mut self.points) }
+    fn curve_mode(&self) -> CurveMode { self.curve_mode }
 }
 
 impl PathPoints for Element {
@@ -253,6 +258,13 @@ impl PathPoints for Element {
             Element::Line(e) => Some(&mut e.points),
             Element::Arrow(e) => Some(&mut e.points),
             _ => None,
+        }
+    }
+    fn curve_mode(&self) -> CurveMode {
+        match self {
+            Element::Line(e) => e.curve_mode,
+            Element::Arrow(e) => e.curve_mode,
+            _ => CurveMode::Straight,
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::model::elements::path::handle_positions;
+use crate::model::elements::path::{handle_positions, segment_midpoint};
 use crate::model::{
     Bounds, Element, ElementId, Point, Scene, ShapeColor, Offset, PathPoints, Resize, Rotate,
     SnapToGrid,
@@ -89,10 +89,10 @@ pub fn selection_handle_overlay(
                         view! { <circle cx=p.x cy=p.y r="5" fill="white" stroke=hex stroke-width="1.5" pointer-events="none" /> }.into_view()
                     }).collect();
 
-                    let ghost_handles: Vec<_> = (0..n.saturating_sub(1)).map(|i| {
-                        let gx = (points[i].x + points[i + 1].x) / 2.0;
-                        let gy = (points[i].y + points[i + 1].y) / 2.0;
-                        view! { <circle cx=gx cy=gy r="3.5" fill="none" stroke=hex stroke-width="1" pointer-events="none" /> }.into_view()
+                    let cm = el.curve_mode();
+                    let ghost_handles: Vec<_> = (0..n.saturating_sub(1)).filter_map(|i| {
+                        let (gx, gy) = segment_midpoint(points, cm, i)?;
+                        Some(view! { <circle cx=gx cy=gy r="3.5" fill="none" stroke=hex stroke-width="1" pointer-events="none" /> }.into_view())
                     }).collect();
 
                     let move_icon = view! {
@@ -243,9 +243,9 @@ pub fn select_pointer_down(
                 // Check ghost midpoints — deferred insertion: grab starts the
                 // drag; the point is inserted only once the drag exceeds
                 // MIN_DRAG_DIST (handled in select_pointer_move).
+                let cm = el.curve_mode();
                 for i in 0..points.len().saturating_sub(1) {
-                    let mx = (points[i].x + points[i + 1].x) / 2.0;
-                    let my = (points[i].y + points[i + 1].y) / 2.0;
+                    let Some((mx, my)) = segment_midpoint(points, cm, i) else { continue };
                     let d = ((world.0 - mx).powi(2) + (world.1 - my).powi(2)).sqrt();
                     if d <= HANDLE_RESIZE_RADIUS {
                         st.drag_action.set(Some(Handle::PathMidpoint(i)));
@@ -421,9 +421,8 @@ pub fn select_pointer_move(
                         let (mx, my) = props.scene.with(|s| {
                             s.elements.iter().find(|e| e.id() == ids[0]).and_then(|el| {
                                 let pts = el.path_points()?;
-                                if i + 1 < pts.len() {
-                                    Some(((pts[i].x + pts[i + 1].x) / 2.0, (pts[i].y + pts[i + 1].y) / 2.0))
-                                } else { None }
+                                let cm = el.curve_mode();
+                                segment_midpoint(pts, cm, i)
                             }).unwrap_or((world.0, world.1))
                         });
                         (props.push_snapshot)();
