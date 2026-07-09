@@ -4,6 +4,7 @@ pub(crate) mod line;
 pub mod arrow;
 pub(crate) mod text;
 pub mod freehand;
+pub mod path;
 
 pub use rect::Rectangle;
 pub use ellipse::Ellipse;

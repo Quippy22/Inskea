@@ -159,7 +159,7 @@ impl Rotate for Arrow {
 
 impl Resize for Arrow {
     fn resize(&mut self, ctx: &ResizeContext) {
-        let hpos = crate::model::elements::line::handle_positions(ctx.bx, ctx.by, ctx.bw, ctx.bh);
+        let hpos = crate::model::elements::path::handle_positions(ctx.bx, ctx.by, ctx.bw, ctx.bh);
         let (hx, hy) = hpos[ctx.handle];
         let dist_a = (self.a.x - hx).hypot(self.a.y - hy);
         let dist_b = (self.b.x - hx).hypot(self.b.y - hy);

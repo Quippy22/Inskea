@@ -161,21 +161,4 @@ impl Resize for Line {
     }
 }
 
-/// Returns the 10 handle positions for the given bounding box.
-///
-/// Indices 0–7 are resize corners/edges, 8 is the move handle (center),
-/// 9 is the rotate handle (above the box).
-pub(crate) fn handle_positions(bx: f64, by: f64, bw: f64, bh: f64) -> [(f64, f64); 10] {
-    [
-        (bx, by),
-        (bx + bw / 2.0, by),
-        (bx + bw, by),
-        (bx, by + bh / 2.0),
-        (bx + bw, by + bh / 2.0),
-        (bx, by + bh),
-        (bx + bw / 2.0, by + bh),
-        (bx + bw, by + bh),
-        (bx + bw / 2.0, by + bh / 2.0),
-        (bx + bw / 2.0, by - 25.0),
-    ]
-}
+

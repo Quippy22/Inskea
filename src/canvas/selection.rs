@@ -1,4 +1,4 @@
-use crate::model::elements::line::handle_positions;
+use crate::model::elements::path::handle_positions;
 use crate::model::{
     Bounds, Element, ElementId, Scene, ShapeColor, Offset, Resize, Rotate, SnapToGrid,
 };
