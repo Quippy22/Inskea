@@ -219,6 +219,10 @@ pub trait Rotate {
 ///
 /// Used by the selection overlay to render draggable point handles and
 /// ghost midpoint inserters for `Line` and `Arrow`.
+///
+/// **Note:** `Freehand` does **not** implement this trait — a freehand
+/// stroke can have hundreds of sampled points and would be unusable with
+/// per-dot handles. Freehand keeps its current render-only behavior.
 pub trait PathPoints {
     /// Shared reference to this element's path points, if it has them.
     fn path_points(&self) -> Option<&Vec<Point>> { None }
