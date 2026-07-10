@@ -24,8 +24,16 @@ fn is_tauri() -> bool {
 
 fn window_size() -> (f64, f64) {
     let window = web_sys::window().expect("no global `window` exists");
-    let w = window.inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let h = window.inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let w = window
+        .inner_width()
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let h = window
+        .inner_height()
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
     (w, h)
 }
 
@@ -122,7 +130,11 @@ where
 
     let on_new = {
         let close_menu = close_menu.clone();
-        move || { close_menu(); saved_path.set(None); scene.set(Scene::new()); }
+        move || {
+            close_menu();
+            saved_path.set(None);
+            scene.set(Scene::new());
+        }
     };
     let on_save_as = {
         let close_menu = close_menu.clone();
@@ -300,24 +312,66 @@ where
     // ── Dropdown item lists ────────────────────────────────────────────
 
     let file_items: Vec<DropdownItem> = vec![
-        DropdownItem::Action { label: "New", on_click: Rc::new(on_new) },
-        DropdownItem::Action { label: "Save", on_click: Rc::new(on_save) },
-        DropdownItem::Action { label: "Save As", on_click: Rc::new(on_save_as) },
-        DropdownItem::Action { label: "Open", on_click: Rc::new(on_open) },
+        DropdownItem::Action {
+            label: "New",
+            on_click: Rc::new(on_new),
+        },
+        DropdownItem::Action {
+            label: "Save",
+            on_click: Rc::new(on_save),
+        },
+        DropdownItem::Action {
+            label: "Save As",
+            on_click: Rc::new(on_save_as),
+        },
+        DropdownItem::Action {
+            label: "Open",
+            on_click: Rc::new(on_open),
+        },
         DropdownItem::Separator,
-        DropdownItem::Action { label: "Import", on_click: Rc::new(on_import) },
+        DropdownItem::Action {
+            label: "Import",
+            on_click: Rc::new(on_import),
+        },
     ];
 
     let export_items: Vec<DropdownItem> = vec![
-        DropdownItem::Action { label: "Export .skea", on_click: Rc::new(on_export_skea) },
+        DropdownItem::Action {
+            label: "Export .skea",
+            on_click: Rc::new(on_export_skea),
+        },
         DropdownItem::Separator,
         DropdownItem::Header { label: "PNG" },
-        DropdownItem::Action { label: "Full canvas", on_click: Rc::new({ let f = on_export_png.clone(); move || f(false) }) },
-        DropdownItem::Action { label: "Selection", on_click: Rc::new({ let f = on_export_png.clone(); move || f(true) }) },
+        DropdownItem::Action {
+            label: "Full canvas",
+            on_click: Rc::new({
+                let f = on_export_png.clone();
+                move || f(false)
+            }),
+        },
+        DropdownItem::Action {
+            label: "Selection",
+            on_click: Rc::new({
+                let f = on_export_png.clone();
+                move || f(true)
+            }),
+        },
         DropdownItem::Separator,
         DropdownItem::Header { label: "SVG" },
-        DropdownItem::Action { label: "Full canvas", on_click: Rc::new({ let f = on_export_svg.clone(); move || f(false) }) },
-        DropdownItem::Action { label: "Selection", on_click: Rc::new({ let f = on_export_svg.clone(); move || f(true) }) },
+        DropdownItem::Action {
+            label: "Full canvas",
+            on_click: Rc::new({
+                let f = on_export_svg.clone();
+                move || f(false)
+            }),
+        },
+        DropdownItem::Action {
+            label: "Selection",
+            on_click: Rc::new({
+                let f = on_export_svg.clone();
+                move || f(true)
+            }),
+        },
     ];
 
     // ── Mode button helper ─────────────────────────────────────────────

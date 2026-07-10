@@ -1,9 +1,9 @@
+use crate::model::ShapeColor;
 use crate::model::{Bounds, Element, ElementId, HitTest, Scene};
 use crate::ui::dock::Tool;
-use crate::model::ShapeColor;
 use crate::ui::settings::{CenterStyle, GridSize, GridStyle};
-use std::rc::Rc;
 use leptos::*;
+use std::rc::Rc;
 
 const HIT_MARGIN: f64 = 6.0;
 const CLICK_MARGIN: f64 = 12.0;
@@ -93,7 +93,9 @@ impl CanvasState {
 }
 
 impl Default for CanvasState {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Props passed into the Canvas component, bundled for easy forwarding to handlers.
@@ -132,13 +134,7 @@ pub fn hit_and_erase(point: (f64, f64), scene: RwSignal<Scene>) {
 }
 
 /// Check whether a rectangle fully contains an element's bounding box.
-pub fn rect_fully_contains_element(
-    rx: f64,
-    ry: f64,
-    rw: f64,
-    rh: f64,
-    el: &Element,
-) -> bool {
+pub fn rect_fully_contains_element(rx: f64, ry: f64, rw: f64, rh: f64, el: &Element) -> bool {
     let (ex, ey, ew, eh) = el.bounds();
     ex >= rx && ey >= ry && (ex + ew) <= (rx + rw) && (ey + eh) <= (ry + rh)
 }
@@ -153,12 +149,7 @@ pub fn combined_bounds(ids: &[ElementId], elements: &[Element]) -> Option<(f64, 
             match out {
                 None => out = Some((x1, y1, x2, y2)),
                 Some((min_x, min_y, max_x, max_y)) => {
-                    out = Some((
-                        min_x.min(x1),
-                        min_y.min(y1),
-                        max_x.max(x2),
-                        max_y.max(y2),
-                    ));
+                    out = Some((min_x.min(x1), min_y.min(y1), max_x.max(x2), max_y.max(y2)));
                 }
             }
         }

@@ -11,15 +11,19 @@ struct SkeaFile {
 }
 
 pub fn save_to_string(scene: &Scene) -> String {
-    let file = SkeaFile { format_version: FORMAT_VERSION, scene: scene.clone() };
+    let file = SkeaFile {
+        format_version: FORMAT_VERSION,
+        scene: scene.clone(),
+    };
     serde_json::to_string_pretty(&file).unwrap_or_else(|_| "{}".to_string())
 }
 
 pub fn load_from_str(input: &str) -> Result<Scene, String> {
-    let mut raw: serde_json::Value = serde_json::from_str(input)
-        .map_err(|e| format!("failed to parse .skea file: {e}"))?;
+    let mut raw: serde_json::Value =
+        serde_json::from_str(input).map_err(|e| format!("failed to parse .skea file: {e}"))?;
 
-    let version = raw.get("format_version")
+    let version = raw
+        .get("format_version")
         .and_then(|v| v.as_u64())
         .unwrap_or(0) as u32;
 
@@ -39,7 +43,10 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                                     obj.remove("b");
                                     let points = serde_json::json!([a_val, b_val]);
                                     obj.insert("points".to_string(), points);
-                                    obj.insert("curve_mode".to_string(), serde_json::json!("Straight"));
+                                    obj.insert(
+                                        "curve_mode".to_string(),
+                                        serde_json::json!("Straight"),
+                                    );
                                 }
                             }
                         }
@@ -52,7 +59,8 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
         }
     }
 
-    let version_after = raw.get("format_version")
+    let version_after = raw
+        .get("format_version")
         .and_then(|v| v.as_u64())
         .unwrap_or(0) as u32;
 
@@ -71,11 +79,11 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::elements::path::CurveMode;
+    use crate::model::elements::text::WrappedText;
     use crate::model::{
         Arrow, Element, ElementData, Ellipse, Freehand, Line, Point, Rectangle, ShapeColor, Text,
     };
-    use crate::model::elements::text::WrappedText;
-    use crate::model::elements::path::CurveMode;
 
     fn make_scene() -> Scene {
         let mut s = Scene::new();

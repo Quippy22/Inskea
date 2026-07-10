@@ -1,10 +1,10 @@
-use leptos::IntoView;
-use super::{ElementData, ShapeColor};
+use super::rect::MIN_ELEMENT_SIZE;
 use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Rotate, SnapToGrid,
     UpdateDrag,
 };
-use super::rect::MIN_ELEMENT_SIZE;
+use super::{ElementData, ShapeColor};
+use leptos::IntoView;
 
 pub(crate) const MIN_FONT_SIZE: f64 = 12.0;
 pub(crate) const TEXT_ASCENT_RATIO: f64 = 0.85;
@@ -46,7 +46,11 @@ impl WrappedText {
     pub fn new(raw: &str, width: f64, font_size: f64) -> Self {
         let max_chars = Self::compute_max_chars(width, font_size);
         let display = Self::wrap(raw, max_chars);
-        WrappedText { raw: raw.to_string(), display, max_chars }
+        WrappedText {
+            raw: raw.to_string(),
+            display,
+            max_chars,
+        }
     }
 
     /// Replace the raw content and recompute wrapping.
@@ -298,12 +302,27 @@ impl Resize for Text {
     fn resize(&mut self, ctx: &ResizeContext) {
         let rctx = ctx;
         let (mut nx, mut ny, mut nw, mut nh) = match rctx.handle {
-            0 => (rctx.bx + rctx.dx, rctx.by + rctx.dy, rctx.bw - rctx.dx, rctx.bh - rctx.dy),
+            0 => (
+                rctx.bx + rctx.dx,
+                rctx.by + rctx.dy,
+                rctx.bw - rctx.dx,
+                rctx.bh - rctx.dy,
+            ),
             1 => (rctx.bx, rctx.by + rctx.dy, rctx.bw, rctx.bh - rctx.dy),
-            2 => (rctx.bx, rctx.by + rctx.dy, rctx.bw + rctx.dx, rctx.bh - rctx.dy),
+            2 => (
+                rctx.bx,
+                rctx.by + rctx.dy,
+                rctx.bw + rctx.dx,
+                rctx.bh - rctx.dy,
+            ),
             3 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh),
             4 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh),
-            5 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh + rctx.dy),
+            5 => (
+                rctx.bx + rctx.dx,
+                rctx.by,
+                rctx.bw - rctx.dx,
+                rctx.bh + rctx.dy,
+            ),
             6 => (rctx.bx, rctx.by, rctx.bw, rctx.bh + rctx.dy),
             7 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh + rctx.dy),
             _ => return,
@@ -317,11 +336,22 @@ impl Resize for Text {
                 nw = nh * ratio;
             }
             match rctx.handle {
-                0 => { nx = rctx.bx + rctx.bw - nw; ny = rctx.by + rctx.bh - nh; }
-                1 => { ny = rctx.by + rctx.bh - nh; }
-                2 => { ny = rctx.by + rctx.bh - nh; }
-                3 => { nx = rctx.bx + rctx.bw - nw; }
-                5 => { nx = rctx.bx + rctx.bw - nw; }
+                0 => {
+                    nx = rctx.bx + rctx.bw - nw;
+                    ny = rctx.by + rctx.bh - nh;
+                }
+                1 => {
+                    ny = rctx.by + rctx.bh - nh;
+                }
+                2 => {
+                    ny = rctx.by + rctx.bh - nh;
+                }
+                3 => {
+                    nx = rctx.bx + rctx.bw - nw;
+                }
+                5 => {
+                    nx = rctx.bx + rctx.bw - nw;
+                }
                 _ => {}
             }
         }

@@ -1,19 +1,17 @@
 mod viewport;
 pub use viewport::Viewport;
 
-mod state;
-mod text_edit;
 mod grid;
 mod modes;
 mod selection;
+mod state;
+mod text_edit;
 
-pub use state::CanvasMode;
-pub use state::combined_bounds;
-use state::{
-    CanvasInputs, CanvasState, hit_and_erase,
-};
 use modes::{draw_pointer_down, draw_pointer_up};
 use selection::{select_pointer_down, select_pointer_move, select_pointer_up};
+pub use state::combined_bounds;
+pub use state::CanvasMode;
+use state::{hit_and_erase, CanvasInputs, CanvasState};
 
 use crate::model::*;
 use crate::ui::dock::Tool;
@@ -44,8 +42,16 @@ pub(crate) const DASH_PREVIEW: &str = "4 2";
 /// object is unavailable (should not happen in a browser context).
 fn window_size() -> (f64, f64) {
     let window = web_sys::window().expect("no global `window` exists");
-    let w = window.inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let h = window.inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let w = window
+        .inner_width()
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let h = window
+        .inner_height()
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
     (w, h)
 }
 
@@ -125,18 +131,26 @@ pub fn Canvas(
     let _ = window_event_listener(ev::keydown, {
         let sp = st.shift_pressed;
         move |ev: ev::KeyboardEvent| {
-            if ev.key() == "Shift" { sp.set(true); }
+            if ev.key() == "Shift" {
+                sp.set(true);
+            }
         }
     });
     let _ = window_event_listener(ev::keyup, {
         let sp = st.shift_pressed;
         move |ev: ev::KeyboardEvent| {
-            if ev.key() == "Shift" { sp.set(false); }
+            if ev.key() == "Shift" {
+                sp.set(false);
+            }
         }
     });
 
     let commit_edit = text_edit::make_commit_edit(
-        st.editing_id, st.edit_text, props.scene, st.textarea_ref, props.viewport,
+        st.editing_id,
+        st.edit_text,
+        props.scene,
+        st.textarea_ref,
+        props.viewport,
     );
 
     // Switching mode (Select/Hand/Draw) or active tool used to leave whatever
@@ -221,7 +235,9 @@ pub fn Canvas(
         let mut props = props.clone();
         let update_world = update_world.clone();
         move |ev: ev::PointerEvent| {
-            if st.editing_id.get().is_some() { return; }
+            if st.editing_id.get().is_some() {
+                return;
+            }
             let mode = props.canvas_mode.get();
             let world = update_world(&ev);
 
@@ -239,7 +255,8 @@ pub fn Canvas(
 
             match mode {
                 CanvasMode::Hand => {
-                    st.pan_anchor.set(Some((ev.client_x() as f64, ev.client_y() as f64)));
+                    st.pan_anchor
+                        .set(Some((ev.client_x() as f64, ev.client_y() as f64)));
                 }
                 CanvasMode::Select => {
                     select_pointer_down(&ev, world, &mut st, &mut props);
@@ -294,7 +311,8 @@ pub fn Canvas(
                             vp.offset_x -= dx / vp.zoom;
                             vp.offset_y -= dy / vp.zoom;
                         });
-                        st.pan_anchor.set(Some((ev.client_x() as f64, ev.client_y() as f64)));
+                        st.pan_anchor
+                            .set(Some((ev.client_x() as f64, ev.client_y() as f64)));
                     }
                 }
                 CanvasMode::Select => {
@@ -392,7 +410,11 @@ pub fn Canvas(
             ev.prevent_default();
             let screen = props.cursor_screen.get();
             let (sw, sh) = st.screen_size.get();
-            let factor = if ev.delta_y() < 0.0 { ZOOM_FACTOR } else { 1.0 / ZOOM_FACTOR };
+            let factor = if ev.delta_y() < 0.0 {
+                ZOOM_FACTOR
+            } else {
+                1.0 / ZOOM_FACTOR
+            };
             props.viewport.update(|vp| {
                 let world = vp.screen_to_world(screen, (sw, sh));
                 vp.zoom = (vp.zoom * factor).clamp(ZOOM_MIN, ZOOM_MAX);
@@ -426,21 +448,31 @@ pub fn Canvas(
         let st = st;
         let props = props.clone();
         move || {
-            if props.canvas_mode.get() != CanvasMode::Draw { return None; }
+            if props.canvas_mode.get() != CanvasMode::Draw {
+                return None;
+            }
             let state = st.drawing.get()?;
-            if state.tool == Tool::Freehand { return None; }
+            if state.tool == Tool::Freehand {
+                return None;
+            }
             let world = props.cursor_world.get();
             let dx = world.0 - state.anchor.0;
             let dy = world.1 - state.anchor.1;
-            if dx.hypot(dy) < MIN_DRAG_DIST { return None; }
+            if dx.hypot(dy) < MIN_DRAG_DIST {
+                return None;
+            }
             let shift = st.shift_pressed.get();
             let el: Element = match state.tool {
-                Tool::Rectangle => Rectangle::from_drag(state.anchor, world, state.color, shift).into(),
+                Tool::Rectangle => {
+                    Rectangle::from_drag(state.anchor, world, state.color, shift).into()
+                }
                 Tool::Ellipse => Ellipse::from_drag(state.anchor, world, state.color, shift).into(),
                 Tool::Line => Line::from_drag(state.anchor, world, state.color, shift).into(),
                 Tool::Arrow => Arrow::from_drag(state.anchor, world, state.color, shift).into(),
                 Tool::Text => Text::from_drag(state.anchor, world, state.color, shift).into(),
-                Tool::Freehand => Freehand::from_drag(state.anchor, world, state.color, shift).into(),
+                Tool::Freehand => {
+                    Freehand::from_drag(state.anchor, world, state.color, shift).into()
+                }
             };
             Some(view! { <g stroke-dasharray={DASH_PREVIEW}>{el.render(props.viewport.get().zoom)}</g> }.into_view())
         }

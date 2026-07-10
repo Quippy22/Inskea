@@ -1,5 +1,5 @@
-use crate::ui::components::SegmentedControl;
 use crate::ui::classes;
+use crate::ui::components::SegmentedControl;
 use crate::ui::icon;
 use leptos::*;
 use serde::{Deserialize, Serialize};
@@ -125,10 +125,7 @@ pub fn SettingsPanel(
 
     let toggle_opts = &[(true, "On"), (false, "Off")];
 
-    let bg_opts = &[
-        (CanvasBg::Dark, "Dark"),
-        (CanvasBg::Light, "Light"),
-    ];
+    let bg_opts = &[(CanvasBg::Dark, "Dark"), (CanvasBg::Light, "Light")];
 
     view! {
         <div class="fixed top-4 right-4 z-50 pointer-events-none">

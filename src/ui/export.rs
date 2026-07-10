@@ -29,13 +29,27 @@ pub fn download_string(content: &str, filename: &str) {
 /// SVG export: walks elements and builds a minimal SVG string.
 /// When `selected` is `Some` and non-empty, only matching elements are
 /// included and the viewBox is set to the tight bounds of the selection.
-pub fn scene_to_svg(scene: &Scene, viewport: &Viewport, screen: (f64, f64), selected: Option<&[ElementId]>) -> String {
+pub fn scene_to_svg(
+    scene: &Scene,
+    viewport: &Viewport,
+    screen: (f64, f64),
+    selected: Option<&[ElementId]>,
+) -> String {
     let (vb, elements): (String, &[Element]) = match selected {
         Some(ids) if !ids.is_empty() => {
             let bounds = combined_bounds(ids, &scene.elements);
             if let Some((bx, by, bw, bh)) = bounds {
                 let pad = 10.0;
-                (format!("{} {} {} {}", bx - pad, by - pad, bw + pad * 2.0, bh + pad * 2.0), &scene.elements)
+                (
+                    format!(
+                        "{} {} {} {}",
+                        bx - pad,
+                        by - pad,
+                        bw + pad * 2.0,
+                        bh + pad * 2.0
+                    ),
+                    &scene.elements,
+                )
             } else {
                 return String::new();
             }
@@ -71,7 +85,13 @@ fn el_svg(el: &Element) -> String {
             let fill = r.data.fill_color.map(|c| c.to_hex()).unwrap_or("none");
             format!(
                 r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" stroke="{}" stroke-width="{}"/>"#,
-                r.data.x, r.data.y, r.data.width, r.data.height, fill, r.data.stroke_color.to_hex(), r.data.stroke_width,
+                r.data.x,
+                r.data.y,
+                r.data.width,
+                r.data.height,
+                fill,
+                r.data.stroke_color.to_hex(),
+                r.data.stroke_width,
             )
         }
         Element::Ellipse(e) => {
@@ -80,21 +100,31 @@ fn el_svg(el: &Element) -> String {
             let cy = e.data.y + e.data.height / 2.0;
             format!(
                 r#"<ellipse cx="{}" cy="{}" rx="{}" ry="{}" fill="{}" stroke="{}" stroke-width="{}"/>"#,
-                cx, cy, e.data.width / 2.0, e.data.height / 2.0, fill, e.data.stroke_color.to_hex(), e.data.stroke_width,
+                cx,
+                cy,
+                e.data.width / 2.0,
+                e.data.height / 2.0,
+                fill,
+                e.data.stroke_color.to_hex(),
+                e.data.stroke_width,
             )
         }
         Element::Line(l) => {
             let d = crate::model::elements::path::path_d(&l.points, l.curve_mode);
             format!(
                 r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
-                d, l.data.stroke_color.to_hex(), l.data.stroke_width,
+                d,
+                l.data.stroke_color.to_hex(),
+                l.data.stroke_width,
             )
         }
         Element::Arrow(a) => {
             let d = crate::model::elements::path::path_d(&a.points, a.curve_mode);
             let mut out = format!(
                 r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
-                d, a.data.stroke_color.to_hex(), a.data.stroke_width,
+                d,
+                a.data.stroke_color.to_hex(),
+                a.data.stroke_width,
             );
             if a.points.len() >= 2 {
                 let tail = &a.points[a.points.len() - 2];
@@ -109,11 +139,17 @@ fn el_svg(el: &Element) -> String {
                     let hw = hl * 0.4;
                     let bx = tip.x - ux * hl;
                     let by = tip.y - uy * hl;
-                    let _ = write!(out, r#"<polyline points="{},{} {},{} {},{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
-                        tip.x, tip.y,
-                        bx - uy * hw, by + ux * hw,
-                        bx + uy * hw, by - ux * hw,
-                        a.data.stroke_color.to_hex(), a.data.stroke_width,
+                    let _ = write!(
+                        out,
+                        r#"<polyline points="{},{} {},{} {},{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
+                        tip.x,
+                        tip.y,
+                        bx - uy * hw,
+                        by + ux * hw,
+                        bx + uy * hw,
+                        by - ux * hw,
+                        a.data.stroke_color.to_hex(),
+                        a.data.stroke_width,
                     );
                 }
             }
@@ -122,12 +158,26 @@ fn el_svg(el: &Element) -> String {
         Element::Text(t) => {
             let mut out = format!(
                 r#"<text x="{}" y="{}" font-size="{}" fill="{}">"#,
-                t.data.x, t.data.y + t.data.font_size, t.data.font_size, t.data.stroke_color.to_hex(),
+                t.data.x,
+                t.data.y + t.data.font_size,
+                t.data.font_size,
+                t.data.stroke_color.to_hex(),
             );
             for (i, line) in t.wrapped.display.split('\n').enumerate() {
-                let esc = line.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
-                let dy = if i == 0 { "0" } else { &format!("{}", t.data.font_size) };
-                let _ = write!(out, r#"<tspan x="{}" dy="{}">{}</tspan>"#, t.data.x, dy, esc);
+                let esc = line
+                    .replace('&', "&amp;")
+                    .replace('<', "&lt;")
+                    .replace('>', "&gt;");
+                let dy = if i == 0 {
+                    "0"
+                } else {
+                    &format!("{}", t.data.font_size)
+                };
+                let _ = write!(
+                    out,
+                    r#"<tspan x="{}" dy="{}">{}</tspan>"#,
+                    t.data.x, dy, esc
+                );
             }
             out.push_str("</text>");
             out
@@ -151,7 +201,9 @@ fn el_svg(el: &Element) -> String {
             }
             format!(
                 r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}" stroke-linecap="round"/>"#,
-                d, f.data.stroke_color.to_hex(), f.data.stroke_width,
+                d,
+                f.data.stroke_color.to_hex(),
+                f.data.stroke_width,
             )
         }
     }
@@ -162,35 +214,39 @@ fn image_load_promise(img: &web_sys::HtmlImageElement, url: &str) -> js_sys::Pro
     let img2 = img.clone();
     let img3 = img.clone();
     let url2 = String::from(url);
-    js_sys::Promise::new(&mut move |resolve: js_sys::Function, reject: js_sys::Function| {
-        let onload_cb = wasm_bindgen::closure::Closure::once(move || {
-            let _ = resolve.call0(&JsValue::null());
-        });
-        let onerror_cb = wasm_bindgen::closure::Closure::once(move || {
-            let _ = reject.call0(&JsValue::null());
-        });
-        img2.set_onload(Some(onload_cb.as_ref().unchecked_ref()));
-        onload_cb.forget();
-        img3.set_onerror(Some(onerror_cb.as_ref().unchecked_ref()));
-        onerror_cb.forget();
-        img2.set_src(&url2);
-    })
+    js_sys::Promise::new(
+        &mut move |resolve: js_sys::Function, reject: js_sys::Function| {
+            let onload_cb = wasm_bindgen::closure::Closure::once(move || {
+                let _ = resolve.call0(&JsValue::null());
+            });
+            let onerror_cb = wasm_bindgen::closure::Closure::once(move || {
+                let _ = reject.call0(&JsValue::null());
+            });
+            img2.set_onload(Some(onload_cb.as_ref().unchecked_ref()));
+            onload_cb.forget();
+            img3.set_onerror(Some(onerror_cb.as_ref().unchecked_ref()));
+            onerror_cb.forget();
+            img2.set_src(&url2);
+        },
+    )
 }
 
 /// Create a JS Promise that resolves with the blob from canvas.to_blob().
 fn canvas_to_blob_promise(canvas: &web_sys::HtmlCanvasElement) -> js_sys::Promise {
     let c = canvas.clone();
-    js_sys::Promise::new(&mut move |resolve: js_sys::Function, _reject: js_sys::Function| {
-        let cb = wasm_bindgen::closure::Closure::once(move |blob: Option<web_sys::Blob>| {
-            let val = match blob {
-                Some(b) => JsValue::from(b),
-                None => JsValue::null(),
-            };
-            let _ = resolve.call1(&JsValue::null(), &val);
-        });
-        let _ = c.to_blob(cb.as_ref().unchecked_ref());
-        cb.forget();
-    })
+    js_sys::Promise::new(
+        &mut move |resolve: js_sys::Function, _reject: js_sys::Function| {
+            let cb = wasm_bindgen::closure::Closure::once(move |blob: Option<web_sys::Blob>| {
+                let val = match blob {
+                    Some(b) => JsValue::from(b),
+                    None => JsValue::null(),
+                };
+                let _ = resolve.call1(&JsValue::null(), &val);
+            });
+            let _ = c.to_blob(cb.as_ref().unchecked_ref());
+            cb.forget();
+        },
+    )
 }
 
 fn svg_blob(svg: &str) -> web_sys::Blob {
@@ -234,7 +290,8 @@ pub fn download_png_from_svg(svg: String, filename: String) {
             .unwrap();
         let _ = ctx.draw_image_with_html_image_element(&img, 0.0, 0.0);
 
-        let blob_val = wasm_bindgen_futures::JsFuture::from(canvas_to_blob_promise(&canvas)).await
+        let blob_val = wasm_bindgen_futures::JsFuture::from(canvas_to_blob_promise(&canvas))
+            .await
             .ok()
             .and_then(|v| v.dyn_into::<web_sys::Blob>().ok());
 
@@ -263,7 +320,11 @@ pub fn browser_export_skea(scene: Scene) {
 pub fn tauri_export_svg(svg: String, selection: bool) {
     spawn_local(async move {
         let dir = crate::tauri_bridge::get_app_data_dir().await.ok();
-        let name = if selection { "selection.svg" } else { "canvas.svg" };
+        let name = if selection {
+            "selection.svg"
+        } else {
+            "canvas.svg"
+        };
         let path = crate::tauri_bridge::pick_save_path_svg(name, dir.as_deref()).await;
         if let Some(path) = path {
             let _ = crate::tauri_bridge::save_file(&path, &svg).await;
@@ -305,14 +366,19 @@ pub fn tauri_export_png(svg: String, selection: bool) {
             .unwrap();
         let _ = ctx.draw_image_with_html_image_element(&img, 0.0, 0.0);
 
-        let blob_val = wasm_bindgen_futures::JsFuture::from(canvas_to_blob_promise(&canvas)).await
+        let blob_val = wasm_bindgen_futures::JsFuture::from(canvas_to_blob_promise(&canvas))
+            .await
             .ok()
             .and_then(|v| v.dyn_into::<web_sys::Blob>().ok());
 
         web_sys::Url::revoke_object_url(&url).ok();
 
         if let Some(blob) = blob_val {
-            let name = if selection { "selection.png" } else { "canvas.png" };
+            let name = if selection {
+                "selection.png"
+            } else {
+                "canvas.png"
+            };
             let dir = crate::tauri_bridge::get_app_data_dir().await.ok();
             let path = crate::tauri_bridge::pick_save_path_png(name, dir.as_deref()).await;
             if let Some(path) = path {

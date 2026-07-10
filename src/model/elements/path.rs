@@ -46,7 +46,9 @@ pub fn path_d(points: &[Point], mode: CurveMode) -> String {
     let mut d = format!("M{} {}", points[0].x, points[0].y);
     use std::fmt::Write;
     for i in 0..n - 1 {
-        let Some((_, b1, b2, p1)) = segment_cubic_bezier(points, i) else { continue };
+        let Some((_, b1, b2, p1)) = segment_cubic_bezier(points, i) else {
+            continue;
+        };
         let _ = write!(d, " C{} {} {} {} {} {}", b1.x, b1.y, b2.x, b2.y, p1.x, p1.y);
     }
     d
@@ -63,10 +65,20 @@ fn segment_cubic_bezier(points: &[Point], i: usize) -> Option<(Point, Point, Poi
     let p0 = &points[i];
     let p3 = &points[i + 1];
     let p_before = if i == 0 { &points[0] } else { &points[i - 1] };
-    let p_after = if i + 2 >= points.len() { &points[points.len() - 1] } else { &points[i + 2] };
+    let p_after = if i + 2 >= points.len() {
+        &points[points.len() - 1]
+    } else {
+        &points[i + 2]
+    };
 
-    let b1 = Point { x: p0.x + (p3.x - p_before.x) / 6.0, y: p0.y + (p3.y - p_before.y) / 6.0 };
-    let b2 = Point { x: p3.x - (p_after.x - p0.x) / 6.0, y: p3.y - (p_after.y - p0.y) / 6.0 };
+    let b1 = Point {
+        x: p0.x + (p3.x - p_before.x) / 6.0,
+        y: p0.y + (p3.y - p_before.y) / 6.0,
+    };
+    let b2 = Point {
+        x: p3.x - (p_after.x - p0.x) / 6.0,
+        y: p3.y - (p_after.y - p0.y) / 6.0,
+    };
 
     Some((p0.clone(), b1, b2, p3.clone()))
 }
@@ -101,7 +113,15 @@ fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -
 
 /// Test a query point against a cubic Bezier curve by subdividing it into
 /// `subdivisions` straight-line segments.
-fn hit_test_cubic_bezier(p0: &Point, p1: &Point, p2: &Point, p3: &Point, q: (f64, f64), tolerance: f64, subdivisions: usize) -> bool {
+fn hit_test_cubic_bezier(
+    p0: &Point,
+    p1: &Point,
+    p2: &Point,
+    p3: &Point,
+    q: (f64, f64),
+    tolerance: f64,
+    subdivisions: usize,
+) -> bool {
     let (qx, qy) = q;
     let mut prev = eval_cubic_bezier(p0, p1, p2, p3, 0.0);
     for i in 1..=subdivisions {
@@ -153,9 +173,14 @@ pub fn hit_test_path(points: &[Point], mode: CurveMode, point: (f64, f64), toler
 /// placement. In `Straight` mode this is the linear midpoint; in `Curved`
 /// mode it is the midpoint of the cubic Bezier.
 pub fn segment_midpoint(points: &[Point], mode: CurveMode, i: usize) -> Option<(f64, f64)> {
-    if i + 1 >= points.len() { return None; }
+    if i + 1 >= points.len() {
+        return None;
+    }
     if points.len() <= 2 || mode == CurveMode::Straight {
-        Some(((points[i].x + points[i + 1].x) / 2.0, (points[i].y + points[i + 1].y) / 2.0))
+        Some((
+            (points[i].x + points[i + 1].x) / 2.0,
+            (points[i].y + points[i + 1].y) / 2.0,
+        ))
     } else {
         let (p0, p1, p2, p3) = segment_cubic_bezier(points, i)?;
         let mid = eval_cubic_bezier(&p0, &p1, &p2, &p3, 0.5);
@@ -189,12 +214,27 @@ pub fn scale_points(points: &mut [Point], ctx: &ResizeContext, orig: &[Point]) {
     use super::rect::MIN_ELEMENT_SIZE;
     let rctx = ctx;
     let (nx, ny, nw, nh) = match rctx.handle {
-        0 => (rctx.bx + rctx.dx, rctx.by + rctx.dy, rctx.bw - rctx.dx, rctx.bh - rctx.dy),
+        0 => (
+            rctx.bx + rctx.dx,
+            rctx.by + rctx.dy,
+            rctx.bw - rctx.dx,
+            rctx.bh - rctx.dy,
+        ),
         1 => (rctx.bx, rctx.by + rctx.dy, rctx.bw, rctx.bh - rctx.dy),
-        2 => (rctx.bx, rctx.by + rctx.dy, rctx.bw + rctx.dx, rctx.bh - rctx.dy),
+        2 => (
+            rctx.bx,
+            rctx.by + rctx.dy,
+            rctx.bw + rctx.dx,
+            rctx.bh - rctx.dy,
+        ),
         3 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh),
         4 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh),
-        5 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh + rctx.dy),
+        5 => (
+            rctx.bx + rctx.dx,
+            rctx.by,
+            rctx.bw - rctx.dx,
+            rctx.bh + rctx.dy,
+        ),
         6 => (rctx.bx, rctx.by, rctx.bw, rctx.bh + rctx.dy),
         7 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh + rctx.dy),
         _ => return,

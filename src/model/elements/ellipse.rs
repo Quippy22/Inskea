@@ -1,6 +1,9 @@
-use leptos::IntoView;
 use super::ElementData;
-use super::{Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Rotate, SnapToGrid, UpdateDrag};
+use super::{
+    Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Rotate, SnapToGrid,
+    UpdateDrag,
+};
+use leptos::IntoView;
 
 use super::rect::{self, MIN_ELEMENT_SIZE};
 
@@ -188,12 +191,27 @@ impl Resize for Ellipse {
     fn resize(&mut self, ctx: &ResizeContext) {
         let rctx = ctx;
         let (mut nx, mut ny, mut nw, mut nh) = match rctx.handle {
-            0 => (rctx.bx + rctx.dx, rctx.by + rctx.dy, rctx.bw - rctx.dx, rctx.bh - rctx.dy),
+            0 => (
+                rctx.bx + rctx.dx,
+                rctx.by + rctx.dy,
+                rctx.bw - rctx.dx,
+                rctx.bh - rctx.dy,
+            ),
             1 => (rctx.bx, rctx.by + rctx.dy, rctx.bw, rctx.bh - rctx.dy),
-            2 => (rctx.bx, rctx.by + rctx.dy, rctx.bw + rctx.dx, rctx.bh - rctx.dy),
+            2 => (
+                rctx.bx,
+                rctx.by + rctx.dy,
+                rctx.bw + rctx.dx,
+                rctx.bh - rctx.dy,
+            ),
             3 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh),
             4 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh),
-            5 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh + rctx.dy),
+            5 => (
+                rctx.bx + rctx.dx,
+                rctx.by,
+                rctx.bw - rctx.dx,
+                rctx.bh + rctx.dy,
+            ),
             6 => (rctx.bx, rctx.by, rctx.bw, rctx.bh + rctx.dy),
             7 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh + rctx.dy),
             _ => return,
@@ -207,11 +225,22 @@ impl Resize for Ellipse {
                 nw = nh * ratio;
             }
             match rctx.handle {
-                0 => { nx = rctx.bx + rctx.bw - nw; ny = rctx.by + rctx.bh - nh; }
-                1 => { ny = rctx.by + rctx.bh - nh; }
-                2 => { ny = rctx.by + rctx.bh - nh; }
-                3 => { nx = rctx.bx + rctx.bw - nw; }
-                5 => { nx = rctx.bx + rctx.bw - nw; }
+                0 => {
+                    nx = rctx.bx + rctx.bw - nw;
+                    ny = rctx.by + rctx.bh - nh;
+                }
+                1 => {
+                    ny = rctx.by + rctx.bh - nh;
+                }
+                2 => {
+                    ny = rctx.by + rctx.bh - nh;
+                }
+                3 => {
+                    nx = rctx.bx + rctx.bw - nw;
+                }
+                5 => {
+                    nx = rctx.bx + rctx.bw - nw;
+                }
                 _ => {}
             }
         }

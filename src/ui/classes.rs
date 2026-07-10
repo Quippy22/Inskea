@@ -73,4 +73,5 @@ pub const SETTINGS_LABEL: &str = "text-xs text-subtle shrink-0";
 pub const SEG_BTN_ACTIVE: &str = "px-2.5 py-1 text-xs transition-colors bg-accent/10 text-accent";
 
 /// Segmented control button — inactive state.
-pub const SEG_BTN_INACTIVE: &str = "px-2.5 py-1 text-xs transition-colors text-subtle hover:text-fg hover:bg-surface/50";
+pub const SEG_BTN_INACTIVE: &str =
+    "px-2.5 py-1 text-xs transition-colors text-subtle hover:text-fg hover:bg-surface/50";

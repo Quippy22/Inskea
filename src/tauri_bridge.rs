@@ -89,7 +89,9 @@ pub async fn pick_open_path(default_dir: Option<&str>) -> Option<String> {
 pub async fn get_app_data_dir() -> Result<String, String> {
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({}))
         .map_err(|e| format!("serialization error: {e}"))?;
-    let result = invoke("get_app_data_dir", args).await.map_err(invoke_error)?;
+    let result = invoke("get_app_data_dir", args)
+        .await
+        .map_err(invoke_error)?;
     result
         .as_string()
         .ok_or_else(|| "failed to get app data dir".into())
@@ -113,7 +115,9 @@ pub async fn save_file_binary(path: &str, data: &[u8]) -> Result<(), String> {
         "data": data,
     }))
     .map_err(|e| format!("serialization error: {e}"))?;
-    invoke("save_file_binary", args).await.map_err(invoke_error)?;
+    invoke("save_file_binary", args)
+        .await
+        .map_err(invoke_error)?;
     Ok(())
 }
 

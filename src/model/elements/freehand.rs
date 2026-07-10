@@ -1,9 +1,9 @@
-use leptos::IntoView;
-use super::{ElementData, Point, ShapeColor};
 use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Rotate, SnapToGrid,
     UpdateDrag,
 };
+use super::{ElementData, Point, ShapeColor};
+use leptos::IntoView;
 use std::fmt::Write;
 
 /// Minimum distance (world-space) between consecutive sampled points.
@@ -95,7 +95,10 @@ impl FromDrag for Freehand {
                 stroke_color: color,
                 ..ElementData::new(0)
             },
-            points: vec![Point { x: anchor.0, y: anchor.1 }],
+            points: vec![Point {
+                x: anchor.0,
+                y: anchor.1,
+            }],
         };
         fh.simplify(SIMPLIFY_EPSILON);
         fh

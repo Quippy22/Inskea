@@ -1,20 +1,21 @@
-pub mod rect;
-pub mod ellipse;
-pub(crate) mod line;
 pub mod arrow;
-pub(crate) mod text;
+pub mod ellipse;
 pub mod freehand;
+pub mod id;
+pub(crate) mod line;
 pub mod path;
+pub mod rect;
+pub(crate) mod text;
 
-pub use rect::Rectangle;
-pub use ellipse::Ellipse;
-pub use line::Line;
 pub use arrow::Arrow;
-pub use text::Text;
+pub use ellipse::Ellipse;
 pub use freehand::Freehand;
+pub use line::Line;
+pub use rect::Rectangle;
+pub use text::Text;
 
-use path::CurveMode;
 use super::ShapeColor;
+use path::CurveMode;
 
 /// Unique identifier for an element in the scene.
 pub type ElementId = u64;
@@ -133,22 +134,34 @@ impl Element {
 // ── Into<Element> conversions ─────────────────────────────────────────
 
 impl From<Rectangle> for Element {
-    fn from(e: Rectangle) -> Self { Element::Rectangle(e) }
+    fn from(e: Rectangle) -> Self {
+        Element::Rectangle(e)
+    }
 }
 impl From<Ellipse> for Element {
-    fn from(e: Ellipse) -> Self { Element::Ellipse(e) }
+    fn from(e: Ellipse) -> Self {
+        Element::Ellipse(e)
+    }
 }
 impl From<Line> for Element {
-    fn from(e: Line) -> Self { Element::Line(e) }
+    fn from(e: Line) -> Self {
+        Element::Line(e)
+    }
 }
 impl From<Arrow> for Element {
-    fn from(e: Arrow) -> Self { Element::Arrow(e) }
+    fn from(e: Arrow) -> Self {
+        Element::Arrow(e)
+    }
 }
 impl From<Text> for Element {
-    fn from(e: Text) -> Self { Element::Text(e) }
+    fn from(e: Text) -> Self {
+        Element::Text(e)
+    }
 }
 impl From<Freehand> for Element {
-    fn from(e: Freehand) -> Self { Element::Freehand(e) }
+    fn from(e: Freehand) -> Self {
+        Element::Freehand(e)
+    }
 }
 
 // ── Trait definitions ──────────────────────────────────────────────────
@@ -226,23 +239,41 @@ pub trait Rotate {
 /// per-dot handles. Freehand keeps its current render-only behavior.
 pub trait PathPoints {
     /// Shared reference to this element's path points, if it has them.
-    fn path_points(&self) -> Option<&Vec<Point>> { None }
+    fn path_points(&self) -> Option<&Vec<Point>> {
+        None
+    }
     /// Mutable reference to this element's path points, if it has them.
-    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> { None }
+    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> {
+        None
+    }
     /// How the path is rendered (curve mode).
-    fn curve_mode(&self) -> CurveMode { CurveMode::Straight }
+    fn curve_mode(&self) -> CurveMode {
+        CurveMode::Straight
+    }
 }
 
 impl PathPoints for Line {
-    fn path_points(&self) -> Option<&Vec<Point>> { Some(&self.points) }
-    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> { Some(&mut self.points) }
-    fn curve_mode(&self) -> CurveMode { self.curve_mode }
+    fn path_points(&self) -> Option<&Vec<Point>> {
+        Some(&self.points)
+    }
+    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> {
+        Some(&mut self.points)
+    }
+    fn curve_mode(&self) -> CurveMode {
+        self.curve_mode
+    }
 }
 
 impl PathPoints for Arrow {
-    fn path_points(&self) -> Option<&Vec<Point>> { Some(&self.points) }
-    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> { Some(&mut self.points) }
-    fn curve_mode(&self) -> CurveMode { self.curve_mode }
+    fn path_points(&self) -> Option<&Vec<Point>> {
+        Some(&self.points)
+    }
+    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> {
+        Some(&mut self.points)
+    }
+    fn curve_mode(&self) -> CurveMode {
+        self.curve_mode
+    }
 }
 
 impl PathPoints for Element {
@@ -302,12 +333,7 @@ pub trait Resize {
 /// Construct an element from a mouse-drag operation (anchor → current position).
 pub trait FromDrag: Sized {
     /// Create a new element of this type given the drag start and current world-space points.
-    fn from_drag(
-        anchor: (f64, f64),
-        current: (f64, f64),
-        color: ShapeColor,
-        shift: bool,
-    ) -> Self;
+    fn from_drag(anchor: (f64, f64), current: (f64, f64), color: ShapeColor, shift: bool) -> Self;
 }
 
 /// Update an element while it is being drawn (e.g. freehand adding points).

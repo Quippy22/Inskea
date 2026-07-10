@@ -6,7 +6,10 @@ use std::rc::Rc;
 #[derive(Clone)]
 pub enum DropdownItem {
     /// Clickable row with a label.
-    Action { label: &'static str, on_click: Rc<dyn Fn()> },
+    Action {
+        label: &'static str,
+        on_click: Rc<dyn Fn()>,
+    },
     /// Non-clickable header label (e.g. "PNG", "SVG").
     Header { label: &'static str },
     /// Horizontal separator line.

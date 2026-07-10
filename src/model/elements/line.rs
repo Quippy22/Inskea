@@ -1,12 +1,14 @@
-use leptos::IntoView;
-use super::{ElementData, Point, ShapeColor};
+use super::path::{
+    bounds_of_points, hit_test_path, offset_points, path_d, rotate_points, scale_points,
+    snap_points_to_grid, CurveMode,
+};
+use super::snap_angle;
 use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Rotate, SnapToGrid,
     UpdateDrag,
 };
-use super::snap_angle;
-use super::path::{CurveMode, path_d, bounds_of_points, hit_test_path, offset_points,
-    rotate_points, scale_points, snap_points_to_grid};
+use super::{ElementData, Point, ShapeColor};
+use leptos::IntoView;
 
 const SNAP_DIVISIONS: f64 = 8.0;
 
@@ -26,12 +28,7 @@ pub struct Line {
 }
 
 impl FromDrag for Line {
-    fn from_drag(
-        anchor: (f64, f64),
-        current: (f64, f64),
-        color: ShapeColor,
-        shift: bool,
-    ) -> Self {
+    fn from_drag(anchor: (f64, f64), current: (f64, f64), color: ShapeColor, shift: bool) -> Self {
         let (ax, ay) = anchor;
         let (cx, cy) = current;
         let (mut ex, mut ey) = (cx, cy);
@@ -97,7 +94,12 @@ impl Render for Line {
 
 impl HitTest for Line {
     fn hit_test(&self, point: (f64, f64), margin: f64) -> bool {
-        hit_test_path(&self.points, self.curve_mode, point, margin + self.data.stroke_width)
+        hit_test_path(
+            &self.points,
+            self.curve_mode,
+            point,
+            margin + self.data.stroke_width,
+        )
     }
 }
 

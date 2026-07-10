@@ -14,8 +14,8 @@ pub use group::GroupPanel;
 pub use pages::PagesPanel;
 
 use crate::canvas::CanvasMode;
-use crate::model::{Element, ElementId, PathPoints, Scene, ShapeColor};
 use crate::model::elements::path::CurveMode;
+use crate::model::{Element, ElementId, PathPoints, Scene, ShapeColor};
 use crate::ui::classes;
 use crate::ui::icon;
 use leptos::*;
@@ -101,7 +101,9 @@ pub fn Dock(
     // Determine whether a single Line or Arrow is selected and its curve mode
     let path_info = move || -> Option<CurveMode> {
         let ids = selected_ids.get();
-        if ids.len() != 1 { return None; }
+        if ids.len() != 1 {
+            return None;
+        }
         let els = scene.get().elements;
         let el = els.iter().find(|e| e.id() == ids[0])?;
         el.path_points()?; // ensure it's a path element
@@ -114,7 +116,9 @@ pub fn Dock(
 
     let toggle_curve_mode = move |_| {
         let ids = selected_ids.get();
-        if ids.len() != 1 { return; }
+        if ids.len() != 1 {
+            return;
+        }
         let id = ids[0];
         scene.update(|s| {
             if let Some(el) = s.elements.iter_mut().find(|e| e.id() == id) {

@@ -1,6 +1,9 @@
-use leptos::IntoView;
+use super::{
+    Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Rotate, SnapToGrid,
+    UpdateDrag,
+};
 use super::{ElementData, ShapeColor};
-use super::{Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Rotate, SnapToGrid, UpdateDrag};
+use leptos::IntoView;
 
 /// Constants used across element resize logic.
 pub(crate) const MIN_ELEMENT_SIZE: f64 = 5.0;
@@ -27,12 +30,7 @@ impl Rectangle {
 }
 
 impl FromDrag for Rectangle {
-    fn from_drag(
-        anchor: (f64, f64),
-        current: (f64, f64),
-        color: ShapeColor,
-        shift: bool,
-    ) -> Self {
+    fn from_drag(anchor: (f64, f64), current: (f64, f64), color: ShapeColor, shift: bool) -> Self {
         let (ax, ay) = anchor;
         let (cx, cy) = current;
         let mut x = ax.min(cx);
@@ -197,12 +195,27 @@ impl Resize for Rectangle {
     fn resize(&mut self, ctx: &ResizeContext) {
         let rctx = ctx;
         let (mut nx, mut ny, mut nw, mut nh) = match rctx.handle {
-            0 => (rctx.bx + rctx.dx, rctx.by + rctx.dy, rctx.bw - rctx.dx, rctx.bh - rctx.dy),
+            0 => (
+                rctx.bx + rctx.dx,
+                rctx.by + rctx.dy,
+                rctx.bw - rctx.dx,
+                rctx.bh - rctx.dy,
+            ),
             1 => (rctx.bx, rctx.by + rctx.dy, rctx.bw, rctx.bh - rctx.dy),
-            2 => (rctx.bx, rctx.by + rctx.dy, rctx.bw + rctx.dx, rctx.bh - rctx.dy),
+            2 => (
+                rctx.bx,
+                rctx.by + rctx.dy,
+                rctx.bw + rctx.dx,
+                rctx.bh - rctx.dy,
+            ),
             3 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh),
             4 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh),
-            5 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh + rctx.dy),
+            5 => (
+                rctx.bx + rctx.dx,
+                rctx.by,
+                rctx.bw - rctx.dx,
+                rctx.bh + rctx.dy,
+            ),
             6 => (rctx.bx, rctx.by, rctx.bw, rctx.bh + rctx.dy),
             7 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh + rctx.dy),
             _ => return,
@@ -216,11 +229,22 @@ impl Resize for Rectangle {
                 nw = nh * ratio;
             }
             match rctx.handle {
-                0 => { nx = rctx.bx + rctx.bw - nw; ny = rctx.by + rctx.bh - nh; }
-                1 => { ny = rctx.by + rctx.bh - nh; }
-                2 => { ny = rctx.by + rctx.bh - nh; }
-                3 => { nx = rctx.bx + rctx.bw - nw; }
-                5 => { nx = rctx.bx + rctx.bw - nw; }
+                0 => {
+                    nx = rctx.bx + rctx.bw - nw;
+                    ny = rctx.by + rctx.bh - nh;
+                }
+                1 => {
+                    ny = rctx.by + rctx.bh - nh;
+                }
+                2 => {
+                    ny = rctx.by + rctx.bh - nh;
+                }
+                3 => {
+                    nx = rctx.bx + rctx.bw - nw;
+                }
+                5 => {
+                    nx = rctx.bx + rctx.bw - nw;
+                }
                 _ => {}
             }
         }
