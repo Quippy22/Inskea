@@ -72,17 +72,6 @@ pub fn rotate_point_around(p: (f64, f64), center: (f64, f64), angle: f64) -> (f6
     )
 }
 
-/// Compute the four world-space rotated corners of an element's bounding box.
-pub fn rotated_corners(el: &ElementData) -> [(f64, f64); 4] {
-    let x = el.world_point.x;
-    let y = el.world_point.y;
-    let w = el.width;
-    let h = el.height;
-    let center = (x + w / 2.0, y + h / 2.0);
-    let corners = [(x, y), (x + w, y), (x + w, y + h), (x, y + h)];
-    corners.map(|c| rotate_point_around(c, center, el.rotation))
-}
-
 /// Axis-aligned bounding box that encloses all given elements,
 /// accounting for their individual rotations.
 pub fn common_bounds(elements: &[&ElementData]) -> (f64, f64, f64, f64) {
@@ -91,11 +80,11 @@ pub fn common_bounds(elements: &[&ElementData]) -> (f64, f64, f64, f64) {
     let mut max_x = f64::MIN;
     let mut max_y = f64::MIN;
     for el in elements {
-        for (x, y) in rotated_corners(el) {
-            min_x = min_x.min(x);
-            min_y = min_y.min(y);
-            max_x = max_x.max(x);
-            max_y = max_y.max(y);
+        for c in el.world_point.rect_corners(el.width, el.height, el.rotation) {
+            min_x = min_x.min(c.x);
+            min_y = min_y.min(c.y);
+            max_x = max_x.max(c.x);
+            max_y = max_y.max(c.y);
         }
     }
     (min_x, min_y, max_x - min_x, max_y - min_y)
@@ -392,13 +381,22 @@ mod tests {
     }
 
     #[test]
+    fn rect_corners_rotated_90() {
+        let p = Point::new(0.0, 0.0);
+        let corners = p.rect_corners(100.0, 50.0, std::f64::consts::FRAC_PI_2);
+        // Center at (50, 25), rotate 90° CW → top-left (-25, 50), etc.
+        assert!((corners[0].x - 75.0).abs() < 0.01);
+        assert!((corners[0].y - -25.0).abs() < 0.01);
+    }
+
+    #[test]
     fn rotated_corners_unrotated() {
         let el = default_data();
-        let corners = rotated_corners(&el);
-        assert_eq!(corners[0], (0.0, 0.0));
-        assert_eq!(corners[1], (100.0, 0.0));
-        assert_eq!(corners[2], (100.0, 100.0));
-        assert_eq!(corners[3], (0.0, 100.0));
+        let corners = el.world_point.rect_corners(el.width, el.height, el.rotation);
+        assert_eq!(corners[0], Point { x: 0.0, y: 0.0 });
+        assert_eq!(corners[1], Point { x: 100.0, y: 0.0 });
+        assert_eq!(corners[2], Point { x: 100.0, y: 100.0 });
+        assert_eq!(corners[3], Point { x: 0.0, y: 100.0 });
     }
 
     #[test]

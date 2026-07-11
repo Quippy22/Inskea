@@ -41,6 +41,28 @@ impl Point {
         let sin = delta.sin();
         self.set(other.x + dx * cos - dy * sin, other.y + dx * sin + dy * cos);
     }
+
+    /// Return the four world-space corners of a rectangle with this point
+    /// as the top-left corner, rotated around its center by `rotation` radians.
+    pub fn rect_corners(self, width: f64, height: f64, rotation: f64) -> [Point; 4] {
+        let cx = self.x + width / 2.0;
+        let cy = self.y + height / 2.0;
+        let center = Point::new(cx, cy);
+        let corners = [
+            Point::new(self.x, self.y),
+            Point::new(self.x + width, self.y),
+            Point::new(self.x + width, self.y + height),
+            Point::new(self.x, self.y + height),
+        ];
+        if rotation == 0.0 {
+            corners
+        } else {
+            corners.map(|mut c| {
+                c.rotate_around(center, rotation);
+                c
+            })
+        }
+    }
 }
 
 impl Default for Point {
