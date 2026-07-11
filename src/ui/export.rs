@@ -85,8 +85,8 @@ fn el_svg(el: &Element) -> String {
             let fill = r.data.fill_color.map(|c| c.to_hex()).unwrap_or("none");
             format!(
                 r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" stroke="{}" stroke-width="{}"/>"#,
-                r.data.x,
-                r.data.y,
+                r.data.world_point.x,
+                r.data.world_point.y,
                 r.data.width,
                 r.data.height,
                 fill,
@@ -96,8 +96,8 @@ fn el_svg(el: &Element) -> String {
         }
         Element::Ellipse(e) => {
             let fill = e.data.fill_color.map(|c| c.to_hex()).unwrap_or("none");
-            let cx = e.data.x + e.data.width / 2.0;
-            let cy = e.data.y + e.data.height / 2.0;
+            let cx = e.data.world_point.x + e.data.width / 2.0;
+            let cy = e.data.world_point.y + e.data.height / 2.0;
             format!(
                 r#"<ellipse cx="{}" cy="{}" rx="{}" ry="{}" fill="{}" stroke="{}" stroke-width="{}"/>"#,
                 cx,
@@ -158,8 +158,8 @@ fn el_svg(el: &Element) -> String {
         Element::Text(t) => {
             let mut out = format!(
                 r#"<text x="{}" y="{}" font-size="{}" fill="{}">"#,
-                t.data.x,
-                t.data.y + t.data.font_size,
+                t.data.world_point.x,
+                t.data.world_point.y + t.data.font_size,
                 t.data.font_size,
                 t.data.stroke_color.to_hex(),
             );
@@ -176,7 +176,7 @@ fn el_svg(el: &Element) -> String {
                 let _ = write!(
                     out,
                     r#"<tspan x="{}" dy="{}">{}</tspan>"#,
-                    t.data.x, dy, esc
+                    t.data.world_point.x, dy, esc
                 );
             }
             out.push_str("</text>");

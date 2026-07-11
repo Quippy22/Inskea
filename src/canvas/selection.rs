@@ -25,7 +25,8 @@ const PATH_MERGE_DIST: f64 = 3.0;
 const DASH_BOUNDS: &str = "3 2";
 /// Number of snap divisions when shift-rotating (24 → 15° increments).
 const ROTATE_SNAP_DIVISIONS: f64 = 24.0;
-use crate::model::elements::{snap_angle, ResizeContext};
+use crate::model::elements::snap_angle;
+use crate::model::resize::{ResizeContext, ResizeHandle};
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, *};
 
 /// Reactive marquee rectangle shown during a box-select drag.
@@ -335,7 +336,7 @@ pub fn select_pointer_down(
             for (i, &(hx, hy)) in hpos[..8].iter().enumerate() {
                 if ((test_x - hx).powi(2) + (test_y - hy).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
                     (props.push_snapshot)();
-                    st.drag_action.set(Some(Handle::Resize(i)));
+                    st.drag_action.set(Some(Handle::Resize(ResizeHandle::from(i))));
                     st.moving_anchor.set(Some(world));
                     st.drag_bounds.set(Some(bounds));
                     st.last_world.set(Some(world));
@@ -424,7 +425,7 @@ pub fn select_pointer_move(
         let dy = world.1 - anchor.1;
         let ids = st.selected_ids.get();
         match st.drag_action.get() {
-            Some(Handle::Resize(idx)) => {
+            Some(Handle::Resize(handle)) => {
                 if let Some((bx, by, bw, bh)) = st.drag_bounds.get() {
                     let frame_dx = world.0 - st.last_world.get().unwrap_or(world).0;
                     let frame_dy = world.1 - st.last_world.get().unwrap_or(world).1;
@@ -445,7 +446,7 @@ pub fn select_pointer_move(
                                         dy,
                                         fdx: frame_dx,
                                         fdy: frame_dy,
-                                        handle: idx,
+                                        handle,
                                         shift: st.shift_pressed.get(),
                                         multi,
                                     };
@@ -470,7 +471,7 @@ pub fn select_pointer_move(
                         props.scene.update(|s| {
                             for el in s.elements.iter_mut() {
                                 if ids.contains(&el.id()) {
-                                    el.rotate_around(cx, cy, delta);
+                                    el.rotate_around(Point { x: cx, y: cy }, delta);
                                 }
                             }
                         });

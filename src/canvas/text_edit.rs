@@ -64,7 +64,7 @@ pub fn text_edit_overlay(
         let (sw, sh) = screen_size.get();
         let (sx, sy) = viewport
             .get()
-            .world_to_screen((text_elem.data.x, text_elem.data.y), (sw, sh));
+            .world_to_screen((text_elem.data.world_point.x, text_elem.data.world_point.y), (sw, sh));
         let fill = text_elem
             .data
             .fill_color

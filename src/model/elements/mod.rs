@@ -13,30 +13,21 @@ pub use line::Line;
 pub use rect::Rectangle;
 pub use text::Text;
 
+pub use crate::model::point::Point;
+
 use super::ShapeColor;
 use path::CurveMode;
 
 /// Unique identifier for an element in the scene.
 pub type ElementId = u64;
 
-/// A 2-D point in world space.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct Point {
-    /// Horizontal coordinate (positive right).
-    pub x: f64,
-    /// Vertical coordinate (positive down).
-    pub y: f64,
-}
-
 /// Common data shared by every element type: position, size, and appearance.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ElementData {
     /// Unique identifier for this element, assigned when added to a Scene.
     pub id: ElementId,
-    /// World-space X of the element's anchor (top-left for rect/ellipse/text).
-    pub x: f64,
-    /// World-space Y of the element's anchor.
-    pub y: f64,
+    /// World-space position of the element's anchor (top-left for rect/ellipse/text).
+    pub world_point: Point,
     /// Width of the element's bounding box in world-space.
     pub width: f64,
     /// Height of the element's bounding box in world-space.
@@ -45,9 +36,9 @@ pub struct ElementData {
     pub rotation: f64,
     /// Font size in world-space units (used by [`Text`]).
     pub font_size: f64,
-    /// Stroke (outline) colour.
+    /// Stroke (outline) color.
     pub stroke_color: ShapeColor,
-    /// Optional fill colour. `None` means transparent.
+    /// Optional fill color. `None` means transparent.
     pub fill_color: Option<ShapeColor>,
     /// Stroke width in world-space units.
     pub stroke_width: f64,
@@ -59,8 +50,7 @@ impl ElementData {
     pub fn new(id: ElementId) -> Self {
         Self {
             id,
-            x: 0.0,
-            y: 0.0,
+            world_point: Point::default(),
             width: 100.0,
             height: 100.0,
             rotation: 0.0,
@@ -174,7 +164,7 @@ pub trait Render {
 /// Hit-testing: check if a world-space point intersects the element within a margin.
 pub trait HitTest {
     /// Returns `true` if `point` lies on/near this element within `margin` world-space units.
-    fn hit_test(&self, point: (f64, f64), margin: f64) -> bool;
+    fn hit_test(&self, point: Point, margin: f64) -> bool;
 }
 
 /// Bounding box computation in world-space: (x, y, width, height).
@@ -225,7 +215,7 @@ pub trait SnapToGrid {
 /// rotation.
 pub trait Rotate {
     /// Rotate by `delta` radians around the point (`cx`, `cy`).
-    fn rotate_around(&mut self, cx: f64, cy: f64, delta: f64);
+    fn rotate_around(&mut self, point: Point, delta: f64);
 }
 
 /// Trait for element types that expose an editable path of points.
@@ -299,29 +289,7 @@ impl PathPoints for Element {
     }
 }
 
-/// Parameters for resizing an element via drag handles.
-#[derive(Clone, Copy)]
-pub struct ResizeContext<'a> {
-    /// Original (pre-drag) element data — used to prevent scale compounding.
-    pub orig: &'a Element,
-    /// Bounding box at drag start.
-    pub bx: f64,
-    pub by: f64,
-    pub bw: f64,
-    pub bh: f64,
-    /// Total mouse delta from drag start.
-    pub dx: f64,
-    pub dy: f64,
-    /// Per-frame mouse delta (for elements like lines that move individual endpoints).
-    pub fdx: f64,
-    pub fdy: f64,
-    /// Handle index (0–7 for corners/edges).
-    pub handle: usize,
-    /// Whether Shift is held (preserve aspect ratio).
-    pub shift: bool,
-    /// Whether multiple elements are being resized together.
-    pub multi: bool,
-}
+use crate::model::resize::ResizeContext;
 
 /// Resize the element using the given context.
 pub trait Resize {
@@ -357,7 +325,7 @@ impl Render for Element {
 }
 
 impl HitTest for Element {
-    fn hit_test(&self, point: (f64, f64), margin: f64) -> bool {
+    fn hit_test(&self, point: Point, margin: f64) -> bool {
         match self {
             Element::Rectangle(e) => e.hit_test(point, margin),
             Element::Ellipse(e) => e.hit_test(point, margin),
@@ -409,14 +377,14 @@ impl SnapToGrid for Element {
 }
 
 impl Rotate for Element {
-    fn rotate_around(&mut self, cx: f64, cy: f64, delta: f64) {
+    fn rotate_around(&mut self, point: Point, delta: f64) {
         match self {
-            Element::Rectangle(e) => e.rotate_around(cx, cy, delta),
-            Element::Ellipse(e) => e.rotate_around(cx, cy, delta),
-            Element::Line(e) => e.rotate_around(cx, cy, delta),
-            Element::Arrow(e) => e.rotate_around(cx, cy, delta),
-            Element::Text(e) => e.rotate_around(cx, cy, delta),
-            Element::Freehand(e) => e.rotate_around(cx, cy, delta),
+            Element::Rectangle(e) => e.rotate_around(point, delta),
+            Element::Ellipse(e) => e.rotate_around(point, delta),
+            Element::Line(e) => e.rotate_around(point, delta),
+            Element::Arrow(e) => e.rotate_around(point, delta),
+            Element::Text(e) => e.rotate_around(point, delta),
+            Element::Freehand(e) => e.rotate_around(point, delta),
         }
     }
 }

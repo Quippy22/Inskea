@@ -1,11 +1,12 @@
 use super::ElementData;
 use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Rotate, SnapToGrid,
-    UpdateDrag,
+    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
+use crate::model::resize::{resize_bbox, ResizeContext, ResizeHandle};
+use crate::model::Point;
 use leptos::IntoView;
 
-use super::rect::{self, MIN_ELEMENT_SIZE};
+use super::rect;
 
 /// An ellipse (oval) shape defined by its bounding-box top-left, width, and height.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -55,8 +56,7 @@ impl FromDrag for Ellipse {
         }
         Self {
             data: ElementData {
-                x,
-                y,
+                world_point: Point { x, y },
                 width: w,
                 height: h,
                 stroke_color: color,
@@ -91,8 +91,8 @@ impl UpdateDrag for Ellipse {
         if h < rect::MIN_DIMENSION {
             h = rect::MIN_DIMENSION;
         }
-        self.data.x = x;
-        self.data.y = y;
+        self.data.world_point.x = x;
+        self.data.world_point.y = y;
         self.data.width = w;
         self.data.height = h;
     }
@@ -100,8 +100,8 @@ impl UpdateDrag for Ellipse {
 
 impl Render for Ellipse {
     fn render(&self, _zoom: f64) -> leptos::View {
-        let cx = self.data.x + self.data.width / 2.0;
-        let cy = self.data.y + self.data.height / 2.0;
+        let cx = self.data.world_point.x + self.data.width / 2.0;
+        let cy = self.data.world_point.y + self.data.height / 2.0;
         let rx = self.data.width / 2.0;
         let ry = self.data.height / 2.0;
         let sw = self.data.stroke_width;
@@ -125,27 +125,27 @@ impl Render for Ellipse {
 }
 
 impl HitTest for Ellipse {
-    fn hit_test(&self, point: (f64, f64), margin: f64) -> bool {
+    fn hit_test(&self, point: Point, margin: f64) -> bool {
         let (px, py) = if self.data.rotation != 0.0 {
-            let cx = self.data.x + self.data.width / 2.0;
-            let cy = self.data.y + self.data.height / 2.0;
+            let cx = self.data.world_point.x + self.data.width / 2.0;
+            let cy = self.data.world_point.y + self.data.height / 2.0;
             let cos = (-self.data.rotation).cos();
             let sin = (-self.data.rotation).sin();
-            let dx = point.0 - cx;
-            let dy = point.1 - cy;
+            let dx = point.x - cx;
+            let dy = point.y - cy;
             (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos)
         } else {
-            point
+            (point.x, point.y)
         };
         let has_fill = self.data.fill_color.is_some();
         if has_fill {
-            px >= self.data.x - margin
-                && px <= self.data.x + self.data.width + margin
-                && py >= self.data.y - margin
-                && py <= self.data.y + self.data.height + margin
+            px >= self.data.world_point.x - margin
+                && px <= self.data.world_point.x + self.data.width + margin
+                && py >= self.data.world_point.y - margin
+                && py <= self.data.world_point.y + self.data.height + margin
         } else {
-            let cx = self.data.x + self.data.width / 2.0;
-            let cy = self.data.y + self.data.height / 2.0;
+            let cx = self.data.world_point.x + self.data.width / 2.0;
+            let cy = self.data.world_point.y + self.data.height / 2.0;
             let hw = self.data.width / 2.0;
             let hh = self.data.height / 2.0;
             let dx = (px - cx) / hw.max(1.0);
@@ -159,30 +159,29 @@ impl HitTest for Ellipse {
 
 impl Bounds for Ellipse {
     fn bounds(&self) -> (f64, f64, f64, f64) {
-        (self.data.x, self.data.y, self.data.width, self.data.height)
+        (self.data.world_point.x, self.data.world_point.y, self.data.width, self.data.height)
     }
 }
 
 impl Offset for Ellipse {
     fn offset(&mut self, dx: f64, dy: f64) {
-        self.data.x += dx;
-        self.data.y += dy;
+        self.data.world_point.offset(dx, dy);
     }
 }
 
 impl SnapToGrid for Ellipse {
     fn snap_to_grid(&mut self, grid: f64) {
-        let cx = self.data.x + self.data.width / 2.0;
-        let cy = self.data.y + self.data.height / 2.0;
+        let cx = self.data.world_point.x + self.data.width / 2.0;
+        let cy = self.data.world_point.y + self.data.height / 2.0;
         let snapped_cx = (cx / grid).round() * grid;
         let snapped_cy = (cy / grid).round() * grid;
-        self.data.x += snapped_cx - cx;
-        self.data.y += snapped_cy - cy;
+        self.data.world_point.x += snapped_cx - cx;
+        self.data.world_point.y += snapped_cy - cy;
     }
 }
 
 impl Rotate for Ellipse {
-    fn rotate_around(&mut self, _cx: f64, _cy: f64, delta: f64) {
+    fn rotate_around(&mut self, _point: Point, delta: f64) {
         self.data.rotation += delta;
     }
 }
@@ -190,31 +189,13 @@ impl Rotate for Ellipse {
 impl Resize for Ellipse {
     fn resize(&mut self, ctx: &ResizeContext) {
         let rctx = ctx;
-        let (mut nx, mut ny, mut nw, mut nh) = match rctx.handle {
-            0 => (
-                rctx.bx + rctx.dx,
-                rctx.by + rctx.dy,
-                rctx.bw - rctx.dx,
-                rctx.bh - rctx.dy,
-            ),
-            1 => (rctx.bx, rctx.by + rctx.dy, rctx.bw, rctx.bh - rctx.dy),
-            2 => (
-                rctx.bx,
-                rctx.by + rctx.dy,
-                rctx.bw + rctx.dx,
-                rctx.bh - rctx.dy,
-            ),
-            3 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh),
-            4 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh),
-            5 => (
-                rctx.bx + rctx.dx,
-                rctx.by,
-                rctx.bw - rctx.dx,
-                rctx.bh + rctx.dy,
-            ),
-            6 => (rctx.bx, rctx.by, rctx.bw, rctx.bh + rctx.dy),
-            7 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh + rctx.dy),
-            _ => return,
+        let (mut nx, mut ny, mut nw, mut nh) = match resize_bbox(
+            rctx.bx, rctx.by, rctx.bw, rctx.bh,
+            rctx.dx, rctx.dy,
+            rctx.handle,
+        ) {
+            Some(v) => v,
+            None => return,
         };
         if rctx.shift {
             let ratio = rctx.bw / rctx.bh;
@@ -225,42 +206,36 @@ impl Resize for Ellipse {
                 nw = nh * ratio;
             }
             match rctx.handle {
-                0 => {
+                ResizeHandle::Nw => {
                     nx = rctx.bx + rctx.bw - nw;
                     ny = rctx.by + rctx.bh - nh;
                 }
-                1 => {
+                ResizeHandle::N | ResizeHandle::Ne => {
                     ny = rctx.by + rctx.bh - nh;
                 }
-                2 => {
-                    ny = rctx.by + rctx.bh - nh;
-                }
-                3 => {
-                    nx = rctx.bx + rctx.bw - nw;
-                }
-                5 => {
+                ResizeHandle::W | ResizeHandle::Sw => {
                     nx = rctx.bx + rctx.bw - nw;
                 }
                 _ => {}
             }
         }
-        if nw < MIN_ELEMENT_SIZE || nh < MIN_ELEMENT_SIZE {
+        if nw < crate::model::resize::MIN_ELEMENT_SIZE || nh < crate::model::resize::MIN_ELEMENT_SIZE {
             return;
         }
         if rctx.multi {
             if let super::Element::Ellipse(orig) = rctx.orig {
-                let obw = rctx.bw.max(MIN_ELEMENT_SIZE);
-                let obh = rctx.bh.max(MIN_ELEMENT_SIZE);
+                let obw = rctx.bw.max(crate::model::resize::MIN_ELEMENT_SIZE);
+                let obh = rctx.bh.max(crate::model::resize::MIN_ELEMENT_SIZE);
                 let sx = nw / obw;
                 let sy = nh / obh;
-                self.data.x = (orig.data.x - rctx.bx) * sx + nx;
-                self.data.y = (orig.data.y - rctx.by) * sy + ny;
-                self.data.width = (orig.data.width * sx).max(MIN_ELEMENT_SIZE);
-                self.data.height = (orig.data.height * sy).max(MIN_ELEMENT_SIZE);
+                self.data.world_point.x = (orig.data.world_point.x - rctx.bx) * sx + nx;
+                self.data.world_point.y = (orig.data.world_point.y - rctx.by) * sy + ny;
+                self.data.width = (orig.data.width * sx).max(crate::model::resize::MIN_ELEMENT_SIZE);
+                self.data.height = (orig.data.height * sy).max(crate::model::resize::MIN_ELEMENT_SIZE);
             }
         } else {
-            self.data.x = nx;
-            self.data.y = ny;
+            self.data.world_point.x = nx;
+            self.data.world_point.y = ny;
             self.data.width = nw;
             self.data.height = nh;
         }

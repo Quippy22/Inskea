@@ -39,8 +39,8 @@ pub fn draw_pointer_down(
     if tool == Tool::Text {
         (props.push_snapshot)();
         let mut data = ElementData::new(0);
-        data.x = world.0;
-        data.y = world.1;
+        data.world_point.x = world.0;
+        data.world_point.y = world.1;
         data.font_size = DEFAULT_FONT_SIZE;
         data.width = 0.0;
         data.height = 0.0;

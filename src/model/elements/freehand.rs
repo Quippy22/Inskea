@@ -1,8 +1,9 @@
 use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Rotate, SnapToGrid,
-    UpdateDrag,
+    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
-use super::{ElementData, Point, ShapeColor};
+use super::{ElementData, ShapeColor};
+use crate::model::resize::ResizeContext;
+use crate::model::Point;
 use leptos::IntoView;
 use std::fmt::Write;
 
@@ -178,11 +179,11 @@ fn build_smooth_path(points: &[Point]) -> String {
 // ── Geometry traits ────────────────────────────────────────────────────
 
 impl HitTest for Freehand {
-    fn hit_test(&self, point: (f64, f64), margin: f64) -> bool {
+    fn hit_test(&self, point: Point, margin: f64) -> bool {
         crate::model::elements::path::hit_test_path(
             &self.points,
             crate::model::elements::path::CurveMode::Straight,
-            point,
+            (point.x, point.y),
             margin + self.data.stroke_width,
         )
     }
@@ -196,8 +197,7 @@ impl Bounds for Freehand {
 
 impl Offset for Freehand {
     fn offset(&mut self, dx: f64, dy: f64) {
-        self.data.x += dx;
-        self.data.y += dy;
+        self.data.world_point.offset(dx, dy);
         crate::model::elements::path::offset_points(&mut self.points, dx, dy);
     }
 }
@@ -209,8 +209,8 @@ impl SnapToGrid for Freehand {
 }
 
 impl Rotate for Freehand {
-    fn rotate_around(&mut self, cx: f64, cy: f64, delta: f64) {
-        crate::model::elements::path::rotate_points(&mut self.points, cx, cy, delta);
+    fn rotate_around(&mut self, point: Point, delta: f64) {
+        crate::model::elements::path::rotate_points(&mut self.points, point.x, point.y, delta);
     }
 }
 

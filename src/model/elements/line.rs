@@ -4,10 +4,11 @@ use super::path::{
 };
 use super::snap_angle;
 use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Rotate, SnapToGrid,
-    UpdateDrag,
+    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
-use super::{ElementData, Point, ShapeColor};
+use super::{ElementData, ShapeColor};
+use crate::model::resize::ResizeContext;
+use crate::model::Point;
 use leptos::IntoView;
 
 const SNAP_DIVISIONS: f64 = 8.0;
@@ -93,11 +94,11 @@ impl Render for Line {
 }
 
 impl HitTest for Line {
-    fn hit_test(&self, point: (f64, f64), margin: f64) -> bool {
+    fn hit_test(&self, point: Point, margin: f64) -> bool {
         hit_test_path(
             &self.points,
             self.curve_mode,
-            point,
+            (point.x, point.y),
             margin + self.data.stroke_width,
         )
     }
@@ -111,8 +112,7 @@ impl Bounds for Line {
 
 impl Offset for Line {
     fn offset(&mut self, dx: f64, dy: f64) {
-        self.data.x += dx;
-        self.data.y += dy;
+        self.data.world_point.offset(dx, dy);
         offset_points(&mut self.points, dx, dy);
     }
 }
@@ -124,8 +124,8 @@ impl SnapToGrid for Line {
 }
 
 impl Rotate for Line {
-    fn rotate_around(&mut self, cx: f64, cy: f64, delta: f64) {
-        rotate_points(&mut self.points, cx, cy, delta);
+    fn rotate_around(&mut self, point: Point, delta: f64) {
+        rotate_points(&mut self.points, point.x, point.y, delta);
     }
 }
 

@@ -1,12 +1,11 @@
 use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Rotate, SnapToGrid,
-    UpdateDrag,
+    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
 use super::{ElementData, ShapeColor};
+use crate::model::resize::{resize_bbox, ResizeContext, ResizeHandle};
+use crate::model::Point;
 use leptos::IntoView;
 
-/// Constants used across element resize logic.
-pub(crate) const MIN_ELEMENT_SIZE: f64 = 5.0;
 pub(crate) const MIN_DIMENSION: f64 = 1.0;
 
 /// A rectangle shape defined by its top-left corner, width, and height.
@@ -56,8 +55,7 @@ impl FromDrag for Rectangle {
         }
         Self {
             data: ElementData {
-                x,
-                y,
+                world_point: Point { x, y },
                 width: w,
                 height: h,
                 stroke_color: color,
@@ -92,8 +90,8 @@ impl UpdateDrag for Rectangle {
         if h < MIN_DIMENSION {
             h = MIN_DIMENSION;
         }
-        self.data.x = x;
-        self.data.y = y;
+        self.data.world_point.x = x;
+        self.data.world_point.y = y;
         self.data.width = w;
         self.data.height = h;
     }
@@ -101,8 +99,8 @@ impl UpdateDrag for Rectangle {
 
 impl Render for Rectangle {
     fn render(&self, _zoom: f64) -> leptos::View {
-        let x = self.data.x;
-        let y = self.data.y;
+        let x = self.data.world_point.x;
+        let y = self.data.world_point.y;
         let w = self.data.width;
         let h = self.data.height;
         let sw = self.data.stroke_width;
@@ -128,97 +126,79 @@ impl Render for Rectangle {
 }
 
 impl HitTest for Rectangle {
-    fn hit_test(&self, point: (f64, f64), margin: f64) -> bool {
+    fn hit_test(&self, point: Point, margin: f64) -> bool {
         let (px, py) = if self.data.rotation != 0.0 {
-            let cx = self.data.x + self.data.width / 2.0;
-            let cy = self.data.y + self.data.height / 2.0;
+            let cx = self.data.world_point.x + self.data.width / 2.0;
+            let cy = self.data.world_point.y + self.data.height / 2.0;
             let cos = (-self.data.rotation).cos();
             let sin = (-self.data.rotation).sin();
-            let dx = point.0 - cx;
-            let dy = point.1 - cy;
+            let dx = point.x - cx;
+            let dy = point.y - cy;
             (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos)
         } else {
-            point
+            (point.x, point.y)
         };
         let has_fill = self.data.fill_color.is_some();
         if has_fill {
-            px >= self.data.x - margin
-                && px <= self.data.x + self.data.width + margin
-                && py >= self.data.y - margin
-                && py <= self.data.y + self.data.height + margin
+            px >= self.data.world_point.x - margin
+                && px <= self.data.world_point.x + self.data.width + margin
+                && py >= self.data.world_point.y - margin
+                && py <= self.data.world_point.y + self.data.height + margin
         } else {
-            let dl = (px - self.data.x).abs();
-            let dr = (px - (self.data.x + self.data.width)).abs();
-            let dt = (py - self.data.y).abs();
-            let db = (py - (self.data.y + self.data.height)).abs();
+            let dl = (px - self.data.world_point.x).abs();
+            let dr = (px - (self.data.world_point.x + self.data.width)).abs();
+            let dt = (py - self.data.world_point.y).abs();
+            let db = (py - (self.data.world_point.y + self.data.height)).abs();
             let near_edge = dl.min(dr).min(dt).min(db);
             near_edge <= margin + self.data.stroke_width
-                && px >= self.data.x - margin
-                && px <= self.data.x + self.data.width + margin
-                && py >= self.data.y - margin
-                && py <= self.data.y + self.data.height + margin
+                && px >= self.data.world_point.x - margin
+                && px <= self.data.world_point.x + self.data.width + margin
+                && py >= self.data.world_point.y - margin
+                && py <= self.data.world_point.y + self.data.height + margin
         }
     }
 }
 
 impl Bounds for Rectangle {
     fn bounds(&self) -> (f64, f64, f64, f64) {
-        (self.data.x, self.data.y, self.data.width, self.data.height)
+        (self.data.world_point.x, self.data.world_point.y, self.data.width, self.data.height)
     }
 }
 
 impl Offset for Rectangle {
     fn offset(&mut self, dx: f64, dy: f64) {
-        self.data.x += dx;
-        self.data.y += dy;
+        self.data.world_point.offset(dx, dy);
     }
 }
 
 impl SnapToGrid for Rectangle {
     fn snap_to_grid(&mut self, grid: f64) {
-        let cx = self.data.x + self.data.width / 2.0;
-        let cy = self.data.y + self.data.height / 2.0;
+        let cx = self.data.world_point.x + self.data.width / 2.0;
+        let cy = self.data.world_point.y + self.data.height / 2.0;
         let snapped_cx = (cx / grid).round() * grid;
         let snapped_cy = (cy / grid).round() * grid;
-        self.data.x += snapped_cx - cx;
-        self.data.y += snapped_cy - cy;
+        self.data.world_point.x += snapped_cx - cx;
+        self.data.world_point.y += snapped_cy - cy;
     }
 }
 
 impl Rotate for Rectangle {
-    fn rotate_around(&mut self, _cx: f64, _cy: f64, delta: f64) {
+    fn rotate_around(&mut self, _point: Point, delta: f64) {
         self.data.rotation += delta;
     }
 }
 
 impl Resize for Rectangle {
     fn resize(&mut self, ctx: &ResizeContext) {
+        use crate::model::resize::MIN_ELEMENT_SIZE;
         let rctx = ctx;
-        let (mut nx, mut ny, mut nw, mut nh) = match rctx.handle {
-            0 => (
-                rctx.bx + rctx.dx,
-                rctx.by + rctx.dy,
-                rctx.bw - rctx.dx,
-                rctx.bh - rctx.dy,
-            ),
-            1 => (rctx.bx, rctx.by + rctx.dy, rctx.bw, rctx.bh - rctx.dy),
-            2 => (
-                rctx.bx,
-                rctx.by + rctx.dy,
-                rctx.bw + rctx.dx,
-                rctx.bh - rctx.dy,
-            ),
-            3 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh),
-            4 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh),
-            5 => (
-                rctx.bx + rctx.dx,
-                rctx.by,
-                rctx.bw - rctx.dx,
-                rctx.bh + rctx.dy,
-            ),
-            6 => (rctx.bx, rctx.by, rctx.bw, rctx.bh + rctx.dy),
-            7 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh + rctx.dy),
-            _ => return,
+        let (mut nx, mut ny, mut nw, mut nh) = match resize_bbox(
+            rctx.bx, rctx.by, rctx.bw, rctx.bh,
+            rctx.dx, rctx.dy,
+            rctx.handle,
+        ) {
+            Some(v) => v,
+            None => return,
         };
         if rctx.shift {
             let ratio = rctx.bw / rctx.bh;
@@ -229,20 +209,14 @@ impl Resize for Rectangle {
                 nw = nh * ratio;
             }
             match rctx.handle {
-                0 => {
+                ResizeHandle::Nw => {
                     nx = rctx.bx + rctx.bw - nw;
                     ny = rctx.by + rctx.bh - nh;
                 }
-                1 => {
+                ResizeHandle::N | ResizeHandle::Ne => {
                     ny = rctx.by + rctx.bh - nh;
                 }
-                2 => {
-                    ny = rctx.by + rctx.bh - nh;
-                }
-                3 => {
-                    nx = rctx.bx + rctx.bw - nw;
-                }
-                5 => {
+                ResizeHandle::W | ResizeHandle::Sw => {
                     nx = rctx.bx + rctx.bw - nw;
                 }
                 _ => {}
@@ -257,14 +231,14 @@ impl Resize for Rectangle {
                 let obh = rctx.bh.max(MIN_ELEMENT_SIZE);
                 let sx = nw / obw;
                 let sy = nh / obh;
-                self.data.x = (orig.data.x - rctx.bx) * sx + nx;
-                self.data.y = (orig.data.y - rctx.by) * sy + ny;
+                self.data.world_point.x = (orig.data.world_point.x - rctx.bx) * sx + nx;
+                self.data.world_point.y = (orig.data.world_point.y - rctx.by) * sy + ny;
                 self.data.width = (orig.data.width * sx).max(MIN_ELEMENT_SIZE);
                 self.data.height = (orig.data.height * sy).max(MIN_ELEMENT_SIZE);
             }
         } else {
-            self.data.x = nx;
-            self.data.y = ny;
+            self.data.world_point.x = nx;
+            self.data.world_point.y = ny;
             self.data.width = nw;
             self.data.height = nh;
         }

@@ -1,5 +1,6 @@
+use crate::model::resize::ResizeHandle;
 use crate::model::ShapeColor;
-use crate::model::{Bounds, Element, ElementId, HitTest, Scene};
+use crate::model::{Bounds, Element, ElementId, HitTest, Point, Scene};
 use crate::ui::dock::Tool;
 use crate::ui::settings::{CenterStyle, GridSize, GridStyle};
 use leptos::*;
@@ -22,8 +23,8 @@ pub enum CanvasMode {
 /// Which handle a drag operation is acting on.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Handle {
-    /// Resize corner (0–3) or edge (4–7) handle.
-    Resize(usize),
+    /// Resize corner or edge handle on the bounding box.
+    Resize(ResizeHandle),
     /// Move via the centre crosshair.
     Move,
     /// Rotate via the top handle.
@@ -125,7 +126,7 @@ pub fn hit_and_erase(point: (f64, f64), scene: RwSignal<Scene>) {
         s.elements
             .iter()
             .rev()
-            .find(|el| el.hit_test(point, HIT_MARGIN))
+            .find(|el| el.hit_test(Point { x: point.0, y: point.1 }, HIT_MARGIN))
             .map(|el| el.id())
     });
     if let Some(id) = id {
@@ -162,7 +163,7 @@ pub fn hit_test_topmost(point: (f64, f64), elements: &[Element]) -> Option<Eleme
     elements
         .iter()
         .rev()
-        .find(|el| el.hit_test(point, HIT_MARGIN))
+        .find(|el| el.hit_test(Point { x: point.0, y: point.1 }, HIT_MARGIN))
         .map(|el| el.id())
 }
 

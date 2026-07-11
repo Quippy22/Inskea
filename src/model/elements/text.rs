@@ -1,9 +1,9 @@
-use super::rect::MIN_ELEMENT_SIZE;
 use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Rotate, SnapToGrid,
-    UpdateDrag,
+    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
 use super::{ElementData, ShapeColor};
+use crate::model::resize::{resize_bbox, MIN_ELEMENT_SIZE, ResizeContext, ResizeHandle};
+use crate::model::Point;
 use leptos::IntoView;
 
 pub(crate) const MIN_FONT_SIZE: f64 = 12.0;
@@ -168,8 +168,8 @@ impl FromDrag for Text {
         _shift: bool,
     ) -> Self {
         let mut data = ElementData::new(0);
-        data.x = anchor.0;
-        data.y = anchor.1;
+        data.world_point.x = anchor.0;
+        data.world_point.y = anchor.1;
         data.font_size = 24.0;
         data.width = 0.0;
         data.height = 0.0;
@@ -193,8 +193,8 @@ impl Render for Text {
     fn render(&self, _zoom: f64) -> leptos::View {
         let font_size = self.data.font_size.max(MIN_FONT_SIZE);
         let lines: Vec<String> = Vec::from(&self.wrapped);
-        let x = self.data.x;
-        let baseline = self.data.y + font_size * TEXT_ASCENT_RATIO;
+        let x = self.data.world_point.x;
+        let baseline = self.data.world_point.y + font_size * TEXT_ASCENT_RATIO;
         let fill = self
             .data
             .fill_color
@@ -248,7 +248,7 @@ impl Render for Text {
             inner
         } else {
             let cx = x + self.data.width / 2.0;
-            let cy = self.data.y + self.data.height / 2.0;
+            let cy = self.data.world_point.y + self.data.height / 2.0;
             let deg = self.data.rotation.to_degrees();
             leptos::view! {
                 <g transform={format!("rotate({} {} {})", deg, cx, cy)}>{inner}</g>
@@ -259,41 +259,40 @@ impl Render for Text {
 }
 
 impl HitTest for Text {
-    fn hit_test(&self, point: (f64, f64), margin: f64) -> bool {
-        let (px, py) = point;
-        px >= self.data.x - margin
-            && px <= self.data.x + self.data.width + margin
-            && py >= self.data.y - margin
-            && py <= self.data.y + self.data.height + margin
+    fn hit_test(&self, point: Point, margin: f64) -> bool {
+        let (px, py) = (point.x, point.y);
+        px >= self.data.world_point.x - margin
+            && px <= self.data.world_point.x + self.data.width + margin
+            && py >= self.data.world_point.y - margin
+            && py <= self.data.world_point.y + self.data.height + margin
     }
 }
 
 impl Bounds for Text {
     fn bounds(&self) -> (f64, f64, f64, f64) {
-        (self.data.x, self.data.y, self.data.width, self.data.height)
+        (self.data.world_point.x, self.data.world_point.y, self.data.width, self.data.height)
     }
 }
 
 impl Offset for Text {
     fn offset(&mut self, dx: f64, dy: f64) {
-        self.data.x += dx;
-        self.data.y += dy;
+        self.data.world_point.offset(dx, dy);
     }
 }
 
 impl SnapToGrid for Text {
     fn snap_to_grid(&mut self, grid: f64) {
-        let cx = self.data.x + self.data.width / 2.0;
-        let cy = self.data.y + self.data.height / 2.0;
+        let cx = self.data.world_point.x + self.data.width / 2.0;
+        let cy = self.data.world_point.y + self.data.height / 2.0;
         let snapped_cx = (cx / grid).round() * grid;
         let snapped_cy = (cy / grid).round() * grid;
-        self.data.x += snapped_cx - cx;
-        self.data.y += snapped_cy - cy;
+        self.data.world_point.x += snapped_cx - cx;
+        self.data.world_point.y += snapped_cy - cy;
     }
 }
 
 impl Rotate for Text {
-    fn rotate_around(&mut self, _cx: f64, _cy: f64, delta: f64) {
+    fn rotate_around(&mut self, _point: Point, delta: f64) {
         self.data.rotation += delta;
     }
 }
@@ -301,31 +300,13 @@ impl Rotate for Text {
 impl Resize for Text {
     fn resize(&mut self, ctx: &ResizeContext) {
         let rctx = ctx;
-        let (mut nx, mut ny, mut nw, mut nh) = match rctx.handle {
-            0 => (
-                rctx.bx + rctx.dx,
-                rctx.by + rctx.dy,
-                rctx.bw - rctx.dx,
-                rctx.bh - rctx.dy,
-            ),
-            1 => (rctx.bx, rctx.by + rctx.dy, rctx.bw, rctx.bh - rctx.dy),
-            2 => (
-                rctx.bx,
-                rctx.by + rctx.dy,
-                rctx.bw + rctx.dx,
-                rctx.bh - rctx.dy,
-            ),
-            3 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh),
-            4 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh),
-            5 => (
-                rctx.bx + rctx.dx,
-                rctx.by,
-                rctx.bw - rctx.dx,
-                rctx.bh + rctx.dy,
-            ),
-            6 => (rctx.bx, rctx.by, rctx.bw, rctx.bh + rctx.dy),
-            7 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh + rctx.dy),
-            _ => return,
+        let (mut nx, mut ny, mut nw, mut nh) = match resize_bbox(
+            rctx.bx, rctx.by, rctx.bw, rctx.bh,
+            rctx.dx, rctx.dy,
+            rctx.handle,
+        ) {
+            Some(v) => v,
+            None => return,
         };
         if rctx.shift {
             let ratio = rctx.bw / rctx.bh;
@@ -336,20 +317,14 @@ impl Resize for Text {
                 nw = nh * ratio;
             }
             match rctx.handle {
-                0 => {
+                ResizeHandle::Nw => {
                     nx = rctx.bx + rctx.bw - nw;
                     ny = rctx.by + rctx.bh - nh;
                 }
-                1 => {
+                ResizeHandle::N | ResizeHandle::Ne => {
                     ny = rctx.by + rctx.bh - nh;
                 }
-                2 => {
-                    ny = rctx.by + rctx.bh - nh;
-                }
-                3 => {
-                    nx = rctx.bx + rctx.bw - nw;
-                }
-                5 => {
+                ResizeHandle::W | ResizeHandle::Sw => {
                     nx = rctx.bx + rctx.bw - nw;
                 }
                 _ => {}
@@ -364,13 +339,13 @@ impl Resize for Text {
                 let obh = rctx.bh.max(MIN_ELEMENT_SIZE);
                 let sx = nw / obw;
                 let sy = nh / obh;
-                self.data.x = (orig.data.x - rctx.bx) * sx + nx;
-                self.data.y = (orig.data.y - rctx.by) * sy + ny;
+                self.data.world_point.x = (orig.data.world_point.x - rctx.bx) * sx + nx;
+                self.data.world_point.y = (orig.data.world_point.y - rctx.by) * sy + ny;
                 self.data.width = (orig.data.width * sx).max(MIN_ELEMENT_SIZE);
             }
         } else {
-            self.data.x = nx;
-            self.data.y = ny;
+            self.data.world_point.x = nx;
+            self.data.world_point.y = ny;
             self.data.width = nw;
         }
         self.resize_text(self.data.width);

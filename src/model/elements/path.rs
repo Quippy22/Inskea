@@ -1,4 +1,5 @@
-use super::{Point, ResizeContext};
+use crate::model::resize::{resize_bbox, ResizeContext};
+use crate::model::Point;
 
 /// How a set of path points should be interpreted when rendering.
 ///
@@ -211,37 +212,16 @@ pub fn bounds_of_points(points: &[Point]) -> (f64, f64, f64, f64) {
 /// `orig` is the pre-drag point slice (from the undo snapshot) —
 /// each output point position = `(orig_point - bx) * sx + nx`.
 pub fn scale_points(points: &mut [Point], ctx: &ResizeContext, orig: &[Point]) {
-    use super::rect::MIN_ELEMENT_SIZE;
+    use crate::model::resize::MIN_ELEMENT_SIZE;
     let rctx = ctx;
-    let (nx, ny, nw, nh) = match rctx.handle {
-        0 => (
-            rctx.bx + rctx.dx,
-            rctx.by + rctx.dy,
-            rctx.bw - rctx.dx,
-            rctx.bh - rctx.dy,
-        ),
-        1 => (rctx.bx, rctx.by + rctx.dy, rctx.bw, rctx.bh - rctx.dy),
-        2 => (
-            rctx.bx,
-            rctx.by + rctx.dy,
-            rctx.bw + rctx.dx,
-            rctx.bh - rctx.dy,
-        ),
-        3 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh),
-        4 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh),
-        5 => (
-            rctx.bx + rctx.dx,
-            rctx.by,
-            rctx.bw - rctx.dx,
-            rctx.bh + rctx.dy,
-        ),
-        6 => (rctx.bx, rctx.by, rctx.bw, rctx.bh + rctx.dy),
-        7 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh + rctx.dy),
-        _ => return,
+    let (nx, ny, nw, nh) = match resize_bbox(
+        rctx.bx, rctx.by, rctx.bw, rctx.bh,
+        rctx.dx, rctx.dy,
+        rctx.handle,
+    ) {
+        Some(v) => v,
+        None => return,
     };
-    if nw < MIN_ELEMENT_SIZE || nh < MIN_ELEMENT_SIZE {
-        return;
-    }
     let obw = rctx.bw.max(MIN_ELEMENT_SIZE);
     let obh = rctx.bh.max(MIN_ELEMENT_SIZE);
     let sx = nw / obw;
@@ -254,29 +234,23 @@ pub fn scale_points(points: &mut [Point], ctx: &ResizeContext, orig: &[Point]) {
 
 /// Rotate every point around the pivot `(cx, cy)` by `delta` radians.
 pub fn rotate_points(points: &mut [Point], cx: f64, cy: f64, delta: f64) {
-    let cos = delta.cos();
-    let sin = delta.sin();
+    let pivot = Point::new(cx, cy);
     for p in points {
-        let dx = p.x - cx;
-        let dy = p.y - cy;
-        p.x = cx + dx * cos - dy * sin;
-        p.y = cy + dx * sin + dy * cos;
+        p.rotate_around(pivot, delta);
     }
 }
 
 /// Offset (translate) every point by `(dx, dy)`.
 pub fn offset_points(points: &mut [Point], dx: f64, dy: f64) {
     for p in points {
-        p.x += dx;
-        p.y += dy;
+        p.offset(dx, dy);
     }
 }
 
 /// Snap every point to the nearest grid line.
 pub fn snap_points_to_grid(points: &mut [Point], grid: f64) {
     for p in points {
-        p.x = (p.x / grid).round() * grid;
-        p.y = (p.y / grid).round() * grid;
+        p.snap_to_grid(grid);
     }
 }
 
@@ -306,7 +280,7 @@ pub fn handle_positions(bx: f64, by: f64, bw: f64, bh: f64) -> [(f64, f64); 10] 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::elements::Point;
+    use crate::model::Point;
 
     #[test]
     fn path_d_empty() {
