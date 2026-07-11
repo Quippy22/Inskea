@@ -520,7 +520,7 @@ pub fn Canvas(
 
             {drawing_preview}
             {selection::selection_preview_overlay(st.select_anchor, props.cursor_world)}
-            {selection::selection_handle_overlay(st.selected_ids, props.scene)}
+            {selection::selection_handle_overlay(st.selected_ids, props.scene, st.overlay_freeze, st.rotation_delta)}
         </svg>
 
         {text_edit::text_edit_overlay(

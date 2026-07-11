@@ -182,8 +182,14 @@ impl SnapToGrid for Rectangle {
 }
 
 impl Rotate for Rectangle {
-    fn rotate_around(&mut self, _point: Point, delta: f64) {
+    fn rotate_around(&mut self, point: Point, delta: f64) {
         self.data.rotation += delta;
+        let cx = self.data.world_point.x + self.data.width / 2.0;
+        let cy = self.data.world_point.y + self.data.height / 2.0;
+        let mut center = Point { x: cx, y: cy };
+        center.rotate_around(point, delta);
+        self.data.world_point.x = center.x - self.data.width / 2.0;
+        self.data.world_point.y = center.y - self.data.height / 2.0;
     }
 }
 

@@ -49,6 +49,8 @@ pub fn selection_preview_overlay(
 pub fn selection_handle_overlay(
     selected_ids: RwSignal<Vec<ElementId>>,
     scene: RwSignal<Scene>,
+    overlay_freeze: RwSignal<Option<(f64, f64, f64, f64)>>,
+    rotation_delta: RwSignal<f64>,
 ) -> impl Fn() -> Option<View> {
     move || {
         let ids = selected_ids.get();
@@ -100,15 +102,16 @@ pub fn selection_handle_overlay(
             }
         }
 
-        // Use common_bounds (rotation-aware) for multi-select,
-        // axis-aligned bounds for single-select (which rotates its overlay).
-        let (bx, by, bw, bh) = if ids.len() == 1 {
+        // Use frozen overlay bounds if set (rotation drag active),
+        // otherwise compute axis-aligned bounds from current scene.
+        let (bx, by, bw, bh) = if let Some(fb) = overlay_freeze.get() {
+            fb
+        } else if ids.len() == 1 {
             els.iter()
                 .find(|el| el.id() == ids[0])
                 .map(|el| el.bounds())
                 .unwrap_or_else(|| combined_bounds(&ids, &els).unwrap_or((0.0, 0.0, 0.0, 0.0)))
         } else {
-            // For multi-select, use rotation-aware common_bounds
             let data_refs: Vec<_> = els.iter()
                 .filter(|el| ids.contains(&el.id()))
                 .map(|el| el.data())
@@ -119,26 +122,22 @@ pub fn selection_handle_overlay(
                 common_bounds(&data_refs)
             }
         };
+
         let hr = 5.0;
         let cx = bx + bw / 2.0;
         let cy = by + bh / 2.0;
-
-        let rot: f64 = (ids.len() == 1)
-            .then(|| {
-                els.iter().find(|el| el.id() == ids[0]).and_then(|el| {
-                    let r = el.data().rotation;
-                    if r != 0.0 {
-                        Some(r)
-                    } else {
-                        None
-                    }
-                })
-            })
-            .flatten()
-            .unwrap_or(0.0);
-
         let rx = cx;
         let ry = by - ROTATE_HANDLE_OFFSET;
+        let _ = ry;
+
+        let rot: f64 = if ids.len() == 1 {
+            els.iter()
+                .find(|el| el.id() == ids[0])
+                .map(|el| el.data().rotation)
+                .unwrap_or(0.0)
+        } else {
+            rotation_delta.get()
+        };
 
         let inner = {
             let corners = [
@@ -216,6 +215,8 @@ pub fn select_pointer_down(
     st: &mut CanvasState,
     props: &mut CanvasInputs,
 ) {
+    st.overlay_freeze.set(None);
+    st.rotation_delta.set(0.0);
     if _ev.detail() >= 2 {
         let els = props.scene.get().elements;
         if let Some(id) = hit_test_topmost(world, &els) {
@@ -337,6 +338,7 @@ pub fn select_pointer_down(
                 st.drag_angle.set(Some((world.1 - cy).atan2(world.0 - cx) + std::f64::consts::FRAC_PI_2));
                 st.moving_anchor.set(Some(world));
                 st.drag_bounds.set(Some(bounds));
+                st.overlay_freeze.set(Some(bounds));
                 st.drag_originals.set(
                     els.iter()
                         .filter(|el| ids.contains(&el.id()))
@@ -430,6 +432,7 @@ pub fn select_pointer_move(
                             let step = std::f64::consts::TAU / 24.0;
                             delta = (delta / step).round() * step;
                         }
+                        st.rotation_delta.set(delta);
                         // Snapshot-based: restore from originals and apply total delta
                         let originals = st.drag_originals.get();
                         props.scene.update(|s| {
@@ -579,6 +582,8 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &m
         st.drag_action.set(None);
         st.drag_bounds.set(None);
         st.drag_angle.set(None);
+        st.overlay_freeze.set(None);
+        st.rotation_delta.set(0.0);
         st.last_world.set(None);
         st.drag_originals.set(Vec::new());
         st.select_anchor.set(None);

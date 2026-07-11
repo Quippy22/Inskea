@@ -261,14 +261,14 @@ pub fn resize_bbox(
         }
     } else {
         match handle {
-            ResizeHandle::Nw => { nx = bx - (pointer_world.0 - bx); ny = by - (pointer_world.1 - by); nw = bw + (pointer_world.0 - bx); nh = bh + (pointer_world.1 - by); }
-            ResizeHandle::N => { ny = by - (pointer_world.1 - by); nh = bh + (pointer_world.1 - by); }
-            ResizeHandle::Ne => { ny = by - (pointer_world.1 - by); nw = bw + (pointer_world.0 - bx); nh = bh + (pointer_world.1 - by); }
-            ResizeHandle::W => { nx = bx - (pointer_world.0 - bx); nw = bw + (pointer_world.0 - bx); }
-            ResizeHandle::E => { nw = bw + (pointer_world.0 - bx); }
-            ResizeHandle::Sw => { nx = bx - (pointer_world.0 - bx); nw = bw + (pointer_world.0 - bx); nh = bh + (pointer_world.1 - by); }
-            ResizeHandle::S => { nh = bh + (pointer_world.1 - by); }
-            ResizeHandle::Se => { nw = bw + (pointer_world.0 - bx); nh = bh + (pointer_world.1 - by); }
+            ResizeHandle::Nw => { nx = pointer_world.0; ny = pointer_world.1; nw = (bx + bw) - pointer_world.0; nh = (by + bh) - pointer_world.1; }
+            ResizeHandle::N => { ny = pointer_world.1; nh = (by + bh) - pointer_world.1; }
+            ResizeHandle::Ne => { ny = pointer_world.1; nw = pointer_world.0 - bx; nh = (by + bh) - pointer_world.1; }
+            ResizeHandle::W => { nx = pointer_world.0; nw = (bx + bw) - pointer_world.0; }
+            ResizeHandle::E => { nw = pointer_world.0 - bx; }
+            ResizeHandle::Sw => { nx = pointer_world.0; nw = (bx + bw) - pointer_world.0; nh = pointer_world.1 - by; }
+            ResizeHandle::S => { nh = pointer_world.1 - by; }
+            ResizeHandle::Se => { nw = pointer_world.0 - bx; nh = pointer_world.1 - by; }
         }
 
         if nw < MIN_ELEMENT_SIZE || nh < MIN_ELEMENT_SIZE {

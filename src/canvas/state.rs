@@ -65,6 +65,10 @@ pub struct CanvasState {
     pub drag_angle: RwSignal<Option<f64>>,
     pub last_world: RwSignal<Option<(f64, f64)>>,
     pub drag_originals: RwSignal<Vec<Element>>,
+    /// Frozen overlay bounds, set at rotate drag start, cleared on pointer-up.
+    pub overlay_freeze: RwSignal<Option<(f64, f64, f64, f64)>>,
+    /// Cumulative rotation delta during a rotate drag (0 when not rotating).
+    pub rotation_delta: RwSignal<f64>,
     pub editing_id: RwSignal<Option<ElementId>>,
     pub edit_text: RwSignal<String>,
     pub textarea_ref: NodeRef<leptos::html::Textarea>,
@@ -88,6 +92,8 @@ impl CanvasState {
             drag_angle: create_rw_signal(None),
             last_world: create_rw_signal(None),
             drag_originals: create_rw_signal(Vec::new()),
+            overlay_freeze: create_rw_signal(None),
+            rotation_delta: create_rw_signal(0.0),
             editing_id: create_rw_signal(None),
             edit_text: create_rw_signal(String::new()),
             textarea_ref: create_node_ref(),
