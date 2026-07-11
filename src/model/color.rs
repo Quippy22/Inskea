@@ -32,6 +32,7 @@ impl std::fmt::Display for ShapeColor {
 
 impl ShapeColor {
     /// Parse a variant name (as serialised by Display) back into a color.
+    #[allow(dead_code)]
     pub fn from_name(s: &str) -> Option<Self> {
         match s {
             "Purple" => Some(Self::Purple),

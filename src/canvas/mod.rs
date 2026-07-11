@@ -1,3 +1,4 @@
+#![allow(clippy::redundant_locals, clippy::type_complexity)]
 mod viewport;
 pub use viewport::Viewport;
 

@@ -58,9 +58,6 @@ pub struct ResizeContext<'a> {
     /// Total mouse delta from drag start.
     pub dx: f64,
     pub dy: f64,
-    /// Per-frame mouse delta (for elements like lines that move individual endpoints).
-    pub fdx: f64,
-    pub fdy: f64,
     /// Which handle is being dragged.
     pub handle: ResizeHandle,
     /// Whether Shift is held (preserve aspect ratio).

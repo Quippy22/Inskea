@@ -81,7 +81,7 @@ fn segment_cubic_bezier(points: &[Point], i: usize) -> Option<(Point, Point, Poi
         y: p3.y - (p_after.y - p0.y) / 6.0,
     };
 
-    Some((p0.clone(), b1, b2, p3.clone()))
+    Some((*p0, b1, b2, *p3))
 }
 
 /// Evaluate a cubic Bezier at parameter `t` (0.0 – 1.0).

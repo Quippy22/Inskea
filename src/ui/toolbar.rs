@@ -1,3 +1,4 @@
+#![allow(clippy::redundant_locals, clippy::type_complexity)]
 use crate::canvas::{CanvasMode, Viewport};
 use crate::model::Scene;
 use crate::skea;

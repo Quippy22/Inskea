@@ -49,11 +49,11 @@ fn simplify_points(points: &[Point], epsilon: f64) -> Vec<Point> {
     let mut max_dist = 0.0;
     let mut max_idx = 0;
 
-    for i in 1..n - 1 {
-        let dist = perpendicular_dist(points[i].x, points[i].y, x1, y1, x2, y2);
+    for (i, p) in points[1..n - 1].iter().enumerate() {
+        let dist = perpendicular_dist(p.x, p.y, x1, y1, x2, y2);
         if dist > max_dist {
             max_dist = dist;
-            max_idx = i;
+            max_idx = i + 1;
         }
     }
 
@@ -64,7 +64,7 @@ fn simplify_points(points: &[Point], epsilon: f64) -> Vec<Point> {
         left.extend(right);
         left
     } else {
-        vec![points[0].clone(), points[n - 1].clone()]
+        vec![points[0], points[n - 1]]
     }
 }
 

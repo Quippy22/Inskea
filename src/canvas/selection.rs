@@ -427,8 +427,6 @@ pub fn select_pointer_move(
         match st.drag_action.get() {
             Some(Handle::Resize(handle)) => {
                 if let Some((bx, by, bw, bh)) = st.drag_bounds.get() {
-                    let frame_dx = world.0 - st.last_world.get().unwrap_or(world).0;
-                    let frame_dy = world.1 - st.last_world.get().unwrap_or(world).1;
                     st.last_world.set(Some(world));
                     let multi = ids.len() > 1;
                     let originals = st.drag_originals.get();
@@ -444,8 +442,6 @@ pub fn select_pointer_move(
                                         bh,
                                         dx,
                                         dy,
-                                        fdx: frame_dx,
-                                        fdy: frame_dy,
                                         handle,
                                         shift: st.shift_pressed.get(),
                                         multi,
