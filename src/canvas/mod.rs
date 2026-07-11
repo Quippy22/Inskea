@@ -233,7 +233,7 @@ pub fn Canvas(
     let on_pointer_down = {
         let mut st = st;
         let mut props = props.clone();
-        let update_world = update_world.clone();
+        let update_world = update_world;
         move |ev: ev::PointerEvent| {
             if st.editing_id.get().is_some() {
                 return;
@@ -288,7 +288,7 @@ pub fn Canvas(
     let on_pointer_move = {
         let mut st = st;
         let mut props = props.clone();
-        let update_world = update_world.clone();
+        let update_world = update_world;
         move |ev: ev::PointerEvent| {
             let mode = props.canvas_mode.get();
             let world = update_world(&ev);
@@ -351,7 +351,7 @@ pub fn Canvas(
     let on_pointer_up = {
         let mut st = st;
         let mut props = props.clone();
-        let update_world = update_world.clone();
+        let update_world = update_world;
         move |ev: ev::PointerEvent| {
             if props.eraser_active.get() {
                 let world = update_world(&ev);

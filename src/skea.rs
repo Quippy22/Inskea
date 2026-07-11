@@ -33,8 +33,8 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
             if let Some(arr) = elements.as_array_mut() {
                 for el in arr.iter_mut() {
                     let type_name = el.get("type").and_then(|v| v.as_str());
-                    if type_name == Some("Line") || type_name == Some("Arrow") {
-                        if el.get("points").is_none() {
+                    if (type_name == Some("Line") || type_name == Some("Arrow"))
+                        && el.get("points").is_none() {
                             let a = el.get("a").and_then(|v| serde_json::to_value(v).ok());
                             let b = el.get("b").and_then(|v| serde_json::to_value(v).ok());
                             if let (Some(a_val), Some(b_val)) = (a, b) {
@@ -50,7 +50,6 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                                 }
                             }
                         }
-                    }
                 }
             }
         }

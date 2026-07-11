@@ -58,7 +58,7 @@ pub fn scene_to_svg(
     };
     let mut out = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">"#);
     for el in elements {
-        if selected.map_or(true, |ids| ids.contains(&el.id())) {
+        if selected.is_none_or(|ids| ids.contains(&el.id())) {
             out.push_str(&el_svg(el));
         }
     }

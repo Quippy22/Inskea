@@ -129,7 +129,7 @@ where
     // ── File actions ───────────────────────────────────────────────────
 
     let on_new = {
-        let close_menu = close_menu.clone();
+        let close_menu = close_menu;
         move || {
             close_menu();
             saved_path.set(None);
@@ -137,7 +137,7 @@ where
         }
     };
     let on_save_as = {
-        let close_menu = close_menu.clone();
+        let close_menu = close_menu;
         move || {
             close_menu();
             spawn_local(async move {
@@ -153,8 +153,8 @@ where
         }
     };
     let on_save = {
-        let close_menu = close_menu.clone();
-        let on_save_as = on_save_as.clone();
+        let close_menu = close_menu;
+        let on_save_as = on_save_as;
         move || {
             close_menu();
             let saved = saved_path.get();
@@ -170,7 +170,7 @@ where
         }
     };
     let on_open = {
-        let close_menu = close_menu.clone();
+        let close_menu = close_menu;
         move || {
             close_menu();
             spawn_local(async move {
@@ -190,7 +190,7 @@ where
         }
     };
     let on_import = {
-        let close_menu = close_menu.clone();
+        let close_menu = close_menu;
         move || {
             close_menu();
             if tauri {
@@ -216,7 +216,7 @@ where
     // ── Export actions ─────────────────────────────────────────────────
 
     let on_export_skea = {
-        let close_menu = close_menu.clone();
+        let close_menu = close_menu;
         move || {
             close_menu();
             let s = scene.get();
@@ -236,7 +236,7 @@ where
     };
 
     let on_export_svg = {
-        let _close_menu = close_menu.clone();
+        let _close_menu = close_menu;
         let _export_crop_active = export_crop_active;
         let _on_crop_export = on_crop_export;
         let _scene = scene;
@@ -246,7 +246,7 @@ where
                 let scene = _scene;
                 let on_crop_export = _on_crop_export;
                 let export_crop_active = _export_crop_active;
-                let close_menu = _close_menu.clone();
+                let close_menu = _close_menu;
                 on_crop_export.set(Some(Rc::new(move |rect: (f64, f64, f64, f64)| {
                     close_menu();
                     let s = scene.get();
@@ -273,7 +273,7 @@ where
     };
 
     let on_export_png = {
-        let _close_menu = close_menu.clone();
+        let _close_menu = close_menu;
         let _export_crop_active = export_crop_active;
         let _on_crop_export = on_crop_export;
         let _scene = scene;
@@ -283,7 +283,7 @@ where
                 let scene = _scene;
                 let on_crop_export = _on_crop_export;
                 let export_crop_active = _export_crop_active;
-                let close_menu = _close_menu.clone();
+                let close_menu = _close_menu;
                 on_crop_export.set(Some(Rc::new(move |rect: (f64, f64, f64, f64)| {
                     close_menu();
                     let s = scene.get();
@@ -345,14 +345,14 @@ where
         DropdownItem::Action {
             label: "Full canvas",
             on_click: Rc::new({
-                let f = on_export_png.clone();
+                let f = on_export_png;
                 move || f(false)
             }),
         },
         DropdownItem::Action {
             label: "Selection",
             on_click: Rc::new({
-                let f = on_export_png.clone();
+                let f = on_export_png;
                 move || f(true)
             }),
         },
@@ -361,14 +361,14 @@ where
         DropdownItem::Action {
             label: "Full canvas",
             on_click: Rc::new({
-                let f = on_export_svg.clone();
+                let f = on_export_svg;
                 move || f(false)
             }),
         },
         DropdownItem::Action {
             label: "Selection",
             on_click: Rc::new({
-                let f = on_export_svg.clone();
+                let f = on_export_svg;
                 move || f(true)
             }),
         },

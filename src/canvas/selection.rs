@@ -597,7 +597,7 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &m
                         .iter()
                         .find(|e| e.id() == ids[0])
                         .and_then(|el| el.path_points())
-                        .map_or(false, |pts| idx < pts.len())
+                        .is_some_and(|pts| idx < pts.len())
                 });
                 if exists {
                     props.scene.update(|s| {

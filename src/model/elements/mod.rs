@@ -1,7 +1,6 @@
 pub mod arrow;
 pub mod ellipse;
 pub mod freehand;
-pub mod id;
 pub(crate) mod line;
 pub mod path;
 pub mod rect;
