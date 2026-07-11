@@ -32,6 +32,22 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
         if let Some(elements) = raw.pointer_mut("/scene/elements") {
             if let Some(arr) = elements.as_array_mut() {
                 for el in arr.iter_mut() {
+                    // Convert flat data.{x,y} to data.world_point.{x,y}
+                    if let Some(data) = el.get_mut("data") {
+                        if let Some(data_obj) = data.as_object_mut() {
+                            let has_x = data_obj.contains_key("x");
+                            let has_y = data_obj.contains_key("y");
+                            if has_x || has_y {
+                                let old_x = data_obj.remove("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                                let old_y = data_obj.remove("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                                data_obj.insert(
+                                    "world_point".to_string(),
+                                    serde_json::json!({"x": old_x, "y": old_y}),
+                                );
+                            }
+                        }
+                    }
+
                     let type_name = el.get("type").and_then(|v| v.as_str());
                     if (type_name == Some("Line") || type_name == Some("Arrow"))
                         && el.get("points").is_none() {
@@ -87,8 +103,8 @@ mod tests {
     fn make_scene() -> Scene {
         let mut s = Scene::new();
         let mut rd = ElementData::new(0);
-        rd.x = 10.0;
-        rd.y = 20.0;
+        rd.world_point.x = 10.0;
+        rd.world_point.y = 20.0;
         rd.width = 100.0;
         rd.height = 50.0;
         rd.stroke_color = ShapeColor::Blue;
@@ -96,8 +112,8 @@ mod tests {
         s.add_element(Element::Rectangle(Rectangle { data: rd }));
 
         let mut ed = ElementData::new(0);
-        ed.x = 5.0;
-        ed.y = 5.0;
+        ed.world_point.x = 5.0;
+        ed.world_point.y = 5.0;
         ed.width = 60.0;
         ed.height = 60.0;
         ed.stroke_color = ShapeColor::Red;
@@ -121,8 +137,8 @@ mod tests {
         }));
 
         let mut td = ElementData::new(0);
-        td.x = 30.0;
-        td.y = 40.0;
+        td.world_point.x = 30.0;
+        td.world_point.y = 40.0;
         td.fill_color = Some(ShapeColor::White);
         s.add_element(Element::Text(Text {
             data: td,
@@ -156,8 +172,8 @@ mod tests {
     fn round_trip_text_with_newlines() {
         let mut s = Scene::new();
         let mut td = ElementData::new(0);
-        td.x = 10.0;
-        td.y = 10.0;
+        td.world_point.x = 10.0;
+        td.world_point.y = 10.0;
         td.fill_color = Some(ShapeColor::White);
         s.add_element(Element::Text(Text {
             data: td,
@@ -172,8 +188,8 @@ mod tests {
     fn round_trip_rotation_and_font_size() {
         let mut s = Scene::new();
         let mut rd = ElementData::new(0);
-        rd.x = 10.0;
-        rd.y = 10.0;
+        rd.world_point.x = 10.0;
+        rd.world_point.y = 10.0;
         rd.width = 100.0;
         rd.height = 50.0;
         rd.stroke_color = ShapeColor::Blue;
@@ -181,8 +197,8 @@ mod tests {
         s.add_element(Element::Rectangle(Rectangle { data: rd }));
 
         let mut td = ElementData::new(0);
-        td.x = 50.0;
-        td.y = 50.0;
+        td.world_point.x = 50.0;
+        td.world_point.y = 50.0;
         td.fill_color = Some(ShapeColor::White);
         td.font_size = 36.0;
         s.add_element(Element::Text(Text {

@@ -216,8 +216,10 @@ pub fn scale_points(points: &mut [Point], ctx: &ResizeContext, orig: &[Point]) {
     let rctx = ctx;
     let (nx, ny, nw, nh) = match resize_bbox(
         rctx.bx, rctx.by, rctx.bw, rctx.bh,
-        rctx.dx, rctx.dy,
+        rctx.pointer_world,
         rctx.handle,
+        rctx.shift,
+        rctx.alt,
     ) {
         Some(v) => v,
         None => return,

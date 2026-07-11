@@ -131,17 +131,25 @@ pub fn Canvas(
     });
     let _ = window_event_listener(ev::keydown, {
         let sp = st.shift_pressed;
+        let ap = st.alt_pressed;
         move |ev: ev::KeyboardEvent| {
             if ev.key() == "Shift" {
                 sp.set(true);
+            }
+            if ev.key() == "Alt" {
+                ap.set(true);
             }
         }
     });
     let _ = window_event_listener(ev::keyup, {
         let sp = st.shift_pressed;
+        let ap = st.alt_pressed;
         move |ev: ev::KeyboardEvent| {
             if ev.key() == "Shift" {
                 sp.set(false);
+            }
+            if ev.key() == "Alt" {
+                ap.set(false);
             }
         }
     });

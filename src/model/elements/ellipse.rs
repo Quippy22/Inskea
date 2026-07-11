@@ -2,7 +2,7 @@ use super::ElementData;
 use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
-use crate::model::resize::{resize_bbox, ResizeContext, ResizeHandle};
+use crate::model::resize::{resize_bbox, resize_from_handle, ResizeContext};
 use crate::model::Point;
 use leptos::IntoView;
 
@@ -188,56 +188,36 @@ impl Rotate for Ellipse {
 
 impl Resize for Ellipse {
     fn resize(&mut self, ctx: &ResizeContext) {
-        let rctx = ctx;
-        let (mut nx, mut ny, mut nw, mut nh) = match resize_bbox(
-            rctx.bx, rctx.by, rctx.bw, rctx.bh,
-            rctx.dx, rctx.dy,
-            rctx.handle,
-        ) {
-            Some(v) => v,
-            None => return,
-        };
-        if rctx.shift {
-            let ratio = rctx.bw / rctx.bh;
-            let nratio = nw / nh;
-            if nratio > ratio {
-                nh = nw / ratio;
-            } else {
-                nw = nh * ratio;
-            }
-            match rctx.handle {
-                ResizeHandle::Nw => {
-                    nx = rctx.bx + rctx.bw - nw;
-                    ny = rctx.by + rctx.bh - nh;
-                }
-                ResizeHandle::N | ResizeHandle::Ne => {
-                    ny = rctx.by + rctx.bh - nh;
-                }
-                ResizeHandle::W | ResizeHandle::Sw => {
-                    nx = rctx.bx + rctx.bw - nw;
-                }
-                _ => {}
-            }
-        }
-        if nw < crate::model::resize::MIN_ELEMENT_SIZE || nh < crate::model::resize::MIN_ELEMENT_SIZE {
-            return;
-        }
-        if rctx.multi {
-            if let super::Element::Ellipse(orig) = rctx.orig {
-                let obw = rctx.bw.max(crate::model::resize::MIN_ELEMENT_SIZE);
-                let obh = rctx.bh.max(crate::model::resize::MIN_ELEMENT_SIZE);
+        if ctx.multi {
+            let (nx, ny, nw, nh) = match resize_bbox(
+                ctx.bx, ctx.by, ctx.bw, ctx.bh,
+                ctx.pointer_world,
+                ctx.handle,
+                ctx.shift,
+                ctx.alt,
+            ) {
+                Some(v) => v,
+                None => return,
+            };
+            if let super::Element::Ellipse(orig) = ctx.orig {
+                let obw = ctx.bw.max(crate::model::resize::MIN_ELEMENT_SIZE);
+                let obh = ctx.bh.max(crate::model::resize::MIN_ELEMENT_SIZE);
                 let sx = nw / obw;
                 let sy = nh / obh;
-                self.data.world_point.x = (orig.data.world_point.x - rctx.bx) * sx + nx;
-                self.data.world_point.y = (orig.data.world_point.y - rctx.by) * sy + ny;
+                self.data.world_point.x = (orig.data.world_point.x - ctx.bx) * sx + nx;
+                self.data.world_point.y = (orig.data.world_point.y - ctx.by) * sy + ny;
                 self.data.width = (orig.data.width * sx).max(crate::model::resize::MIN_ELEMENT_SIZE);
                 self.data.height = (orig.data.height * sy).max(crate::model::resize::MIN_ELEMENT_SIZE);
             }
         } else {
-            self.data.world_point.x = nx;
-            self.data.world_point.y = ny;
-            self.data.width = nw;
-            self.data.height = nh;
+            let result = resize_from_handle(
+                &self.data,
+                ctx.handle,
+                ctx.pointer_world,
+                ctx.shift,
+                ctx.alt,
+            );
+            self.data = result;
         }
     }
 }
