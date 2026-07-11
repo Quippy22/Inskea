@@ -168,8 +168,7 @@ impl FromDrag for Text {
         _shift: bool,
     ) -> Self {
         let mut data = ElementData::new(0);
-        data.world_point.x = anchor.0;
-        data.world_point.y = anchor.1;
+        data.world_point.set(anchor.0, anchor.1);
         data.font_size = 24.0;
         data.width = 0.0;
         data.height = 0.0;
@@ -300,8 +299,9 @@ impl Rotate for Text {
 impl Resize for Text {
     fn resize(&mut self, ctx: &ResizeContext) {
         if ctx.multi {
-            let (nx, ny, nw, nh) = match resize_bbox(
-                ctx.bx, ctx.by, ctx.bw, ctx.bh,
+            let (pos, (nw, nh)) = match resize_bbox(
+                Point { x: ctx.bx, y: ctx.by },
+                (ctx.bw, ctx.bh),
                 ctx.pointer_world,
                 ctx.handle,
                 ctx.shift,
@@ -315,8 +315,10 @@ impl Resize for Text {
                 let obh = ctx.bh.max(MIN_ELEMENT_SIZE);
                 let sx = nw / obw;
                 let sy = nh / obh;
-                self.data.world_point.x = (orig.data.world_point.x - ctx.bx) * sx + nx;
-                self.data.world_point.y = (orig.data.world_point.y - ctx.by) * sy + ny;
+                self.data.world_point.set(
+                    (orig.data.world_point.x - ctx.bx) * sx + pos.x,
+                    (orig.data.world_point.y - ctx.by) * sy + pos.y,
+                );
                 self.data.width = (orig.data.width * sx).max(MIN_ELEMENT_SIZE);
             }
         } else {

@@ -91,8 +91,7 @@ impl UpdateDrag for Ellipse {
         if h < rect::MIN_DIMENSION {
             h = rect::MIN_DIMENSION;
         }
-        self.data.world_point.x = x;
-        self.data.world_point.y = y;
+        self.data.world_point.set(x, y);
         self.data.width = w;
         self.data.height = h;
     }
@@ -189,8 +188,9 @@ impl Rotate for Ellipse {
 impl Resize for Ellipse {
     fn resize(&mut self, ctx: &ResizeContext) {
         if ctx.multi {
-            let (nx, ny, nw, nh) = match resize_bbox(
-                ctx.bx, ctx.by, ctx.bw, ctx.bh,
+            let (pos, (nw, nh)) = match resize_bbox(
+                Point { x: ctx.bx, y: ctx.by },
+                (ctx.bw, ctx.bh),
                 ctx.pointer_world,
                 ctx.handle,
                 ctx.shift,
@@ -204,8 +204,10 @@ impl Resize for Ellipse {
                 let obh = ctx.bh.max(crate::model::resize::MIN_ELEMENT_SIZE);
                 let sx = nw / obw;
                 let sy = nh / obh;
-                self.data.world_point.x = (orig.data.world_point.x - ctx.bx) * sx + nx;
-                self.data.world_point.y = (orig.data.world_point.y - ctx.by) * sy + ny;
+                self.data.world_point.set(
+                    (orig.data.world_point.x - ctx.bx) * sx + pos.x,
+                    (orig.data.world_point.y - ctx.by) * sy + pos.y,
+                );
                 self.data.width = (orig.data.width * sx).max(crate::model::resize::MIN_ELEMENT_SIZE);
                 self.data.height = (orig.data.height * sy).max(crate::model::resize::MIN_ELEMENT_SIZE);
             }

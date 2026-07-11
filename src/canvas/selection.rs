@@ -430,8 +430,7 @@ pub fn select_pointer_move(
                     if let Some(el) = s.elements.iter_mut().find(|e| e.id() == ids[0]) {
                         if let Some(pts) = el.path_points_mut() {
                             if idx < pts.len() {
-                                pts[idx].x = world.0;
-                                pts[idx].y = world.1;
+                                pts[idx].set(world.0, world.1);
                             }
                         }
                     }
@@ -459,8 +458,7 @@ pub fn select_pointer_move(
                             if let Some(target) = s.elements.iter_mut().find(|e| e.id() == ids[0]) {
                                 if let Some(pts) = target.path_points_mut() {
                                     pts.insert(new_idx, Point { x: mx, y: my });
-                                    pts[new_idx].x = world.0;
-                                    pts[new_idx].y = world.1;
+                                    pts[new_idx].set(world.0, world.1);
                                 }
                             }
                         });
@@ -539,8 +537,9 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &m
                     props.scene.update(|s| {
                         if let Some(el) = s.elements.iter_mut().find(|e| e.id() == ids[0]) {
                             if let Some(pts) = el.path_points_mut() {
-                                pts[idx].x = (pts[idx].x / GRID_SIZE).round() * GRID_SIZE;
-                                pts[idx].y = (pts[idx].y / GRID_SIZE).round() * GRID_SIZE;
+                                let sx = (pts[idx].x / GRID_SIZE).round() * GRID_SIZE;
+                                let sy = (pts[idx].y / GRID_SIZE).round() * GRID_SIZE;
+                                pts[idx].set(sx, sy);
                             }
                         }
                     });

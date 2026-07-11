@@ -103,8 +103,7 @@ mod tests {
     fn make_scene() -> Scene {
         let mut s = Scene::new();
         let mut rd = ElementData::new(0);
-        rd.world_point.x = 10.0;
-        rd.world_point.y = 20.0;
+        rd.world_point.set(10.0, 20.0);
         rd.width = 100.0;
         rd.height = 50.0;
         rd.stroke_color = ShapeColor::Blue;
@@ -112,8 +111,7 @@ mod tests {
         s.add_element(Element::Rectangle(Rectangle { data: rd }));
 
         let mut ed = ElementData::new(0);
-        ed.world_point.x = 5.0;
-        ed.world_point.y = 5.0;
+        ed.world_point.set(5.0, 5.0);
         ed.width = 60.0;
         ed.height = 60.0;
         ed.stroke_color = ShapeColor::Red;
@@ -137,8 +135,7 @@ mod tests {
         }));
 
         let mut td = ElementData::new(0);
-        td.world_point.x = 30.0;
-        td.world_point.y = 40.0;
+        td.world_point.set(30.0, 40.0);
         td.fill_color = Some(ShapeColor::White);
         s.add_element(Element::Text(Text {
             data: td,
@@ -172,8 +169,7 @@ mod tests {
     fn round_trip_text_with_newlines() {
         let mut s = Scene::new();
         let mut td = ElementData::new(0);
-        td.world_point.x = 10.0;
-        td.world_point.y = 10.0;
+        td.world_point.set(10.0, 10.0);
         td.fill_color = Some(ShapeColor::White);
         s.add_element(Element::Text(Text {
             data: td,
@@ -188,8 +184,7 @@ mod tests {
     fn round_trip_rotation_and_font_size() {
         let mut s = Scene::new();
         let mut rd = ElementData::new(0);
-        rd.world_point.x = 10.0;
-        rd.world_point.y = 10.0;
+        rd.world_point.set(10.0, 10.0);
         rd.width = 100.0;
         rd.height = 50.0;
         rd.stroke_color = ShapeColor::Blue;
@@ -197,8 +192,7 @@ mod tests {
         s.add_element(Element::Rectangle(Rectangle { data: rd }));
 
         let mut td = ElementData::new(0);
-        td.world_point.x = 50.0;
-        td.world_point.y = 50.0;
+        td.world_point.set(50.0, 50.0);
         td.fill_color = Some(ShapeColor::White);
         td.font_size = 36.0;
         s.add_element(Element::Text(Text {

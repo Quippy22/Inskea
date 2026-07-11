@@ -69,10 +69,8 @@ impl UpdateDrag for Line {
         }
         // During initial draw, a fresh Line always has exactly 2 points.
         if self.points.len() >= 2 {
-            self.points[0].x = ax;
-            self.points[0].y = ay;
-            self.points[1].x = ex;
-            self.points[1].y = ey;
+            self.points[0].set(ax, ay);
+            self.points[1].set(ex, ey);
         }
     }
 }

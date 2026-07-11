@@ -13,6 +13,12 @@ impl Point {
         Self { x, y }
     }
 
+    /// Set both coordinates at once.
+    pub fn set(&mut self, x: f64, y: f64) {
+        self.x = x;
+        self.y = y;
+    }
+
     /// Translate this point by `dx` horizontally and `dy` vertically.
     pub fn offset(&mut self, dx: f64, dy: f64) {
         self.x += dx;
@@ -21,8 +27,10 @@ impl Point {
 
     /// Snap this point to the nearest grid line with the given `grid` spacing.
     pub fn snap_to_grid(&mut self, grid: f64) {
-        self.x = (self.x / grid).round() * grid;
-        self.y = (self.y / grid).round() * grid;
+        self.set(
+            (self.x / grid).round() * grid,
+            (self.y / grid).round() * grid,
+        );
     }
 
     /// Rotate this point around `other` by `delta` radians.
@@ -31,8 +39,7 @@ impl Point {
         let dy = self.y - other.y;
         let cos = delta.cos();
         let sin = delta.sin();
-        self.x = other.x + dx * cos - dy * sin;
-        self.y = other.y + dx * sin + dy * cos;
+        self.set(other.x + dx * cos - dy * sin, other.y + dx * sin + dy * cos);
     }
 }
 

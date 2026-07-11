@@ -243,15 +243,15 @@ pub struct ResizeContext<'a> {
 
 /// Compute the axis-aligned bounding-box change for multi-element scaling.
 pub fn resize_bbox(
-    bx: f64,
-    by: f64,
-    bw: f64,
-    bh: f64,
-    _pointer_world: (f64, f64),
+    pos: Point,
+    size: (f64, f64),
+    pointer_world: (f64, f64),
     handle: ResizeHandle,
     shift: bool,
     alt: bool,
-) -> Option<(f64, f64, f64, f64)> {
+) -> Option<(Point, (f64, f64))> {
+    let (bx, by) = (pos.x, pos.y);
+    let (bw, bh) = size;
     let (free_x, free_y) = handle.free_axes();
 
     let mut nx = bx;
@@ -260,29 +260,26 @@ pub fn resize_bbox(
     let mut nh = bh;
 
     if alt {
-        // For alt mode, we need the pointer delta from center
-        // But we don't have it here — this is a simplified version
-        // The actual computation will use pointer_world relative to bbox center
         let cx = bx + bw / 2.0;
         let cy = by + bh / 2.0;
         if free_x {
-            let half_w = (_pointer_world.0 - cx).abs().max(MIN_ELEMENT_SIZE / 2.0);
+            let half_w = (pointer_world.0 - cx).abs().max(MIN_ELEMENT_SIZE / 2.0);
             nw = 2.0 * half_w;
         }
         if free_y {
-            let half_h = (_pointer_world.1 - cy).abs().max(MIN_ELEMENT_SIZE / 2.0);
+            let half_h = (pointer_world.1 - cy).abs().max(MIN_ELEMENT_SIZE / 2.0);
             nh = 2.0 * half_h;
         }
     } else {
         match handle {
-            ResizeHandle::Nw => { nx = bx - (_pointer_world.0 - bx); ny = by - (_pointer_world.1 - by); nw = bw + (_pointer_world.0 - bx); nh = bh + (_pointer_world.1 - by); }
-            ResizeHandle::N => { ny = by - (_pointer_world.1 - by); nh = bh + (_pointer_world.1 - by); }
-            ResizeHandle::Ne => { ny = by - (_pointer_world.1 - by); nw = bw + (_pointer_world.0 - bx); nh = bh + (_pointer_world.1 - by); }
-            ResizeHandle::W => { nx = bx - (_pointer_world.0 - bx); nw = bw + (_pointer_world.0 - bx); }
-            ResizeHandle::E => { nw = bw + (_pointer_world.0 - bx); }
-            ResizeHandle::Sw => { nx = bx - (_pointer_world.0 - bx); nw = bw + (_pointer_world.0 - bx); nh = bh + (_pointer_world.1 - by); }
-            ResizeHandle::S => { nh = bh + (_pointer_world.1 - by); }
-            ResizeHandle::Se => { nw = bw + (_pointer_world.0 - bx); nh = bh + (_pointer_world.1 - by); }
+            ResizeHandle::Nw => { nx = bx - (pointer_world.0 - bx); ny = by - (pointer_world.1 - by); nw = bw + (pointer_world.0 - bx); nh = bh + (pointer_world.1 - by); }
+            ResizeHandle::N => { ny = by - (pointer_world.1 - by); nh = bh + (pointer_world.1 - by); }
+            ResizeHandle::Ne => { ny = by - (pointer_world.1 - by); nw = bw + (pointer_world.0 - bx); nh = bh + (pointer_world.1 - by); }
+            ResizeHandle::W => { nx = bx - (pointer_world.0 - bx); nw = bw + (pointer_world.0 - bx); }
+            ResizeHandle::E => { nw = bw + (pointer_world.0 - bx); }
+            ResizeHandle::Sw => { nx = bx - (pointer_world.0 - bx); nw = bw + (pointer_world.0 - bx); nh = bh + (pointer_world.1 - by); }
+            ResizeHandle::S => { nh = bh + (pointer_world.1 - by); }
+            ResizeHandle::Se => { nw = bw + (pointer_world.0 - bx); nh = bh + (pointer_world.1 - by); }
         }
 
         if nw < MIN_ELEMENT_SIZE || nh < MIN_ELEMENT_SIZE {
@@ -305,7 +302,6 @@ pub fn resize_bbox(
             }
         }
 
-        // Constrain edge handles
         match handle {
             ResizeHandle::N | ResizeHandle::S => { nx = bx; nw = bw; }
             ResizeHandle::W | ResizeHandle::E => { ny = by; nh = bh; }
@@ -317,7 +313,7 @@ pub fn resize_bbox(
         return None;
     }
 
-    Some((nx, ny, nw, nh))
+    Some((Point { x: nx, y: ny }, (nw, nh)))
 }
 
 #[cfg(test)]

@@ -214,8 +214,9 @@ pub fn bounds_of_points(points: &[Point]) -> (f64, f64, f64, f64) {
 pub fn scale_points(points: &mut [Point], ctx: &ResizeContext, orig: &[Point]) {
     use crate::model::resize::MIN_ELEMENT_SIZE;
     let rctx = ctx;
-    let (nx, ny, nw, nh) = match resize_bbox(
-        rctx.bx, rctx.by, rctx.bw, rctx.bh,
+    let (pos, (nw, nh)) = match resize_bbox(
+        Point { x: rctx.bx, y: rctx.by },
+        (rctx.bw, rctx.bh),
         rctx.pointer_world,
         rctx.handle,
         rctx.shift,
@@ -229,8 +230,10 @@ pub fn scale_points(points: &mut [Point], ctx: &ResizeContext, orig: &[Point]) {
     let sx = nw / obw;
     let sy = nh / obh;
     for (p, op) in points.iter_mut().zip(orig.iter()) {
-        p.x = (op.x - rctx.bx) * sx + nx;
-        p.y = (op.y - rctx.by) * sy + ny;
+        p.set(
+            (op.x - rctx.bx) * sx + pos.x,
+            (op.y - rctx.by) * sy + pos.y,
+        );
     }
 }
 
