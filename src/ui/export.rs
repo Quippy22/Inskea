@@ -83,7 +83,7 @@ fn el_svg(el: &Element) -> String {
     match el {
         Element::Rectangle(r) => {
             let fill = r.data.fill_color.map(|c| c.to_hex()).unwrap_or("none");
-            format!(
+            let rect = format!(
                 r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" stroke="{}" stroke-width="{}"/>"#,
                 r.data.world_point.x,
                 r.data.world_point.y,
@@ -92,13 +92,21 @@ fn el_svg(el: &Element) -> String {
                 fill,
                 r.data.stroke_color.to_hex(),
                 r.data.stroke_width,
-            )
+            );
+            if r.data.rotation == 0.0 {
+                rect
+            } else {
+                let cx = r.data.world_point.x + r.data.width / 2.0;
+                let cy = r.data.world_point.y + r.data.height / 2.0;
+                let deg = r.data.rotation.to_degrees();
+                format!(r#"<g transform="rotate({deg} {cx} {cy})">{rect}</g>"#)
+            }
         }
         Element::Ellipse(e) => {
             let fill = e.data.fill_color.map(|c| c.to_hex()).unwrap_or("none");
             let cx = e.data.world_point.x + e.data.width / 2.0;
             let cy = e.data.world_point.y + e.data.height / 2.0;
-            format!(
+            let ellipse = format!(
                 r#"<ellipse cx="{}" cy="{}" rx="{}" ry="{}" fill="{}" stroke="{}" stroke-width="{}"/>"#,
                 cx,
                 cy,
@@ -107,7 +115,13 @@ fn el_svg(el: &Element) -> String {
                 fill,
                 e.data.stroke_color.to_hex(),
                 e.data.stroke_width,
-            )
+            );
+            if e.data.rotation == 0.0 {
+                ellipse
+            } else {
+                let deg = e.data.rotation.to_degrees();
+                format!(r#"<g transform="rotate({deg} {cx} {cy})">{ellipse}</g>"#)
+            }
         }
         Element::Line(l) => {
             let d = crate::model::elements::path::path_d(&l.points, l.curve_mode);
