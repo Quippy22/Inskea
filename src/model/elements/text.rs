@@ -138,13 +138,17 @@ impl Text {
     /// `wrap_width` determines `max_chars` for soft-break insertion and
     /// becomes `data.width` so the hitbox aligns with the wrap boundary.
     /// Height is auto-sized to fit all wrapped lines.
-    pub fn set_content(&mut self, raw: &str, wrap_width: f64) {
-        self.wrapped.set_raw(raw, wrap_width, self.data.font_size);
+    fn recalc_height(&mut self) {
         let fs = self.data.font_size.max(MIN_FONT_SIZE);
         let line_h = fs * 1.2;
         let num_lines = self.wrapped.display.split('\n').count().max(1);
-        self.data.width = wrap_width;
         self.data.height = num_lines as f64 * line_h;
+    }
+
+    pub fn set_content(&mut self, raw: &str, wrap_width: f64) {
+        self.wrapped.set_raw(raw, wrap_width, self.data.font_size);
+        self.data.width = wrap_width;
+        self.recalc_height();
     }
 
     /// Resize the element to a new world-space width, re-wrap the text,
@@ -154,10 +158,7 @@ impl Text {
     pub fn resize_text(&mut self, new_width: f64) {
         self.data.width = new_width;
         self.wrapped.rewrap(new_width, self.data.font_size);
-        let fs = self.data.font_size.max(MIN_FONT_SIZE);
-        let line_h = fs * 1.2;
-        let num_lines = self.wrapped.display.split('\n').count().max(1);
-        self.data.height = num_lines as f64 * line_h;
+        self.recalc_height();
     }
 }
 
