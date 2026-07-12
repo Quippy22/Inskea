@@ -1,6 +1,8 @@
+use crate::model::resize::ResizeContext;
 use crate::model::Point;
 
 use super::rect::MIN_DIMENSION;
+use super::Element;
 use super::ElementData;
 
 pub(crate) fn snap_bbox_to_grid(world_point: &mut Point, width: f64, height: f64, grid: f64) {
@@ -41,6 +43,16 @@ pub(crate) fn line_endpoints(anchor: Point, current: Point, shift: bool) -> (Poi
         ey = ay + dist * snapped.sin();
     }
     (Point { x: ax, y: ay }, Point { x: ex, y: ey })
+}
+
+pub(crate) fn scale_points(points: &mut [Point], ctx: &ResizeContext) {
+    let orig_slice: Vec<Point> = match ctx.orig {
+        Element::Line(orig) => orig.points.clone(),
+        Element::Arrow(orig) => orig.points.clone(),
+        Element::Freehand(orig) if ctx.multi => orig.points.clone(),
+        _ => points.to_vec(),
+    };
+    super::path::scale_points(points, ctx, &orig_slice);
 }
 
 pub(crate) fn rect_from_drag(anchor: Point, current: Point, shift: bool) -> (Point, f64, f64) {

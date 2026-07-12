@@ -1,3 +1,4 @@
+use super::utils::scale_points;
 use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
@@ -211,15 +212,6 @@ impl Rotate for Freehand {
 
 impl Resize for Freehand {
     fn resize(&mut self, ctx: &ResizeContext) {
-        let orig_slice: Vec<Point> = if ctx.multi {
-            if let super::Element::Freehand(orig) = ctx.orig {
-                orig.points.clone()
-            } else {
-                self.points.clone()
-            }
-        } else {
-            self.points.clone()
-        };
-        crate::model::elements::path::scale_points(&mut self.points, ctx, &orig_slice);
+        scale_points(&mut self.points, ctx);
     }
 }

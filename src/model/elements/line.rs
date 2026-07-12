@@ -1,8 +1,8 @@
 use super::path::{
-    bounds_of_points, hit_test_path, offset_points, path_d, rotate_points, scale_points,
+    bounds_of_points, hit_test_path, offset_points, path_d, rotate_points,
     snap_points_to_grid, CurveMode,
 };
-use super::utils::line_endpoints;
+use super::utils::{line_endpoints, scale_points};
 use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
@@ -104,11 +104,6 @@ impl Rotate for Line {
 
 impl Resize for Line {
     fn resize(&mut self, ctx: &ResizeContext) {
-        let orig_slice: Vec<Point> = if let super::Element::Line(orig) = ctx.orig {
-            orig.points.clone()
-        } else {
-            self.points.clone()
-        };
-        scale_points(&mut self.points, ctx, &orig_slice);
+        scale_points(&mut self.points, ctx);
     }
 }
