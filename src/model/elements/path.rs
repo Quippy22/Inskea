@@ -97,21 +97,6 @@ pub fn eval_cubic_bezier(p0: &Point, p1: &Point, p2: &Point, p3: &Point, t: f64)
     }
 }
 
-/// Minimum distance from a query point `(px, py)` to the line segment
-/// `(ax, ay)` – `(bx, by)`.
-fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
-    let dx = bx - ax;
-    let dy = by - ay;
-    let len2 = dx * dx + dy * dy;
-    if len2 == 0.0 {
-        return ((px - ax).powi(2) + (py - ay).powi(2)).sqrt();
-    }
-    let t = (((px - ax) * dx + (py - ay) * dy) / len2).clamp(0.0, 1.0);
-    let nx = ax + t * dx;
-    let ny = ay + t * dy;
-    ((px - nx).powi(2) + (py - ny).powi(2)).sqrt()
-}
-
 /// Test a query point against a cubic Bezier curve by subdividing it into
 /// `subdivisions` straight-line segments.
 fn hit_test_cubic_bezier(
@@ -128,7 +113,7 @@ fn hit_test_cubic_bezier(
     for i in 1..=subdivisions {
         let t = i as f64 / subdivisions as f64;
         let cur = eval_cubic_bezier(p0, p1, p2, p3, t);
-        if point_to_segment_dist(qx, qy, prev.x, prev.y, cur.x, cur.y) <= tolerance {
+        if Point::dist_to_segment(Point::new(qx, qy), prev, cur) <= tolerance {
             return true;
         }
         prev = cur;
@@ -154,7 +139,7 @@ pub fn hit_test_path(points: &[Point], mode: CurveMode, point: (f64, f64), toler
         for i in 1..points.len() {
             let a = &points[i - 1];
             let b = &points[i];
-            if point_to_segment_dist(px, py, a.x, a.y, b.x, b.y) <= tolerance {
+            if Point::dist_to_segment(Point::new(px, py), *a, *b) <= tolerance {
                 return true;
             }
         }

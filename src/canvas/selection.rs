@@ -519,14 +519,7 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &m
                     if idx == 0 || idx + 1 >= pts.len() {
                         return Some(false);
                     }
-                    let d = point_to_line_segment_dist(
-                        pts[idx].x,
-                        pts[idx].y,
-                        pts[idx - 1].x,
-                        pts[idx - 1].y,
-                        pts[idx + 1].x,
-                        pts[idx + 1].y,
-                    );
+                    let d = Point::dist_to_segment(pts[idx], pts[idx - 1], pts[idx + 1]);
                     Some(d < PATH_MERGE_DIST)
                 })
                 .unwrap_or(false);
@@ -611,15 +604,4 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &m
     }
 }
 
-fn point_to_line_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
-    let abx = bx - ax;
-    let aby = by - ay;
-    let len2 = abx * abx + aby * aby;
-    if len2 == 0.0 {
-        return ((px - ax).powi(2) + (py - ay).powi(2)).sqrt();
-    }
-    let t = (((px - ax) * abx + (py - ay) * aby) / len2).clamp(0.0, 1.0);
-    let cx = ax + t * abx;
-    let cy = ay + t * aby;
-    ((px - cx).powi(2) + (py - cy).powi(2)).sqrt()
-}
+

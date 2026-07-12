@@ -42,6 +42,20 @@ impl Point {
         self.set(other.x + dx * cos - dy * sin, other.y + dx * sin + dy * cos);
     }
 
+    /// Minimum distance from `p` to the line segment `a`–`b`.
+    pub fn dist_to_segment(p: Point, a: Point, b: Point) -> f64 {
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let len2 = dx * dx + dy * dy;
+        if len2 == 0.0 {
+            return ((p.x - a.x).powi(2) + (p.y - a.y).powi(2)).sqrt();
+        }
+        let t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / len2).clamp(0.0, 1.0);
+        let nx = a.x + t * dx;
+        let ny = a.y + t * dy;
+        ((p.x - nx).powi(2) + (p.y - ny).powi(2)).sqrt()
+    }
+
     /// Return the four world-space corners of a rectangle with this point
     /// as the top-left corner, rotated around its center by `rotation` radians.
     pub fn rect_corners(self, width: f64, height: f64, rotation: f64) -> [Point; 4] {
