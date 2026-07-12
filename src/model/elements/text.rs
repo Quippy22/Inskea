@@ -2,6 +2,7 @@ use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
 use super::{ElementData, ShapeColor};
+use super::utils::snap_bbox_to_grid;
 use crate::model::resize::{resize_bbox, resize_from_handle, MIN_ELEMENT_SIZE, ResizeContext};
 use crate::model::Point;
 use leptos::IntoView;
@@ -281,12 +282,7 @@ impl Offset for Text {
 
 impl SnapToGrid for Text {
     fn snap_to_grid(&mut self, grid: f64) {
-        let cx = self.data.world_point.x + self.data.width / 2.0;
-        let cy = self.data.world_point.y + self.data.height / 2.0;
-        let snapped_cx = (cx / grid).round() * grid;
-        let snapped_cy = (cy / grid).round() * grid;
-        self.data.world_point.x += snapped_cx - cx;
-        self.data.world_point.y += snapped_cy - cy;
+        snap_bbox_to_grid(&mut self.data.world_point, self.data.width, self.data.height, grid);
     }
 }
 

@@ -2,6 +2,15 @@ use crate::model::Point;
 
 use super::rect::MIN_DIMENSION;
 
+pub(crate) fn snap_bbox_to_grid(world_point: &mut Point, width: f64, height: f64, grid: f64) {
+    let cx = world_point.x + width / 2.0;
+    let cy = world_point.y + height / 2.0;
+    let snapped_cx = (cx / grid).round() * grid;
+    let snapped_cy = (cy / grid).round() * grid;
+    world_point.x += snapped_cx - cx;
+    world_point.y += snapped_cy - cy;
+}
+
 pub(crate) fn rect_from_drag(
     anchor: (f64, f64),
     current: (f64, f64),
