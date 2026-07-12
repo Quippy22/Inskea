@@ -129,6 +129,26 @@ pub fn Dock(
         });
     };
 
+    fn cat_icon(cat: Category) -> leptos::View {
+        match cat {
+            Category::Drawing => icon::pencil().into_view(),
+            Category::Colors => icon::palette().into_view(),
+            Category::Group => icon::group().into_view(),
+            Category::Pages => icon::pages().into_view(),
+        }
+    }
+
+    fn cat_title(cat: Category) -> &'static str {
+        match cat {
+            Category::Drawing => "Drawing",
+            Category::Colors => "Colors",
+            Category::Group => "Group",
+            Category::Pages => "Pages",
+        }
+    }
+
+    const ALL_CATS: [Category; 4] = [Category::Drawing, Category::Colors, Category::Group, Category::Pages];
+
     view! {
         // Wrapper centers everything
         <div class=classes::CONTAINER_DOCK>
@@ -148,41 +168,28 @@ pub fn Dock(
             // Main dock
             <div class="relative flex">
                 <div class=classes::PANEL>
-                    <button
-                        class=move || btn_class(Category::Drawing)
-                        on:click=move |_| select_category(Category::Drawing)
-                        title="Drawing"
-                    >
-                        {icon::pencil()}
-                    </button>
-                    <button
-                        class=move || btn_class(Category::Colors)
-                        on:click=move |_| select_category(Category::Colors)
-                        title="Colors"
-                        style=move || {
-                            if selected_color.get() != ShapeColor::White {
-                                format!("color: {}", selected_color.get().to_hex())
-                            } else {
-                                String::new()
-                            }
+                    {ALL_CATS.iter().map(|&cat| {
+                        view! {
+                            <button
+                                class=move || btn_class(cat)
+                                on:click=move |_| select_category(cat)
+                                title=cat_title(cat)
+                                style=move || {
+                                    if cat == Category::Colors {
+                                        if selected_color.get() != ShapeColor::White {
+                                            format!("color: {}", selected_color.get().to_hex())
+                                        } else {
+                                            String::new()
+                                        }
+                                    } else {
+                                        String::new()
+                                    }
+                                }
+                            >
+                                {cat_icon(cat)}
+                            </button>
                         }
-                    >
-                        {icon::palette()}
-                    </button>
-                    <button
-                        class=move || btn_class(Category::Group)
-                        on:click=move |_| select_category(Category::Group)
-                        title="Group"
-                    >
-                        {icon::group()}
-                    </button>
-                    <button
-                        class=move || btn_class(Category::Pages)
-                        on:click=move |_| select_category(Category::Pages)
-                        title="Pages"
-                    >
-                        {icon::pages()}
-                    </button>
+                    }).collect::<Vec<_>>()}
 
                     // Eraser
                     <button
