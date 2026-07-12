@@ -5,7 +5,7 @@ use crate::skea;
 use crate::tauri_bridge;
 use crate::util::window_size;
 use crate::ui::classes;
-use crate::ui::components::{Dropdown, DropdownItem};
+use crate::ui::components::{Dropdown, DropdownItem, IconButton};
 use crate::ui::export;
 use crate::ui::icon;
 use leptos::*;
@@ -93,7 +93,7 @@ where
     let export_sub_hover = create_rw_signal(false);
     let show_export = Signal::derive(move || export_hover.get() || export_sub_hover.get());
 
-    let on_home = move |_| viewport.set(Viewport::default());
+    let on_home = move || viewport.set(Viewport::default());
 
     let close_menu = move || {
         menu_open.set(false);
@@ -386,9 +386,9 @@ where
                     {icon::pencil()}
                 </button>
                 <div class=classes::SEP_V />
-                <button class=classes::BTN_GHOST on:click=on_home title="Home">
+                <IconButton on_click=on_home title="Home" class=classes::BTN_GHOST>
                     {icon::home()}
-                </button>
+                </IconButton>
                 <button
                     class=classes::BTN_GHOST
                     class:opacity-40=move || !can_undo.get()
@@ -409,13 +409,13 @@ where
                 </button>
                 <div class=classes::SEP_V />
                 <div class="relative">
-                    <button
-                        class=classes::BTN_GHOST
-                        on:click=move |_| menu_open.update(|v| *v = !*v)
+                    <IconButton
+                        on_click=move || menu_open.update(|v| *v = !*v)
                         title="Menu"
+                        class=classes::BTN_GHOST
                     >
                         {icon::menu()}
-                    </button>
+                    </IconButton>
                     {move || {
                         if menu_open.get() {
                             view! {

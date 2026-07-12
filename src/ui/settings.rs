@@ -1,5 +1,5 @@
 use crate::ui::classes;
-use crate::ui::components::SegmentedControl;
+use crate::ui::components::{IconButton, SegmentedControl};
 use crate::ui::icon;
 use leptos::*;
 use serde::{Deserialize, Serialize};
@@ -102,7 +102,7 @@ pub fn SettingsPanel(
     let open = create_rw_signal(false);
 
     let close = move || open.set(false);
-    let toggle = move |_| open.update(|v| *v = !*v);
+    let toggle = move || open.update(|v| *v = !*v);
 
     // ── Options arrays ────────────────────────────────────
     let center_opts = &[
@@ -131,13 +131,9 @@ pub fn SettingsPanel(
         <div class="fixed top-4 right-4 z-50 pointer-events-none">
             <div class="relative pointer-events-auto">
                 <div class=classes::PANEL>
-                    <button
-                        class=classes::BTN_COLLAPSE
-                        on:click=toggle
-                        title="Settings"
-                    >
+                    <IconButton on_click=toggle title="Settings" class=classes::BTN_COLLAPSE>
                         {icon::gear()}
-                    </button>
+                    </IconButton>
                 </div>
 
                 {move || {
