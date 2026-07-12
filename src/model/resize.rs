@@ -193,28 +193,6 @@ pub fn resize_from_handle(
     }
 }
 
-/// Compute the rotation angle from a pointer position relative to an element's center.
-///
-/// The rotate handle sits above the element (at -90° relative to center),
-/// so we add `FRAC_PI_2` to get the angle of the handle-to-pointer vector.
-/// When `shift` is held, snap to `SNAP_DIVISIONS` steps (24 → 15°).
-#[allow(dead_code)]
-pub fn rotation_from_pointer(
-    original: &ElementData,
-    pointer_world: (f64, f64),
-    shift: bool,
-) -> f64 {
-    let cx = original.world_point.x + original.width / 2.0;
-    let cy = original.world_point.y + original.height / 2.0;
-    let mut angle = (pointer_world.1 - cy).atan2(pointer_world.0 - cx) + std::f64::consts::FRAC_PI_2;
-    if shift {
-        let divisions = 24.0;
-        let step = std::f64::consts::TAU / divisions;
-        angle = (angle / step).round() * step;
-    }
-    angle
-}
-
 /// Parameters for resizing an element via drag handles.
 #[derive(Clone, Copy)]
 pub struct ResizeContext<'a> {
@@ -449,14 +427,4 @@ mod tests {
         assert!((cy - 50.0).abs() < 0.01);
     }
 
-    #[test]
-    fn rotation_from_pointer_works() {
-        let original = default_data();
-        // Pointer above center → angle should be PI (pointing down from top)
-        // The rotate handle sits above center (at -90° relative to center)
-        let angle = rotation_from_pointer(&original, (50.0, -50.0), false);
-        // At position (50, -50), the atan2 is atan2(-50-50, 50-50) = atan2(-100, 0) = -PI/2
-        // + FRAC_PI_2 = 0
-        assert!((angle - 0.0).abs() < 0.01, "angle = {angle}");
-    }
 }
