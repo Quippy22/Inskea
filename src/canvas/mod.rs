@@ -1,4 +1,4 @@
-#![allow(clippy::redundant_locals, clippy::type_complexity)]
+#![allow(clippy::redundant_locals)]
 mod viewport;
 pub use viewport::Viewport;
 
@@ -13,6 +13,7 @@ use selection::{select_pointer_down, select_pointer_move, select_pointer_up};
 pub use state::combined_bounds;
 pub use state::CanvasMode;
 use state::{hit_and_erase, CanvasInputs, CanvasState};
+pub use state::CropExportCallback;
 
 use crate::model::*;
 use crate::ui::dock::Tool;
@@ -84,7 +85,7 @@ pub fn Canvas(
     grid_size: RwSignal<GridSize>,
     push_snapshot: Rc<dyn Fn()>,
     export_crop_active: RwSignal<bool>,
-    on_crop_export: RwSignal<Option<Rc<dyn Fn((f64, f64, f64, f64))>>>,
+    on_crop_export: RwSignal<Option<CropExportCallback>>,
     selected_ids: RwSignal<Vec<ElementId>>,
 ) -> impl IntoView {
     let mut st = CanvasState::new();

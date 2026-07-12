@@ -36,6 +36,8 @@ pub enum Handle {
     PathMidpoint(usize),
 }
 
+pub type CropExportCallback = Rc<dyn Fn((f64, f64, f64, f64))>;
+
 /// Tracks an in-progress draw operation.
 #[derive(Clone)]
 pub struct DrawingState {
@@ -123,8 +125,7 @@ pub struct CanvasInputs {
     pub grid_size: RwSignal<GridSize>,
     pub push_snapshot: Rc<dyn Fn()>,
     pub export_crop_active: RwSignal<bool>,
-    #[allow(clippy::type_complexity)]
-    pub on_crop_export: RwSignal<Option<Rc<dyn Fn((f64, f64, f64, f64))>>>,
+    pub on_crop_export: RwSignal<Option<CropExportCallback>>,
 }
 
 // ── Helper functions used by pointer event handlers ──────────────────────

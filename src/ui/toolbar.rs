@@ -1,5 +1,5 @@
-#![allow(clippy::redundant_locals, clippy::type_complexity)]
-use crate::canvas::{CanvasMode, Viewport};
+#![allow(clippy::redundant_locals)]
+use crate::canvas::{CanvasMode, CropExportCallback, Viewport};
 use crate::model::Scene;
 use crate::skea;
 use crate::tauri_bridge;
@@ -74,7 +74,7 @@ pub fn ToolBar<F1, F2>(
     can_undo: Signal<bool>,
     can_redo: Signal<bool>,
     export_crop_active: RwSignal<bool>,
-    on_crop_export: RwSignal<Option<Rc<dyn Fn((f64, f64, f64, f64))>>>,
+    on_crop_export: RwSignal<Option<CropExportCallback>>,
 ) -> impl IntoView
 where
     F1: Fn() + 'static,

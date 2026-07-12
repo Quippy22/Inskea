@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::canvas::{Canvas, CanvasMode, Viewport};
+use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
 use crate::model::{ElementId, Scene, ShapeColor};
 use crate::tauri_bridge;
 use crate::ui::dock::{Dock, Tool};
@@ -27,7 +27,7 @@ pub fn App() -> impl IntoView {
     // Crop-export state: when active the canvas lets you drag a rectangle,
     // and on release the region is exported via this callback.
     let export_crop_active = create_rw_signal(false);
-    let on_crop_export = create_rw_signal::<Option<Rc<dyn Fn((f64, f64, f64, f64))>>>(None);
+    let on_crop_export = create_rw_signal::<Option<CropExportCallback>>(None);
 
     let center_style = create_rw_signal(CenterStyle::Crosshair);
     let grid_style = create_rw_signal(GridStyle::Dot);
