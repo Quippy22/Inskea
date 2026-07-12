@@ -122,36 +122,22 @@ impl Element {
 
 // ── Into<Element> conversions ─────────────────────────────────────────
 
-impl From<Rectangle> for Element {
-    fn from(e: Rectangle) -> Self {
-        Element::Rectangle(e)
-    }
+macro_rules! impl_into_element {
+    ($variant:ident) => {
+        impl From<$variant> for Element {
+            fn from(e: $variant) -> Self {
+                Element::$variant(e)
+            }
+        }
+    };
 }
-impl From<Ellipse> for Element {
-    fn from(e: Ellipse) -> Self {
-        Element::Ellipse(e)
-    }
-}
-impl From<Line> for Element {
-    fn from(e: Line) -> Self {
-        Element::Line(e)
-    }
-}
-impl From<Arrow> for Element {
-    fn from(e: Arrow) -> Self {
-        Element::Arrow(e)
-    }
-}
-impl From<Text> for Element {
-    fn from(e: Text) -> Self {
-        Element::Text(e)
-    }
-}
-impl From<Freehand> for Element {
-    fn from(e: Freehand) -> Self {
-        Element::Freehand(e)
-    }
-}
+
+impl_into_element!(Rectangle);
+impl_into_element!(Ellipse);
+impl_into_element!(Line);
+impl_into_element!(Arrow);
+impl_into_element!(Text);
+impl_into_element!(Freehand);
 
 // ── Trait definitions ──────────────────────────────────────────────────
 
