@@ -22,6 +22,27 @@ pub(crate) fn rotate_bbox(data: &mut ElementData, pivot: Point, delta: f64) {
     data.world_point.y = center.y - data.height / 2.0;
 }
 
+/// Compute the two endpoints of a line/arrow from drag anchor and current position.
+/// When `shift` is held, the endpoint angle is snapped to the nearest 45° division.
+pub(crate) fn line_endpoints(anchor: Point, current: Point, shift: bool) -> (Point, Point) {
+    let ax = anchor.x;
+    let ay = anchor.y;
+    let cx = current.x;
+    let cy = current.y;
+    let (mut ex, mut ey) = (cx, cy);
+    if shift {
+        let dx = cx - ax;
+        let dy = cy - ay;
+        let angle = dy.atan2(dx);
+        let divisions = 8.0;
+        let snapped = crate::model::elements::snap_angle(angle, divisions);
+        let dist = (dx * dx + dy * dy).sqrt();
+        ex = ax + dist * snapped.cos();
+        ey = ay + dist * snapped.sin();
+    }
+    (Point { x: ax, y: ay }, Point { x: ex, y: ey })
+}
+
 pub(crate) fn rect_from_drag(anchor: Point, current: Point, shift: bool) -> (Point, f64, f64) {
     let ax = anchor.x;
     let ay = anchor.y;

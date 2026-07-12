@@ -2,7 +2,7 @@ use super::path::{
     bounds_of_points, hit_test_path, offset_points, path_d, rotate_points, scale_points,
     snap_points_to_grid, CurveMode,
 };
-use super::snap_angle;
+use super::utils::line_endpoints;
 use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
@@ -10,8 +10,6 @@ use super::{ElementData, ShapeColor};
 use crate::model::resize::ResizeContext;
 use crate::model::Point;
 use leptos::IntoView;
-
-const SNAP_DIVISIONS: f64 = 8.0;
 
 /// A line defined by an ordered list of path points.
 ///
@@ -30,26 +28,13 @@ pub struct Line {
 
 impl FromDrag for Line {
     fn from_drag(anchor: Point, current: Point, color: ShapeColor, shift: bool) -> Self {
-        let ax = anchor.x;
-        let ay = anchor.y;
-        let cx = current.x;
-        let cy = current.y;
-        let (mut ex, mut ey) = (cx, cy);
-        if shift {
-            let dx = cx - ax;
-            let dy = cy - ay;
-            let angle = dy.atan2(dx);
-            let snapped = snap_angle(angle, SNAP_DIVISIONS);
-            let dist = (dx * dx + dy * dy).sqrt();
-            ex = ax + dist * snapped.cos();
-            ey = ay + dist * snapped.sin();
-        }
+        let (a, b) = line_endpoints(anchor, current, shift);
         Self {
             data: ElementData {
                 stroke_color: color,
                 ..ElementData::new(0)
             },
-            points: vec![Point { x: ax, y: ay }, Point { x: ex, y: ey }],
+            points: vec![a, b],
             curve_mode: CurveMode::default(),
         }
     }
@@ -57,24 +42,10 @@ impl FromDrag for Line {
 
 impl UpdateDrag for Line {
     fn update_drag(&mut self, current: Point, anchor: Point, shift: bool) {
-        let ax = anchor.x;
-        let ay = anchor.y;
-        let cx = current.x;
-        let cy = current.y;
-        let (mut ex, mut ey) = (cx, cy);
-        if shift {
-            let dx = cx - ax;
-            let dy = cy - ay;
-            let angle = dy.atan2(dx);
-            let snapped = snap_angle(angle, SNAP_DIVISIONS);
-            let dist = (dx * dx + dy * dy).sqrt();
-            ex = ax + dist * snapped.cos();
-            ey = ay + dist * snapped.sin();
-        }
-        // During initial draw, a fresh Line always has exactly 2 points.
+        let (a, b) = line_endpoints(anchor, current, shift);
         if self.points.len() >= 2 {
-            self.points[0].set(ax, ay);
-            self.points[1].set(ex, ey);
+            self.points[0] = a;
+            self.points[1] = b;
         }
     }
 }
