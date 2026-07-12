@@ -11,6 +11,25 @@ use crate::model::{
 };
 use crate::model::resize::ResizeContext;
 
+fn selection_bounds(ids: &[ElementId], els: &[Element]) -> Option<(f64, f64, f64, f64)> {
+    if ids.len() == 1 {
+        els.iter()
+            .find(|e| e.id() == ids[0])
+            .map(|el| el.bounds())
+            .or_else(|| combined_bounds(ids, els))
+    } else {
+        let data_refs: Vec<_> = els.iter()
+            .filter(|el| ids.contains(&el.id()))
+            .map(|el| el.data())
+            .collect();
+        if data_refs.is_empty() {
+            None
+        } else {
+            Some(common_bounds(&data_refs))
+        }
+    }
+}
+
 const GRID_SIZE: f64 = 40.0;
 const HANDLE_RESIZE_RADIUS: f64 = 5.0;
 const HANDLE_MOVE_RADIUS: f64 = 6.0;
@@ -106,21 +125,8 @@ pub fn selection_handle_overlay(
         // otherwise compute axis-aligned bounds from current scene.
         let (bx, by, bw, bh) = if let Some(fb) = overlay_freeze.get() {
             fb
-        } else if ids.len() == 1 {
-            els.iter()
-                .find(|el| el.id() == ids[0])
-                .map(|el| el.bounds())
-                .unwrap_or_else(|| combined_bounds(&ids, &els).unwrap_or((0.0, 0.0, 0.0, 0.0)))
         } else {
-            let data_refs: Vec<_> = els.iter()
-                .filter(|el| ids.contains(&el.id()))
-                .map(|el| el.data())
-                .collect();
-            if data_refs.is_empty() {
-                (0.0, 0.0, 0.0, 0.0)
-            } else {
-                common_bounds(&data_refs)
-            }
+            selection_bounds(&ids, &els).unwrap_or((0.0, 0.0, 0.0, 0.0))
         };
 
         let hr = 5.0;
@@ -281,25 +287,7 @@ pub fn select_pointer_down(
             world
         };
 
-        // Use the same bounds as selection_handle_overlay for hit-test alignment:
-        // - single-select: el.bounds() (axis-aligned, unrotated via unrotate_for_element)
-        // - multi-select:  common_bounds (rotation-aware)
-        let bounds = if ids.len() == 1 {
-            els.iter()
-                .find(|e| e.id() == ids[0])
-                .map(|el| el.bounds())
-                .or_else(|| combined_bounds(&ids, &els))
-        } else {
-            let data_refs: Vec<_> = els.iter()
-                .filter(|el| ids.contains(&el.id()))
-                .map(|el| el.data())
-                .collect();
-            if data_refs.is_empty() {
-                None
-            } else {
-                Some(common_bounds(&data_refs))
-            }
-        };
+        let bounds = selection_bounds(&ids, &els);
 
         if let Some(bounds @ (bx, by, bw, bh)) = bounds {
             let hpos = handle_positions(bx, by, bw, bh);
