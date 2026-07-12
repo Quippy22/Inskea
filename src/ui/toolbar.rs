@@ -13,16 +13,6 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
-fn is_tauri() -> bool {
-    let window = match web_sys::window() {
-        Some(w) => w,
-        None => return false,
-    };
-    js_sys::Reflect::get(&window, &JsValue::from_str("__TAURI__"))
-        .map(|v| !v.is_undefined() && !v.is_null())
-        .unwrap_or(false)
-}
-
 fn window_size() -> (f64, f64) {
     let window = web_sys::window().expect("no global `window` exists");
     let w = window
@@ -106,7 +96,7 @@ where
 {
     let menu_open = create_rw_signal(false);
     let saved_path = create_rw_signal::<Option<String>>(None);
-    let tauri = is_tauri();
+    let tauri = tauri_bridge::is_tauri();
 
     // Submenu hover tracking — one pair per fly-out panel
     let file_hover = create_rw_signal(false);
