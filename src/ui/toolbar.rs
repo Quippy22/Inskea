@@ -212,49 +212,15 @@ where
         }
     };
 
-    let on_export_svg = {
-        let _close_menu = close_menu;
-        let _export_crop_active = export_crop_active;
-        let _on_crop_export = on_crop_export;
-        let _scene = scene;
-        move |selection: bool| {
-            _close_menu();
-            if selection {
-                let scene = _scene;
-                let on_crop_export = _on_crop_export;
-                let export_crop_active = _export_crop_active;
-                let close_menu = _close_menu;
-                on_crop_export.set(Some(Rc::new(move |rect: (f64, f64, f64, f64)| {
-                    close_menu();
-                    let s = scene.get();
-                    let svg = export::scene_to_svg_crop(&s, rect);
-                    if tauri {
-                        export::tauri_export_svg(svg, true);
-                    } else {
-                        export::download_string(&svg, "selection.svg");
-                    }
-                })));
-                export_crop_active.set(true);
-                return;
-            }
-            let s = _scene.get();
-            let vp = viewport.get();
-            let size = window_size();
-            let svg = export::scene_to_svg(&s, &vp, size, None);
-            if tauri {
-                export::tauri_export_svg(svg, false);
-            } else {
-                export::download_string(&svg, "canvas.svg");
-            }
-        }
-    };
+    #[derive(Clone, Copy)]
+    enum ExportFormat { Svg, Png }
 
-    let on_export_png = {
+    let on_export = {
         let _close_menu = close_menu;
         let _export_crop_active = export_crop_active;
         let _on_crop_export = on_crop_export;
         let _scene = scene;
-        move |selection: bool| {
+        move |fmt: ExportFormat, selection: bool| {
             _close_menu();
             if selection {
                 let scene = _scene;
@@ -265,10 +231,15 @@ where
                     close_menu();
                     let s = scene.get();
                     let svg = export::scene_to_svg_crop(&s, rect);
-                    if tauri {
-                        export::tauri_export_png(svg, true);
-                    } else {
-                        export::download_png_from_svg(svg, "selection.png".to_string());
+                    match fmt {
+                        ExportFormat::Svg => {
+                            if tauri { export::tauri_export_svg(svg, true); }
+                            else { export::download_string(&svg, "selection.svg"); }
+                        }
+                        ExportFormat::Png => {
+                            if tauri { export::tauri_export_png(svg, true); }
+                            else { export::download_png_from_svg(svg, "selection.png".to_string()); }
+                        }
                     }
                 })));
                 export_crop_active.set(true);
@@ -278,10 +249,15 @@ where
             let vp = viewport.get();
             let size = window_size();
             let svg = export::scene_to_svg(&s, &vp, size, None);
-            if tauri {
-                export::tauri_export_png(svg, false);
-            } else {
-                export::download_png_from_svg(svg, "canvas.png".to_string());
+            match fmt {
+                ExportFormat::Svg => {
+                    if tauri { export::tauri_export_svg(svg, false); }
+                    else { export::download_string(&svg, "canvas.svg"); }
+                }
+                ExportFormat::Png => {
+                    if tauri { export::tauri_export_png(svg, false); }
+                    else { export::download_png_from_svg(svg, "canvas.png".to_string()); }
+                }
             }
         }
     };
@@ -322,15 +298,15 @@ where
         DropdownItem::Action {
             label: "Full canvas",
             on_click: Rc::new({
-                let f = on_export_png;
-                move || f(false)
+                let f = on_export;
+                move || f(ExportFormat::Png, false)
             }),
         },
         DropdownItem::Action {
             label: "Selection",
             on_click: Rc::new({
-                let f = on_export_png;
-                move || f(true)
+                let f = on_export;
+                move || f(ExportFormat::Png, true)
             }),
         },
         DropdownItem::Separator,
@@ -338,15 +314,15 @@ where
         DropdownItem::Action {
             label: "Full canvas",
             on_click: Rc::new({
-                let f = on_export_svg;
-                move || f(false)
+                let f = on_export;
+                move || f(ExportFormat::Svg, false)
             }),
         },
         DropdownItem::Action {
             label: "Selection",
             on_click: Rc::new({
-                let f = on_export_svg;
-                move || f(true)
+                let f = on_export;
+                move || f(ExportFormat::Svg, true)
             }),
         },
     ];

@@ -257,47 +257,45 @@ fn svg_blob(svg: &str) -> web_sys::Blob {
     web_sys::Blob::new_with_str_sequence_and_options(&parts, &opts).expect("blob")
 }
 
+/// Shared SVG→canvas→blob pipeline used by both browser and Tauri PNG export.
+async fn svg_to_png_blob(svg: &str) -> Option<web_sys::Blob> {
+    let document = web_sys::window().unwrap().document().unwrap();
+    let blob = svg_blob(svg);
+    let url = web_sys::Url::create_object_url_with_blob(&blob).expect("url");
+    let img = document
+        .create_element("img")
+        .unwrap()
+        .dyn_into::<web_sys::HtmlImageElement>()
+        .unwrap();
+    let _ = wasm_bindgen_futures::JsFuture::from(image_load_promise(&img, &url)).await;
+    let canvas = document
+        .create_element("canvas")
+        .unwrap()
+        .dyn_into::<web_sys::HtmlCanvasElement>()
+        .unwrap();
+    let (w, h) = (img.natural_width() as u32, img.natural_height() as u32);
+    canvas.set_width(w.max(1));
+    canvas.set_height(h.max(1));
+    let ctx = canvas
+        .get_context("2d")
+        .ok()
+        .flatten()
+        .unwrap()
+        .dyn_into::<web_sys::CanvasRenderingContext2d>()
+        .unwrap();
+    let _ = ctx.draw_image_with_html_image_element(&img, 0.0, 0.0);
+    let png = wasm_bindgen_futures::JsFuture::from(canvas_to_blob_promise(&canvas))
+        .await
+        .ok()
+        .and_then(|v| v.dyn_into::<web_sys::Blob>().ok());
+    web_sys::Url::revoke_object_url(&url).ok();
+    png
+}
+
 pub fn download_png_from_svg(svg: String, filename: String) {
     spawn_local(async move {
         let document = web_sys::window().unwrap().document().unwrap();
-
-        let blob = svg_blob(&svg);
-        let url = web_sys::Url::create_object_url_with_blob(&blob).expect("url");
-
-        let img = document
-            .create_element("img")
-            .unwrap()
-            .dyn_into::<web_sys::HtmlImageElement>()
-            .unwrap();
-
-        let _ = wasm_bindgen_futures::JsFuture::from(image_load_promise(&img, &url)).await;
-
-        let canvas = document
-            .create_element("canvas")
-            .unwrap()
-            .dyn_into::<web_sys::HtmlCanvasElement>()
-            .unwrap();
-        let (w, h) = (img.natural_width() as u32, img.natural_height() as u32);
-        canvas.set_width(w.max(1));
-        canvas.set_height(h.max(1));
-
-        let ctx = canvas
-            .get_context("2d")
-            .ok()
-            .flatten()
-            .unwrap()
-            .dyn_into::<web_sys::CanvasRenderingContext2d>()
-            .unwrap();
-        let _ = ctx.draw_image_with_html_image_element(&img, 0.0, 0.0);
-
-        let blob_val = wasm_bindgen_futures::JsFuture::from(canvas_to_blob_promise(&canvas))
-            .await
-            .ok()
-            .and_then(|v| v.dyn_into::<web_sys::Blob>().ok());
-
-        web_sys::Url::revoke_object_url(&url).ok();
-
-        if let Some(blob) = blob_val {
+        if let Some(blob) = svg_to_png_blob(&svg).await {
             let url2 = web_sys::Url::create_object_url_with_blob(&blob).expect("url2");
             let a = document.create_element("a").unwrap();
             a.set_attribute("href", &url2).ok();
@@ -335,45 +333,7 @@ pub fn tauri_export_svg(svg: String, selection: bool) {
 /// Tauri-native PNG export: renders SVG to canvas, converts to blob, saves as PNG.
 pub fn tauri_export_png(svg: String, selection: bool) {
     spawn_local(async move {
-        let document = web_sys::window().unwrap().document().unwrap();
-
-        let blob = svg_blob(&svg);
-        let url = web_sys::Url::create_object_url_with_blob(&blob).expect("url");
-
-        let img = document
-            .create_element("img")
-            .unwrap()
-            .dyn_into::<web_sys::HtmlImageElement>()
-            .unwrap();
-
-        let _ = wasm_bindgen_futures::JsFuture::from(image_load_promise(&img, &url)).await;
-
-        let canvas = document
-            .create_element("canvas")
-            .unwrap()
-            .dyn_into::<web_sys::HtmlCanvasElement>()
-            .unwrap();
-        let (w, h) = (img.natural_width() as u32, img.natural_height() as u32);
-        canvas.set_width(w.max(1));
-        canvas.set_height(h.max(1));
-
-        let ctx = canvas
-            .get_context("2d")
-            .ok()
-            .flatten()
-            .unwrap()
-            .dyn_into::<web_sys::CanvasRenderingContext2d>()
-            .unwrap();
-        let _ = ctx.draw_image_with_html_image_element(&img, 0.0, 0.0);
-
-        let blob_val = wasm_bindgen_futures::JsFuture::from(canvas_to_blob_promise(&canvas))
-            .await
-            .ok()
-            .and_then(|v| v.dyn_into::<web_sys::Blob>().ok());
-
-        web_sys::Url::revoke_object_url(&url).ok();
-
-        if let Some(blob) = blob_val {
+        if let Some(blob) = svg_to_png_blob(&svg).await {
             let name = if selection {
                 "selection.png"
             } else {
@@ -382,9 +342,8 @@ pub fn tauri_export_png(svg: String, selection: bool) {
             let dir = crate::tauri_bridge::get_app_data_dir().await.ok();
             let path = crate::tauri_bridge::pick_save_path_png(name, dir.as_deref()).await;
             if let Some(path) = path {
-                let blob2 = blob.clone();
                 let ab_promise = js_sys::Promise::new(&mut {
-                    let blob2 = blob2.clone();
+                    let blob2 = blob.clone();
                     move |resolve: js_sys::Function, _reject: js_sys::Function| {
                         let reader = web_sys::FileReader::new().expect("FileReader");
                         let reader_c = reader.clone();
