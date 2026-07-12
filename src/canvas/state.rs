@@ -103,12 +103,6 @@ impl CanvasState {
     }
 }
 
-impl Default for CanvasState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// Props passed into the Canvas component, bundled for easy forwarding to handlers.
 #[derive(Clone)]
 pub struct CanvasInputs {
