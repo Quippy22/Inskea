@@ -370,15 +370,16 @@ pub fn Canvas(
                 return;
             }
 
+            let world = update_world(&ev);
             match props.canvas_mode.get() {
                 CanvasMode::Hand => {
                     st.pan_anchor.set(None);
                 }
                 CanvasMode::Select => {
-                    select_pointer_up(&ev, &mut st, &mut props);
+                    select_pointer_up(&ev, world, &mut st, &mut props);
                 }
                 CanvasMode::Draw => {
-                    draw_pointer_up(&ev, &mut st, &mut props);
+                    draw_pointer_up(&ev, world, &mut st, &mut props);
                 }
             }
         }

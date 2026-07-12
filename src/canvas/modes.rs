@@ -103,7 +103,7 @@ pub fn draw_pointer_down(
 ///   **after** construction (so the undo snapshot happens before the element
 ///   is added), then the element is added to the scene and the drawing state
 ///   is cleared.
-pub fn draw_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &mut CanvasInputs) {
+pub fn draw_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut CanvasState, props: &mut CanvasInputs) {
     if let Some(state) = st.drawing.get() {
         if state.tool == Tool::Freehand {
             props.scene.update(|s| {
@@ -115,7 +115,6 @@ pub fn draw_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &mut
             return;
         }
 
-        let world = props.cursor_world.get();
         let dx = world.0 - state.anchor.0;
         let dy = world.1 - state.anchor.1;
         if dx.hypot(dy) < MIN_DRAG_DIST {

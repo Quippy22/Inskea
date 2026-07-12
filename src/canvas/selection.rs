@@ -490,7 +490,7 @@ pub fn select_pointer_move(
     }
 }
 
-pub fn select_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &mut CanvasInputs) {
+pub fn select_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut CanvasState, props: &mut CanvasInputs) {
     if st.moving_anchor.get().is_some() {
         let drag_action = st.drag_action.get();
         let ids = st.selected_ids.get();
@@ -567,7 +567,6 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &m
     }
 
     if let Some(anchor) = st.select_anchor.get() {
-        let world = props.cursor_world.get();
         let dx = world.0 - anchor.0;
         let dy = world.1 - anchor.1;
         if dx.hypot(dy) >= MIN_DRAG_DIST {
