@@ -290,6 +290,10 @@ impl Rotate for Text {
 
 impl Resize for Text {
     fn resize(&mut self, ctx: &ResizeContext) {
+        // Guard: set to true if resize_text is called within a branch to
+        // prevent double-wrapping from the fallthrough call below.
+        #[allow(unused_mut)]
+        let mut text_resized = false;
         if ctx.multi {
             let (pos, (nw, nh)) = match resize_bbox(
                 Point { x: ctx.bx, y: ctx.by },
@@ -315,6 +319,8 @@ impl Resize for Text {
             self.data.width = result.width;
             self.data.height = result.height;
         }
-        self.resize_text(self.data.width);
+        if !text_resized {
+            self.resize_text(self.data.width);
+        }
     }
 }
