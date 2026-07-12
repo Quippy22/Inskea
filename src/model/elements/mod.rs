@@ -14,9 +14,8 @@ pub use line::Line;
 pub use rect::Rectangle;
 pub use text::Text;
 
-pub use crate::model::point::Point;
-
 use super::ShapeColor;
+use crate::model::Point;
 use path::CurveMode;
 
 /// Unique identifier for an element in the scene.
