@@ -85,20 +85,15 @@ fn perpendicular_dist(px: f64, py: f64, x1: f64, y1: f64, x2: f64, y2: f64) -> f
 // ── Trait implementations ──────────────────────────────────────────────
 
 impl FromDrag for Freehand {
-    fn from_drag(
-        anchor: (f64, f64),
-        _current: (f64, f64),
-        color: ShapeColor,
-        _shift: bool,
-    ) -> Self {
+    fn from_drag(anchor: Point, _current: Point, color: ShapeColor, _shift: bool) -> Self {
         let mut fh = Self {
             data: ElementData {
                 stroke_color: color,
                 ..ElementData::new(0)
             },
             points: vec![Point {
-                x: anchor.0,
-                y: anchor.1,
+                x: anchor.x,
+                y: anchor.y,
             }],
         };
         fh.simplify(SIMPLIFY_EPSILON);
@@ -107,17 +102,17 @@ impl FromDrag for Freehand {
 }
 
 impl UpdateDrag for Freehand {
-    fn update_drag(&mut self, current: (f64, f64), _anchor: (f64, f64), _shift: bool) {
+    fn update_drag(&mut self, current: Point, _anchor: Point, _shift: bool) {
         if let Some(last) = self.points.last() {
-            let dx = current.0 - last.x;
-            let dy = current.1 - last.y;
+            let dx = current.x - last.x;
+            let dy = current.y - last.y;
             if dx.hypot(dy) < MIN_SAMPLE_DIST {
                 return;
             }
         }
         self.points.push(Point {
-            x: current.0,
-            y: current.1,
+            x: current.x,
+            y: current.y,
         });
     }
 }

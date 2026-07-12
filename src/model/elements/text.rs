@@ -162,14 +162,9 @@ impl Text {
 }
 
 impl FromDrag for Text {
-    fn from_drag(
-        anchor: (f64, f64),
-        _current: (f64, f64),
-        color: ShapeColor,
-        _shift: bool,
-    ) -> Self {
+    fn from_drag(anchor: Point, _current: Point, color: ShapeColor, _shift: bool) -> Self {
         let mut data = ElementData::new(0);
-        data.world_point.set(anchor.0, anchor.1);
+        data.world_point.set(anchor.x, anchor.y);
         data.font_size = 24.0;
         data.width = 0.0;
         data.height = 0.0;
@@ -184,7 +179,7 @@ impl FromDrag for Text {
 }
 
 impl UpdateDrag for Text {
-    fn update_drag(&mut self, _current: (f64, f64), _anchor: (f64, f64), _shift: bool) {
+    fn update_drag(&mut self, _current: Point, _anchor: Point, _shift: bool) {
         // Text elements are placed on click, not dragged to size.
     }
 }

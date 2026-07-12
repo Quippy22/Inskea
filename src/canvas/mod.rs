@@ -314,7 +314,7 @@ pub fn Canvas(
                         if state.tool == Tool::Freehand {
                             props.scene.update(|s| {
                                 if let Some(el) = s.elements.last_mut() {
-                                    el.update_drag(world, state.anchor, ev.shift_key());
+                                    el.update_drag(Point::from(world), Point::from(state.anchor), ev.shift_key());
                                 }
                             });
                         }
@@ -453,17 +453,15 @@ pub fn Canvas(
                 return None;
             }
             let shift = st.shift_pressed.get();
+            let anchor = Point::from(state.anchor);
+            let world_pt = Point::from(world);
             let el: Element = match state.tool {
-                Tool::Rectangle => {
-                    Rectangle::from_drag(state.anchor, world, state.color, shift).into()
-                }
-                Tool::Ellipse => Ellipse::from_drag(state.anchor, world, state.color, shift).into(),
-                Tool::Line => Line::from_drag(state.anchor, world, state.color, shift).into(),
-                Tool::Arrow => Arrow::from_drag(state.anchor, world, state.color, shift).into(),
-                Tool::Text => Text::from_drag(state.anchor, world, state.color, shift).into(),
-                Tool::Freehand => {
-                    Freehand::from_drag(state.anchor, world, state.color, shift).into()
-                }
+                Tool::Rectangle => Rectangle::from_drag(anchor, world_pt, state.color, shift).into(),
+                Tool::Ellipse => Ellipse::from_drag(anchor, world_pt, state.color, shift).into(),
+                Tool::Line => Line::from_drag(anchor, world_pt, state.color, shift).into(),
+                Tool::Arrow => Arrow::from_drag(anchor, world_pt, state.color, shift).into(),
+                Tool::Text => Text::from_drag(anchor, world_pt, state.color, shift).into(),
+                Tool::Freehand => Freehand::from_drag(anchor, world_pt, state.color, shift).into(),
             };
             Some(view! { <g stroke-dasharray={DASH_PREVIEW}>{el.render(props.viewport.get().zoom)}</g> }.into_view())
         }

@@ -24,12 +24,7 @@ impl Ellipse {
 }
 
 impl FromDrag for Ellipse {
-    fn from_drag(
-        anchor: (f64, f64),
-        current: (f64, f64),
-        color: super::ShapeColor,
-        shift: bool,
-    ) -> Self {
+    fn from_drag(anchor: Point, current: Point, color: super::ShapeColor, shift: bool) -> Self {
         let (pt, w, h) = rect_from_drag(anchor, current, shift);
         Self {
             data: ElementData {
@@ -44,7 +39,7 @@ impl FromDrag for Ellipse {
 }
 
 impl UpdateDrag for Ellipse {
-    fn update_drag(&mut self, current: (f64, f64), anchor: (f64, f64), shift: bool) {
+    fn update_drag(&mut self, current: Point, anchor: Point, shift: bool) {
         let (pt, w, h) = rect_from_drag(anchor, current, shift);
         self.data.world_point.set(pt.x, pt.y);
         self.data.width = w;

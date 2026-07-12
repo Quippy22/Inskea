@@ -22,13 +22,11 @@ pub(crate) fn rotate_bbox(data: &mut ElementData, pivot: Point, delta: f64) {
     data.world_point.y = center.y - data.height / 2.0;
 }
 
-pub(crate) fn rect_from_drag(
-    anchor: (f64, f64),
-    current: (f64, f64),
-    shift: bool,
-) -> (Point, f64, f64) {
-    let (ax, ay) = anchor;
-    let (cx, cy) = current;
+pub(crate) fn rect_from_drag(anchor: Point, current: Point, shift: bool) -> (Point, f64, f64) {
+    let ax = anchor.x;
+    let ay = anchor.y;
+    let cx = current.x;
+    let cy = current.y;
     let mut x = ax.min(cx);
     let mut y = ay.min(cy);
     let mut w = (cx - ax).abs();

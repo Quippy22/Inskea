@@ -122,26 +122,15 @@ pub fn draw_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &mut
             st.drawing.set(None);
             return;
         }
+        let anchor = Point::from(state.anchor);
+        let world_pt = Point::from(world);
         let el: Element = match state.tool {
-            Tool::Rectangle => {
-                Rectangle::from_drag(state.anchor, world, state.color, st.shift_pressed.get())
-                    .into()
-            }
-            Tool::Ellipse => {
-                Ellipse::from_drag(state.anchor, world, state.color, st.shift_pressed.get()).into()
-            }
-            Tool::Line => {
-                Line::from_drag(state.anchor, world, state.color, st.shift_pressed.get()).into()
-            }
-            Tool::Arrow => {
-                Arrow::from_drag(state.anchor, world, state.color, st.shift_pressed.get()).into()
-            }
-            Tool::Text => {
-                Text::from_drag(state.anchor, world, state.color, st.shift_pressed.get()).into()
-            }
-            Tool::Freehand => {
-                Freehand::from_drag(state.anchor, world, state.color, st.shift_pressed.get()).into()
-            }
+            Tool::Rectangle => Rectangle::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
+            Tool::Ellipse => Ellipse::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
+            Tool::Line => Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
+            Tool::Arrow => Arrow::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
+            Tool::Text => Text::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
+            Tool::Freehand => Freehand::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
         };
         (props.push_snapshot)();
         props.scene.update(|s| {

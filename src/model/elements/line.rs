@@ -29,9 +29,11 @@ pub struct Line {
 }
 
 impl FromDrag for Line {
-    fn from_drag(anchor: (f64, f64), current: (f64, f64), color: ShapeColor, shift: bool) -> Self {
-        let (ax, ay) = anchor;
-        let (cx, cy) = current;
+    fn from_drag(anchor: Point, current: Point, color: ShapeColor, shift: bool) -> Self {
+        let ax = anchor.x;
+        let ay = anchor.y;
+        let cx = current.x;
+        let cy = current.y;
         let (mut ex, mut ey) = (cx, cy);
         if shift {
             let dx = cx - ax;
@@ -54,9 +56,11 @@ impl FromDrag for Line {
 }
 
 impl UpdateDrag for Line {
-    fn update_drag(&mut self, current: (f64, f64), anchor: (f64, f64), shift: bool) {
-        let (ax, ay) = anchor;
-        let (cx, cy) = current;
+    fn update_drag(&mut self, current: Point, anchor: Point, shift: bool) {
+        let ax = anchor.x;
+        let ay = anchor.y;
+        let cx = current.x;
+        let cy = current.y;
         let (mut ex, mut ey) = (cx, cy);
         if shift {
             let dx = cx - ax;

@@ -287,13 +287,13 @@ pub trait Resize {
 /// Construct an element from a mouse-drag operation (anchor → current position).
 pub trait FromDrag: Sized {
     /// Create a new element of this type given the drag start and current world-space points.
-    fn from_drag(anchor: (f64, f64), current: (f64, f64), color: ShapeColor, shift: bool) -> Self;
+    fn from_drag(anchor: Point, current: Point, color: ShapeColor, shift: bool) -> Self;
 }
 
 /// Update an element while it is being drawn (e.g. freehand adding points).
 pub trait UpdateDrag {
     /// Adjust the element in response to a mouse move during the drag that created it.
-    fn update_drag(&mut self, current: (f64, f64), anchor: (f64, f64), shift: bool);
+    fn update_drag(&mut self, current: Point, anchor: Point, shift: bool);
 }
 
 // ── Blanket trait implementations on Element ───────────────────────────
@@ -390,7 +390,7 @@ impl Resize for Element {
 }
 
 impl UpdateDrag for Element {
-    fn update_drag(&mut self, current: (f64, f64), anchor: (f64, f64), shift: bool) {
+    fn update_drag(&mut self, current: Point, anchor: Point, shift: bool) {
         match self {
             Element::Rectangle(e) => e.update_drag(current, anchor, shift),
             Element::Ellipse(e) => e.update_drag(current, anchor, shift),

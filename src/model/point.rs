@@ -79,6 +79,12 @@ impl Point {
     }
 }
 
+impl From<(f64, f64)> for Point {
+    fn from((x, y): (f64, f64)) -> Self {
+        Self::new(x, y)
+    }
+}
+
 impl Default for Point {
     fn default() -> Self {
         Self::new(0.0, 0.0)
