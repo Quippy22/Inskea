@@ -56,6 +56,19 @@ impl Point {
         ((p.x - nx).powi(2) + (p.y - ny).powi(2)).sqrt()
     }
 
+    /// Un-rotate a point into the local frame of an element with the given bounding-box
+    /// center and rotation, returning the un-rotated point.
+    pub fn unrotate(point: Point, cx: f64, cy: f64, rotation: f64) -> Point {
+        if rotation == 0.0 {
+            return point;
+        }
+        let cos = (-rotation).cos();
+        let sin = (-rotation).sin();
+        let dx = point.x - cx;
+        let dy = point.y - cy;
+        Point::new(cx + dx * cos - dy * sin, cy + dx * sin + dy * cos)
+    }
+
     /// Return the four world-space corners of a rectangle with this point
     /// as the top-left corner, rotated around its center by `rotation` radians.
     pub fn rect_corners(self, width: f64, height: f64, rotation: f64) -> [Point; 4] {

@@ -83,17 +83,11 @@ impl Render for Rectangle {
 
 impl HitTest for Rectangle {
     fn hit_test(&self, point: Point, margin: f64) -> bool {
-        let (px, py) = if self.data.rotation != 0.0 {
-            let cx = self.data.world_point.x + self.data.width / 2.0;
-            let cy = self.data.world_point.y + self.data.height / 2.0;
-            let cos = (-self.data.rotation).cos();
-            let sin = (-self.data.rotation).sin();
-            let dx = point.x - cx;
-            let dy = point.y - cy;
-            (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos)
-        } else {
-            (point.x, point.y)
-        };
+        let cx = self.data.world_point.x + self.data.width / 2.0;
+        let cy = self.data.world_point.y + self.data.height / 2.0;
+        let pt = Point::unrotate(point, cx, cy, self.data.rotation);
+        let px = pt.x;
+        let py = pt.y;
         let has_fill = self.data.fill_color.is_some();
         if has_fill {
             px >= self.data.world_point.x - margin
