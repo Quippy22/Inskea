@@ -5,6 +5,7 @@ pub(crate) mod line;
 pub mod path;
 pub mod rect;
 pub(crate) mod text;
+mod utils;
 
 pub use arrow::Arrow;
 pub use ellipse::Ellipse;

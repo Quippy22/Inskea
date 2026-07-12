@@ -2,6 +2,7 @@ use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
 use super::{ElementData, ShapeColor};
+use super::utils::rect_from_drag;
 use crate::model::resize::{resize_bbox, resize_from_handle, ResizeContext};
 use crate::model::Point;
 use leptos::IntoView;
@@ -30,32 +31,10 @@ impl Rectangle {
 
 impl FromDrag for Rectangle {
     fn from_drag(anchor: (f64, f64), current: (f64, f64), color: ShapeColor, shift: bool) -> Self {
-        let (ax, ay) = anchor;
-        let (cx, cy) = current;
-        let mut x = ax.min(cx);
-        let mut y = ay.min(cy);
-        let mut w = (cx - ax).abs();
-        let mut h = (cy - ay).abs();
-        if shift {
-            let s = w.max(h);
-            w = s;
-            h = s;
-            if cx < ax {
-                x = ax - s;
-            }
-            if cy < ay {
-                y = ay - s;
-            }
-        }
-        if w < MIN_DIMENSION {
-            w = MIN_DIMENSION;
-        }
-        if h < MIN_DIMENSION {
-            h = MIN_DIMENSION;
-        }
+        let (pt, w, h) = rect_from_drag(anchor, current, shift);
         Self {
             data: ElementData {
-                world_point: Point { x, y },
+                world_point: pt,
                 width: w,
                 height: h,
                 stroke_color: color,
@@ -67,30 +46,8 @@ impl FromDrag for Rectangle {
 
 impl UpdateDrag for Rectangle {
     fn update_drag(&mut self, current: (f64, f64), anchor: (f64, f64), shift: bool) {
-        let (ax, ay) = anchor;
-        let (cx, cy) = current;
-        let mut x = ax.min(cx);
-        let mut y = ay.min(cy);
-        let mut w = (cx - ax).abs();
-        let mut h = (cy - ay).abs();
-        if shift {
-            let s = w.max(h);
-            w = s;
-            h = s;
-            if cx < ax {
-                x = ax - s;
-            }
-            if cy < ay {
-                y = ay - s;
-            }
-        }
-        if w < MIN_DIMENSION {
-            w = MIN_DIMENSION;
-        }
-        if h < MIN_DIMENSION {
-            h = MIN_DIMENSION;
-        }
-        self.data.world_point.set(x, y);
+        let (pt, w, h) = rect_from_drag(anchor, current, shift);
+        self.data.world_point.set(pt.x, pt.y);
         self.data.width = w;
         self.data.height = h;
     }

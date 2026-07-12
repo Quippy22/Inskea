@@ -2,11 +2,10 @@ use super::ElementData;
 use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
+use super::utils::rect_from_drag;
 use crate::model::resize::{resize_bbox, resize_from_handle, ResizeContext};
 use crate::model::Point;
 use leptos::IntoView;
-
-use super::rect;
 
 /// An ellipse (oval) shape defined by its bounding-box top-left, width, and height.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -31,32 +30,10 @@ impl FromDrag for Ellipse {
         color: super::ShapeColor,
         shift: bool,
     ) -> Self {
-        let (ax, ay) = anchor;
-        let (cx, cy) = current;
-        let mut x = ax.min(cx);
-        let mut y = ay.min(cy);
-        let mut w = (cx - ax).abs();
-        let mut h = (cy - ay).abs();
-        if shift {
-            let s = w.max(h);
-            w = s;
-            h = s;
-            if cx < ax {
-                x = ax - s;
-            }
-            if cy < ay {
-                y = ay - s;
-            }
-        }
-        if w < rect::MIN_DIMENSION {
-            w = rect::MIN_DIMENSION;
-        }
-        if h < rect::MIN_DIMENSION {
-            h = rect::MIN_DIMENSION;
-        }
+        let (pt, w, h) = rect_from_drag(anchor, current, shift);
         Self {
             data: ElementData {
-                world_point: Point { x, y },
+                world_point: pt,
                 width: w,
                 height: h,
                 stroke_color: color,
@@ -68,30 +45,8 @@ impl FromDrag for Ellipse {
 
 impl UpdateDrag for Ellipse {
     fn update_drag(&mut self, current: (f64, f64), anchor: (f64, f64), shift: bool) {
-        let (ax, ay) = anchor;
-        let (cx, cy) = current;
-        let mut x = ax.min(cx);
-        let mut y = ay.min(cy);
-        let mut w = (cx - ax).abs();
-        let mut h = (cy - ay).abs();
-        if shift {
-            let s = w.max(h);
-            w = s;
-            h = s;
-            if cx < ax {
-                x = ax - s;
-            }
-            if cy < ay {
-                y = ay - s;
-            }
-        }
-        if w < rect::MIN_DIMENSION {
-            w = rect::MIN_DIMENSION;
-        }
-        if h < rect::MIN_DIMENSION {
-            h = rect::MIN_DIMENSION;
-        }
-        self.data.world_point.set(x, y);
+        let (pt, w, h) = rect_from_drag(anchor, current, shift);
+        self.data.world_point.set(pt.x, pt.y);
         self.data.width = w;
         self.data.height = h;
     }
