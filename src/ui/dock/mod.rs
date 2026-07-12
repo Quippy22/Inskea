@@ -15,7 +15,7 @@ pub use pages::PagesPanel;
 
 use crate::canvas::CanvasMode;
 use crate::model::elements::path::CurveMode;
-use crate::model::{Element, ElementId, PathPoints, Scene, ShapeColor};
+use crate::model::{ElementId, PathPoints, Scene, ShapeColor};
 use crate::ui::classes;
 use crate::ui::icon;
 use leptos::*;
@@ -107,11 +107,7 @@ pub fn Dock(
         let els = scene.get().elements;
         let el = els.iter().find(|e| e.id() == ids[0])?;
         el.path_points()?; // ensure it's a path element
-        match el {
-            Element::Line(l) => Some(l.curve_mode),
-            Element::Arrow(a) => Some(a.curve_mode),
-            _ => None,
-        }
+        Some(el.curve_mode())
     };
 
     let toggle_curve_mode = move |_| {
@@ -122,20 +118,12 @@ pub fn Dock(
         let id = ids[0];
         scene.update(|s| {
             if let Some(el) = s.elements.iter_mut().find(|e| e.id() == id) {
-                match el {
-                    Element::Line(l) => {
-                        l.curve_mode = match l.curve_mode {
-                            CurveMode::Straight => CurveMode::Curved,
-                            CurveMode::Curved => CurveMode::Straight,
-                        };
-                    }
-                    Element::Arrow(a) => {
-                        a.curve_mode = match a.curve_mode {
-                            CurveMode::Straight => CurveMode::Curved,
-                            CurveMode::Curved => CurveMode::Straight,
-                        };
-                    }
-                    _ => {}
+                if el.path_points().is_some() {
+                    let new_mode = match el.curve_mode() {
+                        CurveMode::Straight => CurveMode::Curved,
+                        CurveMode::Curved => CurveMode::Straight,
+                    };
+                    el.set_curve_mode(new_mode);
                 }
             }
         });

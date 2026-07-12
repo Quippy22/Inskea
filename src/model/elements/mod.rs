@@ -225,6 +225,8 @@ pub trait PathPoints {
     fn curve_mode(&self) -> CurveMode {
         CurveMode::Straight
     }
+    /// Set the curve mode.
+    fn set_curve_mode(&mut self, _mode: CurveMode) {}
 }
 
 impl PathPoints for Line {
@@ -237,6 +239,9 @@ impl PathPoints for Line {
     fn curve_mode(&self) -> CurveMode {
         self.curve_mode
     }
+    fn set_curve_mode(&mut self, mode: CurveMode) {
+        self.curve_mode = mode;
+    }
 }
 
 impl PathPoints for Arrow {
@@ -248,6 +253,9 @@ impl PathPoints for Arrow {
     }
     fn curve_mode(&self) -> CurveMode {
         self.curve_mode
+    }
+    fn set_curve_mode(&mut self, mode: CurveMode) {
+        self.curve_mode = mode;
     }
 }
 
@@ -271,6 +279,13 @@ impl PathPoints for Element {
             Element::Line(e) => e.curve_mode,
             Element::Arrow(e) => e.curve_mode,
             _ => CurveMode::Straight,
+        }
+    }
+    fn set_curve_mode(&mut self, mode: CurveMode) {
+        match self {
+            Element::Line(e) => e.curve_mode = mode,
+            Element::Arrow(e) => e.curve_mode = mode,
+            _ => {}
         }
     }
 }
