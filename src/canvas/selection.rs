@@ -128,7 +128,6 @@ pub fn selection_handle_overlay(
         let cy = by + bh / 2.0;
         let rx = cx;
         let ry = by - ROTATE_HANDLE_OFFSET;
-        let _ = ry;
 
         let rot: f64 = if ids.len() == 1 {
             els.iter()
