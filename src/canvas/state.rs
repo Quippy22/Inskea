@@ -2,7 +2,7 @@ use crate::model::resize::ResizeHandle;
 use crate::model::ShapeColor;
 use crate::model::{Bounds, Element, ElementId, HitTest, Point, Scene};
 use crate::ui::dock::Tool;
-use crate::ui::settings::{CenterStyle, GridSize, GridStyle};
+use crate::canvas::settings::CanvasSettings;
 use leptos::*;
 use std::rc::Rc;
 
@@ -114,9 +114,7 @@ pub struct CanvasInputs {
     pub canvas_mode: RwSignal<CanvasMode>,
     pub scene: RwSignal<Scene>,
     pub eraser_active: RwSignal<bool>,
-    pub center_style: RwSignal<CenterStyle>,
-    pub grid_style: RwSignal<GridStyle>,
-    pub grid_size: RwSignal<GridSize>,
+    pub settings: RwSignal<CanvasSettings>,
     pub push_snapshot: Rc<dyn Fn()>,
     pub export_crop_active: RwSignal<bool>,
     pub on_crop_export: RwSignal<Option<CropExportCallback>>,

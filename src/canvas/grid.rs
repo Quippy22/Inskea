@@ -1,15 +1,13 @@
-use crate::ui::settings::{CenterStyle, GridSize, GridStyle};
+use crate::canvas::settings::{CanvasSettings, CenterStyle, GridStyle};
 use leptos::*;
 
 /// Returns a reactive closure that renders the grid pattern and centre indicator.
 pub fn grid_overlay(
-    grid_style: RwSignal<GridStyle>,
-    grid_size: RwSignal<GridSize>,
-    center_style: RwSignal<CenterStyle>,
+    settings: RwSignal<CanvasSettings>,
 ) -> impl Fn() -> View {
     move || {
-        let gs = grid_style.get();
-        let sz = grid_size.get().px();
+        let gs = settings.get().grid_style;
+        let sz = settings.get().grid_size.px();
         let half = sz / 2.0;
 
         let pattern = match gs {
@@ -58,7 +56,7 @@ pub fn grid_overlay(
             }
         };
 
-        let center = match center_style.get() {
+        let center = match settings.get().center_style {
             CenterStyle::Crosshair => view! {
                 <path d="M-12,0 L12,0 M0,-12 L0,12" stroke="#7aa2f7" stroke-width="2" />
             }

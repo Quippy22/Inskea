@@ -5,6 +5,7 @@ pub use viewport::Viewport;
 mod grid;
 mod modes;
 mod selection;
+pub mod settings;
 mod state;
 mod text_edit;
 
@@ -17,7 +18,7 @@ pub use state::CropExportCallback;
 
 use crate::model::*;
 use crate::ui::dock::Tool;
-use crate::ui::settings::{CenterStyle, GridSize, GridStyle};
+use settings::CanvasSettings;
 use crate::util::window_size;
 use leptos::ev;
 use leptos::*;
@@ -80,9 +81,7 @@ pub fn Canvas(
     canvas_mode: RwSignal<CanvasMode>,
     scene: RwSignal<Scene>,
     eraser_active: RwSignal<bool>,
-    center_style: RwSignal<CenterStyle>,
-    grid_style: RwSignal<GridStyle>,
-    grid_size: RwSignal<GridSize>,
+    settings: RwSignal<CanvasSettings>,
     push_snapshot: Rc<dyn Fn()>,
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<CropExportCallback>>,
@@ -99,9 +98,7 @@ pub fn Canvas(
         canvas_mode,
         scene,
         eraser_active,
-        center_style,
-        grid_style,
-        grid_size,
+        settings,
         push_snapshot,
         export_crop_active,
         on_crop_export,
@@ -482,7 +479,7 @@ pub fn Canvas(
             on:pointerup=on_pointer_up
             on:wheel=on_wheel
         >
-            {grid::grid_overlay(props.grid_style, props.grid_size, props.center_style)}
+            {grid::grid_overlay(props.settings)}
 
             // NB: this is deliberately NOT a <For> loop keyed by ElementId.
             // Leptos's <For> only re-invokes `children` for a newly-inserted

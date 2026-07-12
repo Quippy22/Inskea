@@ -1,47 +1,9 @@
+use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
 use crate::ui::classes;
 use crate::ui::components::{IconButton, SegmentedControl};
 use crate::ui::icon;
 use leptos::*;
 use serde::{Deserialize, Serialize};
-
-// ── Settings types ──────────────────────────────────────────────────────────
-
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum CenterStyle {
-    Crosshair,
-    Dot,
-    Off,
-}
-
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum GridStyle {
-    Dot,
-    Line,
-    Off,
-}
-
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum GridSize {
-    Px10,
-    Px20,
-    Px30,
-}
-
-impl GridSize {
-    pub fn px(&self) -> f64 {
-        match self {
-            GridSize::Px10 => 10.0,
-            GridSize::Px20 => 20.0,
-            GridSize::Px30 => 30.0,
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum CanvasBg {
-    Dark,
-    Light,
-}
 
 // ── Persistence ─────────────────────────────────────────────────────────────
 
@@ -93,13 +55,31 @@ pub fn from_toml(content: &str) -> Option<(CenterStyle, GridStyle, GridSize, boo
 
 #[component]
 pub fn SettingsPanel(
-    center_style: RwSignal<CenterStyle>,
-    grid_style: RwSignal<GridStyle>,
-    grid_size: RwSignal<GridSize>,
-    autosave: RwSignal<bool>,
-    canvas_bg: RwSignal<CanvasBg>,
+    settings: RwSignal<CanvasSettings>,
 ) -> impl IntoView {
     let open = create_rw_signal(false);
+
+    let center_style = create_rw_signal(settings.get().center_style);
+    let grid_style = create_rw_signal(settings.get().grid_style);
+    let grid_size = create_rw_signal(settings.get().grid_size);
+    let autosave = create_rw_signal(settings.get().autosave);
+    let canvas_bg = create_rw_signal(settings.get().canvas_bg);
+
+    create_effect(move |_| {
+        settings.update(|s| s.center_style = center_style.get());
+    });
+    create_effect(move |_| {
+        settings.update(|s| s.grid_style = grid_style.get());
+    });
+    create_effect(move |_| {
+        settings.update(|s| s.grid_size = grid_size.get());
+    });
+    create_effect(move |_| {
+        settings.update(|s| s.autosave = autosave.get());
+    });
+    create_effect(move |_| {
+        settings.update(|s| s.canvas_bg = canvas_bg.get());
+    });
 
     let close = move || open.set(false);
     let toggle = move || open.update(|v| *v = !*v);

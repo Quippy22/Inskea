@@ -4,7 +4,8 @@ use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
 use crate::model::{ElementId, Scene, ShapeColor};
 use crate::tauri_bridge;
 use crate::ui::dock::{Dock, Tool};
-use crate::ui::settings::{from_toml, to_toml, CanvasBg, CenterStyle, GridSize, GridStyle};
+use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
+use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::{SettingsPanel, ToolBar};
 use leptos::ev;
 use leptos::*;
@@ -29,11 +30,13 @@ pub fn App() -> impl IntoView {
     let export_crop_active = create_rw_signal(false);
     let on_crop_export = create_rw_signal::<Option<CropExportCallback>>(None);
 
-    let center_style = create_rw_signal(CenterStyle::Crosshair);
-    let grid_style = create_rw_signal(GridStyle::Dot);
-    let grid_size = create_rw_signal(GridSize::Px30);
-    let autosave = create_rw_signal(false);
-    let canvas_bg = create_rw_signal(CanvasBg::Dark);
+    let settings = create_rw_signal(CanvasSettings {
+        center_style: CenterStyle::Crosshair,
+        grid_style: GridStyle::Dot,
+        grid_size: GridSize::Px30,
+        autosave: false,
+        canvas_bg: CanvasBg::Dark,
+    });
 
     // ── Undo / Redo ────────────────────────────────────────────────────────
     let undo_stack = create_rw_signal(Vec::<Scene>::new());
@@ -90,11 +93,13 @@ pub fn App() -> impl IntoView {
         spawn_local(async move {
             if let Ok(content) = tauri_bridge::load_settings().await {
                 if let Some((cs, gs, gz, auto, bg)) = from_toml(&content) {
-                    center_style.set(cs);
-                    grid_style.set(gs);
-                    grid_size.set(gz);
-                    autosave.set(auto);
-                    canvas_bg.set(bg);
+                    settings.set(CanvasSettings {
+                        center_style: cs,
+                        grid_style: gs,
+                        grid_size: gz,
+                        autosave: auto,
+                        canvas_bg: bg,
+                    });
                 }
             }
             initialized.set(true);
@@ -104,21 +109,10 @@ pub fn App() -> impl IntoView {
     }
 
     create_effect(move |_| {
-        let _ = (
-            center_style.get(),
-            grid_style.get(),
-            grid_size.get(),
-            autosave.get(),
-            canvas_bg.get(),
-        );
+        let s = settings.get();
+        let _ = s;
         if initialized.get() && is_tauri {
-            let content = to_toml(
-                center_style.get(),
-                grid_style.get(),
-                grid_size.get(),
-                autosave.get(),
-                canvas_bg.get(),
-            );
+            let content = to_toml(s.center_style, s.grid_style, s.grid_size, s.autosave, s.canvas_bg);
             spawn_local(async move {
                 let _ = tauri_bridge::save_settings(&content).await;
             });
@@ -127,7 +121,7 @@ pub fn App() -> impl IntoView {
 
     view! {
         <div class=move || {
-            let bg = if canvas_bg.get() == CanvasBg::Dark { "bg-bg" } else { "bg-white" };
+            let bg = if settings.get().canvas_bg == CanvasBg::Dark { "bg-bg" } else { "bg-white" };
             format!("w-screen h-screen {bg} text-fg")
         }>
             <Canvas
@@ -139,9 +133,7 @@ pub fn App() -> impl IntoView {
                 canvas_mode=canvas_mode
                 scene=scene
                 eraser_active=eraser_active
-                center_style=center_style
-                grid_style=grid_style
-                grid_size=grid_size
+                settings=settings
                 push_snapshot=push_snapshot
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
@@ -167,11 +159,7 @@ pub fn App() -> impl IntoView {
                 selected_ids=selected_ids
             />
             <SettingsPanel
-                center_style=center_style
-                grid_style=grid_style
-                grid_size=grid_size
-                autosave=autosave
-                canvas_bg=canvas_bg
+                settings=settings
             />
         </div>
     }
