@@ -2,7 +2,7 @@ use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
 use super::{ElementData, ShapeColor};
-use super::utils::snap_bbox_to_grid;
+use super::utils::{rotate_bbox, snap_bbox_to_grid};
 use crate::model::resize::{resize_bbox, resize_from_handle, MIN_ELEMENT_SIZE, ResizeContext};
 use crate::model::Point;
 use leptos::IntoView;
@@ -288,13 +288,7 @@ impl SnapToGrid for Text {
 
 impl Rotate for Text {
     fn rotate_around(&mut self, point: Point, delta: f64) {
-        self.data.rotation += delta;
-        let cx = self.data.world_point.x + self.data.width / 2.0;
-        let cy = self.data.world_point.y + self.data.height / 2.0;
-        let mut center = Point { x: cx, y: cy };
-        center.rotate_around(point, delta);
-        self.data.world_point.x = center.x - self.data.width / 2.0;
-        self.data.world_point.y = center.y - self.data.height / 2.0;
+        rotate_bbox(&mut self.data, point, delta);
     }
 }
 

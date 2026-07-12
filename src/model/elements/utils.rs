@@ -1,6 +1,7 @@
 use crate::model::Point;
 
 use super::rect::MIN_DIMENSION;
+use super::ElementData;
 
 pub(crate) fn snap_bbox_to_grid(world_point: &mut Point, width: f64, height: f64, grid: f64) {
     let cx = world_point.x + width / 2.0;
@@ -9,6 +10,16 @@ pub(crate) fn snap_bbox_to_grid(world_point: &mut Point, width: f64, height: f64
     let snapped_cy = (cy / grid).round() * grid;
     world_point.x += snapped_cx - cx;
     world_point.y += snapped_cy - cy;
+}
+
+pub(crate) fn rotate_bbox(data: &mut ElementData, pivot: Point, delta: f64) {
+    data.rotation += delta;
+    let cx = data.world_point.x + data.width / 2.0;
+    let cy = data.world_point.y + data.height / 2.0;
+    let mut center = Point { x: cx, y: cy };
+    center.rotate_around(pivot, delta);
+    data.world_point.x = center.x - data.width / 2.0;
+    data.world_point.y = center.y - data.height / 2.0;
 }
 
 pub(crate) fn rect_from_drag(
