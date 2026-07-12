@@ -283,6 +283,40 @@ pub fn resize_bbox(
     Some((Point { x: nx, y: ny }, (nw, nh)))
 }
 
+/// Scale an element's position and size proportionally to a new bounding-box.
+///
+/// `pos` is the new top-left corner of the bounds, `(nw, nh)` the new size.
+/// `(bx, by, bw, bh)` is the original bounds box. The scaling is derived from
+/// the ratio of `(nw, nh)` to the clamped bounds size.
+///
+/// When `set_height` is `false` (used by `Text`), the element's height is kept
+/// unchanged — the caller manages it separately via `resize_text`.
+pub fn resize_scale_element(
+    data: &mut ElementData,
+    orig: &ElementData,
+    pos: Point,
+    nw: f64,
+    nh: f64,
+    bx: f64,
+    by: f64,
+    bw: f64,
+    bh: f64,
+    set_height: bool,
+) {
+    let obw = bw.max(MIN_ELEMENT_SIZE);
+    let obh = bh.max(MIN_ELEMENT_SIZE);
+    let sx = nw / obw;
+    let sy = nh / obh;
+    data.world_point.set(
+        (orig.world_point.x - bx) * sx + pos.x,
+        (orig.world_point.y - by) * sy + pos.y,
+    );
+    data.width = (orig.width * sx).max(MIN_ELEMENT_SIZE);
+    if set_height {
+        data.height = (orig.height * sy).max(MIN_ELEMENT_SIZE);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

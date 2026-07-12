@@ -3,7 +3,7 @@ use super::{
 };
 use super::{ElementData, ShapeColor};
 use super::utils::{rect_from_drag, rotate_bbox, snap_bbox_to_grid};
-use crate::model::resize::{resize_bbox, resize_from_handle, ResizeContext};
+use crate::model::resize::{resize_bbox, resize_from_handle, resize_scale_element, ResizeContext};
 use crate::model::Point;
 use leptos::IntoView;
 
@@ -136,7 +136,6 @@ impl Rotate for Rectangle {
 impl Resize for Rectangle {
     fn resize(&mut self, ctx: &ResizeContext) {
         if ctx.multi {
-            use crate::model::resize::MIN_ELEMENT_SIZE;
             let (pos, (nw, nh)) = match resize_bbox(
                 Point { x: ctx.bx, y: ctx.by },
                 (ctx.bw, ctx.bh),
@@ -148,18 +147,7 @@ impl Resize for Rectangle {
                 Some(v) => v,
                 None => return,
             };
-            if let super::Element::Rectangle(orig) = ctx.orig {
-                let obw = ctx.bw.max(MIN_ELEMENT_SIZE);
-                let obh = ctx.bh.max(MIN_ELEMENT_SIZE);
-                let sx = nw / obw;
-                let sy = nh / obh;
-                self.data.world_point.set(
-                    (orig.data.world_point.x - ctx.bx) * sx + pos.x,
-                    (orig.data.world_point.y - ctx.by) * sy + pos.y,
-                );
-                self.data.width = (orig.data.width * sx).max(MIN_ELEMENT_SIZE);
-                self.data.height = (orig.data.height * sy).max(MIN_ELEMENT_SIZE);
-            }
+            resize_scale_element(&mut self.data, ctx.orig.data(), pos, nw, nh, ctx.bx, ctx.by, ctx.bw, ctx.bh, true);
         } else {
             let result = resize_from_handle(
                 &self.data,

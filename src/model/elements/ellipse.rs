@@ -3,7 +3,7 @@ use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
 use super::utils::{rect_from_drag, rotate_bbox, snap_bbox_to_grid};
-use crate::model::resize::{resize_bbox, resize_from_handle, ResizeContext};
+use crate::model::resize::{resize_bbox, resize_from_handle, resize_scale_element, ResizeContext};
 use crate::model::Point;
 use leptos::IntoView;
 
@@ -138,18 +138,7 @@ impl Resize for Ellipse {
                 Some(v) => v,
                 None => return,
             };
-            if let super::Element::Ellipse(orig) = ctx.orig {
-                let obw = ctx.bw.max(crate::model::resize::MIN_ELEMENT_SIZE);
-                let obh = ctx.bh.max(crate::model::resize::MIN_ELEMENT_SIZE);
-                let sx = nw / obw;
-                let sy = nh / obh;
-                self.data.world_point.set(
-                    (orig.data.world_point.x - ctx.bx) * sx + pos.x,
-                    (orig.data.world_point.y - ctx.by) * sy + pos.y,
-                );
-                self.data.width = (orig.data.width * sx).max(crate::model::resize::MIN_ELEMENT_SIZE);
-                self.data.height = (orig.data.height * sy).max(crate::model::resize::MIN_ELEMENT_SIZE);
-            }
+            resize_scale_element(&mut self.data, ctx.orig.data(), pos, nw, nh, ctx.bx, ctx.by, ctx.bw, ctx.bh, true);
         } else {
             let result = resize_from_handle(
                 &self.data,
