@@ -3,6 +3,7 @@ use crate::canvas::{CanvasMode, Viewport};
 use crate::model::Scene;
 use crate::skea;
 use crate::tauri_bridge;
+use crate::util::window_size;
 use crate::ui::classes;
 use crate::ui::components::{Dropdown, DropdownItem};
 use crate::ui::export;
@@ -12,21 +13,6 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
-
-fn window_size() -> (f64, f64) {
-    let window = web_sys::window().expect("no global `window` exists");
-    let w = window
-        .inner_width()
-        .ok()
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0);
-    let h = window
-        .inner_height()
-        .ok()
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0);
-    (w, h)
-}
 
 fn browser_import(scene: RwSignal<Scene>) {
     let document = web_sys::window().unwrap().document().unwrap();

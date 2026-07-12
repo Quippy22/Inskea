@@ -17,6 +17,7 @@ use state::{hit_and_erase, CanvasInputs, CanvasState};
 use crate::model::*;
 use crate::ui::dock::Tool;
 use crate::ui::settings::{CenterStyle, GridSize, GridStyle};
+use crate::util::window_size;
 use leptos::ev;
 use leptos::*;
 use std::rc::Rc;
@@ -36,25 +37,6 @@ const ZOOM_MAX: f64 = 20.0;
 pub(crate) const DASH_PREVIEW: &str = "4 2";
 
 // ────────────────────────────────────────────────────────────────────────────
-
-/// Read the current browser window inner dimensions.
-///
-/// Returns `(width, height)` in CSS pixels. Falls back to `(0, 0)` if the window
-/// object is unavailable (should not happen in a browser context).
-fn window_size() -> (f64, f64) {
-    let window = web_sys::window().expect("no global `window` exists");
-    let w = window
-        .inner_width()
-        .ok()
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0);
-    let h = window
-        .inner_height()
-        .ok()
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0);
-    (w, h)
-}
 
 /// Root SVG canvas component.
 ///
