@@ -17,8 +17,8 @@ pub fn make_commit_edit(
             let text = edit_text.get();
             scene.update(|s| {
                 if text.is_empty() {
-                    s.elements.retain(|e| e.id() != id);
-                } else if let Some(Element::Text(text_elem)) = s.elements.iter_mut().find(|e| e.id() == id) {
+                    s.remove_by_id(id);
+                } else if let Some(Element::Text(text_elem)) = s.element_by_id_mut(id) {
                     let wrap_width = if text_elem.data.width > 0.0 {
                         text_elem.data.width
                     } else {
@@ -49,7 +49,7 @@ pub fn text_edit_overlay(
     move || {
         let id = editing_id.get()?;
         let text_elem = scene.with(|s| {
-            s.elements.iter().find(|e| e.id() == id).and_then(|e| {
+            s.element_by_id(id).and_then(|e| {
                 if let Element::Text(t) = e {
                     Some(t.clone())
                 } else {

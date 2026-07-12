@@ -107,7 +107,7 @@ pub fn draw_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &mut
     if let Some(state) = st.drawing.get() {
         if state.tool == Tool::Freehand {
             props.scene.update(|s| {
-                if let Some(Element::Freehand(fh)) = s.elements.last_mut() {
+                if let Some(Element::Freehand(fh)) = s.elements_mut().last_mut() {
                     fh.simplify(0.5);
                 }
             });

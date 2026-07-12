@@ -240,9 +240,9 @@ mod tests {
             }
         }"#;
         let scene = load_from_str(v1_input).expect("v1 migration should succeed");
-        assert_eq!(scene.elements.len(), 3);
+        assert_eq!(scene.elements().len(), 3);
         // Check the Line was migrated
-        if let Element::Line(line) = &scene.elements[1] {
+        if let Element::Line(line) = &scene.elements()[1] {
             assert_eq!(line.points.len(), 2);
             assert_eq!(line.points[0].x, 0.0);
             assert_eq!(line.points[0].y, 0.0);
@@ -253,7 +253,7 @@ mod tests {
             panic!("expected Line element at index 1");
         }
         // Check the Arrow was migrated
-        if let Element::Arrow(arrow) = &scene.elements[2] {
+        if let Element::Arrow(arrow) = &scene.elements()[2] {
             assert_eq!(arrow.points.len(), 2);
             assert_eq!(arrow.points[0].x, 10.0);
             assert_eq!(arrow.points[0].y, 10.0);

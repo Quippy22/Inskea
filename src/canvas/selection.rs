@@ -57,7 +57,7 @@ pub fn selection_handle_overlay(
         if ids.is_empty() {
             return None;
         }
-        let els = scene.get().elements;
+        let els = scene.get().elements().to_vec();
         let hex = ShapeColor::Blue.to_hex();
 
         if ids.len() == 1 {
@@ -217,7 +217,7 @@ pub fn select_pointer_down(
     st.overlay_freeze.set(None);
     st.rotation_delta.set(0.0);
     if _ev.detail() >= 2 {
-        let els = props.scene.get().elements;
+        let els = props.scene.get().elements().to_vec();
         if let Some(id) = hit_test_topmost(world, &els) {
             if let Some(Element::Text(text_elem)) = els.iter().find(|e| e.id() == id) {
                 st.editing_id.set(Some(id));
@@ -228,7 +228,7 @@ pub fn select_pointer_down(
     }
 
     let ids = st.selected_ids.get();
-    let els = props.scene.get().elements;
+        let els = props.scene.get().elements().to_vec();
 
     if ids.len() == 1 {
         if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
@@ -401,22 +401,22 @@ pub fn select_pointer_move(
                     let alt = st.alt_pressed.get();
                     let shift = st.shift_pressed.get();
                     props.scene.update(|s| {
-                        for el in s.elements.iter_mut() {
-                            if ids.contains(&el.id()) {
-                                if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
-                                    let ctx = ResizeContext {
-                                        orig,
-                                        handle,
-                                        pointer_world: world,
-                                        shift,
-                                        alt,
-                                        multi,
-                                        bx, by, bw, bh,
-                                    };
-                                    el.resize(&ctx);
-                                }
+                    for el in s.elements_mut().iter_mut() {
+                        if ids.contains(&el.id()) {
+                            if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
+                                let ctx = ResizeContext {
+                                    orig,
+                                    handle,
+                                    pointer_world: world,
+                                    shift,
+                                    alt,
+                                    multi,
+                                    bx, by, bw, bh,
+                                };
+                                el.resize(&ctx);
                             }
                         }
+                    }
                     });
                 }
             }
@@ -435,7 +435,7 @@ pub fn select_pointer_move(
                         // Snapshot-based: restore from originals and apply total delta
                         let originals = st.drag_originals.get();
                         props.scene.update(|s| {
-                            for el in s.elements.iter_mut() {
+                            for el in s.elements_mut().iter_mut() {
                                 if ids.contains(&el.id()) {
                                     if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
                                         *el = orig.clone();
@@ -449,7 +449,7 @@ pub fn select_pointer_move(
             }
             Some(Handle::PathPoint(idx)) => {
                 props.scene.update(|s| {
-                    if let Some(el) = s.elements.iter_mut().find(|e| e.id() == ids[0]) {
+                    if let Some(el) = s.element_by_id_mut(ids[0]) {
                         if let Some(pts) = el.path_points_mut() {
                             if idx < pts.len() {
                                 pts[idx].set(world.0, world.1);
@@ -465,9 +465,7 @@ pub fn select_pointer_move(
                     if dist >= MIN_DRAG_DIST {
                         let new_idx = i + 1;
                         let (mx, my) = props.scene.with(|s| {
-                            s.elements
-                                .iter()
-                                .find(|e| e.id() == ids[0])
+                            s.element_by_id(ids[0])
                                 .and_then(|el| {
                                     let pts = el.path_points()?;
                                     let cm = el.curve_mode();
@@ -477,7 +475,7 @@ pub fn select_pointer_move(
                         });
                         (props.push_snapshot)();
                         props.scene.update(|s| {
-                            if let Some(target) = s.elements.iter_mut().find(|e| e.id() == ids[0]) {
+                            if let Some(target) = s.element_by_id_mut(ids[0]) {
                                 if let Some(pts) = target.path_points_mut() {
                                     pts.insert(new_idx, Point { x: mx, y: my });
                                     pts[new_idx].set(world.0, world.1);
@@ -492,7 +490,7 @@ pub fn select_pointer_move(
             }
             _ => {
                 props.scene.update(|s| {
-                    for el in s.elements.iter_mut() {
+                    for el in s.elements_mut().iter_mut() {
                         if ids.contains(&el.id()) {
                             el.offset(dx, dy);
                         }
@@ -513,7 +511,7 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &m
             let merged = props
                 .scene
                 .with(|s| {
-                    let el = s.elements.iter().find(|e| e.id() == ids[0])?;
+                    let el = s.element_by_id(ids[0])?;
                     let pts = el.path_points()?;
                     if idx == 0 || idx + 1 >= pts.len() {
                         return Some(false);
@@ -526,7 +524,7 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &m
             if merged {
                 (props.push_snapshot)();
                 props.scene.update(|s| {
-                    if let Some(el) = s.elements.iter_mut().find(|e| e.id() == ids[0]) {
+                    if let Some(el) = s.element_by_id_mut(ids[0]) {
                         if let Some(pts) = el.path_points_mut() {
                             if idx < pts.len() {
                                 pts.remove(idx);
@@ -542,15 +540,13 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &m
             let ids = st.selected_ids.get();
             if let Some(Handle::PathPoint(idx)) = drag_action {
                 let exists = props.scene.with(|s| {
-                    s.elements
-                        .iter()
-                        .find(|e| e.id() == ids[0])
+                    s.element_by_id(ids[0])
                         .and_then(|el| el.path_points())
                         .is_some_and(|pts| idx < pts.len())
                 });
                 if exists {
                     props.scene.update(|s| {
-                        if let Some(el) = s.elements.iter_mut().find(|e| e.id() == ids[0]) {
+                    if let Some(el) = s.element_by_id_mut(ids[0]) {
                             if let Some(pts) = el.path_points_mut() {
                                 let sx = (pts[idx].x / GRID_SIZE).round() * GRID_SIZE;
                                 let sy = (pts[idx].y / GRID_SIZE).round() * GRID_SIZE;
@@ -561,7 +557,7 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &m
                 }
             } else {
                 props.scene.update(|s| {
-                    for el in s.elements.iter_mut() {
+                    for el in s.elements_mut().iter_mut() {
                         if ids.contains(&el.id()) {
                             el.snap_to_grid(GRID_SIZE);
                         }
@@ -591,7 +587,7 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, st: &mut CanvasState, props: &m
             let ry = anchor.1.min(world.1);
             let rw = (world.0 - anchor.0).abs();
             let rh = (world.1 - anchor.1).abs();
-            let els = props.scene.get().elements;
+            let els = props.scene.get().elements().to_vec();
             let contained: Vec<ElementId> = els
                 .iter()
                 .filter(|el| rect_fully_contains_element(rx, ry, rw, rh, el))

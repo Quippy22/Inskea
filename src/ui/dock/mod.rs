@@ -104,7 +104,7 @@ pub fn Dock(
         if ids.len() != 1 {
             return None;
         }
-        let els = scene.get().elements;
+        let els = scene.get().elements().to_vec();
         let el = els.iter().find(|e| e.id() == ids[0])?;
         el.path_points()?; // ensure it's a path element
         Some(el.curve_mode())
@@ -117,7 +117,7 @@ pub fn Dock(
         }
         let id = ids[0];
         scene.update(|s| {
-            if let Some(el) = s.elements.iter_mut().find(|e| e.id() == id) {
+            if let Some(el) = s.element_by_id_mut(id) {
                 if el.path_points().is_some() {
                     let new_mode = match el.curve_mode() {
                         CurveMode::Straight => CurveMode::Curved,

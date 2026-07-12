@@ -127,14 +127,14 @@ pub struct CanvasInputs {
 /// Erase the topmost element at a world-space point.
 pub fn hit_and_erase(point: (f64, f64), scene: RwSignal<Scene>) {
     let id = scene.with(|s| {
-        s.elements
+        s.elements()
             .iter()
             .rev()
             .find(|el| el.hit_test(Point { x: point.0, y: point.1 }, HIT_MARGIN))
             .map(|el| el.id())
     });
     if let Some(id) = id {
-        scene.update(|s| s.elements.retain(|e| e.id() != id));
+        scene.update(|s| s.remove_by_id(id));
     }
 }
 

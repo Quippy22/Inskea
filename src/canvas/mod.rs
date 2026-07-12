@@ -173,7 +173,7 @@ pub fn Canvas(
                     }
                     if let Some(id) = st.editing_id.get_untracked() {
                         if st.edit_text.get_untracked().is_empty() {
-                            props.scene.update(|s| s.elements.retain(|e| e.id() != id));
+                            props.scene.update(|s| s.remove_by_id(id));
                             st.editing_id.set(None);
                             st.edit_text.set(String::new());
                         } else {
@@ -314,7 +314,7 @@ pub fn Canvas(
                     if let Some(ref state) = st.drawing.get() {
                         if state.tool == Tool::Freehand {
                             props.scene.update(|s| {
-                                if let Some(el) = s.elements.last_mut() {
+                                if let Some(el) = s.elements_mut().last_mut() {
                                     el.update_drag(Point::from(world), Point::from(state.anchor), ev.shift_key());
                                 }
                             });
@@ -493,7 +493,7 @@ pub fn Canvas(
             // (e.g. Vec<RwSignal<Element>> instead of RwSignal<Scene>), which
             // is a model restructuring, not a one-line change.
             {let props = props.clone(); move || {
-                props.scene.get().elements.iter().map(|el| {
+                props.scene.get().elements().iter().map(|el| {
                     let zoom = props.viewport.get().zoom;
                     view! { <g pointer-events="none">{el.render(zoom)}</g> }.into_view()
                 }).collect_view()

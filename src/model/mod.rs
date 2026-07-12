@@ -29,6 +29,26 @@ impl Scene {
         }
     }
 
+    pub fn elements(&self) -> &[Element] {
+        &self.elements
+    }
+
+    pub fn elements_mut(&mut self) -> &mut Vec<Element> {
+        &mut self.elements
+    }
+
+    pub fn element_by_id(&self, id: ElementId) -> Option<&Element> {
+        self.elements.iter().find(|e| e.id() == id)
+    }
+
+    pub fn element_by_id_mut(&mut self, id: ElementId) -> Option<&mut Element> {
+        self.elements.iter_mut().find(|e| e.id() == id)
+    }
+
+    pub fn remove_by_id(&mut self, id: ElementId) {
+        self.elements.retain(|e| e.id() != id);
+    }
+
     /// Adds an element to the scene, assigning it a unique ID.
     ///
     /// The element's previous ID is overwritten.

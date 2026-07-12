@@ -37,7 +37,7 @@ pub fn scene_to_svg(
 ) -> String {
     let (vb, elements): (String, &[Element]) = match selected {
         Some(ids) if !ids.is_empty() => {
-            let bounds = combined_bounds(ids, &scene.elements);
+            let bounds = combined_bounds(ids, scene.elements());
             if let Some((bx, by, bw, bh)) = bounds {
                 let pad = 10.0;
                 (
@@ -48,13 +48,13 @@ pub fn scene_to_svg(
                         bw + pad * 2.0,
                         bh + pad * 2.0
                     ),
-                    &scene.elements,
+                    scene.elements(),
                 )
             } else {
                 return String::new();
             }
         }
-        _ => (viewport.to_view_box(screen.0, screen.1), &scene.elements),
+        _ => (viewport.to_view_box(screen.0, screen.1), scene.elements()),
     };
     let mut out = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">"#);
     for el in elements {
@@ -71,7 +71,7 @@ pub fn scene_to_svg_crop(scene: &Scene, crop: (f64, f64, f64, f64)) -> String {
     let (cx, cy, cw, ch) = crop;
     let vb = format!("{} {} {} {}", cx, cy, cw, ch);
     let mut out = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">"#);
-    for el in &scene.elements {
+    for el in scene.elements() {
         out.push_str(&el_svg(el));
     }
     out.push_str("</svg>");
