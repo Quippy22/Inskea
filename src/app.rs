@@ -32,7 +32,7 @@ pub fn App() -> impl IntoView {
     let settings = create_rw_signal(CanvasSettings {
         center_style: CenterStyle::Crosshair,
         grid_style: GridStyle::Dot,
-        grid_size: GridSize::Px30,
+        grid_size: GridSize::new(30.0),
         autosave: false,
         canvas_bg: CanvasBg::Dark,
     });

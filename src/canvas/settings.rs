@@ -15,19 +15,21 @@ pub enum GridStyle {
 }
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum GridSize {
-    Px10,
-    Px20,
-    Px30,
-}
+pub struct GridSize(f64);
 
 impl GridSize {
     pub fn px(&self) -> f64 {
-        match self {
-            GridSize::Px10 => 10.0,
-            GridSize::Px20 => 20.0,
-            GridSize::Px30 => 30.0,
-        }
+        self.0
+    }
+
+    pub fn new(v: f64) -> Self {
+        Self(v)
+    }
+}
+
+impl From<GridSize> for f64 {
+    fn from(v: GridSize) -> Self {
+        v.0
     }
 }
 

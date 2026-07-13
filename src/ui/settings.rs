@@ -1,6 +1,6 @@
 use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
 use crate::ui::classes;
-use crate::ui::components::{IconButton, SegmentedControl};
+use crate::ui::components::{IconButton, NumberSlider, SegmentedControl};
 use crate::ui::icon;
 use leptos::*;
 use serde::{Deserialize, Serialize};
@@ -61,7 +61,7 @@ pub fn SettingsPanel(
 
     let center_style = create_rw_signal(settings.get().center_style);
     let grid_style = create_rw_signal(settings.get().grid_style);
-    let grid_size = create_rw_signal(settings.get().grid_size);
+    let grid_size = create_rw_signal(settings.get().grid_size.px());
     let autosave = create_rw_signal(settings.get().autosave);
     let canvas_bg = create_rw_signal(settings.get().canvas_bg);
 
@@ -72,7 +72,7 @@ pub fn SettingsPanel(
         settings.update(|s| s.grid_style = grid_style.get());
     });
     create_effect(move |_| {
-        settings.update(|s| s.grid_size = grid_size.get());
+        settings.update(|s| s.grid_size = GridSize::new(grid_size.get()));
     });
     create_effect(move |_| {
         settings.update(|s| s.autosave = autosave.get());
@@ -95,12 +95,6 @@ pub fn SettingsPanel(
         (GridStyle::Dot, "Dot grid"),
         (GridStyle::Line, "Line"),
         (GridStyle::Off, "Off"),
-    ];
-
-    let size_opts = &[
-        (GridSize::Px10, "10px"),
-        (GridSize::Px20, "20px"),
-        (GridSize::Px30, "30px"),
     ];
 
     let toggle_opts = &[(true, "On"), (false, "Off")];
@@ -142,11 +136,13 @@ pub fn SettingsPanel(
                                     />
                                 </div>
 
-                                <div class="flex items-center justify-between mb-3">
-                                    <span class=classes::SETTINGS_LABEL>"Grid size"</span>
-                                    <SegmentedControl
-                                        options=size_opts
-                                        active=grid_size
+                                <div class="mb-3">
+                                    <NumberSlider
+                                        value=grid_size
+                                        min=5.0
+                                        max=100.0
+                                        increment=5.0
+                                        label="Grid size"
                                     />
                                 </div>
 
