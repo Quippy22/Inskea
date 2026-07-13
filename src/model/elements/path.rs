@@ -244,14 +244,6 @@ pub fn snap_points_to_grid(points: &mut [Point], grid: f64) {
     }
 }
 
-/// Returns the 10 handle positions for the given bounding box.
-///
-/// Indices 0–7 are resize corners/edges, 8 is the move handle (center),
-/// 9 is the rotate handle (above the box).
-///
-/// This is used by `selection.rs` for the generic bounding-box handle overlay
-/// for every element type (Rectangle, Ellipse, Text, Freehand, and multi-
-/// selections). It is NOT used for single-selection Line/Arrow node editing.
 #[cfg(test)]
 mod tests {
     use super::*;
