@@ -103,3 +103,24 @@ impl Default for Point {
         Self::new(0.0, 0.0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dist_to_segment_horizontal() {
+        let p = Point::new(5.0, 10.0);
+        let a = Point::new(0.0, 0.0);
+        let b = Point::new(20.0, 0.0);
+        let d = Point::dist_to_segment(p, a, b);
+        assert!((d - 10.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn unrotate_90_degrees() {
+        let result = Point::unrotate(Point::new(10.0, 0.0), 0.0, 0.0, std::f64::consts::FRAC_PI_2);
+        assert!((result.x - 0.0).abs() < 1e-10);
+        assert!((result.y - -10.0).abs() < 1e-10);
+    }
+}

@@ -461,4 +461,63 @@ mod tests {
         assert!((cy - 50.0).abs() < 0.01);
     }
 
+    #[test]
+    fn resize_scale_element_doubles_width() {
+        let mut data = ElementData {
+            id: 2,
+            world_point: Point::new(0.0, 0.0),
+            width: 100.0,
+            height: 50.0,
+            rotation: 0.0,
+            font_size: 24.0,
+            stroke_color: super::super::ShapeColor::Blue,
+            fill_color: None,
+            stroke_width: 2.0,
+        };
+        let orig = ElementData {
+            id: 1,
+            world_point: Point::new(0.0, 0.0),
+            width: 100.0,
+            height: 50.0,
+            rotation: 0.0,
+            font_size: 24.0,
+            stroke_color: super::super::ShapeColor::Blue,
+            fill_color: None,
+            stroke_width: 2.0,
+        };
+        resize_scale_element(&mut data, &orig, Point::new(0.0, 0.0), 200.0, 100.0, 0.0, 0.0, 100.0, 50.0, true);
+        assert!((data.width - 200.0).abs() < 0.01);
+        assert!((data.height - 100.0).abs() < 0.01);
+        assert!((data.world_point.x - 0.0).abs() < 0.01);
+        assert!((data.world_point.y - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn resize_scale_element_skips_height_when_set_height_false() {
+        let mut data = ElementData {
+            id: 2,
+            world_point: Point::new(0.0, 0.0),
+            width: 100.0,
+            height: 50.0,
+            rotation: 0.0,
+            font_size: 24.0,
+            stroke_color: super::super::ShapeColor::Blue,
+            fill_color: None,
+            stroke_width: 2.0,
+        };
+        let orig = ElementData {
+            id: 1,
+            world_point: Point::new(0.0, 0.0),
+            width: 100.0,
+            height: 50.0,
+            rotation: 0.0,
+            font_size: 24.0,
+            stroke_color: super::super::ShapeColor::Blue,
+            fill_color: None,
+            stroke_width: 2.0,
+        };
+        resize_scale_element(&mut data, &orig, Point::new(0.0, 0.0), 200.0, 100.0, 0.0, 0.0, 100.0, 50.0, false);
+        assert!((data.width - 200.0).abs() < 0.01);
+        assert!((data.height - 50.0).abs() < 0.01); // unchanged
+    }
 }
