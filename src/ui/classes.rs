@@ -4,7 +4,6 @@
 //   PANEL_*        Floating panels (frosted glass, border, shadow)
 //   BTN_*          Button base classes (use _ACTIVE / _INACTIVE suffix for states)
 //   CONTAINER_*    Outer layout wrappers (fixed positioning, etc.)
-//   SEP_*          Separator / divider
 //   MENU_*         Menu dropdown
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -24,10 +23,10 @@ pub const CONTAINER_STATUSBAR: &str =
     "fixed max-sm:top-2 top-4 inset-x-0 flex justify-center pointer-events-none z-50";
 
 /// Active state for a dock category / eraser button.
-pub const BTN_CAT_ACTIVE: &str = "flex items-center justify-center h-9 w-9 transition-colors text-accent bg-accent/10 border-l-2 border-accent";
+pub const BTN_CAT_ACTIVE: &str = "flex items-center justify-center h-9 w-9 rounded-md transition-colors text-accent bg-accent/10";
 
 /// Inactive state for a dock category / eraser button.
-pub const BTN_CAT_INACTIVE: &str = "flex items-center justify-center h-9 w-9 transition-colors text-subtle hover:text-fg hover:bg-surface/50 border-l-2 border-transparent";
+pub const BTN_CAT_INACTIVE: &str = "flex items-center justify-center h-9 w-9 rounded-md transition-colors text-subtle hover:text-fg hover:bg-surface/50";
 
 /// Active toolbar button (hand / select / draw).
 pub const BTN_TBAR_ACTIVE: &str = "flex items-center justify-center h-8 w-8 rounded-md transition-colors text-accent bg-accent/10";
@@ -41,15 +40,12 @@ pub const BTN_GHOST: &str = "flex items-center justify-center h-8 w-8 rounded-md
 /// Collapse / expand button inside the dock.
 pub const BTN_COLLAPSE: &str = "flex items-center justify-center h-9 w-9 text-subtle hover:text-fg hover:bg-surface/50 transition-colors";
 
-/// Colour swatch with selection ring.
+/// Color swatch with selection ring.
 pub const BTN_SWATCH_SEL: &str = "w-7 h-7 rounded-md border transition-transform hover:scale-110 border-accent ring-2 ring-accent/50";
 
-/// Colour swatch (no selection).
+/// Color swatch (no selection).
 pub const BTN_SWATCH_OFF: &str =
     "w-7 h-7 rounded-md border transition-transform hover:scale-110 border-border";
-
-/// Separator line (vertical).
-pub const SEP_V: &str = "w-px h-5 bg-border mx-1";
 
 /// Menu dropdown container (frosted panel anchored below the menu button).
 pub const MENU_DROPDOWN: &str = "absolute top-full right-0 mt-1 z-50 min-w-[160px] rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1 pointer-events-auto";

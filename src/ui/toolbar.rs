@@ -343,10 +343,15 @@ where
                 >
                     {icon::pencil()}
                 </button>
-                <div class=classes::SEP_V />
                 <IconButton on_click=on_home title="Home" class=classes::BTN_GHOST>
                     {icon::home()}
                 </IconButton>
+                <button
+                    class="flex items-center justify-center h-8 w-8 rounded-md opacity-40 cursor-default"
+                    title="Pages"
+                >
+                    {icon::pages()}
+                </button>
                 <button
                     class=classes::BTN_GHOST
                     class:opacity-40=move || !can_undo.get()
@@ -357,6 +362,16 @@ where
                     {icon::undo()}
                 </button>
                 <button
+                    class="flex items-center justify-center h-8 rounded-md text-xs text-subtle hover:text-fg transition-colors tabular-nums min-w-[2.5rem]"
+                    on:click=move |_| viewport.set(Viewport::default())
+                    title="Reset zoom to 100%"
+                >
+                    {move || {
+                        let pct = (viewport.get().zoom * 100.0).round() as i64;
+                        format!("{}%", pct)
+                    }}
+                </button>
+                <button
                     class=classes::BTN_GHOST
                     class:opacity-40=move || !can_redo.get()
                     class:cursor-not-allowed=move || !can_redo.get()
@@ -365,7 +380,6 @@ where
                 >
                     {icon::redo()}
                 </button>
-                <div class=classes::SEP_V />
                 <div class="relative">
                     <IconButton
                         on_click=move || menu_open.update(|v| *v = !*v)
