@@ -169,7 +169,6 @@ pub fn App() -> impl IntoView {
             />
             <Dock
                 selected_tool=selected_tool
-                selected_color=selected_color
                 canvas_mode=canvas_mode
                 eraser_active=eraser_active
                 scene=scene

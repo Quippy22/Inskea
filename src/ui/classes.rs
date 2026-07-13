@@ -29,12 +29,6 @@ pub const BTN_CAT_ACTIVE: &str = "flex items-center justify-center h-9 w-9 trans
 /// Inactive state for a dock category / eraser button.
 pub const BTN_CAT_INACTIVE: &str = "flex items-center justify-center h-9 w-9 transition-colors text-subtle hover:text-fg hover:bg-surface/50 border-l-2 border-transparent";
 
-/// Active drawing-tool button in the expanded panel.
-pub const BTN_TOOL_ACTIVE: &str = "flex items-center justify-center h-9 w-9 rounded-md transition-colors text-accent bg-accent/10";
-
-/// Inactive drawing-tool button.
-pub const BTN_TOOL_INACTIVE: &str = "flex items-center justify-center h-9 w-9 rounded-md transition-colors text-subtle hover:text-fg hover:bg-surface/50";
-
 /// Active toolbar button (hand / select / draw).
 pub const BTN_TBAR_ACTIVE: &str = "flex items-center justify-center h-8 w-8 rounded-md transition-colors text-accent bg-accent/10";
 
