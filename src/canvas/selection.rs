@@ -135,6 +135,12 @@ pub fn selection_handle_overlay(
         let rx = cx;
         let ry = by - ROTATE_HANDLE_OFFSET;
 
+        // Single-select reads the persistent rotation from element data; multi-select
+        // uses rotation_delta because each element's data.rotation is a separate signal
+        // and applying the same delta to all of them requires an accumulator that lives
+        // outside any single element. For point-based elements (Line/Arrow) data.rotation
+        // is always 0 — rotation is expressed through the points themselves — so the
+        // overlay never shows a rotation transform for single path elements either.
         let rot: f64 = if ids.len() == 1 {
             els.iter()
                 .find(|el| el.id() == ids[0])
