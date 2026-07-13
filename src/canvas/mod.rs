@@ -151,30 +151,54 @@ pub fn Canvas(
     // element has no reason to exist), commit if the user had actually typed
     // something (so switching tools mid-edit doesn't lose typed text).
     {
-        let st = st;
-        let props = props.clone();
-        let commit_edit = commit_edit.clone();
+        let _st = st;
+        let _props = props.clone();
         create_effect(move |prev: Option<(CanvasMode, Tool)>| {
-            let mode = props.canvas_mode.get();
-            let tool = props.selected_tool.get();
+            let mode = _props.canvas_mode.get();
+            let tool = _props.selected_tool.get();
             if let Some(prev) = prev {
                 if prev != (mode, tool) {
-                    if props.export_crop_active.get_untracked() {
-                        props.export_crop_active.set(false);
-                        props.on_crop_export.set(None);
-                        st.select_anchor.set(None);
-                        st.drag.last_world.set(None);
+                    if _props.export_crop_active.get_untracked() {
+                        _props.export_crop_active.set(false);
+                        _props.on_crop_export.set(None);
+                        _st.select_anchor.set(None);
+                        _st.drag.last_world.set(None);
                     }
-                    if !st.selected_ids.get_untracked().is_empty() {
-                        st.selected_ids.set(Vec::new());
+                }
+            }
+            (mode, tool)
+        });
+
+        let _st = st;
+        let _props = props.clone();
+        create_effect(move |prev: Option<(CanvasMode, Tool)>| {
+            let mode = _props.canvas_mode.get();
+            let tool = _props.selected_tool.get();
+            if let Some(prev) = prev {
+                if prev != (mode, tool) {
+                    if !_st.selected_ids.get_untracked().is_empty() {
+                        _st.selected_ids.set(Vec::new());
                     }
-                    if let Some(id) = st.text_edit.editing_id.get_untracked() {
-                        if st.text_edit.edit_text.get_untracked().is_empty() {
-                            props.scene.update(|s| s.remove_by_id(id));
-                            st.text_edit.editing_id.set(None);
-                            st.text_edit.edit_text.set(String::new());
+                }
+            }
+            (mode, tool)
+        });
+
+        let _st = st;
+        let _props = props.clone();
+        let _commit_edit = commit_edit.clone();
+        create_effect(move |prev: Option<(CanvasMode, Tool)>| {
+            let mode = _props.canvas_mode.get();
+            let tool = _props.selected_tool.get();
+            if let Some(prev) = prev {
+                if prev != (mode, tool) {
+                    if let Some(id) = _st.text_edit.editing_id.get_untracked() {
+                        if _st.text_edit.edit_text.get_untracked().is_empty() {
+                            _props.scene.update(|s| s.remove_by_id(id));
+                            _st.text_edit.editing_id.set(None);
+                            _st.text_edit.edit_text.set(String::new());
                         } else {
-                            commit_edit();
+                            _commit_edit();
                         }
                     }
                 }
