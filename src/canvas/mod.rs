@@ -157,14 +157,13 @@ pub fn Canvas(
             let mode = _props.canvas_mode.get();
             let tool = _props.selected_tool.get();
             if let Some(prev) = prev {
-                if prev != (mode, tool) {
-                    if _props.export_crop_active.get_untracked() {
+                if prev != (mode, tool)
+                    && _props.export_crop_active.get_untracked() {
                         _props.export_crop_active.set(false);
                         _props.on_crop_export.set(None);
                         _st.select_anchor.set(None);
                         _st.drag.last_world.set(None);
                     }
-                }
             }
             (mode, tool)
         });
@@ -175,11 +174,10 @@ pub fn Canvas(
             let mode = _props.canvas_mode.get();
             let tool = _props.selected_tool.get();
             if let Some(prev) = prev {
-                if prev != (mode, tool) {
-                    if !_st.selected_ids.get_untracked().is_empty() {
+                if prev != (mode, tool)
+                    && !_st.selected_ids.get_untracked().is_empty() {
                         _st.selected_ids.set(Vec::new());
                     }
-                }
             }
             (mode, tool)
         });

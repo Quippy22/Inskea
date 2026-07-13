@@ -291,6 +291,7 @@ pub fn resize_bbox(
 ///
 /// When `set_height` is `false` (used by `Text`), the element's height is kept
 /// unchanged — the caller manages it separately via `resize_text`.
+#[allow(clippy::too_many_arguments)]
 pub fn resize_scale_element(
     data: &mut ElementData,
     orig: &ElementData,

@@ -256,10 +256,7 @@ impl PathPoints for Element {
         }
     }
     fn set_curve_mode(&mut self, mode: CurveMode) {
-        match self {
-            Element::Line(e) => e.curve_mode = mode,
-            _ => {}
-        }
+        if let Element::Line(e) = self { e.curve_mode = mode }
     }
 }
 
