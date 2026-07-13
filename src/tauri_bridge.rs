@@ -27,12 +27,15 @@ pub fn is_tauri() -> bool {
         .unwrap_or(false)
 }
 
-/// Open a native save-file dialog and return the chosen path, or `None` if cancelled.
-/// If `default_dir` is provided, the dialog starts in that directory.
-pub async fn pick_save_path(default_name: &str, default_dir: Option<&str>) -> Option<String> {
+async fn pick_save_path_with_filter(
+    default_name: &str,
+    default_dir: Option<&str>,
+    filter_name: &str,
+    ext: &str,
+) -> Option<String> {
     let mut opts = serde_json::json!({
         "defaultPath": default_name,
-        "filters": [{ "name": "Inskea Drawing", "extensions": ["skea"] }],
+        "filters": [{ "name": filter_name, "extensions": [ext] }],
     });
     if let Some(dir) = default_dir {
         opts["defaultPath"] = serde_json::json!(format!("{dir}/{default_name}"));
@@ -40,34 +43,21 @@ pub async fn pick_save_path(default_name: &str, default_dir: Option<&str>) -> Op
     let args = serde_wasm_bindgen::to_value(&opts).ok()?;
     let result = save(args).await;
     result.as_string()
+}
+
+/// Open a native save-file dialog for an Inskea drawing (.skea).
+pub async fn pick_save_path(default_name: &str, default_dir: Option<&str>) -> Option<String> {
+    pick_save_path_with_filter(default_name, default_dir, "Inskea Drawing", "skea").await
 }
 
 /// Open a native save-file dialog for SVG export.
 pub async fn pick_save_path_svg(default_name: &str, default_dir: Option<&str>) -> Option<String> {
-    let mut opts = serde_json::json!({
-        "defaultPath": default_name,
-        "filters": [{ "name": "SVG Image", "extensions": ["svg"] }],
-    });
-    if let Some(dir) = default_dir {
-        opts["defaultPath"] = serde_json::json!(format!("{dir}/{default_name}"));
-    }
-    let args = serde_wasm_bindgen::to_value(&opts).ok()?;
-    let result = save(args).await;
-    result.as_string()
+    pick_save_path_with_filter(default_name, default_dir, "SVG Image", "svg").await
 }
 
 /// Open a native save-file dialog for PNG export.
 pub async fn pick_save_path_png(default_name: &str, default_dir: Option<&str>) -> Option<String> {
-    let mut opts = serde_json::json!({
-        "defaultPath": default_name,
-        "filters": [{ "name": "PNG Image", "extensions": ["png"] }],
-    });
-    if let Some(dir) = default_dir {
-        opts["defaultPath"] = serde_json::json!(format!("{dir}/{default_name}"));
-    }
-    let args = serde_wasm_bindgen::to_value(&opts).ok()?;
-    let result = save(args).await;
-    result.as_string()
+    pick_save_path_with_filter(default_name, default_dir, "PNG Image", "png").await
 }
 
 /// Open a native open-file dialog and return the chosen path, or `None` if cancelled.
