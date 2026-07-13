@@ -1,11 +1,11 @@
-use crate::model::elements::text::WrappedText;
-use crate::model::{Arrow, Element, ElementData, Ellipse, Freehand, FromDrag, Line, Point, Rectangle, Text};
-use crate::ui::dock::Tool;
-use leptos::{ev, SignalGet, SignalSet, SignalUpdate, SignalWith};
 use super::state::{CanvasInputs, CanvasState, DrawingState};
 use super::MIN_DRAG_DIST;
-
-const DEFAULT_FONT_SIZE: f64 = 24.0;
+use crate::model::elements::text::WrappedText;
+use crate::model::{
+    Element, ElementData, Ellipse, Freehand, FromDrag, Line, Point, Rectangle, Text,
+};
+use crate::ui::dock::Tool;
+use leptos::{ev, SignalGet, SignalSet, SignalUpdate, SignalWith};
 
 /// Handle a pointer-down event while in `Draw` mode.
 ///
@@ -37,9 +37,7 @@ pub fn draw_pointer_down(
     if tool == Tool::Text {
         (props.push_snapshot)();
         let mut data = ElementData::new(0);
-        data.x = world.0;
-        data.y = world.1;
-        data.font_size = DEFAULT_FONT_SIZE;
+        data.world_point.set(world.0, world.1);
         data.width = 0.0;
         data.height = 0.0;
         data.stroke_color = color;
@@ -47,10 +45,13 @@ pub fn draw_pointer_down(
         props.scene.update(|s| {
             let w = data.width;
             let fs = data.font_size;
-            s.add_element(Element::Text(Text { data, wrapped: WrappedText::new("", w, fs) }));
+            s.add_element(Element::Text(Text {
+                data,
+                wrapped: WrappedText::new("", w, fs),
+            }));
         });
-        st.editing_id.set(Some(id));
-        st.edit_text.set(String::new());
+        st.text_edit.editing_id.set(Some(id));
+        st.text_edit.edit_text.set(String::new());
         return;
     }
 
@@ -61,17 +62,28 @@ pub fn draw_pointer_down(
             data.stroke_color = color;
             s.add_element(Element::Freehand(Freehand {
                 data,
-                points: vec![Point { x: world.0, y: world.1 }],
+                points: vec![Point {
+                    x: world.0,
+                    y: world.1,
+                }],
             }));
         });
-        st.drawing.set(Some(DrawingState { anchor: world, tool, color }));
+        st.drawing.set(Some(DrawingState {
+            anchor: world,
+            tool,
+            color,
+        }));
         return;
     }
 
     // No snapshot here — it fires once in draw_pointer_up, immediately
     // before the element is added to the scene, so degenerate clicks
     // below MIN_DRAG_DIST don't pollute the undo stack.
-    st.drawing.set(Some(DrawingState { anchor: world, tool, color }));
+    st.drawing.set(Some(DrawingState {
+        anchor: world,
+        tool,
+        color,
+    }));
 }
 
 /// Handle a pointer-up event while in `Draw` mode.
@@ -88,15 +100,11 @@ pub fn draw_pointer_down(
 ///   **after** construction (so the undo snapshot happens before the element
 ///   is added), then the element is added to the scene and the drawing state
 ///   is cleared.
-pub fn draw_pointer_up(
-    _ev: &ev::PointerEvent,
-    st: &mut CanvasState,
-    props: &mut CanvasInputs,
-) {
+pub fn draw_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut CanvasState, props: &mut CanvasInputs) {
     if let Some(state) = st.drawing.get() {
         if state.tool == Tool::Freehand {
             props.scene.update(|s| {
-                if let Some(Element::Freehand(fh)) = s.elements.last_mut() {
+                if let Some(Element::Freehand(fh)) = s.elements_mut().last_mut() {
                     fh.simplify(0.5);
                 }
             });
@@ -104,23 +112,30 @@ pub fn draw_pointer_up(
             return;
         }
 
-        let world = props.cursor_world.get();
         let dx = world.0 - state.anchor.0;
         let dy = world.1 - state.anchor.1;
         if dx.hypot(dy) < MIN_DRAG_DIST {
             st.drawing.set(None);
             return;
         }
+        let anchor = Point::from(state.anchor);
+        let world_pt = Point::from(world);
         let el: Element = match state.tool {
-            Tool::Rectangle => Rectangle::from_drag(state.anchor, world, state.color, st.shift_pressed.get()).into(),
-            Tool::Ellipse => Ellipse::from_drag(state.anchor, world, state.color, st.shift_pressed.get()).into(),
-            Tool::Line => Line::from_drag(state.anchor, world, state.color, st.shift_pressed.get()).into(),
-            Tool::Arrow => Arrow::from_drag(state.anchor, world, state.color, st.shift_pressed.get()).into(),
-            Tool::Text => Text::from_drag(state.anchor, world, state.color, st.shift_pressed.get()).into(),
-            Tool::Freehand => Freehand::from_drag(state.anchor, world, state.color, st.shift_pressed.get()).into(),
+            Tool::Rectangle => Rectangle::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
+            Tool::Ellipse => Ellipse::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
+            Tool::Line => Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
+            Tool::Arrow => {
+                let mut line = Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get());
+                line.has_arrowhead = true;
+                Element::Line(line)
+            }
+            Tool::Text => Text::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
+            Tool::Freehand => Freehand::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
         };
         (props.push_snapshot)();
-        props.scene.update(|s| { s.add_element(el); });
+        props.scene.update(|s| {
+            s.add_element(el);
+        });
         st.drawing.set(None);
     }
 }

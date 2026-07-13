@@ -31,21 +31,6 @@ impl std::fmt::Display for ShapeColor {
 }
 
 impl ShapeColor {
-    /// Parse a variant name (as serialised by Display) back into a color.
-    pub fn from_name(s: &str) -> Option<Self> {
-        match s {
-            "Purple" => Some(Self::Purple),
-            "Blue" => Some(Self::Blue),
-            "Cyan" => Some(Self::Cyan),
-            "Green" => Some(Self::Green),
-            "Yellow" => Some(Self::Yellow),
-            "Orange" => Some(Self::Orange),
-            "Red" => Some(Self::Red),
-            "White" => Some(Self::White),
-            _ => None,
-        }
-    }
-
     /// Return the Tailwind 500‑shade hex string for this color.
     pub fn to_hex(self) -> &'static str {
         match self {

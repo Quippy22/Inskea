@@ -1,23 +1,25 @@
+#![allow(clippy::redundant_locals)]
 mod viewport;
 pub use viewport::Viewport;
 
-mod state;
-mod text_edit;
 mod grid;
 mod modes;
 mod selection;
+pub mod settings;
+mod state;
+mod text_edit;
 
-pub use state::CanvasMode;
-pub use state::combined_bounds;
-use state::{
-    CanvasInputs, CanvasState, hit_and_erase,
-};
 use modes::{draw_pointer_down, draw_pointer_up};
 use selection::{select_pointer_down, select_pointer_move, select_pointer_up};
+pub use state::combined_bounds;
+pub use state::CanvasMode;
+use state::{hit_and_erase, CanvasInputs, CanvasState};
+pub use state::CropExportCallback;
 
 use crate::model::*;
 use crate::ui::dock::Tool;
-use crate::ui::settings::{CenterStyle, GridSize, GridStyle};
+use settings::CanvasSettings;
+use crate::util::window_size;
 use leptos::ev;
 use leptos::*;
 use std::rc::Rc;
@@ -37,17 +39,6 @@ const ZOOM_MAX: f64 = 20.0;
 pub(crate) const DASH_PREVIEW: &str = "4 2";
 
 // ────────────────────────────────────────────────────────────────────────────
-
-/// Read the current browser window inner dimensions.
-///
-/// Returns `(width, height)` in CSS pixels. Falls back to `(0, 0)` if the window
-/// object is unavailable (should not happen in a browser context).
-fn window_size() -> (f64, f64) {
-    let window = web_sys::window().expect("no global `window` exists");
-    let w = window.inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let h = window.inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
-    (w, h)
-}
 
 /// Root SVG canvas component.
 ///
@@ -90,12 +81,10 @@ pub fn Canvas(
     canvas_mode: RwSignal<CanvasMode>,
     scene: RwSignal<Scene>,
     eraser_active: RwSignal<bool>,
-    center_style: RwSignal<CenterStyle>,
-    grid_style: RwSignal<GridStyle>,
-    grid_size: RwSignal<GridSize>,
+    settings: RwSignal<CanvasSettings>,
     push_snapshot: Rc<dyn Fn()>,
     export_crop_active: RwSignal<bool>,
-    on_crop_export: RwSignal<Option<Rc<dyn Fn((f64, f64, f64, f64))>>>,
+    on_crop_export: RwSignal<Option<CropExportCallback>>,
     selected_ids: RwSignal<Vec<ElementId>>,
 ) -> impl IntoView {
     let mut st = CanvasState::new();
@@ -109,9 +98,7 @@ pub fn Canvas(
         canvas_mode,
         scene,
         eraser_active,
-        center_style,
-        grid_style,
-        grid_size,
+        settings,
         push_snapshot,
         export_crop_active,
         on_crop_export,
@@ -124,19 +111,35 @@ pub fn Canvas(
     });
     let _ = window_event_listener(ev::keydown, {
         let sp = st.shift_pressed;
+        let ap = st.alt_pressed;
         move |ev: ev::KeyboardEvent| {
-            if ev.key() == "Shift" { sp.set(true); }
+            if ev.key() == "Shift" {
+                sp.set(true);
+            }
+            if ev.key() == "Alt" {
+                ap.set(true);
+            }
         }
     });
     let _ = window_event_listener(ev::keyup, {
         let sp = st.shift_pressed;
+        let ap = st.alt_pressed;
         move |ev: ev::KeyboardEvent| {
-            if ev.key() == "Shift" { sp.set(false); }
+            if ev.key() == "Shift" {
+                sp.set(false);
+            }
+            if ev.key() == "Alt" {
+                ap.set(false);
+            }
         }
     });
 
     let commit_edit = text_edit::make_commit_edit(
-        st.editing_id, st.edit_text, props.scene, st.textarea_ref, props.viewport,
+        st.text_edit.editing_id,
+        st.text_edit.edit_text,
+        props.scene,
+        st.text_edit.textarea_ref,
+        props.viewport,
     );
 
     // Switching mode (Select/Hand/Draw) or active tool used to leave whatever
@@ -148,30 +151,52 @@ pub fn Canvas(
     // element has no reason to exist), commit if the user had actually typed
     // something (so switching tools mid-edit doesn't lose typed text).
     {
-        let st = st;
-        let props = props.clone();
-        let commit_edit = commit_edit.clone();
+        let _st = st;
+        let _props = props.clone();
         create_effect(move |prev: Option<(CanvasMode, Tool)>| {
-            let mode = props.canvas_mode.get();
-            let tool = props.selected_tool.get();
+            let mode = _props.canvas_mode.get();
+            let tool = _props.selected_tool.get();
+            if let Some(prev) = prev {
+                if prev != (mode, tool)
+                    && _props.export_crop_active.get_untracked() {
+                        _props.export_crop_active.set(false);
+                        _props.on_crop_export.set(None);
+                        _st.select_anchor.set(None);
+                        _st.drag.last_world.set(None);
+                    }
+            }
+            (mode, tool)
+        });
+
+        let _st = st;
+        let _props = props.clone();
+        create_effect(move |prev: Option<(CanvasMode, Tool)>| {
+            let mode = _props.canvas_mode.get();
+            let tool = _props.selected_tool.get();
+            if let Some(prev) = prev {
+                if prev != (mode, tool)
+                    && !_st.selected_ids.get_untracked().is_empty() {
+                        _st.selected_ids.set(Vec::new());
+                    }
+            }
+            (mode, tool)
+        });
+
+        let _st = st;
+        let _props = props.clone();
+        let _commit_edit = commit_edit.clone();
+        create_effect(move |prev: Option<(CanvasMode, Tool)>| {
+            let mode = _props.canvas_mode.get();
+            let tool = _props.selected_tool.get();
             if let Some(prev) = prev {
                 if prev != (mode, tool) {
-                    if props.export_crop_active.get_untracked() {
-                        props.export_crop_active.set(false);
-                        props.on_crop_export.set(None);
-                        st.select_anchor.set(None);
-                        st.last_world.set(None);
-                    }
-                    if !st.selected_ids.get_untracked().is_empty() {
-                        st.selected_ids.set(Vec::new());
-                    }
-                    if let Some(id) = st.editing_id.get_untracked() {
-                        if st.edit_text.get_untracked().is_empty() {
-                            props.scene.update(|s| s.elements.retain(|e| e.id() != id));
-                            st.editing_id.set(None);
-                            st.edit_text.set(String::new());
+                    if let Some(id) = _st.text_edit.editing_id.get_untracked() {
+                        if _st.text_edit.edit_text.get_untracked().is_empty() {
+                            _props.scene.update(|s| s.remove_by_id(id));
+                            _st.text_edit.editing_id.set(None);
+                            _st.text_edit.edit_text.set(String::new());
                         } else {
-                            commit_edit();
+                            _commit_edit();
                         }
                     }
                 }
@@ -219,9 +244,11 @@ pub fn Canvas(
     let on_pointer_down = {
         let mut st = st;
         let mut props = props.clone();
-        let update_world = update_world.clone();
+        let update_world = update_world;
         move |ev: ev::PointerEvent| {
-            if st.editing_id.get().is_some() { return; }
+            if st.text_edit.editing_id.get().is_some() {
+                return;
+            }
             let mode = props.canvas_mode.get();
             let world = update_world(&ev);
 
@@ -239,7 +266,8 @@ pub fn Canvas(
 
             match mode {
                 CanvasMode::Hand => {
-                    st.pan_anchor.set(Some((ev.client_x() as f64, ev.client_y() as f64)));
+                    st.pan_anchor
+                        .set(Some((ev.client_x() as f64, ev.client_y() as f64)));
                 }
                 CanvasMode::Select => {
                     select_pointer_down(&ev, world, &mut st, &mut props);
@@ -271,7 +299,7 @@ pub fn Canvas(
     let on_pointer_move = {
         let mut st = st;
         let mut props = props.clone();
-        let update_world = update_world.clone();
+        let update_world = update_world;
         move |ev: ev::PointerEvent| {
             let mode = props.canvas_mode.get();
             let world = update_world(&ev);
@@ -281,7 +309,7 @@ pub fn Canvas(
             }
 
             if props.export_crop_active.get() {
-                st.last_world.set(Some(world));
+                st.drag.last_world.set(Some(world));
                 return;
             }
 
@@ -294,7 +322,8 @@ pub fn Canvas(
                             vp.offset_x -= dx / vp.zoom;
                             vp.offset_y -= dy / vp.zoom;
                         });
-                        st.pan_anchor.set(Some((ev.client_x() as f64, ev.client_y() as f64)));
+                        st.pan_anchor
+                            .set(Some((ev.client_x() as f64, ev.client_y() as f64)));
                     }
                 }
                 CanvasMode::Select => {
@@ -304,8 +333,8 @@ pub fn Canvas(
                     if let Some(ref state) = st.drawing.get() {
                         if state.tool == Tool::Freehand {
                             props.scene.update(|s| {
-                                if let Some(el) = s.elements.last_mut() {
-                                    el.update_drag(world, state.anchor, ev.shift_key());
+                                if let Some(el) = s.elements_mut().last_mut() {
+                                    el.update_drag(Point::from(world), Point::from(state.anchor), ev.shift_key());
                                 }
                             });
                         }
@@ -333,7 +362,7 @@ pub fn Canvas(
     let on_pointer_up = {
         let mut st = st;
         let mut props = props.clone();
-        let update_world = update_world.clone();
+        let update_world = update_world;
         move |ev: ev::PointerEvent| {
             if props.eraser_active.get() {
                 let world = update_world(&ev);
@@ -343,7 +372,7 @@ pub fn Canvas(
 
             if props.export_crop_active.get() {
                 if let Some(anchor) = st.select_anchor.get() {
-                    let current = st.last_world.get().unwrap_or(anchor);
+                    let current = st.drag.last_world.get().unwrap_or(anchor);
                     let dx = current.0 - anchor.0;
                     let dy = current.1 - anchor.1;
                     if dx.hypot(dy) >= MIN_DRAG_DIST {
@@ -359,19 +388,20 @@ pub fn Canvas(
                 }
                 props.export_crop_active.set(false);
                 st.select_anchor.set(None);
-                st.last_world.set(None);
+                st.drag.last_world.set(None);
                 return;
             }
 
+            let world = update_world(&ev);
             match props.canvas_mode.get() {
                 CanvasMode::Hand => {
                     st.pan_anchor.set(None);
                 }
                 CanvasMode::Select => {
-                    select_pointer_up(&ev, &mut st, &mut props);
+                    select_pointer_up(&ev, world, &mut st, &mut props);
                 }
                 CanvasMode::Draw => {
-                    draw_pointer_up(&ev, &mut st, &mut props);
+                    draw_pointer_up(&ev, world, &mut st, &mut props);
                 }
             }
         }
@@ -392,7 +422,11 @@ pub fn Canvas(
             ev.prevent_default();
             let screen = props.cursor_screen.get();
             let (sw, sh) = st.screen_size.get();
-            let factor = if ev.delta_y() < 0.0 { ZOOM_FACTOR } else { 1.0 / ZOOM_FACTOR };
+            let factor = if ev.delta_y() < 0.0 {
+                ZOOM_FACTOR
+            } else {
+                1.0 / ZOOM_FACTOR
+            };
             props.viewport.update(|vp| {
                 let world = vp.screen_to_world(screen, (sw, sh));
                 vp.zoom = (vp.zoom * factor).clamp(ZOOM_MIN, ZOOM_MAX);
@@ -426,21 +460,33 @@ pub fn Canvas(
         let st = st;
         let props = props.clone();
         move || {
-            if props.canvas_mode.get() != CanvasMode::Draw { return None; }
+            if props.canvas_mode.get() != CanvasMode::Draw {
+                return None;
+            }
             let state = st.drawing.get()?;
-            if state.tool == Tool::Freehand { return None; }
+            if state.tool == Tool::Freehand {
+                return None;
+            }
             let world = props.cursor_world.get();
             let dx = world.0 - state.anchor.0;
             let dy = world.1 - state.anchor.1;
-            if dx.hypot(dy) < MIN_DRAG_DIST { return None; }
+            if dx.hypot(dy) < MIN_DRAG_DIST {
+                return None;
+            }
             let shift = st.shift_pressed.get();
+            let anchor = Point::from(state.anchor);
+            let world_pt = Point::from(world);
             let el: Element = match state.tool {
-                Tool::Rectangle => Rectangle::from_drag(state.anchor, world, state.color, shift).into(),
-                Tool::Ellipse => Ellipse::from_drag(state.anchor, world, state.color, shift).into(),
-                Tool::Line => Line::from_drag(state.anchor, world, state.color, shift).into(),
-                Tool::Arrow => Arrow::from_drag(state.anchor, world, state.color, shift).into(),
-                Tool::Text => Text::from_drag(state.anchor, world, state.color, shift).into(),
-                Tool::Freehand => Freehand::from_drag(state.anchor, world, state.color, shift).into(),
+                Tool::Rectangle => Rectangle::from_drag(anchor, world_pt, state.color, shift).into(),
+                Tool::Ellipse => Ellipse::from_drag(anchor, world_pt, state.color, shift).into(),
+                Tool::Line => Line::from_drag(anchor, world_pt, state.color, shift).into(),
+                Tool::Arrow => {
+                    let mut line = Line::from_drag(anchor, world_pt, state.color, shift);
+                    line.has_arrowhead = true;
+                    Element::Line(line)
+                }
+                Tool::Text => Text::from_drag(anchor, world_pt, state.color, shift).into(),
+                Tool::Freehand => Freehand::from_drag(anchor, world_pt, state.color, shift).into(),
             };
             Some(view! { <g stroke-dasharray={DASH_PREVIEW}>{el.render(props.viewport.get().zoom)}</g> }.into_view())
         }
@@ -460,7 +506,7 @@ pub fn Canvas(
             on:pointerup=on_pointer_up
             on:wheel=on_wheel
         >
-            {grid::grid_overlay(props.grid_style, props.grid_size, props.center_style)}
+            {grid::grid_overlay(props.settings)}
 
             // NB: this is deliberately NOT a <For> loop keyed by ElementId.
             // Leptos's <For> only re-invokes `children` for a newly-inserted
@@ -471,7 +517,7 @@ pub fn Canvas(
             // (e.g. Vec<RwSignal<Element>> instead of RwSignal<Scene>), which
             // is a model restructuring, not a one-line change.
             {let props = props.clone(); move || {
-                props.scene.get().elements.iter().map(|el| {
+                props.scene.get().elements().iter().map(|el| {
                     let zoom = props.viewport.get().zoom;
                     view! { <g pointer-events="none">{el.render(zoom)}</g> }.into_view()
                 }).collect_view()
@@ -479,11 +525,11 @@ pub fn Canvas(
 
             {drawing_preview}
             {selection::selection_preview_overlay(st.select_anchor, props.cursor_world)}
-            {selection::selection_handle_overlay(st.selected_ids, props.scene)}
+            {selection::selection_handle_overlay(st.selected_ids, props.scene, st.drag.overlay_freeze, st.drag.rotation_delta)}
         </svg>
 
         {text_edit::text_edit_overlay(
-            st.editing_id, st.edit_text, st.textarea_ref, props.scene,
+            st.text_edit.editing_id, st.text_edit.edit_text, st.text_edit.textarea_ref, props.scene,
             props.viewport, st.screen_size, commit_edit,
         )}
 

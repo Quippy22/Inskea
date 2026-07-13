@@ -1,9 +1,11 @@
-use leptos::IntoView;
-use super::{ElementData, Point, ShapeColor};
+use super::utils::scale_points;
 use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, ResizeContext, Rotate, SnapToGrid,
-    UpdateDrag,
+    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
+use super::{ElementData, ShapeColor};
+use crate::model::resize::ResizeContext;
+use crate::model::Point;
+use leptos::IntoView;
 use std::fmt::Write;
 
 /// Minimum distance (world-space) between consecutive sampled points.
@@ -48,11 +50,11 @@ fn simplify_points(points: &[Point], epsilon: f64) -> Vec<Point> {
     let mut max_dist = 0.0;
     let mut max_idx = 0;
 
-    for i in 1..n - 1 {
-        let dist = perpendicular_dist(points[i].x, points[i].y, x1, y1, x2, y2);
+    for (i, p) in points[1..n - 1].iter().enumerate() {
+        let dist = perpendicular_dist(p.x, p.y, x1, y1, x2, y2);
         if dist > max_dist {
             max_dist = dist;
-            max_idx = i;
+            max_idx = i + 1;
         }
     }
 
@@ -63,7 +65,7 @@ fn simplify_points(points: &[Point], epsilon: f64) -> Vec<Point> {
         left.extend(right);
         left
     } else {
-        vec![points[0].clone(), points[n - 1].clone()]
+        vec![points[0], points[n - 1]]
     }
 }
 
@@ -84,18 +86,16 @@ fn perpendicular_dist(px: f64, py: f64, x1: f64, y1: f64, x2: f64, y2: f64) -> f
 // ── Trait implementations ──────────────────────────────────────────────
 
 impl FromDrag for Freehand {
-    fn from_drag(
-        anchor: (f64, f64),
-        _current: (f64, f64),
-        color: ShapeColor,
-        _shift: bool,
-    ) -> Self {
+    fn from_drag(anchor: Point, _current: Point, color: ShapeColor, _shift: bool) -> Self {
         let mut fh = Self {
             data: ElementData {
                 stroke_color: color,
                 ..ElementData::new(0)
             },
-            points: vec![Point { x: anchor.0, y: anchor.1 }],
+            points: vec![Point {
+                x: anchor.x,
+                y: anchor.y,
+            }],
         };
         fh.simplify(SIMPLIFY_EPSILON);
         fh
@@ -103,17 +103,17 @@ impl FromDrag for Freehand {
 }
 
 impl UpdateDrag for Freehand {
-    fn update_drag(&mut self, current: (f64, f64), _anchor: (f64, f64), _shift: bool) {
+    fn update_drag(&mut self, current: Point, _anchor: Point, _shift: bool) {
         if let Some(last) = self.points.last() {
-            let dx = current.0 - last.x;
-            let dy = current.1 - last.y;
+            let dx = current.x - last.x;
+            let dy = current.y - last.y;
             if dx.hypot(dy) < MIN_SAMPLE_DIST {
                 return;
             }
         }
         self.points.push(Point {
-            x: current.0,
-            y: current.1,
+            x: current.x,
+            y: current.y,
         });
     }
 }
@@ -175,11 +175,11 @@ fn build_smooth_path(points: &[Point]) -> String {
 // ── Geometry traits ────────────────────────────────────────────────────
 
 impl HitTest for Freehand {
-    fn hit_test(&self, point: (f64, f64), margin: f64) -> bool {
+    fn hit_test(&self, point: Point, margin: f64) -> bool {
         crate::model::elements::path::hit_test_path(
             &self.points,
             crate::model::elements::path::CurveMode::Straight,
-            point,
+            (point.x, point.y),
             margin + self.data.stroke_width,
         )
     }
@@ -193,8 +193,7 @@ impl Bounds for Freehand {
 
 impl Offset for Freehand {
     fn offset(&mut self, dx: f64, dy: f64) {
-        self.data.x += dx;
-        self.data.y += dy;
+        self.data.world_point.offset(dx, dy);
         crate::model::elements::path::offset_points(&mut self.points, dx, dy);
     }
 }
@@ -206,22 +205,13 @@ impl SnapToGrid for Freehand {
 }
 
 impl Rotate for Freehand {
-    fn rotate_around(&mut self, cx: f64, cy: f64, delta: f64) {
-        crate::model::elements::path::rotate_points(&mut self.points, cx, cy, delta);
+    fn rotate_around(&mut self, point: Point, delta: f64) {
+        crate::model::elements::path::rotate_points(&mut self.points, point.x, point.y, delta);
     }
 }
 
 impl Resize for Freehand {
     fn resize(&mut self, ctx: &ResizeContext) {
-        let orig_slice: Vec<Point> = if ctx.multi {
-            if let super::Element::Freehand(orig) = ctx.orig {
-                orig.points.clone()
-            } else {
-                self.points.clone()
-            }
-        } else {
-            self.points.clone()
-        };
-        crate::model::elements::path::scale_points(&mut self.points, ctx, &orig_slice);
+        scale_points(&mut self.points, ctx);
     }
 }

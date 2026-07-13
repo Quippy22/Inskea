@@ -14,8 +14,8 @@ pub use group::GroupPanel;
 pub use pages::PagesPanel;
 
 use crate::canvas::CanvasMode;
-use crate::model::{Element, ElementId, PathPoints, Scene, ShapeColor};
 use crate::model::elements::path::CurveMode;
+use crate::model::{ElementId, PathPoints, Scene, ShapeColor};
 use crate::ui::classes;
 use crate::ui::icon;
 use leptos::*;
@@ -101,41 +101,53 @@ pub fn Dock(
     // Determine whether a single Line or Arrow is selected and its curve mode
     let path_info = move || -> Option<CurveMode> {
         let ids = selected_ids.get();
-        if ids.len() != 1 { return None; }
-        let els = scene.get().elements;
+        if ids.len() != 1 {
+            return None;
+        }
+        let els = scene.get().elements().to_vec();
         let el = els.iter().find(|e| e.id() == ids[0])?;
         el.path_points()?; // ensure it's a path element
-        match el {
-            Element::Line(l) => Some(l.curve_mode),
-            Element::Arrow(a) => Some(a.curve_mode),
-            _ => None,
-        }
+        Some(el.curve_mode())
     };
 
     let toggle_curve_mode = move |_| {
         let ids = selected_ids.get();
-        if ids.len() != 1 { return; }
+        if ids.len() != 1 {
+            return;
+        }
         let id = ids[0];
         scene.update(|s| {
-            if let Some(el) = s.elements.iter_mut().find(|e| e.id() == id) {
-                match el {
-                    Element::Line(l) => {
-                        l.curve_mode = match l.curve_mode {
-                            CurveMode::Straight => CurveMode::Curved,
-                            CurveMode::Curved => CurveMode::Straight,
-                        };
-                    }
-                    Element::Arrow(a) => {
-                        a.curve_mode = match a.curve_mode {
-                            CurveMode::Straight => CurveMode::Curved,
-                            CurveMode::Curved => CurveMode::Straight,
-                        };
-                    }
-                    _ => {}
+            if let Some(el) = s.element_by_id_mut(id) {
+                if el.path_points().is_some() {
+                    let new_mode = match el.curve_mode() {
+                        CurveMode::Straight => CurveMode::Curved,
+                        CurveMode::Curved => CurveMode::Straight,
+                    };
+                    el.set_curve_mode(new_mode);
                 }
             }
         });
     };
+
+    fn cat_icon(cat: Category) -> leptos::View {
+        match cat {
+            Category::Drawing => icon::pencil().into_view(),
+            Category::Colors => icon::palette().into_view(),
+            Category::Group => icon::group().into_view(),
+            Category::Pages => icon::pages().into_view(),
+        }
+    }
+
+    fn cat_title(cat: Category) -> &'static str {
+        match cat {
+            Category::Drawing => "Drawing",
+            Category::Colors => "Colors",
+            Category::Group => "Group",
+            Category::Pages => "Pages",
+        }
+    }
+
+    const ALL_CATS: [Category; 4] = [Category::Drawing, Category::Colors, Category::Group, Category::Pages];
 
     view! {
         // Wrapper centers everything
@@ -156,41 +168,28 @@ pub fn Dock(
             // Main dock
             <div class="relative flex">
                 <div class=classes::PANEL>
-                    <button
-                        class=move || btn_class(Category::Drawing)
-                        on:click=move |_| select_category(Category::Drawing)
-                        title="Drawing"
-                    >
-                        {icon::pencil()}
-                    </button>
-                    <button
-                        class=move || btn_class(Category::Colors)
-                        on:click=move |_| select_category(Category::Colors)
-                        title="Colors"
-                        style=move || {
-                            if selected_color.get() != ShapeColor::White {
-                                format!("color: {}", selected_color.get().to_hex())
-                            } else {
-                                String::new()
-                            }
+                    {ALL_CATS.iter().map(|&cat| {
+                        view! {
+                            <button
+                                class=move || btn_class(cat)
+                                on:click=move |_| select_category(cat)
+                                title=cat_title(cat)
+                                style=move || {
+                                    if cat == Category::Colors {
+                                        if selected_color.get() != ShapeColor::White {
+                                            format!("color: {}", selected_color.get().to_hex())
+                                        } else {
+                                            String::new()
+                                        }
+                                    } else {
+                                        String::new()
+                                    }
+                                }
+                            >
+                                {cat_icon(cat)}
+                            </button>
                         }
-                    >
-                        {icon::palette()}
-                    </button>
-                    <button
-                        class=move || btn_class(Category::Group)
-                        on:click=move |_| select_category(Category::Group)
-                        title="Group"
-                    >
-                        {icon::group()}
-                    </button>
-                    <button
-                        class=move || btn_class(Category::Pages)
-                        on:click=move |_| select_category(Category::Pages)
-                        title="Pages"
-                    >
-                        {icon::pages()}
-                    </button>
+                    }).collect::<Vec<_>>()}
 
                     // Eraser
                     <button

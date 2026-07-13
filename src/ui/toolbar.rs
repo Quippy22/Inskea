@@ -1,9 +1,11 @@
-use crate::canvas::{CanvasMode, Viewport};
+#![allow(clippy::redundant_locals)]
+use crate::canvas::{CanvasMode, CropExportCallback, Viewport};
 use crate::model::Scene;
 use crate::skea;
 use crate::tauri_bridge;
+use crate::util::window_size;
 use crate::ui::classes;
-use crate::ui::components::{Dropdown, DropdownItem};
+use crate::ui::components::{Dropdown, DropdownItem, IconButton};
 use crate::ui::export;
 use crate::ui::icon;
 use leptos::*;
@@ -11,23 +13,6 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
-
-fn is_tauri() -> bool {
-    let window = match web_sys::window() {
-        Some(w) => w,
-        None => return false,
-    };
-    js_sys::Reflect::get(&window, &JsValue::from_str("__TAURI__"))
-        .map(|v| !v.is_undefined() && !v.is_null())
-        .unwrap_or(false)
-}
-
-fn window_size() -> (f64, f64) {
-    let window = web_sys::window().expect("no global `window` exists");
-    let w = window.inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let h = window.inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
-    (w, h)
-}
 
 fn browser_import(scene: RwSignal<Scene>) {
     let document = web_sys::window().unwrap().document().unwrap();
@@ -89,7 +74,7 @@ pub fn ToolBar<F1, F2>(
     can_undo: Signal<bool>,
     can_redo: Signal<bool>,
     export_crop_active: RwSignal<bool>,
-    on_crop_export: RwSignal<Option<Rc<dyn Fn((f64, f64, f64, f64))>>>,
+    on_crop_export: RwSignal<Option<CropExportCallback>>,
 ) -> impl IntoView
 where
     F1: Fn() + 'static,
@@ -97,7 +82,7 @@ where
 {
     let menu_open = create_rw_signal(false);
     let saved_path = create_rw_signal::<Option<String>>(None);
-    let tauri = is_tauri();
+    let tauri = tauri_bridge::is_tauri();
 
     // Submenu hover tracking — one pair per fly-out panel
     let file_hover = create_rw_signal(false);
@@ -108,7 +93,7 @@ where
     let export_sub_hover = create_rw_signal(false);
     let show_export = Signal::derive(move || export_hover.get() || export_sub_hover.get());
 
-    let on_home = move |_| viewport.set(Viewport::default());
+    let on_home = move || viewport.set(Viewport::default());
 
     let close_menu = move || {
         menu_open.set(false);
@@ -121,11 +106,15 @@ where
     // ── File actions ───────────────────────────────────────────────────
 
     let on_new = {
-        let close_menu = close_menu.clone();
-        move || { close_menu(); saved_path.set(None); scene.set(Scene::new()); }
+        let close_menu = close_menu;
+        move || {
+            close_menu();
+            saved_path.set(None);
+            scene.set(Scene::new());
+        }
     };
     let on_save_as = {
-        let close_menu = close_menu.clone();
+        let close_menu = close_menu;
         move || {
             close_menu();
             spawn_local(async move {
@@ -141,8 +130,8 @@ where
         }
     };
     let on_save = {
-        let close_menu = close_menu.clone();
-        let on_save_as = on_save_as.clone();
+        let close_menu = close_menu;
+        let on_save_as = on_save_as;
         move || {
             close_menu();
             let saved = saved_path.get();
@@ -158,7 +147,7 @@ where
         }
     };
     let on_open = {
-        let close_menu = close_menu.clone();
+        let close_menu = close_menu;
         move || {
             close_menu();
             spawn_local(async move {
@@ -178,7 +167,7 @@ where
         }
     };
     let on_import = {
-        let close_menu = close_menu.clone();
+        let close_menu = close_menu;
         move || {
             close_menu();
             if tauri {
@@ -204,7 +193,7 @@ where
     // ── Export actions ─────────────────────────────────────────────────
 
     let on_export_skea = {
-        let close_menu = close_menu.clone();
+        let close_menu = close_menu;
         move || {
             close_menu();
             let s = scene.get();
@@ -223,63 +212,34 @@ where
         }
     };
 
-    let on_export_svg = {
-        let _close_menu = close_menu.clone();
-        let _export_crop_active = export_crop_active;
-        let _on_crop_export = on_crop_export;
-        let _scene = scene;
-        move |selection: bool| {
-            _close_menu();
-            if selection {
-                let scene = _scene;
-                let on_crop_export = _on_crop_export;
-                let export_crop_active = _export_crop_active;
-                let close_menu = _close_menu.clone();
-                on_crop_export.set(Some(Rc::new(move |rect: (f64, f64, f64, f64)| {
-                    close_menu();
-                    let s = scene.get();
-                    let svg = export::scene_to_svg_crop(&s, rect);
-                    if tauri {
-                        export::tauri_export_svg(svg, true);
-                    } else {
-                        export::download_string(&svg, "selection.svg");
-                    }
-                })));
-                export_crop_active.set(true);
-                return;
-            }
-            let s = _scene.get();
-            let vp = viewport.get();
-            let size = window_size();
-            let svg = export::scene_to_svg(&s, &vp, size, None);
-            if tauri {
-                export::tauri_export_svg(svg, false);
-            } else {
-                export::download_string(&svg, "canvas.svg");
-            }
-        }
-    };
+    #[derive(Clone, Copy)]
+    enum ExportFormat { Svg, Png }
 
-    let on_export_png = {
-        let _close_menu = close_menu.clone();
+    let on_export = {
+        let _close_menu = close_menu;
         let _export_crop_active = export_crop_active;
         let _on_crop_export = on_crop_export;
         let _scene = scene;
-        move |selection: bool| {
+        move |fmt: ExportFormat, selection: bool| {
             _close_menu();
             if selection {
                 let scene = _scene;
                 let on_crop_export = _on_crop_export;
                 let export_crop_active = _export_crop_active;
-                let close_menu = _close_menu.clone();
+                let close_menu = _close_menu;
                 on_crop_export.set(Some(Rc::new(move |rect: (f64, f64, f64, f64)| {
                     close_menu();
                     let s = scene.get();
                     let svg = export::scene_to_svg_crop(&s, rect);
-                    if tauri {
-                        export::tauri_export_png(svg, true);
-                    } else {
-                        export::download_png_from_svg(svg, "selection.png".to_string());
+                    match fmt {
+                        ExportFormat::Svg => {
+                            if tauri { export::tauri_export_svg(svg, true); }
+                            else { export::download_string(&svg, "selection.svg"); }
+                        }
+                        ExportFormat::Png => {
+                            if tauri { export::tauri_export_png(svg, true); }
+                            else { export::download_png_from_svg(svg, "selection.png".to_string()); }
+                        }
                     }
                 })));
                 export_crop_active.set(true);
@@ -289,10 +249,15 @@ where
             let vp = viewport.get();
             let size = window_size();
             let svg = export::scene_to_svg(&s, &vp, size, None);
-            if tauri {
-                export::tauri_export_png(svg, false);
-            } else {
-                export::download_png_from_svg(svg, "canvas.png".to_string());
+            match fmt {
+                ExportFormat::Svg => {
+                    if tauri { export::tauri_export_svg(svg, false); }
+                    else { export::download_string(&svg, "canvas.svg"); }
+                }
+                ExportFormat::Png => {
+                    if tauri { export::tauri_export_png(svg, false); }
+                    else { export::download_png_from_svg(svg, "canvas.png".to_string()); }
+                }
             }
         }
     };
@@ -300,24 +265,66 @@ where
     // ── Dropdown item lists ────────────────────────────────────────────
 
     let file_items: Vec<DropdownItem> = vec![
-        DropdownItem::Action { label: "New", on_click: Rc::new(on_new) },
-        DropdownItem::Action { label: "Save", on_click: Rc::new(on_save) },
-        DropdownItem::Action { label: "Save As", on_click: Rc::new(on_save_as) },
-        DropdownItem::Action { label: "Open", on_click: Rc::new(on_open) },
+        DropdownItem::Action {
+            label: "New",
+            on_click: Rc::new(on_new),
+        },
+        DropdownItem::Action {
+            label: "Save",
+            on_click: Rc::new(on_save),
+        },
+        DropdownItem::Action {
+            label: "Save As",
+            on_click: Rc::new(on_save_as),
+        },
+        DropdownItem::Action {
+            label: "Open",
+            on_click: Rc::new(on_open),
+        },
         DropdownItem::Separator,
-        DropdownItem::Action { label: "Import", on_click: Rc::new(on_import) },
+        DropdownItem::Action {
+            label: "Import",
+            on_click: Rc::new(on_import),
+        },
     ];
 
     let export_items: Vec<DropdownItem> = vec![
-        DropdownItem::Action { label: "Export .skea", on_click: Rc::new(on_export_skea) },
+        DropdownItem::Action {
+            label: "Export .skea",
+            on_click: Rc::new(on_export_skea),
+        },
         DropdownItem::Separator,
         DropdownItem::Header { label: "PNG" },
-        DropdownItem::Action { label: "Full canvas", on_click: Rc::new({ let f = on_export_png.clone(); move || f(false) }) },
-        DropdownItem::Action { label: "Selection", on_click: Rc::new({ let f = on_export_png.clone(); move || f(true) }) },
+        DropdownItem::Action {
+            label: "Full canvas",
+            on_click: Rc::new({
+                let f = on_export;
+                move || f(ExportFormat::Png, false)
+            }),
+        },
+        DropdownItem::Action {
+            label: "Selection",
+            on_click: Rc::new({
+                let f = on_export;
+                move || f(ExportFormat::Png, true)
+            }),
+        },
         DropdownItem::Separator,
         DropdownItem::Header { label: "SVG" },
-        DropdownItem::Action { label: "Full canvas", on_click: Rc::new({ let f = on_export_svg.clone(); move || f(false) }) },
-        DropdownItem::Action { label: "Selection", on_click: Rc::new({ let f = on_export_svg.clone(); move || f(true) }) },
+        DropdownItem::Action {
+            label: "Full canvas",
+            on_click: Rc::new({
+                let f = on_export;
+                move || f(ExportFormat::Svg, false)
+            }),
+        },
+        DropdownItem::Action {
+            label: "Selection",
+            on_click: Rc::new({
+                let f = on_export;
+                move || f(ExportFormat::Svg, true)
+            }),
+        },
     ];
 
     // ── Mode button helper ─────────────────────────────────────────────
@@ -355,9 +362,9 @@ where
                     {icon::pencil()}
                 </button>
                 <div class=classes::SEP_V />
-                <button class=classes::BTN_GHOST on:click=on_home title="Home">
+                <IconButton on_click=on_home title="Home" class=classes::BTN_GHOST>
                     {icon::home()}
-                </button>
+                </IconButton>
                 <button
                     class=classes::BTN_GHOST
                     class:opacity-40=move || !can_undo.get()
@@ -378,13 +385,13 @@ where
                 </button>
                 <div class=classes::SEP_V />
                 <div class="relative">
-                    <button
-                        class=classes::BTN_GHOST
-                        on:click=move |_| menu_open.update(|v| *v = !*v)
+                    <IconButton
+                        on_click=move || menu_open.update(|v| *v = !*v)
                         title="Menu"
+                        class=classes::BTN_GHOST
                     >
                         {icon::menu()}
-                    </button>
+                    </IconButton>
                     {move || {
                         if menu_open.get() {
                             view! {

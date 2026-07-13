@@ -1,4 +1,5 @@
-use super::{Point, ResizeContext};
+use crate::model::resize::{resize_bbox, ResizeContext};
+use crate::model::Point;
 
 /// How a set of path points should be interpreted when rendering.
 ///
@@ -46,7 +47,9 @@ pub fn path_d(points: &[Point], mode: CurveMode) -> String {
     let mut d = format!("M{} {}", points[0].x, points[0].y);
     use std::fmt::Write;
     for i in 0..n - 1 {
-        let Some((_, b1, b2, p1)) = segment_cubic_bezier(points, i) else { continue };
+        let Some((_, b1, b2, p1)) = segment_cubic_bezier(points, i) else {
+            continue;
+        };
         let _ = write!(d, " C{} {} {} {} {} {}", b1.x, b1.y, b2.x, b2.y, p1.x, p1.y);
     }
     d
@@ -63,12 +66,22 @@ fn segment_cubic_bezier(points: &[Point], i: usize) -> Option<(Point, Point, Poi
     let p0 = &points[i];
     let p3 = &points[i + 1];
     let p_before = if i == 0 { &points[0] } else { &points[i - 1] };
-    let p_after = if i + 2 >= points.len() { &points[points.len() - 1] } else { &points[i + 2] };
+    let p_after = if i + 2 >= points.len() {
+        &points[points.len() - 1]
+    } else {
+        &points[i + 2]
+    };
 
-    let b1 = Point { x: p0.x + (p3.x - p_before.x) / 6.0, y: p0.y + (p3.y - p_before.y) / 6.0 };
-    let b2 = Point { x: p3.x - (p_after.x - p0.x) / 6.0, y: p3.y - (p_after.y - p0.y) / 6.0 };
+    let b1 = Point {
+        x: p0.x + (p3.x - p_before.x) / 6.0,
+        y: p0.y + (p3.y - p_before.y) / 6.0,
+    };
+    let b2 = Point {
+        x: p3.x - (p_after.x - p0.x) / 6.0,
+        y: p3.y - (p_after.y - p0.y) / 6.0,
+    };
 
-    Some((p0.clone(), b1, b2, p3.clone()))
+    Some((*p0, b1, b2, *p3))
 }
 
 /// Evaluate a cubic Bezier at parameter `t` (0.0 – 1.0).
@@ -84,30 +97,23 @@ pub fn eval_cubic_bezier(p0: &Point, p1: &Point, p2: &Point, p3: &Point, t: f64)
     }
 }
 
-/// Minimum distance from a query point `(px, py)` to the line segment
-/// `(ax, ay)` – `(bx, by)`.
-fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
-    let dx = bx - ax;
-    let dy = by - ay;
-    let len2 = dx * dx + dy * dy;
-    if len2 == 0.0 {
-        return ((px - ax).powi(2) + (py - ay).powi(2)).sqrt();
-    }
-    let t = (((px - ax) * dx + (py - ay) * dy) / len2).clamp(0.0, 1.0);
-    let nx = ax + t * dx;
-    let ny = ay + t * dy;
-    ((px - nx).powi(2) + (py - ny).powi(2)).sqrt()
-}
-
 /// Test a query point against a cubic Bezier curve by subdividing it into
 /// `subdivisions` straight-line segments.
-fn hit_test_cubic_bezier(p0: &Point, p1: &Point, p2: &Point, p3: &Point, q: (f64, f64), tolerance: f64, subdivisions: usize) -> bool {
+fn hit_test_cubic_bezier(
+    p0: &Point,
+    p1: &Point,
+    p2: &Point,
+    p3: &Point,
+    q: (f64, f64),
+    tolerance: f64,
+    subdivisions: usize,
+) -> bool {
     let (qx, qy) = q;
     let mut prev = eval_cubic_bezier(p0, p1, p2, p3, 0.0);
     for i in 1..=subdivisions {
         let t = i as f64 / subdivisions as f64;
         let cur = eval_cubic_bezier(p0, p1, p2, p3, t);
-        if point_to_segment_dist(qx, qy, prev.x, prev.y, cur.x, cur.y) <= tolerance {
+        if Point::dist_to_segment(Point::new(qx, qy), prev, cur) <= tolerance {
             return true;
         }
         prev = cur;
@@ -133,7 +139,7 @@ pub fn hit_test_path(points: &[Point], mode: CurveMode, point: (f64, f64), toler
         for i in 1..points.len() {
             let a = &points[i - 1];
             let b = &points[i];
-            if point_to_segment_dist(px, py, a.x, a.y, b.x, b.y) <= tolerance {
+            if Point::dist_to_segment(Point::new(px, py), *a, *b) <= tolerance {
                 return true;
             }
         }
@@ -153,9 +159,14 @@ pub fn hit_test_path(points: &[Point], mode: CurveMode, point: (f64, f64), toler
 /// placement. In `Straight` mode this is the linear midpoint; in `Curved`
 /// mode it is the midpoint of the cubic Bezier.
 pub fn segment_midpoint(points: &[Point], mode: CurveMode, i: usize) -> Option<(f64, f64)> {
-    if i + 1 >= points.len() { return None; }
+    if i + 1 >= points.len() {
+        return None;
+    }
     if points.len() <= 2 || mode == CurveMode::Straight {
-        Some(((points[i].x + points[i + 1].x) / 2.0, (points[i].y + points[i + 1].y) / 2.0))
+        Some((
+            (points[i].x + points[i + 1].x) / 2.0,
+            (points[i].y + points[i + 1].y) / 2.0,
+        ))
     } else {
         let (p0, p1, p2, p3) = segment_cubic_bezier(points, i)?;
         let mid = eval_cubic_bezier(&p0, &p1, &p2, &p3, 0.5);
@@ -186,87 +197,57 @@ pub fn bounds_of_points(points: &[Point]) -> (f64, f64, f64, f64) {
 /// `orig` is the pre-drag point slice (from the undo snapshot) —
 /// each output point position = `(orig_point - bx) * sx + nx`.
 pub fn scale_points(points: &mut [Point], ctx: &ResizeContext, orig: &[Point]) {
-    use super::rect::MIN_ELEMENT_SIZE;
+    use crate::model::resize::MIN_ELEMENT_SIZE;
     let rctx = ctx;
-    let (nx, ny, nw, nh) = match rctx.handle {
-        0 => (rctx.bx + rctx.dx, rctx.by + rctx.dy, rctx.bw - rctx.dx, rctx.bh - rctx.dy),
-        1 => (rctx.bx, rctx.by + rctx.dy, rctx.bw, rctx.bh - rctx.dy),
-        2 => (rctx.bx, rctx.by + rctx.dy, rctx.bw + rctx.dx, rctx.bh - rctx.dy),
-        3 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh),
-        4 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh),
-        5 => (rctx.bx + rctx.dx, rctx.by, rctx.bw - rctx.dx, rctx.bh + rctx.dy),
-        6 => (rctx.bx, rctx.by, rctx.bw, rctx.bh + rctx.dy),
-        7 => (rctx.bx, rctx.by, rctx.bw + rctx.dx, rctx.bh + rctx.dy),
-        _ => return,
+    let (pos, (nw, nh)) = match resize_bbox(
+        Point { x: rctx.bx, y: rctx.by },
+        (rctx.bw, rctx.bh),
+        rctx.pointer_world,
+        rctx.handle,
+        rctx.shift,
+        rctx.alt,
+    ) {
+        Some(v) => v,
+        None => return,
     };
-    if nw < MIN_ELEMENT_SIZE || nh < MIN_ELEMENT_SIZE {
-        return;
-    }
     let obw = rctx.bw.max(MIN_ELEMENT_SIZE);
     let obh = rctx.bh.max(MIN_ELEMENT_SIZE);
     let sx = nw / obw;
     let sy = nh / obh;
     for (p, op) in points.iter_mut().zip(orig.iter()) {
-        p.x = (op.x - rctx.bx) * sx + nx;
-        p.y = (op.y - rctx.by) * sy + ny;
+        p.set(
+            (op.x - rctx.bx) * sx + pos.x,
+            (op.y - rctx.by) * sy + pos.y,
+        );
     }
 }
 
 /// Rotate every point around the pivot `(cx, cy)` by `delta` radians.
 pub fn rotate_points(points: &mut [Point], cx: f64, cy: f64, delta: f64) {
-    let cos = delta.cos();
-    let sin = delta.sin();
+    let pivot = Point::new(cx, cy);
     for p in points {
-        let dx = p.x - cx;
-        let dy = p.y - cy;
-        p.x = cx + dx * cos - dy * sin;
-        p.y = cy + dx * sin + dy * cos;
+        p.rotate_around(pivot, delta);
     }
 }
 
 /// Offset (translate) every point by `(dx, dy)`.
 pub fn offset_points(points: &mut [Point], dx: f64, dy: f64) {
     for p in points {
-        p.x += dx;
-        p.y += dy;
+        p.offset(dx, dy);
     }
 }
 
 /// Snap every point to the nearest grid line.
 pub fn snap_points_to_grid(points: &mut [Point], grid: f64) {
     for p in points {
-        p.x = (p.x / grid).round() * grid;
-        p.y = (p.y / grid).round() * grid;
+        p.snap_to_grid(grid);
     }
-}
-
-/// Returns the 10 handle positions for the given bounding box.
-///
-/// Indices 0–7 are resize corners/edges, 8 is the move handle (center),
-/// 9 is the rotate handle (above the box).
-///
-/// This is used by `selection.rs` for the generic bounding-box handle overlay
-/// for every element type (Rectangle, Ellipse, Text, Freehand, and multi-
-/// selections). It is NOT used for single-selection Line/Arrow node editing.
-pub fn handle_positions(bx: f64, by: f64, bw: f64, bh: f64) -> [(f64, f64); 10] {
-    [
-        (bx, by),
-        (bx + bw / 2.0, by),
-        (bx + bw, by),
-        (bx, by + bh / 2.0),
-        (bx + bw, by + bh / 2.0),
-        (bx, by + bh),
-        (bx + bw / 2.0, by + bh),
-        (bx + bw, by + bh),
-        (bx + bw / 2.0, by + bh / 2.0),
-        (bx + bw / 2.0, by - 25.0),
-    ]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::elements::Point;
+    use crate::model::Point;
 
     #[test]
     fn path_d_empty() {
@@ -378,12 +359,4 @@ mod tests {
         assert_eq!(pts[0].y, 20.0);
     }
 
-    #[test]
-    fn handle_positions_count() {
-        let h = handle_positions(0.0, 0.0, 100.0, 50.0);
-        assert_eq!(h.len(), 10);
-        assert_eq!(h[0], (0.0, 0.0));
-        assert_eq!(h[8], (50.0, 25.0));
-        assert_eq!(h[9], (50.0, -25.0));
-    }
 }

@@ -17,18 +17,17 @@ pub fn make_commit_edit(
             let text = edit_text.get();
             scene.update(|s| {
                 if text.is_empty() {
-                    s.elements.retain(|e| e.id() != id);
-                } else if let Some(el) = s.elements.iter_mut().find(|e| e.id() == id) {
-                    if let Element::Text(text_elem) = el {
-                        let wrap_width = if text_elem.data.width > 0.0 {
-                            text_elem.data.width
-                        } else {
-                            textarea_ref.get()
-                                .map(|ta| ta.client_width() as f64 / viewport.get().zoom)
-                                .unwrap_or(200.0)
-                        };
-                        text_elem.set_content(&text, wrap_width);
-                    }
+                    s.remove_by_id(id);
+                } else if let Some(Element::Text(text_elem)) = s.element_by_id_mut(id) {
+                    let wrap_width = if text_elem.data.width > 0.0 {
+                        text_elem.data.width
+                    } else {
+                        textarea_ref
+                            .get()
+                            .map(|ta| ta.client_width() as f64 / viewport.get().zoom)
+                            .unwrap_or(200.0)
+                    };
+                    text_elem.set_content(&text, wrap_width);
                 }
             });
             editing_id.set(None);
@@ -50,18 +49,23 @@ pub fn text_edit_overlay(
     move || {
         let id = editing_id.get()?;
         let text_elem = scene.with(|s| {
-            s.elements.iter().find(|e| e.id() == id).and_then(|e| {
-                if let Element::Text(t) = e { Some(t.clone()) } else { None }
+            s.element_by_id(id).and_then(|e| {
+                if let Element::Text(t) = e {
+                    Some(t.clone())
+                } else {
+                    None
+                }
             })
         })?;
         let zoom = viewport.get().zoom;
         let font_size = text_elem.data.font_size.max(12.0);
         let (sw, sh) = screen_size.get();
-        let (sx, sy) = viewport.get().world_to_screen(
-            (text_elem.data.x, text_elem.data.y),
-            (sw, sh),
-        );
-        let fill = text_elem.data.fill_color
+        let (sx, sy) = viewport
+            .get()
+            .world_to_screen((text_elem.data.world_point.x, text_elem.data.world_point.y), (sw, sh));
+        let fill = text_elem
+            .data
+            .fill_color
             .map(|c| c.to_hex())
             .unwrap_or_else(|| text_elem.data.stroke_color.to_hex());
 

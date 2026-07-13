@@ -53,7 +53,6 @@ impl Viewport {
     /// Convert a world-space point into a screen-space point (e.g. to
     /// position an HTML overlay like the text-edit textarea on top of a
     /// world-space element).
-    #[allow(dead_code)]
     pub fn world_to_screen(&self, world: (f64, f64), screen_size: (f64, f64)) -> (f64, f64) {
         let (wx, wy) = world;
         let (sw, sh) = screen_size;
