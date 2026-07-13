@@ -7,8 +7,6 @@ use crate::model::{
 use crate::ui::dock::Tool;
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, SignalWith};
 
-const DEFAULT_FONT_SIZE: f64 = 24.0;
-
 /// Handle a pointer-down event while in `Draw` mode.
 ///
 /// **Behaviour by tool:**
@@ -40,7 +38,6 @@ pub fn draw_pointer_down(
         (props.push_snapshot)();
         let mut data = ElementData::new(0);
         data.world_point.set(world.0, world.1);
-        data.font_size = DEFAULT_FONT_SIZE;
         data.width = 0.0;
         data.height = 0.0;
         data.stroke_color = color;

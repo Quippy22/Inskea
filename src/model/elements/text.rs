@@ -166,7 +166,6 @@ impl FromDrag for Text {
     fn from_drag(anchor: Point, _current: Point, color: ShapeColor, _shift: bool) -> Self {
         let mut data = ElementData::new(0);
         data.world_point.set(anchor.x, anchor.y);
-        data.font_size = 24.0;
         data.width = 0.0;
         data.height = 0.0;
         data.stroke_color = color;
