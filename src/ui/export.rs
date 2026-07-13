@@ -125,45 +125,36 @@ fn el_svg(el: &Element) -> String {
         }
         Element::Line(l) => {
             let d = crate::model::elements::path::path_d(&l.points, l.curve_mode);
-            format!(
+            let mut out = format!(
                 r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
                 d,
                 l.data.stroke_color.to_hex(),
                 l.data.stroke_width,
-            )
-        }
-        Element::Arrow(a) => {
-            let d = crate::model::elements::path::path_d(&a.points, a.curve_mode);
-            let mut out = format!(
-                r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
-                d,
-                a.data.stroke_color.to_hex(),
-                a.data.stroke_width,
             );
-            if a.points.len() >= 2 {
-                let tail = &a.points[a.points.len() - 2];
-                let tip = &a.points[a.points.len() - 1];
+            if l.has_arrowhead && l.points.len() >= 2 {
+                let tail = &l.points[l.points.len() - 2];
+                let tip = &l.points[l.points.len() - 1];
                 let dx = tip.x - tail.x;
                 let dy = tip.y - tail.y;
                 let len = dx.hypot(dy);
                 if len > 1.0 {
                     let ux = dx / len;
                     let uy = dy / len;
-                    let hl = (a.data.stroke_width * 4.0).max(8.0);
+                    let hl = (l.data.stroke_width * 4.0).max(8.0);
                     let hw = hl * 0.4;
                     let bx = tip.x - ux * hl;
                     let by = tip.y - uy * hl;
                     let _ = write!(
                         out,
-                        r#"<polyline points="{},{} {},{} {},{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
+                        r#"<polyline points="{},{},{} {},{} {}" fill="none" stroke="{}" stroke-width="{}"/>"#,
                         tip.x,
                         tip.y,
                         bx - uy * hw,
                         by + ux * hw,
                         bx + uy * hw,
                         by - ux * hw,
-                        a.data.stroke_color.to_hex(),
-                        a.data.stroke_width,
+                        l.data.stroke_color.to_hex(),
+                        l.data.stroke_width,
                     );
                 }
             }

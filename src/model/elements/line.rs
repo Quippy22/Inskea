@@ -24,6 +24,9 @@ pub struct Line {
     pub points: Vec<Point>,
     /// How the points are connected when rendering.
     pub curve_mode: CurveMode,
+    /// Whether this line has an arrowhead at its tip.
+    #[serde(default)]
+    pub has_arrowhead: bool,
 }
 
 impl FromDrag for Line {
@@ -36,6 +39,7 @@ impl FromDrag for Line {
             },
             points: vec![a, b],
             curve_mode: CurveMode::default(),
+            has_arrowhead: false,
         }
     }
 }
@@ -50,19 +54,55 @@ impl UpdateDrag for Line {
     }
 }
 
+const ARROW_HEAD_MULT: f64 = 4.0;
+
 impl Render for Line {
     fn render(&self, _zoom: f64) -> leptos::View {
         let sw = self.data.stroke_width;
         let stroke = ShapeColor::to_hex(self.data.stroke_color);
         let d = path_d(&self.points, self.curve_mode);
-        leptos::view! {
-            <path
-                d=d
-                fill="none"
-                stroke=stroke stroke-width=sw
-            />
+
+        if self.has_arrowhead && self.points.len() >= 2 {
+            let (ux, uy) = {
+                let tail = &self.points[self.points.len() - 2];
+                let tip = &self.points[self.points.len() - 1];
+                let dx = tip.x - tail.x;
+                let dy = tip.y - tail.y;
+                let len = (dx * dx + dy * dy).sqrt();
+                if len > 0.0 {
+                    (dx / len, dy / len)
+                } else {
+                    (1.0, 0.0)
+                }
+            };
+
+            let head_size = (sw * ARROW_HEAD_MULT).max(4.0);
+            let tip = &self.points[self.points.len() - 1];
+            let tip_x = tip.x;
+            let tip_y = tip.y;
+            let lx = tip_x - ux * head_size - uy * head_size * 0.4;
+            let ly = tip_y - uy * head_size + ux * head_size * 0.4;
+            let rx = tip_x - ux * head_size + uy * head_size * 0.4;
+            let ry = tip_y - uy * head_size - ux * head_size * 0.4;
+            let points = format!("{},{} {},{} {},{}", lx, ly, tip_x, tip_y, rx, ry);
+
+            leptos::view! {
+                <g stroke=stroke stroke-width=sw fill="none" stroke-linejoin="round">
+                    <path d=d />
+                    <polyline points=points />
+                </g>
+            }
+            .into_view()
+        } else {
+            leptos::view! {
+                <path
+                    d=d
+                    fill="none"
+                    stroke=stroke stroke-width=sw
+                />
+            }
+            .into_view()
         }
-        .into_view()
     }
 }
 

@@ -482,7 +482,11 @@ pub fn Canvas(
                 Tool::Rectangle => Rectangle::from_drag(anchor, world_pt, state.color, shift).into(),
                 Tool::Ellipse => Ellipse::from_drag(anchor, world_pt, state.color, shift).into(),
                 Tool::Line => Line::from_drag(anchor, world_pt, state.color, shift).into(),
-                Tool::Arrow => Arrow::from_drag(anchor, world_pt, state.color, shift).into(),
+                Tool::Arrow => {
+                    let mut line = Line::from_drag(anchor, world_pt, state.color, shift);
+                    line.has_arrowhead = true;
+                    Element::Line(line)
+                }
                 Tool::Text => Text::from_drag(anchor, world_pt, state.color, shift).into(),
                 Tool::Freehand => Freehand::from_drag(anchor, world_pt, state.color, shift).into(),
             };

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::Scene;
 
-pub const FORMAT_VERSION: u32 = 2;
+pub const FORMAT_VERSION: u32 = 3;
 
 #[derive(Serialize, Deserialize)]
 struct SkeaFile {
@@ -74,6 +74,31 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
         }
     }
 
+    let version = raw
+        .get("format_version")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+
+    if version == 2 {
+        // Migrate v2 → v3: convert Arrow to Line with has_arrowhead
+        if let Some(elements) = raw.pointer_mut("/scene/elements") {
+            if let Some(arr) = elements.as_array_mut() {
+                for el in arr.iter_mut() {
+                    let type_name = el.get("type").and_then(|v| v.as_str());
+                    if type_name == Some("Arrow") {
+                        if let Some(obj) = el.as_object_mut() {
+                            obj.insert("type".to_string(), serde_json::json!("Line"));
+                            obj.insert("has_arrowhead".to_string(), serde_json::json!(true));
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(obj) = raw.as_object_mut() {
+            obj.insert("format_version".to_string(), serde_json::json!(3));
+        }
+    }
+
     let version_after = raw
         .get("format_version")
         .and_then(|v| v.as_u64())
@@ -97,7 +122,7 @@ mod tests {
     use crate::model::elements::path::CurveMode;
     use crate::model::elements::text::WrappedText;
     use crate::model::{
-        Arrow, Element, ElementData, Ellipse, Freehand, Line, Point, Rectangle, ShapeColor, Text,
+        Element, ElementData, Ellipse, Freehand, Line, Point, Rectangle, ShapeColor, Text,
     };
 
     fn make_scene() -> Scene {
@@ -124,14 +149,16 @@ mod tests {
             data: ld,
             points: vec![Point { x: 0.0, y: 0.0 }, Point { x: 100.0, y: 100.0 }],
             curve_mode: CurveMode::Straight,
+            has_arrowhead: false,
         }));
 
         let mut ad = ElementData::new(0);
         ad.stroke_color = ShapeColor::Orange;
-        s.add_element(Element::Arrow(Arrow {
+        s.add_element(Element::Line(Line {
             data: ad,
             points: vec![Point { x: 10.0, y: 10.0 }, Point { x: 200.0, y: 50.0 }],
             curve_mode: CurveMode::Straight,
+            has_arrowhead: true,
         }));
 
         let mut td = ElementData::new(0);
@@ -252,16 +279,50 @@ mod tests {
         } else {
             panic!("expected Line element at index 1");
         }
-        // Check the Arrow was migrated
-        if let Element::Arrow(arrow) = &scene.elements()[2] {
-            assert_eq!(arrow.points.len(), 2);
-            assert_eq!(arrow.points[0].x, 10.0);
-            assert_eq!(arrow.points[0].y, 10.0);
-            assert_eq!(arrow.points[1].x, 200.0);
-            assert_eq!(arrow.points[1].y, 50.0);
-            assert_eq!(arrow.curve_mode, CurveMode::Straight);
+        // Check the Arrow was migrated (through v2 and v3)
+        if let Element::Line(line) = &scene.elements()[2] {
+            assert_eq!(line.points.len(), 2);
+            assert_eq!(line.points[0].x, 10.0);
+            assert_eq!(line.points[0].y, 10.0);
+            assert_eq!(line.points[1].x, 200.0);
+            assert_eq!(line.points[1].y, 50.0);
+            assert_eq!(line.curve_mode, CurveMode::Straight);
+            assert!(line.has_arrowhead);
         } else {
-            panic!("expected Arrow element at index 2");
+            panic!("expected Line (was Arrow) element at index 2");
+        }
+    }
+
+    #[test]
+    fn migrate_v2_arrow_to_v3() {
+        let v2_input = r#"{
+            "format_version": 2,
+            "scene": {
+                "next_id": 10,
+                "elements": [
+                    {"type": "Rectangle", "data": {"id": 1, "world_point": {"x": 0.0, "y": 0.0}, "width": 50.0, "height": 50.0, "rotation": 0.0, "font_size": 24.0, "stroke_color": "Blue", "fill_color": null, "stroke_width": 2.0}},
+                    {"type": "Line", "data": {"id": 2, "world_point": {"x": 0.0, "y": 0.0}, "width": 0.0, "height": 0.0, "rotation": 0.0, "font_size": 24.0, "stroke_color": "Green", "fill_color": null, "stroke_width": 3.0}, "points": [{"x": 0.0, "y": 0.0}, {"x": 100.0, "y": 100.0}], "curve_mode": "Straight"},
+                    {"type": "Arrow", "data": {"id": 3, "world_point": {"x": 0.0, "y": 0.0}, "width": 0.0, "height": 0.0, "rotation": 0.0, "font_size": 24.0, "stroke_color": "Orange", "fill_color": null, "stroke_width": 2.0}, "points": [{"x": 10.0, "y": 10.0}, {"x": 200.0, "y": 50.0}], "curve_mode": "Straight"}
+                ]
+            }
+        }"#;
+        let scene = load_from_str(v2_input).expect("v2→v3 migration should succeed");
+        assert_eq!(scene.elements().len(), 3);
+        // Line unchanged
+        if let Element::Line(line) = &scene.elements()[1] {
+            assert!(!line.has_arrowhead);
+        } else {
+            panic!("expected Line element at index 1");
+        }
+        // Arrow converted to Line
+        if let Element::Line(line) = &scene.elements()[2] {
+            assert_eq!(line.points[0].x, 10.0);
+            assert_eq!(line.points[0].y, 10.0);
+            assert_eq!(line.points[1].x, 200.0);
+            assert_eq!(line.points[1].y, 50.0);
+            assert!(line.has_arrowhead);
+        } else {
+            panic!("expected Line (was Arrow) element at index 2");
         }
     }
 }

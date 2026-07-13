@@ -1,4 +1,3 @@
-pub mod arrow;
 pub mod ellipse;
 pub mod freehand;
 pub(crate) mod line;
@@ -7,7 +6,6 @@ pub mod rect;
 pub(crate) mod text;
 mod utils;
 
-pub use arrow::Arrow;
 pub use ellipse::Ellipse;
 pub use freehand::Freehand;
 pub use line::Line;
@@ -70,10 +68,8 @@ pub enum Element {
     Rectangle(Rectangle),
     /// An [`Ellipse`] (oval) shape.
     Ellipse(Ellipse),
-    /// A [`Line`] segment.
+    /// A [`Line`] segment (optionally with an arrowhead).
     Line(Line),
-    /// An [`Arrow`] with a V-shaped head.
-    Arrow(Arrow),
     /// A [`Text`] label with word-wrapping.
     Text(Text),
     /// A [`Freehand`] stroke made of sampled points.
@@ -89,7 +85,6 @@ impl Element {
             Element::Rectangle(e) => e.data.id,
             Element::Ellipse(e) => e.data.id,
             Element::Line(e) => e.data.id,
-            Element::Arrow(e) => e.data.id,
             Element::Text(e) => e.data.id,
             Element::Freehand(e) => e.data.id,
         }
@@ -101,7 +96,6 @@ impl Element {
             Element::Rectangle(e) => &e.data,
             Element::Ellipse(e) => &e.data,
             Element::Line(e) => &e.data,
-            Element::Arrow(e) => &e.data,
             Element::Text(e) => &e.data,
             Element::Freehand(e) => &e.data,
         }
@@ -113,7 +107,6 @@ impl Element {
             Element::Rectangle(e) => &mut e.data,
             Element::Ellipse(e) => &mut e.data,
             Element::Line(e) => &mut e.data,
-            Element::Arrow(e) => &mut e.data,
             Element::Text(e) => &mut e.data,
             Element::Freehand(e) => &mut e.data,
         }
@@ -135,7 +128,6 @@ macro_rules! impl_into_element {
 impl_into_element!(Rectangle);
 impl_into_element!(Ellipse);
 impl_into_element!(Line);
-impl_into_element!(Arrow);
 impl_into_element!(Text);
 impl_into_element!(Freehand);
 
@@ -244,47 +236,28 @@ impl PathPoints for Line {
     }
 }
 
-impl PathPoints for Arrow {
-    fn path_points(&self) -> Option<&Vec<Point>> {
-        Some(&self.points)
-    }
-    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> {
-        Some(&mut self.points)
-    }
-    fn curve_mode(&self) -> CurveMode {
-        self.curve_mode
-    }
-    fn set_curve_mode(&mut self, mode: CurveMode) {
-        self.curve_mode = mode;
-    }
-}
-
 impl PathPoints for Element {
     fn path_points(&self) -> Option<&Vec<Point>> {
         match self {
             Element::Line(e) => Some(&e.points),
-            Element::Arrow(e) => Some(&e.points),
             _ => None,
         }
     }
     fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> {
         match self {
             Element::Line(e) => Some(&mut e.points),
-            Element::Arrow(e) => Some(&mut e.points),
             _ => None,
         }
     }
     fn curve_mode(&self) -> CurveMode {
         match self {
             Element::Line(e) => e.curve_mode,
-            Element::Arrow(e) => e.curve_mode,
             _ => CurveMode::Straight,
         }
     }
     fn set_curve_mode(&mut self, mode: CurveMode) {
         match self {
             Element::Line(e) => e.curve_mode = mode,
-            Element::Arrow(e) => e.curve_mode = mode,
             _ => {}
         }
     }
@@ -318,7 +291,6 @@ impl Render for Element {
             Element::Rectangle(e) => e.render(zoom),
             Element::Ellipse(e) => e.render(zoom),
             Element::Line(e) => e.render(zoom),
-            Element::Arrow(e) => e.render(zoom),
             Element::Text(e) => e.render(zoom),
             Element::Freehand(e) => e.render(zoom),
         }
@@ -331,7 +303,6 @@ impl HitTest for Element {
             Element::Rectangle(e) => e.hit_test(point, margin),
             Element::Ellipse(e) => e.hit_test(point, margin),
             Element::Line(e) => e.hit_test(point, margin),
-            Element::Arrow(e) => e.hit_test(point, margin),
             Element::Text(e) => e.hit_test(point, margin),
             Element::Freehand(e) => e.hit_test(point, margin),
         }
@@ -344,7 +315,6 @@ impl Bounds for Element {
             Element::Rectangle(e) => e.bounds(),
             Element::Ellipse(e) => e.bounds(),
             Element::Line(e) => e.bounds(),
-            Element::Arrow(e) => e.bounds(),
             Element::Text(e) => e.bounds(),
             Element::Freehand(e) => e.bounds(),
         }
@@ -357,7 +327,6 @@ impl Offset for Element {
             Element::Rectangle(e) => e.offset(dx, dy),
             Element::Ellipse(e) => e.offset(dx, dy),
             Element::Line(e) => e.offset(dx, dy),
-            Element::Arrow(e) => e.offset(dx, dy),
             Element::Text(e) => e.offset(dx, dy),
             Element::Freehand(e) => e.offset(dx, dy),
         }
@@ -370,7 +339,6 @@ impl SnapToGrid for Element {
             Element::Rectangle(e) => e.snap_to_grid(grid),
             Element::Ellipse(e) => e.snap_to_grid(grid),
             Element::Line(e) => e.snap_to_grid(grid),
-            Element::Arrow(e) => e.snap_to_grid(grid),
             Element::Text(e) => e.snap_to_grid(grid),
             Element::Freehand(e) => e.snap_to_grid(grid),
         }
@@ -383,7 +351,6 @@ impl Rotate for Element {
             Element::Rectangle(e) => e.rotate_around(point, delta),
             Element::Ellipse(e) => e.rotate_around(point, delta),
             Element::Line(e) => e.rotate_around(point, delta),
-            Element::Arrow(e) => e.rotate_around(point, delta),
             Element::Text(e) => e.rotate_around(point, delta),
             Element::Freehand(e) => e.rotate_around(point, delta),
         }
@@ -396,7 +363,6 @@ impl Resize for Element {
             Element::Rectangle(e) => e.resize(ctx),
             Element::Ellipse(e) => e.resize(ctx),
             Element::Line(e) => e.resize(ctx),
-            Element::Arrow(e) => e.resize(ctx),
             Element::Text(e) => e.resize(ctx),
             Element::Freehand(e) => e.resize(ctx),
         }
@@ -409,7 +375,6 @@ impl UpdateDrag for Element {
             Element::Rectangle(e) => e.update_drag(current, anchor, shift),
             Element::Ellipse(e) => e.update_drag(current, anchor, shift),
             Element::Line(e) => e.update_drag(current, anchor, shift),
-            Element::Arrow(e) => e.update_drag(current, anchor, shift),
             Element::Text(e) => e.update_drag(current, anchor, shift),
             Element::Freehand(e) => e.update_drag(current, anchor, shift),
         }

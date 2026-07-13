@@ -5,7 +5,7 @@ pub mod resize;
 
 pub use color::ShapeColor;
 pub use elements::{
-    Arrow, Element, ElementData, ElementId, Ellipse, Freehand, Line, Rectangle, Text,
+    Element, ElementData, ElementId, Ellipse, Freehand, Line, Rectangle, Text,
 };
 pub use elements::{
     Bounds, FromDrag, HitTest, Offset, PathPoints, Render, Resize, Rotate, SnapToGrid, UpdateDrag,

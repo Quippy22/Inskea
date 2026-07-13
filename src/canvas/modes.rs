@@ -2,7 +2,7 @@ use super::state::{CanvasInputs, CanvasState, DrawingState};
 use super::MIN_DRAG_DIST;
 use crate::model::elements::text::WrappedText;
 use crate::model::{
-    Arrow, Element, ElementData, Ellipse, Freehand, FromDrag, Line, Point, Rectangle, Text,
+    Element, ElementData, Ellipse, Freehand, FromDrag, Line, Point, Rectangle, Text,
 };
 use crate::ui::dock::Tool;
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, SignalWith};
@@ -124,7 +124,11 @@ pub fn draw_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut Canva
             Tool::Rectangle => Rectangle::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
             Tool::Ellipse => Ellipse::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
             Tool::Line => Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
-            Tool::Arrow => Arrow::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
+            Tool::Arrow => {
+                let mut line = Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get());
+                line.has_arrowhead = true;
+                Element::Line(line)
+            }
             Tool::Text => Text::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
             Tool::Freehand => Freehand::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
         };
