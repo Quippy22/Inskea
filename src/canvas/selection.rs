@@ -214,6 +214,178 @@ fn unrotate_for_element(point: (f64, f64), el: &Element) -> (f64, f64) {
     rotate_point_around(point, (cx, cy), -rot)
 }
 
+fn handle_text_double_click(
+    ev: &ev::PointerEvent,
+    world: (f64, f64),
+    st: &mut CanvasState,
+    props: &CanvasInputs,
+) -> bool {
+    if ev.detail() < 2 {
+        return false;
+    }
+    let els = props.scene.get().elements().to_vec();
+    let id = match hit_test_topmost(world, &els) {
+        Some(id) => id,
+        None => return false,
+    };
+    if let Some(Element::Text(text_elem)) = els.iter().find(|e| e.id() == id) {
+        st.editing_id.set(Some(id));
+        st.edit_text.set(text_elem.wrapped.raw.clone());
+        return true;
+    }
+    false
+}
+
+fn handle_path_point_hit(
+    world: (f64, f64),
+    st: &mut CanvasState,
+    props: &CanvasInputs,
+    el: &Element,
+) -> bool {
+    let Some(points) = el.path_points() else {
+        return false;
+    };
+    for (i, p) in points.iter().enumerate() {
+        let d = ((world.0 - p.x).powi(2) + (world.1 - p.y).powi(2)).sqrt();
+        if d <= HANDLE_RESIZE_RADIUS {
+            (props.push_snapshot)();
+            st.drag_action.set(Some(Handle::PathPoint(i)));
+            st.moving_anchor.set(Some(world));
+            st.last_world.set(Some(world));
+            return true;
+        }
+    }
+    let cm = el.curve_mode();
+    for i in 0..points.len().saturating_sub(1) {
+        let Some((mx, my)) = segment_midpoint(points, cm, i) else {
+            continue;
+        };
+        let d = ((world.0 - mx).powi(2) + (world.1 - my).powi(2)).sqrt();
+        if d <= HANDLE_RESIZE_RADIUS {
+            st.drag_action.set(Some(Handle::PathMidpoint(i)));
+            st.moving_anchor.set(Some(world));
+            st.last_world.set(Some(world));
+            return true;
+        }
+    }
+    false
+}
+
+fn handle_path_move_icon(
+    world: (f64, f64),
+    st: &mut CanvasState,
+    props: &CanvasInputs,
+    el: &Element,
+) -> bool {
+    let (bx, by, bw, _bh) = el.bounds();
+    let mx = bx + bw / 2.0;
+    let my = by - 25.0;
+    if ((world.0 - mx).powi(2) + (world.1 - my).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+        (props.push_snapshot)();
+        st.drag_action.set(Some(Handle::Move));
+        st.moving_anchor.set(Some(world));
+        st.drag_bounds.set(Some(el.bounds()));
+        st.last_world.set(Some(world));
+        return true;
+    }
+    false
+}
+
+fn handle_selection_handles(
+    world: (f64, f64),
+    st: &mut CanvasState,
+    props: &CanvasInputs,
+    ids: &[ElementId],
+    els: &[Element],
+) -> bool {
+    let (test_x, test_y) = if ids.len() == 1 {
+        els.iter()
+            .find(|e| e.id() == ids[0])
+            .map(|el| unrotate_for_element(world, el))
+            .unwrap_or(world)
+    } else {
+        world
+    };
+
+    let Some(bounds @ (bx, by, bw, bh)) = selection_bounds(ids, els) else {
+        return false;
+    };
+    let hpos = handle_positions(bx, by, bw, bh);
+
+    for (i, &(hx, hy)) in hpos[..8].iter().enumerate() {
+        if ((test_x - hx).powi(2) + (test_y - hy).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
+            (props.push_snapshot)();
+            st.drag_action.set(Some(Handle::Resize(ResizeHandle::from(i))));
+            st.moving_anchor.set(Some(world));
+            st.drag_bounds.set(Some(bounds));
+            st.last_world.set(Some(world));
+            st.drag_originals.set(
+                els.iter().filter(|el| ids.contains(&el.id())).cloned().collect(),
+            );
+            return true;
+        }
+    }
+
+    let (hx, hy) = hpos[8];
+    if ((test_x - hx).powi(2) + (test_y - hy).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+        (props.push_snapshot)();
+        st.drag_action.set(Some(Handle::Move));
+        st.moving_anchor.set(Some(world));
+        st.drag_bounds.set(Some(bounds));
+        st.last_world.set(Some(world));
+        return true;
+    }
+
+    let (hx, hy) = hpos[9];
+    if ((test_x - hx).powi(2) + (test_y - hy).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
+        (props.push_snapshot)();
+        let cx = bx + bw / 2.0;
+        let cy = by + bh / 2.0;
+        st.drag_action.set(Some(Handle::Rotate));
+        st.drag_angle.set(Some((world.1 - cy).atan2(world.0 - cx) + std::f64::consts::FRAC_PI_2));
+        st.moving_anchor.set(Some(world));
+        st.drag_bounds.set(Some(bounds));
+        st.overlay_freeze.set(Some(bounds));
+        st.drag_originals.set(
+            els.iter().filter(|el| ids.contains(&el.id())).cloned().collect(),
+        );
+        return true;
+    }
+
+    false
+}
+
+fn handle_element_selection(
+    world: (f64, f64),
+    st: &mut CanvasState,
+    props: &CanvasInputs,
+    els: &[Element],
+) -> bool {
+    let id = match hit_test_topmost(world, els) {
+        Some(id) => id,
+        None => return false,
+    };
+    let mut ids = st.selected_ids.get();
+    if st.shift_pressed.get() {
+        if let Some(pos) = ids.iter().position(|&x| x == id) {
+            ids.remove(pos);
+        } else {
+            ids.push(id);
+        }
+        st.selected_ids.set(ids);
+    } else {
+        st.selected_ids.set(vec![id]);
+        if let Some(bounds) = combined_bounds(&[id], els) {
+            (props.push_snapshot)();
+            st.drag_action.set(Some(Handle::Move));
+            st.moving_anchor.set(Some(world));
+            st.drag_bounds.set(Some(bounds));
+            st.last_world.set(Some(world));
+        }
+    }
+    true
+}
+
 pub fn select_pointer_down(
     _ev: &ev::PointerEvent,
     world: (f64, f64),
@@ -222,140 +394,29 @@ pub fn select_pointer_down(
 ) {
     st.overlay_freeze.set(None);
     st.rotation_delta.set(0.0);
-    if _ev.detail() >= 2 {
-        let els = props.scene.get().elements().to_vec();
-        if let Some(id) = hit_test_topmost(world, &els) {
-            if let Some(Element::Text(text_elem)) = els.iter().find(|e| e.id() == id) {
-                st.editing_id.set(Some(id));
-                st.edit_text.set(text_elem.wrapped.raw.clone());
-                return;
-            }
-        }
+
+    if handle_text_double_click(_ev, world, st, props) {
+        return;
     }
 
     let ids = st.selected_ids.get();
-        let els = props.scene.get().elements().to_vec();
+    let els = props.scene.get().elements().to_vec();
 
     if ids.len() == 1 {
         if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
-            if let Some(points) = el.path_points() {
-                for (i, p) in points.iter().enumerate() {
-                    let d = ((world.0 - p.x).powi(2) + (world.1 - p.y).powi(2)).sqrt();
-                    if d <= HANDLE_RESIZE_RADIUS {
-                        (props.push_snapshot)();
-                        st.drag_action.set(Some(Handle::PathPoint(i)));
-                        st.moving_anchor.set(Some(world));
-                        st.last_world.set(Some(world));
-                        return;
-                    }
-                }
-                let cm = el.curve_mode();
-                for i in 0..points.len().saturating_sub(1) {
-                    let Some((mx, my)) = segment_midpoint(points, cm, i) else {
-                        continue;
-                    };
-                    let d = ((world.0 - mx).powi(2) + (world.1 - my).powi(2)).sqrt();
-                    if d <= HANDLE_RESIZE_RADIUS {
-                        st.drag_action.set(Some(Handle::PathMidpoint(i)));
-                        st.moving_anchor.set(Some(world));
-                        st.last_world.set(Some(world));
-                        return;
-                    }
-                }
-                let (bx, by, bw, _bh) = el.bounds();
-                let mx = bx + bw / 2.0;
-                let my = by - 25.0;
-                if ((world.0 - mx).powi(2) + (world.1 - my).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
-                    (props.push_snapshot)();
-                    st.drag_action.set(Some(Handle::Move));
-                    st.moving_anchor.set(Some(world));
-                    st.drag_bounds.set(Some(el.bounds()));
-                    st.last_world.set(Some(world));
-                    return;
-                }
-            }
-        }
-    }
-
-    if !ids.is_empty() {
-        let (test_x, test_y) = if ids.len() == 1 {
-            els.iter()
-                .find(|e| e.id() == ids[0])
-                .map(|el| unrotate_for_element(world, el))
-                .unwrap_or(world)
-        } else {
-            world
-        };
-
-        let bounds = selection_bounds(&ids, &els);
-
-        if let Some(bounds @ (bx, by, bw, bh)) = bounds {
-            let hpos = handle_positions(bx, by, bw, bh);
-            for (i, &(hx, hy)) in hpos[..8].iter().enumerate() {
-                if ((test_x - hx).powi(2) + (test_y - hy).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
-                    (props.push_snapshot)();
-                    st.drag_action.set(Some(Handle::Resize(ResizeHandle::from(i))));
-                    st.moving_anchor.set(Some(world));
-                    st.drag_bounds.set(Some(bounds));
-                    st.last_world.set(Some(world));
-                    st.drag_originals.set(
-                        els.iter()
-                            .filter(|el| ids.contains(&el.id()))
-                            .cloned()
-                            .collect(),
-                    );
-                    return;
-                }
-            }
-            let (hx, hy) = hpos[8];
-            if ((test_x - hx).powi(2) + (test_y - hy).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
-                (props.push_snapshot)();
-                st.drag_action.set(Some(Handle::Move));
-                st.moving_anchor.set(Some(world));
-                st.drag_bounds.set(Some(bounds));
-                st.last_world.set(Some(world));
-                return;
-            }
-            let (hx, hy) = hpos[9];
-            if ((test_x - hx).powi(2) + (test_y - hy).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
-                (props.push_snapshot)();
-                let cx = bx + bw / 2.0;
-                let cy = by + bh / 2.0;
-                st.drag_action.set(Some(Handle::Rotate));
-                st.drag_angle.set(Some((world.1 - cy).atan2(world.0 - cx) + std::f64::consts::FRAC_PI_2));
-                st.moving_anchor.set(Some(world));
-                st.drag_bounds.set(Some(bounds));
-                st.overlay_freeze.set(Some(bounds));
-                st.drag_originals.set(
-                    els.iter()
-                        .filter(|el| ids.contains(&el.id()))
-                        .cloned()
-                        .collect(),
-                );
+            if handle_path_point_hit(world, st, props, el)
+                || handle_path_move_icon(world, st, props, el)
+            {
                 return;
             }
         }
     }
 
-    if let Some(id) = hit_test_topmost(world, &els) {
-        let mut ids = st.selected_ids.get();
-        if st.shift_pressed.get() {
-            if let Some(pos) = ids.iter().position(|&x| x == id) {
-                ids.remove(pos);
-            } else {
-                ids.push(id);
-            }
-            st.selected_ids.set(ids);
-        } else {
-            st.selected_ids.set(vec![id]);
-            if let Some(bounds) = combined_bounds(&[id], &els) {
-                (props.push_snapshot)();
-                st.drag_action.set(Some(Handle::Move));
-                st.moving_anchor.set(Some(world));
-                st.drag_bounds.set(Some(bounds));
-                st.last_world.set(Some(world));
-            }
-        }
+    if !ids.is_empty() && handle_selection_handles(world, st, props, &ids, &els) {
+        return;
+    }
+
+    if handle_element_selection(world, st, props, &els) {
         return;
     }
 
