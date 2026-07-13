@@ -177,7 +177,7 @@ fn el_svg(el: &Element) -> String {
                 t.data.font_size,
                 t.data.stroke_color.to_hex(),
             );
-            for (i, line) in t.wrapped.display.split('\n').enumerate() {
+            for (i, line) in t.wrapped.lines.iter().enumerate() {
                 let esc = line
                     .replace('&', "&amp;")
                     .replace('<', "&lt;")

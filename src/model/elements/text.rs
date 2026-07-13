@@ -19,60 +19,45 @@ pub(crate) const CHAR_WIDTH_RATIO: f64 = 0.5;
 /// # Design
 ///
 /// - `raw` holds the user-entered text with only **hard** `\n` (from Enter key presses).
-/// - `display` is derived from `raw` by inserting **soft** `\n` for character-count wrapping
-///   every `max_chars` characters within each hard-break segment.
-/// - Hard `\n` are always preserved. Soft `\n` are recalculated whenever the wrap width changes.
-///
-/// On resize, [`rewrap`](Self::rewrap) discards soft breaks and re-runs the wrapping
-/// algorithm against the new width, while keeping the raw content intact.
+/// - `lines` is derived from `raw` by inserting soft breaks every `max_chars` characters
+///   within each hard-break segment. Hard `\n` are always preserved.
+/// - Soft breaks are recalculated whenever the wrap width changes.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct WrappedText {
     /// Raw text with only hard line breaks (from user Enter presses).
-    /// This is the string that mirrors what the textarea shows.
     pub raw: String,
-    /// Text with both hard and soft `\n` inserted, ready for SVG rendering.
-    /// Mutating this string and re-rendering gives instant visual feedback.
-    pub display: String,
+    /// Wrapped lines, one per rendered `<tspan>`.
+    pub lines: Vec<String>,
     /// Maximum number of characters per line at the current wrap width.
-    /// 0 means wrapping is disabled (display equals raw).
+    /// 0 means wrapping is disabled (lines has a single entry).
     pub max_chars: usize,
 }
 
 impl WrappedText {
     /// Build a new `WrappedText` from raw content, computing soft breaks.
-    ///
-    /// `max_chars` is derived from `width / (font_size * CHAR_WIDTH_RATIO)`.
-    /// When `width <= 0.0` or the formula yields <1, wrapping is disabled
-    /// and `display` mirrors `raw` exactly.
     pub fn new(raw: &str, width: f64, font_size: f64) -> Self {
         let max_chars = Self::compute_max_chars(width, font_size);
-        let display = Self::wrap(raw, max_chars);
+        let lines = Self::wrap(raw, max_chars);
         WrappedText {
             raw: raw.to_string(),
-            display,
+            lines,
             max_chars,
         }
     }
 
     /// Replace the raw content and recompute wrapping.
-    ///
-    /// Called when the user finishes editing the text in the textarea.
     pub fn set_raw(&mut self, raw: &str, width: f64, font_size: f64) {
         self.max_chars = Self::compute_max_chars(width, font_size);
         self.raw = raw.to_string();
-        self.display = Self::wrap(raw, self.max_chars);
+        self.lines = Self::wrap(raw, self.max_chars);
     }
 
     /// Recompute wrapping for a new width (e.g. after resize).
-    ///
-    /// Soft `\n` are recalculated; hard `\n` (from `raw`) are preserved.
     pub fn rewrap(&mut self, width: f64, font_size: f64) {
         self.max_chars = Self::compute_max_chars(width, font_size);
-        self.display = Self::wrap(&self.raw, self.max_chars);
+        self.lines = Self::wrap(&self.raw, self.max_chars);
     }
 
-    /// Derive `max_chars` from world-space width and font size.
-    /// Returns 0 when wrapping should be disabled.
     fn compute_max_chars(width: f64, font_size: f64) -> usize {
         if width <= 0.0 || font_size <= 0.0 {
             return 0;
@@ -81,38 +66,24 @@ impl WrappedText {
         (width / char_width).max(1.0) as usize
     }
 
-    /// Core wrapping: insert soft `\n` every `max_chars` characters
-    /// within each hard-break segment.
-    ///
-    /// Empty segments (consecutive hard breaks) are preserved as empty lines.
-    fn wrap(raw: &str, max_chars: usize) -> String {
+    /// Wrap raw text into lines: split on hard `\n`, then split each segment
+    /// into chunks of `max_chars` characters.
+    fn wrap(raw: &str, max_chars: usize) -> Vec<String> {
         if max_chars == 0 {
-            return raw.to_string();
+            return vec![raw.to_string()];
         }
-        let mut out = String::new();
-        for (i, segment) in raw.split('\n').enumerate() {
-            if i > 0 {
-                out.push('\n');
-            }
+        let mut out = Vec::new();
+        for segment in raw.split('\n') {
             let chars: Vec<char> = segment.chars().collect();
             if chars.len() <= max_chars {
-                out.push_str(segment);
+                out.push(segment.to_string());
             } else {
-                for (j, chunk) in chars.chunks(max_chars).enumerate() {
-                    if j > 0 {
-                        out.push('\n');
-                    }
-                    out.extend(chunk);
+                for chunk in chars.chunks(max_chars) {
+                    out.push(chunk.iter().collect());
                 }
             }
         }
         out
-    }
-}
-
-impl From<&WrappedText> for Vec<String> {
-    fn from(wt: &WrappedText) -> Self {
-        wt.display.split('\n').map(|s| s.to_string()).collect()
     }
 }
 
@@ -141,7 +112,7 @@ impl Text {
     fn recalc_height(&mut self) {
         let fs = self.data.font_size.max(MIN_FONT_SIZE);
         let line_h = fs * 1.2;
-        let num_lines = self.wrapped.display.split('\n').count().max(1);
+        let num_lines = self.wrapped.lines.len().max(1);
         self.data.height = num_lines as f64 * line_h;
     }
 
@@ -187,7 +158,7 @@ impl UpdateDrag for Text {
 impl Render for Text {
     fn render(&self, _zoom: f64) -> leptos::View {
         let font_size = self.data.font_size.max(MIN_FONT_SIZE);
-        let lines: Vec<String> = Vec::from(&self.wrapped);
+        let lines = &self.wrapped.lines;
         let x = self.data.world_point.x;
         let baseline = self.data.world_point.y + font_size * TEXT_ASCENT_RATIO;
         let fill = self
