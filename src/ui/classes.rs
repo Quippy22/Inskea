@@ -54,7 +54,7 @@ pub const MENU_DROPDOWN: &str = "absolute top-full right-0 mt-1 z-50 min-w-[160p
 pub const MENU_ITEM: &str = "flex items-center justify-between w-full text-left px-4 py-1.5 text-sm text-fg hover:bg-accent/10 transition-colors";
 
 /// Settings panel window (dropdown anchored below gear button).
-pub const SETTINGS_WINDOW: &str = "absolute top-full right-0 mt-2 z-50 w-64 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-3 px-4 pointer-events-auto";
+pub const SETTINGS_WINDOW: &str = "absolute top-full right-0 mt-2 z-50 w-64 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-3 px-4 pointer-events-auto select-none";
 
 /// Settings section label.
 pub const SETTINGS_LABEL: &str = "text-xs text-subtle shrink-0";
@@ -65,3 +65,26 @@ pub const SEG_BTN_ACTIVE: &str = "px-2.5 py-1 text-xs transition-colors bg-accen
 /// Segmented control button — inactive state.
 pub const SEG_BTN_INACTIVE: &str =
     "px-2.5 py-1 text-xs transition-colors text-subtle hover:text-fg hover:bg-surface/50";
+
+// ── NumberSlider ──────────────────────────────────────────────────────────
+
+/// NumberSlider outer row.
+pub const SLIDER_ROW: &str = "flex items-center gap-2 w-full";
+
+/// NumberSlider drag track (background bar).
+pub const SLIDER_TRACK: &str = "relative flex-1 h-1 bg-surface/50 rounded-sm cursor-pointer";
+
+/// NumberSlider fill bar (accent-coloured progress).
+pub const SLIDER_FILL: &str = "absolute inset-y-0 left-0 rounded-sm bg-accent transition-[width] duration-75";
+
+/// NumberSlider draggable thumb.
+pub const SLIDER_THUMB: &str = "absolute top-1/2 -translate-y-1/2 w-1 h-4 rounded-xs bg-accent cursor-pointer transition-[left] duration-75";
+
+/// NumberSlider numeric readout.
+pub const SLIDER_READOUT: &str = "text-xs text-fg font-mono tabular-nums w-8 text-right shrink-0";
+
+/// NumberSlider arrow stepper pill container.
+pub const SLIDER_STEPPER: &str = "flex flex-col rounded border border-border overflow-hidden shrink-0";
+
+/// NumberSlider stepper button (up/down arrow).
+pub const SLIDER_STEP_BTN: &str = "flex items-center justify-center px-1 py-0.5 text-subtle hover:text-fg hover:bg-accent/10 transition-colors";
