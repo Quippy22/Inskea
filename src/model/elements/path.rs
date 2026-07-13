@@ -252,21 +252,6 @@ pub fn snap_points_to_grid(points: &mut [Point], grid: f64) {
 /// This is used by `selection.rs` for the generic bounding-box handle overlay
 /// for every element type (Rectangle, Ellipse, Text, Freehand, and multi-
 /// selections). It is NOT used for single-selection Line/Arrow node editing.
-pub fn handle_positions(bx: f64, by: f64, bw: f64, bh: f64) -> [(f64, f64); 10] {
-    [
-        (bx, by),
-        (bx + bw / 2.0, by),
-        (bx + bw, by),
-        (bx, by + bh / 2.0),
-        (bx + bw, by + bh / 2.0),
-        (bx, by + bh),
-        (bx + bw / 2.0, by + bh),
-        (bx + bw, by + bh),
-        (bx + bw / 2.0, by + bh / 2.0),
-        (bx + bw / 2.0, by - 25.0),
-    ]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,12 +367,4 @@ mod tests {
         assert_eq!(pts[0].y, 20.0);
     }
 
-    #[test]
-    fn handle_positions_count() {
-        let h = handle_positions(0.0, 0.0, 100.0, 50.0);
-        assert_eq!(h.len(), 10);
-        assert_eq!(h[0], (0.0, 0.0));
-        assert_eq!(h[8], (50.0, 25.0));
-        assert_eq!(h[9], (50.0, -25.0));
-    }
 }

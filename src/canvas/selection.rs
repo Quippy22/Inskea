@@ -3,7 +3,7 @@ use super::state::{
     CanvasInputs, CanvasState, Handle,
 };
 use super::{DASH_PREVIEW, MIN_DRAG_DIST};
-use crate::model::elements::path::{handle_positions, segment_midpoint};
+use crate::model::elements::path::segment_midpoint;
 use crate::model::resize::{common_bounds, rotate_point_around};
 use crate::model::{
     Bounds, Element, ElementId, Offset, PathPoints, Point, Resize, Rotate, Scene, ShapeColor,
@@ -207,6 +207,21 @@ fn render_move_rotate_icons(hex: &'static str, cx: f64, cy: f64, rx: f64, ry: f6
         </g>
     };
     view! { {move_icon} {rotate_icon} }.into_view()
+}
+
+pub fn handle_positions(bx: f64, by: f64, bw: f64, bh: f64) -> [(f64, f64); 10] {
+    [
+        (bx, by),
+        (bx + bw / 2.0, by),
+        (bx + bw, by),
+        (bx, by + bh / 2.0),
+        (bx + bw, by + bh / 2.0),
+        (bx, by + bh),
+        (bx + bw / 2.0, by + bh),
+        (bx + bw, by + bh),
+        (bx + bw / 2.0, by + bh / 2.0),
+        (bx + bw / 2.0, by - 25.0),
+    ]
 }
 
 fn unrotate_for_element(point: (f64, f64), el: &Element) -> (f64, f64) {
