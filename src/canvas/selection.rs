@@ -229,8 +229,8 @@ fn handle_text_double_click(
         None => return false,
     };
     if let Some(Element::Text(text_elem)) = els.iter().find(|e| e.id() == id) {
-        st.editing_id.set(Some(id));
-        st.edit_text.set(text_elem.wrapped.raw.clone());
+        st.text_edit.editing_id.set(Some(id));
+        st.text_edit.edit_text.set(text_elem.wrapped.raw.clone());
         return true;
     }
     false
@@ -249,9 +249,9 @@ fn handle_path_point_hit(
         let d = ((world.0 - p.x).powi(2) + (world.1 - p.y).powi(2)).sqrt();
         if d <= HANDLE_RESIZE_RADIUS {
             (props.push_snapshot)();
-            st.drag_action.set(Some(Handle::PathPoint(i)));
-            st.moving_anchor.set(Some(world));
-            st.last_world.set(Some(world));
+            st.drag.drag_action.set(Some(Handle::PathPoint(i)));
+            st.drag.moving_anchor.set(Some(world));
+            st.drag.last_world.set(Some(world));
             return true;
         }
     }
@@ -262,9 +262,9 @@ fn handle_path_point_hit(
         };
         let d = ((world.0 - mx).powi(2) + (world.1 - my).powi(2)).sqrt();
         if d <= HANDLE_RESIZE_RADIUS {
-            st.drag_action.set(Some(Handle::PathMidpoint(i)));
-            st.moving_anchor.set(Some(world));
-            st.last_world.set(Some(world));
+            st.drag.drag_action.set(Some(Handle::PathMidpoint(i)));
+            st.drag.moving_anchor.set(Some(world));
+            st.drag.last_world.set(Some(world));
             return true;
         }
     }
@@ -282,10 +282,10 @@ fn handle_path_move_icon(
     let my = by - 25.0;
     if ((world.0 - mx).powi(2) + (world.1 - my).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
         (props.push_snapshot)();
-        st.drag_action.set(Some(Handle::Move));
-        st.moving_anchor.set(Some(world));
-        st.drag_bounds.set(Some(el.bounds()));
-        st.last_world.set(Some(world));
+        st.drag.drag_action.set(Some(Handle::Move));
+        st.drag.moving_anchor.set(Some(world));
+        st.drag.drag_bounds.set(Some(el.bounds()));
+        st.drag.last_world.set(Some(world));
         return true;
     }
     false
@@ -315,11 +315,11 @@ fn handle_selection_handles(
     for (i, &(hx, hy)) in hpos[..8].iter().enumerate() {
         if ((test_x - hx).powi(2) + (test_y - hy).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
             (props.push_snapshot)();
-            st.drag_action.set(Some(Handle::Resize(ResizeHandle::from(i))));
-            st.moving_anchor.set(Some(world));
-            st.drag_bounds.set(Some(bounds));
-            st.last_world.set(Some(world));
-            st.drag_originals.set(
+            st.drag.drag_action.set(Some(Handle::Resize(ResizeHandle::from(i))));
+            st.drag.moving_anchor.set(Some(world));
+            st.drag.drag_bounds.set(Some(bounds));
+            st.drag.last_world.set(Some(world));
+            st.drag.drag_originals.set(
                 els.iter().filter(|el| ids.contains(&el.id())).cloned().collect(),
             );
             return true;
@@ -329,10 +329,10 @@ fn handle_selection_handles(
     let (hx, hy) = hpos[8];
     if ((test_x - hx).powi(2) + (test_y - hy).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
         (props.push_snapshot)();
-        st.drag_action.set(Some(Handle::Move));
-        st.moving_anchor.set(Some(world));
-        st.drag_bounds.set(Some(bounds));
-        st.last_world.set(Some(world));
+        st.drag.drag_action.set(Some(Handle::Move));
+        st.drag.moving_anchor.set(Some(world));
+        st.drag.drag_bounds.set(Some(bounds));
+        st.drag.last_world.set(Some(world));
         return true;
     }
 
@@ -341,12 +341,12 @@ fn handle_selection_handles(
         (props.push_snapshot)();
         let cx = bx + bw / 2.0;
         let cy = by + bh / 2.0;
-        st.drag_action.set(Some(Handle::Rotate));
-        st.drag_angle.set(Some((world.1 - cy).atan2(world.0 - cx) + std::f64::consts::FRAC_PI_2));
-        st.moving_anchor.set(Some(world));
-        st.drag_bounds.set(Some(bounds));
-        st.overlay_freeze.set(Some(bounds));
-        st.drag_originals.set(
+        st.drag.drag_action.set(Some(Handle::Rotate));
+        st.drag.drag_angle.set(Some((world.1 - cy).atan2(world.0 - cx) + std::f64::consts::FRAC_PI_2));
+        st.drag.moving_anchor.set(Some(world));
+        st.drag.drag_bounds.set(Some(bounds));
+        st.drag.overlay_freeze.set(Some(bounds));
+        st.drag.drag_originals.set(
             els.iter().filter(|el| ids.contains(&el.id())).cloned().collect(),
         );
         return true;
@@ -377,10 +377,10 @@ fn handle_element_selection(
         st.selected_ids.set(vec![id]);
         if let Some(bounds) = combined_bounds(&[id], els) {
             (props.push_snapshot)();
-            st.drag_action.set(Some(Handle::Move));
-            st.moving_anchor.set(Some(world));
-            st.drag_bounds.set(Some(bounds));
-            st.last_world.set(Some(world));
+            st.drag.drag_action.set(Some(Handle::Move));
+            st.drag.moving_anchor.set(Some(world));
+            st.drag.drag_bounds.set(Some(bounds));
+            st.drag.last_world.set(Some(world));
         }
     }
     true
@@ -392,8 +392,8 @@ pub fn select_pointer_down(
     st: &mut CanvasState,
     props: &mut CanvasInputs,
 ) {
-    st.overlay_freeze.set(None);
-    st.rotation_delta.set(0.0);
+    st.drag.overlay_freeze.set(None);
+    st.drag.rotation_delta.set(0.0);
 
     if handle_text_double_click(_ev, world, st, props) {
         return;
@@ -437,16 +437,16 @@ pub fn select_pointer_move(
     st: &mut CanvasState,
     props: &mut CanvasInputs,
 ) {
-    if let Some(anchor) = st.moving_anchor.get() {
+    if let Some(anchor) = st.drag.moving_anchor.get() {
         let dx = world.0 - anchor.0;
         let dy = world.1 - anchor.1;
         let ids = st.selected_ids.get();
-        match st.drag_action.get() {
+        match st.drag.drag_action.get() {
             Some(Handle::Resize(handle)) => {
-                if let Some((bx, by, bw, bh)) = st.drag_bounds.get() {
-                    st.last_world.set(Some(world));
+                if let Some((bx, by, bw, bh)) = st.drag.drag_bounds.get() {
+                    st.drag.last_world.set(Some(world));
                     let multi = ids.len() > 1;
-                    let originals = st.drag_originals.get();
+                    let originals = st.drag.drag_originals.get();
                     let alt = st.alt_pressed.get();
                     let shift = st.shift_pressed.get();
                     props.scene.update(|s| {
@@ -470,19 +470,19 @@ pub fn select_pointer_move(
                 }
             }
             Some(Handle::Rotate) => {
-                if let Some((bx, by, bw, bh)) = st.drag_bounds.get() {
+                if let Some((bx, by, bw, bh)) = st.drag.drag_bounds.get() {
                     let cx = bx + bw / 2.0;
                     let cy = by + bh / 2.0;
-                    if let Some(initial_angle) = st.drag_angle.get() {
+                    if let Some(initial_angle) = st.drag.drag_angle.get() {
                         let current_angle = (world.1 - cy).atan2(world.0 - cx) + std::f64::consts::FRAC_PI_2;
                         let mut delta = current_angle - initial_angle;
                         if st.shift_pressed.get() {
                             let step = std::f64::consts::TAU / 24.0;
                             delta = (delta / step).round() * step;
                         }
-                        st.rotation_delta.set(delta);
+                        st.drag.rotation_delta.set(delta);
                         // Snapshot-based: restore from originals and apply total delta
-                        let originals = st.drag_originals.get();
+                        let originals = st.drag.drag_originals.get();
                         props.scene.update(|s| {
                             for el in s.elements_mut().iter_mut() {
                                 if ids.contains(&el.id()) {
@@ -506,10 +506,10 @@ pub fn select_pointer_move(
                         }
                     }
                 });
-                st.moving_anchor.set(Some(world));
+                st.drag.moving_anchor.set(Some(world));
             }
             Some(Handle::PathMidpoint(i)) => {
-                if let Some(click) = st.moving_anchor.get() {
+                if let Some(click) = st.drag.moving_anchor.get() {
                     let dist = (world.0 - click.0).hypot(world.1 - click.1);
                     if dist >= MIN_DRAG_DIST {
                         let new_idx = i + 1;
@@ -531,9 +531,9 @@ pub fn select_pointer_move(
                                 }
                             }
                         });
-                        st.drag_action.set(Some(Handle::PathPoint(new_idx)));
-                        st.moving_anchor.set(Some(world));
-                        st.last_world.set(Some(world));
+                        st.drag.drag_action.set(Some(Handle::PathPoint(new_idx)));
+                        st.drag.moving_anchor.set(Some(world));
+                        st.drag.last_world.set(Some(world));
                     }
                 }
             }
@@ -545,15 +545,15 @@ pub fn select_pointer_move(
                         }
                     }
                 });
-                st.moving_anchor.set(Some(world));
+                st.drag.moving_anchor.set(Some(world));
             }
         }
     }
 }
 
 pub fn select_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut CanvasState, props: &mut CanvasInputs) {
-    if st.moving_anchor.get().is_some() {
-        let drag_action = st.drag_action.get();
+    if st.drag.moving_anchor.get().is_some() {
+        let drag_action = st.drag.drag_action.get();
         let ids = st.selected_ids.get();
 
         if let Some(Handle::PathPoint(idx)) = drag_action {
@@ -585,7 +585,7 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut Can
         }
 
         if st.shift_pressed.get() {
-            let drag_action = st.drag_action.get();
+            let drag_action = st.drag.drag_action.get();
             let ids = st.selected_ids.get();
             if let Some(Handle::PathPoint(idx)) = drag_action {
                 let exists = props.scene.with(|s| {
@@ -615,14 +615,14 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut Can
             }
         }
 
-        st.moving_anchor.set(None);
-        st.drag_action.set(None);
-        st.drag_bounds.set(None);
-        st.drag_angle.set(None);
-        st.overlay_freeze.set(None);
-        st.rotation_delta.set(0.0);
-        st.last_world.set(None);
-        st.drag_originals.set(Vec::new());
+        st.drag.moving_anchor.set(None);
+        st.drag.drag_action.set(None);
+        st.drag.drag_bounds.set(None);
+        st.drag.drag_angle.set(None);
+        st.drag.overlay_freeze.set(None);
+        st.drag.rotation_delta.set(0.0);
+        st.drag.last_world.set(None);
+        st.drag.drag_originals.set(Vec::new());
         st.select_anchor.set(None);
         return;
     }

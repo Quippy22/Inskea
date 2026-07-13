@@ -36,6 +36,52 @@ pub enum Handle {
     PathMidpoint(usize),
 }
 
+/// Drag-related state (resize, move, rotate, path-point drag).
+#[derive(Clone, Copy)]
+pub struct DragState {
+    pub moving_anchor: RwSignal<Option<(f64, f64)>>,
+    pub drag_action: RwSignal<Option<Handle>>,
+    pub drag_bounds: RwSignal<Option<(f64, f64, f64, f64)>>,
+    pub drag_angle: RwSignal<Option<f64>>,
+    pub last_world: RwSignal<Option<(f64, f64)>>,
+    pub drag_originals: RwSignal<Vec<Element>>,
+    pub overlay_freeze: RwSignal<Option<(f64, f64, f64, f64)>>,
+    pub rotation_delta: RwSignal<f64>,
+}
+
+impl DragState {
+    pub fn new() -> Self {
+        Self {
+            moving_anchor: create_rw_signal(None),
+            drag_action: create_rw_signal(None),
+            drag_bounds: create_rw_signal(None),
+            drag_angle: create_rw_signal(None),
+            last_world: create_rw_signal(None),
+            drag_originals: create_rw_signal(Vec::new()),
+            overlay_freeze: create_rw_signal(None),
+            rotation_delta: create_rw_signal(0.0),
+        }
+    }
+}
+
+/// Text-editing state.
+#[derive(Clone, Copy)]
+pub struct TextEditState {
+    pub editing_id: RwSignal<Option<ElementId>>,
+    pub edit_text: RwSignal<String>,
+    pub textarea_ref: NodeRef<leptos::html::Textarea>,
+}
+
+impl TextEditState {
+    pub fn new() -> Self {
+        Self {
+            editing_id: create_rw_signal(None),
+            edit_text: create_rw_signal(String::new()),
+            textarea_ref: create_node_ref(),
+        }
+    }
+}
+
 pub type CropExportCallback = Rc<dyn Fn((f64, f64, f64, f64))>;
 
 /// Tracks an in-progress draw operation.
@@ -61,19 +107,8 @@ pub struct CanvasState {
     pub select_anchor: RwSignal<Option<(f64, f64)>>,
     pub erasing: RwSignal<bool>,
     pub selected_ids: RwSignal<Vec<ElementId>>,
-    pub moving_anchor: RwSignal<Option<(f64, f64)>>,
-    pub drag_action: RwSignal<Option<Handle>>,
-    pub drag_bounds: RwSignal<Option<(f64, f64, f64, f64)>>,
-    pub drag_angle: RwSignal<Option<f64>>,
-    pub last_world: RwSignal<Option<(f64, f64)>>,
-    pub drag_originals: RwSignal<Vec<Element>>,
-    /// Frozen overlay bounds, set at rotate drag start, cleared on pointer-up.
-    pub overlay_freeze: RwSignal<Option<(f64, f64, f64, f64)>>,
-    /// Cumulative rotation delta during a rotate drag (0 when not rotating).
-    pub rotation_delta: RwSignal<f64>,
-    pub editing_id: RwSignal<Option<ElementId>>,
-    pub edit_text: RwSignal<String>,
-    pub textarea_ref: NodeRef<leptos::html::Textarea>,
+    pub drag: DragState,
+    pub text_edit: TextEditState,
 }
 
 impl CanvasState {
@@ -88,17 +123,8 @@ impl CanvasState {
             select_anchor: create_rw_signal(None),
             erasing: create_rw_signal(false),
             selected_ids: create_rw_signal(Vec::new()),
-            moving_anchor: create_rw_signal(None),
-            drag_action: create_rw_signal(None),
-            drag_bounds: create_rw_signal(None),
-            drag_angle: create_rw_signal(None),
-            last_world: create_rw_signal(None),
-            drag_originals: create_rw_signal(Vec::new()),
-            overlay_freeze: create_rw_signal(None),
-            rotation_delta: create_rw_signal(0.0),
-            editing_id: create_rw_signal(None),
-            edit_text: create_rw_signal(String::new()),
-            textarea_ref: create_node_ref(),
+            drag: DragState::new(),
+            text_edit: TextEditState::new(),
         }
     }
 }

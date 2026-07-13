@@ -135,10 +135,10 @@ pub fn Canvas(
     });
 
     let commit_edit = text_edit::make_commit_edit(
-        st.editing_id,
-        st.edit_text,
+        st.text_edit.editing_id,
+        st.text_edit.edit_text,
         props.scene,
-        st.textarea_ref,
+        st.text_edit.textarea_ref,
         props.viewport,
     );
 
@@ -163,16 +163,16 @@ pub fn Canvas(
                         props.export_crop_active.set(false);
                         props.on_crop_export.set(None);
                         st.select_anchor.set(None);
-                        st.last_world.set(None);
+                        st.drag.last_world.set(None);
                     }
                     if !st.selected_ids.get_untracked().is_empty() {
                         st.selected_ids.set(Vec::new());
                     }
-                    if let Some(id) = st.editing_id.get_untracked() {
-                        if st.edit_text.get_untracked().is_empty() {
+                    if let Some(id) = st.text_edit.editing_id.get_untracked() {
+                        if st.text_edit.edit_text.get_untracked().is_empty() {
                             props.scene.update(|s| s.remove_by_id(id));
-                            st.editing_id.set(None);
-                            st.edit_text.set(String::new());
+                            st.text_edit.editing_id.set(None);
+                            st.text_edit.edit_text.set(String::new());
                         } else {
                             commit_edit();
                         }
@@ -224,7 +224,7 @@ pub fn Canvas(
         let mut props = props.clone();
         let update_world = update_world;
         move |ev: ev::PointerEvent| {
-            if st.editing_id.get().is_some() {
+            if st.text_edit.editing_id.get().is_some() {
                 return;
             }
             let mode = props.canvas_mode.get();
@@ -287,7 +287,7 @@ pub fn Canvas(
             }
 
             if props.export_crop_active.get() {
-                st.last_world.set(Some(world));
+                st.drag.last_world.set(Some(world));
                 return;
             }
 
@@ -350,7 +350,7 @@ pub fn Canvas(
 
             if props.export_crop_active.get() {
                 if let Some(anchor) = st.select_anchor.get() {
-                    let current = st.last_world.get().unwrap_or(anchor);
+                    let current = st.drag.last_world.get().unwrap_or(anchor);
                     let dx = current.0 - anchor.0;
                     let dy = current.1 - anchor.1;
                     if dx.hypot(dy) >= MIN_DRAG_DIST {
@@ -366,7 +366,7 @@ pub fn Canvas(
                 }
                 props.export_crop_active.set(false);
                 st.select_anchor.set(None);
-                st.last_world.set(None);
+                st.drag.last_world.set(None);
                 return;
             }
 
@@ -499,11 +499,11 @@ pub fn Canvas(
 
             {drawing_preview}
             {selection::selection_preview_overlay(st.select_anchor, props.cursor_world)}
-            {selection::selection_handle_overlay(st.selected_ids, props.scene, st.overlay_freeze, st.rotation_delta)}
+            {selection::selection_handle_overlay(st.selected_ids, props.scene, st.drag.overlay_freeze, st.drag.rotation_delta)}
         </svg>
 
         {text_edit::text_edit_overlay(
-            st.editing_id, st.edit_text, st.textarea_ref, props.scene,
+            st.text_edit.editing_id, st.text_edit.edit_text, st.text_edit.textarea_ref, props.scene,
             props.viewport, st.screen_size, commit_edit,
         )}
 

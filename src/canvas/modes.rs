@@ -50,8 +50,8 @@ pub fn draw_pointer_down(
                 wrapped: WrappedText::new("", w, fs),
             }));
         });
-        st.editing_id.set(Some(id));
-        st.edit_text.set(String::new());
+        st.text_edit.editing_id.set(Some(id));
+        st.text_edit.edit_text.set(String::new());
         return;
     }
 
