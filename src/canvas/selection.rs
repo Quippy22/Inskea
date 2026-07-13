@@ -138,14 +138,18 @@ pub fn selection_handle_overlay(
         // Single-select reads the persistent rotation from element data; multi-select
         // uses rotation_delta because each element's data.rotation is a separate signal
         // and applying the same delta to all of them requires an accumulator that lives
-        // outside any single element. For point-based elements (Line/Arrow) data.rotation
-        // is always 0 — rotation is expressed through the points themselves — so the
-        // overlay never shows a rotation transform for single path elements either.
+        // outside any single element. For point-based elements (Line/Arrow/Freehand)
+        // data.rotation is always 0 — but we still want the selection box to rotate
+        // during the drag gesture, so when rotation_delta is non-zero we use it even
+        // for single-select.
         let rot: f64 = if ids.len() == 1 {
-            els.iter()
+            let el_rot = els.iter()
                 .find(|el| el.id() == ids[0])
                 .map(|el| el.data().rotation)
-                .unwrap_or(0.0)
+                .unwrap_or(0.0);
+            let delta = rotation_delta.get();
+            // Point-based types (data.rotation == 0) use rotation_delta during drag
+            if el_rot == 0.0 && delta != 0.0 { delta } else { el_rot }
         } else {
             rotation_delta.get()
         };
@@ -298,6 +302,9 @@ fn handle_path_move_icon(
     props: &CanvasInputs,
     el: &Element,
 ) -> bool {
+    if el.path_points().is_none() {
+        return false;
+    }
     let (bx, by, bw, _bh) = el.bounds();
     let mx = bx + bw / 2.0;
     let my = by - 25.0;

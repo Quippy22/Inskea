@@ -188,9 +188,7 @@ pub trait SnapToGrid {
 /// `data.rotation` to decide whether a selection box should be rotated
 /// (e.g. `selection.rs`) must be aware of this split: it will correctly
 /// detect rotation for in-place types but will always see `0.0` for
-/// point-based types — do not "fix" that by also writing into
-/// `data.rotation` for point-based types, which would double-apply the
-/// rotation.
+/// point-based types.
 pub trait Rotate {
     /// Rotate by `delta` radians around the point (`cx`, `cy`).
     fn rotate_around(&mut self, point: Point, delta: f64);
