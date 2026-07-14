@@ -1,13 +1,13 @@
 use std::rc::Rc;
 
 use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
-use crate::model::{ElementId, Scene, ShapeColor};
-use crate::tauri_bridge;
-use crate::ui::dock::{Dock, Tool};
+use crate::model::{Element, ElementId, Scene, ShapeColor};
 use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
+use crate::hotkeys::{HotkeysContext, register_hotkeys, ShortcutsModal};
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::{SettingsPanel, ToolBar};
-use leptos::ev;
+use crate::tauri_bridge;
+use crate::ui::dock::{Dock, Tool};
 use leptos::*;
 use wasm_bindgen_futures::spawn_local;
 
@@ -19,14 +19,13 @@ pub fn App() -> impl IntoView {
 
     let selected_tool = create_rw_signal(Tool::Rectangle);
     let selected_color = create_rw_signal(ShapeColor::White);
-    let canvas_mode = create_rw_signal(CanvasMode::Hand);
+    let canvas_mode = create_rw_signal(CanvasMode::Select);
 
     let scene = create_rw_signal(Scene::new());
     let selected_ids = create_rw_signal(Vec::<ElementId>::new());
     let eraser_active = create_rw_signal(false);
+    let shortcuts_open = create_rw_signal(false);
 
-    // Crop-export state: when active the canvas lets you drag a rectangle,
-    // and on release the region is exported via this callback.
     let export_crop_active = create_rw_signal(false);
     let on_crop_export = create_rw_signal::<Option<CropExportCallback>>(None);
 
@@ -38,7 +37,8 @@ pub fn App() -> impl IntoView {
         canvas_bg: CanvasBg::Dark,
     });
 
-    // ── Undo / Redo ────────────────────────────────────────────────────────
+    let clipboard = create_rw_signal(Vec::<Element>::new());
+
     let undo_stack = create_rw_signal(Vec::<Scene>::new());
     let redo_stack = create_rw_signal(Vec::<Scene>::new());
 
@@ -52,40 +52,56 @@ pub fn App() -> impl IntoView {
         redo_stack.set(Vec::new());
     });
 
-    let do_undo = move || {
-        let mut prev = None;
-        undo_stack.update(|s| prev = s.pop());
-        if let Some(prev) = prev {
-            let current = scene.get();
-            scene.set(prev);
-            redo_stack.update(|s| s.push(current));
+    let do_undo = {
+        let scene = scene;
+        let undo_stack = undo_stack;
+        let redo_stack = redo_stack;
+        move || {
+            let mut prev = None;
+            undo_stack.update(|s| prev = s.pop());
+            if let Some(prev) = prev {
+                let current = scene.get();
+                scene.set(prev);
+                redo_stack.update(|s| s.push(current));
+            }
         }
     };
 
-    let do_redo = move || {
-        let mut next = None;
-        redo_stack.update(|s| next = s.pop());
-        if let Some(next) = next {
-            let current = scene.get();
-            scene.set(next);
-            undo_stack.update(|s| s.push(current));
+    let do_redo = {
+        let scene = scene;
+        let undo_stack = undo_stack;
+        let redo_stack = redo_stack;
+        move || {
+            let mut next = None;
+            redo_stack.update(|s| next = s.pop());
+            if let Some(next) = next {
+                let current = scene.get();
+                scene.set(next);
+                undo_stack.update(|s| s.push(current));
+            }
         }
     };
 
     let can_undo = Signal::derive(move || !undo_stack.get().is_empty());
     let can_redo = Signal::derive(move || !redo_stack.get().is_empty());
 
-    let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
-        if ev.ctrl_key() && ev.key() == "z" {
-            if ev.shift_key() {
-                do_redo();
-            } else {
-                do_undo();
-            }
-        }
-    });
+    let saved_path = create_rw_signal::<Option<String>>(None);
 
-    // ── Settings persistence ───────────────────────────────────────────────
+    let ctx = HotkeysContext {
+        canvas_mode,
+        selected_tool,
+        scene,
+        selected_ids,
+        clipboard,
+        saved_path,
+        shortcuts_open,
+        push_snapshot: push_snapshot.clone(),
+        do_undo: Rc::new(do_undo),
+        do_redo: Rc::new(do_redo),
+    };
+
+    register_hotkeys(ctx);
+
     let initialized = create_rw_signal(false);
     let is_tauri = tauri_bridge::is_tauri();
 
@@ -149,6 +165,7 @@ pub fn App() -> impl IntoView {
                 can_redo=can_redo
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
+                shortcuts_open=shortcuts_open
             />
             <Dock
                 selected_tool=selected_tool
@@ -161,6 +178,7 @@ pub fn App() -> impl IntoView {
             <SettingsPanel
                 settings=settings
             />
+            <ShortcutsModal shortcuts_open=shortcuts_open />
         </div>
     }
 }

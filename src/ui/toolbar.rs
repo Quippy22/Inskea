@@ -7,6 +7,7 @@ use crate::util::window_size;
 use crate::ui::classes;
 use crate::ui::components::{Dropdown, DropdownItem, IconButton};
 use crate::ui::export;
+use crate::ui::file_ops;
 use crate::ui::icon;
 use leptos::*;
 use std::rc::Rc;
@@ -75,6 +76,7 @@ pub fn ToolBar<F1, F2>(
     can_redo: Signal<bool>,
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<CropExportCallback>>,
+    shortcuts_open: RwSignal<bool>,
 ) -> impl IntoView
 where
     F1: Fn() + 'static,
@@ -109,63 +111,38 @@ where
         let close_menu = close_menu;
         move || {
             close_menu();
-            saved_path.set(None);
-            scene.set(Scene::new());
+            file_ops::file_new(scene, saved_path);
         }
     };
     let on_save_as = {
         let close_menu = close_menu;
         move || {
             close_menu();
-            spawn_local(async move {
-                let dir = tauri_bridge::get_app_data_dir().await.ok();
-                let path = tauri_bridge::pick_save_path("untitled.skea", dir.as_deref()).await;
-                if let Some(path) = path {
-                    saved_path.set(Some(path.clone()));
-                    let s = scene.get();
-                    let c = skea::save_to_string(&s);
-                    let _ = tauri_bridge::save_skea(&path, &c).await;
-                }
-            });
+            file_ops::file_save_as(scene, saved_path);
         }
     };
     let on_save = {
         let close_menu = close_menu;
-        let on_save_as = on_save_as;
         move || {
             close_menu();
-            let saved = saved_path.get();
-            if let Some(path) = saved {
-                let s = scene.get();
-                spawn_local(async move {
-                    let c = skea::save_to_string(&s);
-                    let _ = tauri_bridge::save_skea(&path, &c).await;
-                });
-            } else {
-                on_save_as();
-            }
+            file_ops::file_save(scene, saved_path);
         }
     };
     let on_open = {
         let close_menu = close_menu;
         move || {
             close_menu();
-            spawn_local(async move {
-                let dir = tauri_bridge::get_app_data_dir().await.ok();
-                let path = tauri_bridge::pick_open_path(dir.as_deref()).await;
-                if let Some(path) = path {
-                    saved_path.set(Some(path.clone()));
-                    match tauri_bridge::load_skea(&path).await {
-                        Ok(c) => match skea::load_from_str(&c) {
-                            Ok(loaded) => scene.set(loaded),
-                            Err(e) => web_sys::console::error_1(&format!("parse: {e}").into()),
-                        },
-                        Err(e) => web_sys::console::error_1(&format!("load: {e}").into()),
-                    }
-                }
-            });
+            file_ops::file_open(scene, saved_path);
         }
     };
+    let on_shortcuts = {
+        let close_menu = close_menu;
+        move || {
+            close_menu();
+            shortcuts_open.set(true);
+        }
+    };
+
     let on_import = {
         let close_menu = close_menu;
         move || {
@@ -286,6 +263,11 @@ where
             label: "Import",
             on_click: Rc::new(on_import),
         },
+        DropdownItem::Separator,
+        DropdownItem::Action {
+            label: "Keyboard Shortcuts",
+            on_click: Rc::new(on_shortcuts),
+        },
     ];
 
     let export_items: Vec<DropdownItem> = vec![
@@ -341,8 +323,8 @@ where
         <div class=classes::CONTAINER_STATUSBAR>
             <div class=classes::TBAR_INNER>
                 <button
-                    class=move || btn(CanvasMode::Hand)
-                    on:click=move |_| canvas_mode.set(CanvasMode::Hand)
+                    class=move || btn(CanvasMode::Pan)
+                    on:click=move |_| canvas_mode.set(CanvasMode::Pan)
                     title="Hand / Pan"
                 >
                     {icon::hand()}
@@ -445,7 +427,16 @@ where
                         }
                     }}
                 </div>
+                <IconButton
+                    on_click=move || shortcuts_open.update(|v| *v = !*v)
+                    title="Keyboard shortcuts"
+                    class=classes::BTN_GHOST
+                >
+                    {icon::help()}
+                </IconButton>
             </div>
         </div>
     }
 }
+
+
