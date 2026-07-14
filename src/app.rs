@@ -143,7 +143,7 @@ pub fn App() -> impl IntoView {
         ..Default::default()
     });
 
-    // ── Panel visibility / kind (no scene tracking → no reactive cycle) ───
+    // ── Panel visibility ───────────────────────────────────────────────────
     let show_panel = Signal::derive(move || {
         let mode = canvas_mode.get();
         if mode == CanvasMode::Select && selected_ids.get().len() == 1 {
@@ -155,16 +155,6 @@ pub fn App() -> impl IntoView {
         false
     });
 
-    let styling_kind = Signal::derive(move || {
-        let ids = selected_ids.get();
-        if ids.len() == 1 {
-            let el = leptos::untrack(|| single_selected_element(scene.get_untracked(), ids));
-            if let Some(el) = el {
-                return el.styling_kind();
-            }
-        }
-        selected_tool.get().styling_kind()
-    });
 
     view! {
         <div class=move || {
@@ -211,40 +201,21 @@ pub fn App() -> impl IntoView {
             />
             <ShortcutsModal shortcuts_open=shortcuts_open />
 
-            {move || {
-                let kind = styling_kind.get();
-                if !show_panel.get() {
-                    return view! {}.into_view();
-                }
-                view! {
-                    <div class="fixed left-[4.5rem] top-1/2 -translate-y-1/2 z-50">
-                        <div class=classes::PANEL>
-                            <div class="py-2 px-3">
-                                <StylingPanel
-                                    kind=kind
-                                    scene=scene
-                                    selected_ids=selected_ids
-                                    selected_tool=selected_tool
-                                    default_style=default_style
-                                />
-                            </div>
-                        </div>
+            <div
+                class="fixed left-[4.5rem] top-1/2 -translate-y-1/2 z-50"
+                class:hidden=move || !show_panel.get()
+            >
+                <div class=classes::PANEL>
+                    <div class="py-2 px-3">
+                        <StylingPanel
+                            scene=scene
+                            selected_ids=selected_ids
+                            selected_tool=selected_tool
+                            default_style=default_style
+                        />
                     </div>
-                }.into_view()
-            }}
+                </div>
+            </div>
         </div>
     }
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────
-
-fn single_selected_element(
-    scene: Scene,
-    ids: Vec<ElementId>,
-) -> Option<Element> {
-    if ids.len() != 1 {
-        return None;
-    }
-    let id = ids[0];
-    scene.elements().iter().find(|e| e.id() == id).cloned()
 }

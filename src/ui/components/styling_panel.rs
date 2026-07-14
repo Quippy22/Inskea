@@ -5,7 +5,6 @@ use crate::ui::classes;
 use crate::ui::components::NumberSlider;
 use leptos::*;
 
-/// Build initial style/line_style from the current scene selection, or defaults.
 fn read_panel_state(
     scene: &Scene,
     ids: &[ElementId],
@@ -32,18 +31,39 @@ fn read_panel_state(
     )
 }
 
+fn single_selected_element(
+    scene: Scene,
+    ids: Vec<ElementId>,
+) -> Option<Element> {
+    if ids.len() != 1 {
+        return None;
+    }
+    let id = ids[0];
+    scene.elements().iter().find(|e| e.id() == id).cloned()
+}
+
 #[component]
 pub fn StylingPanel(
-    kind: StylingKind,
     scene: RwSignal<Scene>,
     selected_ids: RwSignal<Vec<ElementId>>,
     selected_tool: RwSignal<Tool>,
     default_style: RwSignal<ElementStyle>,
 ) -> impl IntoView {
-    let is_text = kind == StylingKind::Text;
-    let is_line = kind == StylingKind::Line || kind == StylingKind::Arrow;
-    let is_arrow = kind == StylingKind::Arrow;
-    let base_kind = !is_text && !is_line;
+    let styling_kind = Signal::derive(move || {
+        let ids = selected_ids.get();
+        if ids.len() == 1 {
+            let el = leptos::untrack(|| single_selected_element(scene.get_untracked(), ids));
+            if let Some(el) = el {
+                return el.styling_kind();
+            }
+        }
+        selected_tool.get().styling_kind()
+    });
+
+    let is_text = Signal::derive(move || styling_kind.get() == StylingKind::Text);
+    let is_line = Signal::derive(move || styling_kind.get() == StylingKind::Line || styling_kind.get() == StylingKind::Arrow);
+    let is_arrow = Signal::derive(move || styling_kind.get() == StylingKind::Arrow);
+    let base_kind = Signal::derive(move || !is_text.get() && !is_line.get());
 
     let (init_style, init_line_style) = read_panel_state(
         &scene.get_untracked(),
@@ -55,15 +75,24 @@ pub fn StylingPanel(
     let local_style = create_rw_signal(init_style);
     let local_line_style = create_rw_signal(init_line_style);
 
-    let size_value = create_rw_signal(
-        if is_text { local_style.get().font_size } else { local_style.get().stroke_width },
-    );
+    let stroke_size = create_rw_signal(local_style.get_untracked().stroke_width);
+    let text_size = create_rw_signal(local_style.get_untracked().font_size);
 
-    let (size_label, size_min, size_max) = if is_text {
-        ("Font size", 8.0, 200.0)
-    } else {
-        ("Stroke size", 1.0, 5.0)
-    };
+    // ── Sync: when selection/scene changes, pull back into local signals ─
+    create_effect(move |_| {
+        let _ids = selected_ids.get();
+        let _s = scene.get();
+        let (new_style, new_line_style) = leptos::untrack(|| read_panel_state(
+            &scene.get_untracked(),
+            &selected_ids.get_untracked(),
+            &default_style.get_untracked(),
+            selected_tool.get_untracked(),
+        ));
+        local_style.set(new_style.clone());
+        local_line_style.set(new_line_style);
+        stroke_size.set(new_style.stroke_width);
+        text_size.set(new_style.font_size);
+    });
 
     // ── Mutator: write to scene element when selected, else default_style ─
     let update_style = {
@@ -98,7 +127,6 @@ pub fn StylingPanel(
                     }
                 });
             }
-            // line-style makes no sense in draw-mode; only persist when selected.
         }
     };
 
@@ -157,7 +185,7 @@ pub fn StylingPanel(
         }
     });
 
-    let size_cb: Rc<dyn Fn(f64)> = Rc::new({
+    let stroke_size_cb: Rc<dyn Fn(f64)> = Rc::new({
         let scene = scene;
         let selected_ids = selected_ids;
         let default_style = default_style;
@@ -166,16 +194,29 @@ pub fn StylingPanel(
             if ids.len() == 1 {
                 scene.update(|s| {
                     if let Some(el) = s.element_by_id_mut(ids[0]) {
-                        let d = el.data_mut();
-                        d.style.stroke_width = val;
-                        d.style.font_size = val;
+                        el.data_mut().style.stroke_width = val;
                     }
                 });
             } else {
-                default_style.update(|s| {
-                    s.stroke_width = val;
-                    s.font_size = val;
+                default_style.update(|s| s.stroke_width = val);
+            }
+        }
+    });
+
+    let text_size_cb: Rc<dyn Fn(f64)> = Rc::new({
+        let scene = scene;
+        let selected_ids = selected_ids;
+        let default_style = default_style;
+        move |val| {
+            let ids = selected_ids.get_untracked();
+            if ids.len() == 1 {
+                scene.update(|s| {
+                    if let Some(el) = s.element_by_id_mut(ids[0]) {
+                        el.data_mut().style.font_size = val;
+                    }
                 });
+            } else {
+                default_style.update(|s| s.font_size = val);
             }
         }
     });
@@ -209,25 +250,34 @@ pub fn StylingPanel(
 
     view! {
         <div class="flex flex-col gap-4">
-            <NumberSlider
-                value=size_value
-                min=size_min
-                max=size_max
-                increment=1.0
-                label=size_label
-                on_change=size_cb
-            />
+            <div class:hidden=move || is_text.get()>
+                <NumberSlider
+                    value=stroke_size
+                    min=1.0
+                    max=5.0
+                    increment=1.0
+                    label="Stroke size"
+                    on_change=stroke_size_cb
+                />
+            </div>
 
-            {if !is_text {
-                view! {
-                    <div>
-                        <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Stroke style"</div>
-                        {uniform_seg(stroke_opts, Signal::derive(move || local_style.get().stroke_style), set_stroke_style)}
-                    </div>
-                }.into_view()
-            } else {
-                view! {}.into_view()
-            }}
+            <div class:hidden=move || !is_text.get()>
+                <NumberSlider
+                    value=text_size
+                    min=8.0
+                    max=200.0
+                    increment=1.0
+                    label="Font size"
+                    on_change=text_size_cb
+                />
+            </div>
+
+            <div class:hidden=move || is_text.get()>
+                <div>
+                    <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Stroke style"</div>
+                    {uniform_seg(stroke_opts, Signal::derive(move || local_style.get().stroke_style), set_stroke_style)}
+                </div>
+            </div>
 
             <div>
                 <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Color"</div>
@@ -255,85 +305,73 @@ pub fn StylingPanel(
                 </div>
             </div>
 
-            {if base_kind {
-                view! {
-                    <div>
-                        <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Background"</div>
-                        <div class="flex gap-1 items-center">
-                            <button
-                                class=move || {
-                                    if local_style.get().fill_color.is_none() {
-                                        classes::BTN_SWATCH_SEL
-                                    } else {
-                                        classes::BTN_SWATCH_OFF
-                                    }
+            <div class:hidden=move || !base_kind.get()>
+                <div>
+                    <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Background"</div>
+                    <div class="flex gap-1 items-center">
+                        <button
+                            class=move || {
+                                if local_style.get().fill_color.is_none() {
+                                    classes::BTN_SWATCH_SEL
+                                } else {
+                                    classes::BTN_SWATCH_OFF
                                 }
-                                on:click={
-                                    let set_fill = set_fill.clone();
-                                    move |_| set_fill(None)
-                                }
-                                title="No fill"
-                            />
-                            <div class="w-px h-5 bg-border mx-1"></div>
-                            {color_swatches
-                                .iter()
-                                .map(|c| {
-                                    let c = *c;
-                                    let set_fill = set_fill.clone();
-                                    view! {
-                                        <button
-                                            class=move || {
-                                                match local_style.get().fill_color {
-                                                    Some(fc) if fc == c => classes::BTN_SWATCH_SEL,
-                                                    _ => classes::BTN_SWATCH_OFF,
-                                                }
+                            }
+                            on:click={
+                                let set_fill = set_fill.clone();
+                                move |_| set_fill(None)
+                            }
+                            title="No fill"
+                        />
+                        <div class="w-px h-5 bg-border mx-1"></div>
+                        {color_swatches
+                            .iter()
+                            .map(|c| {
+                                let c = *c;
+                                let set_fill = set_fill.clone();
+                                view! {
+                                    <button
+                                        class=move || {
+                                            match local_style.get().fill_color {
+                                                Some(fc) if fc == c => classes::BTN_SWATCH_SEL,
+                                                _ => classes::BTN_SWATCH_OFF,
                                             }
-                                            style:background-color=c.to_hex()
-                                            on:click=move |_| set_fill(Some(c))
-                                        />
-                                    }
-                                })
-                                .collect::<Vec<_>>()}
-                        </div>
+                                        }
+                                        style:background-color=c.to_hex()
+                                        on:click=move |_| set_fill(Some(c))
+                                    />
+                                }
+                            })
+                            .collect::<Vec<_>>()}
                     </div>
-                }.into_view()
-            } else {
-                view! {}.into_view()
-            }}
+                </div>
+            </div>
 
-            {if is_text {
-                view! {}.into_view()
-            } else if is_line {
-                view! {
+            <div class:hidden=move || is_text.get()>
+                <div class:hidden=move || !is_line.get()>
                     <div>
                         <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Line style"</div>
                         {uniform_seg(curve_opts, Signal::derive(move || local_line_style.get().curve_mode), set_curve_mode)}
                     </div>
-                }.into_view()
-            } else {
-                view! {
+                </div>
+                <div class:hidden=move || is_line.get()>
                     <div>
                         <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Edge style"</div>
                         {uniform_seg(edge_opts, Signal::derive(move || local_style.get().edge_style), set_edge_style)}
                     </div>
-                }.into_view()
-            }}
+                </div>
+            </div>
 
-            {if is_arrow {
-                view! {
-                    <div>
-                        <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Arrowhead style"</div>
-                        {uniform_seg(arrowhead_opts, Signal::derive(move || local_line_style.get().has_arrowhead), set_has_arrowhead)}
-                    </div>
-                }.into_view()
-            } else {
-                view! {}.into_view()
-            }}
+            <div class:hidden=move || !is_arrow.get()>
+                <div>
+                    <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Arrowhead style"</div>
+                    {uniform_seg(arrowhead_opts, Signal::derive(move || local_line_style.get().has_arrowhead), set_has_arrowhead)}
+                </div>
+            </div>
         </div>
     }
 }
 
-/// Segmented control with equal-width buttons.
 fn uniform_seg<T: PartialEq + Copy + 'static>(
     options: &'static [(T, &'static str)],
     active: Signal<T>,
