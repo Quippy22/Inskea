@@ -89,7 +89,10 @@ impl FromDrag for Freehand {
     fn from_drag(anchor: Point, _current: Point, color: ShapeColor, _shift: bool) -> Self {
         let mut fh = Self {
             data: ElementData {
-                stroke_color: color,
+                style: super::ElementStyle {
+                    stroke_color: color,
+                    ..Default::default()
+                },
                 ..ElementData::new(0)
             },
             points: vec![Point {
@@ -120,8 +123,8 @@ impl UpdateDrag for Freehand {
 
 impl Render for Freehand {
     fn render(&self, _zoom: f64) -> leptos::View {
-        let sw = self.data.stroke_width;
-        let stroke = ShapeColor::to_hex(self.data.stroke_color);
+        let sw = self.data.style.stroke_width;
+        let stroke = ShapeColor::to_hex(self.data.style.stroke_color);
         let d = build_smooth_path(&self.points);
         leptos::view! {
             <path d=d fill="none" stroke=stroke stroke-width=sw stroke-linecap="round" stroke-linejoin="round" />
@@ -180,7 +183,7 @@ impl HitTest for Freehand {
             &self.points,
             crate::model::elements::path::CurveMode::Straight,
             (point.x, point.y),
-            margin + self.data.stroke_width,
+            margin + self.data.style.stroke_width,
         )
     }
 }

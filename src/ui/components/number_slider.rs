@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use crate::ui::classes;
 use leptos::*;
 use leptos::ev;
@@ -10,37 +11,74 @@ pub fn NumberSlider(
     max: f64,
     increment: f64,
     label: &'static str,
+    #[prop(optional)]
+    on_change: Option<Rc<dyn Fn(f64)>>,
 ) -> impl IntoView {
     let snap = move |v: f64| -> f64 {
         let snapped = (v / increment).round() * increment;
         snapped.clamp(min, max)
     };
 
-    let inc = move |_| value.update(|v| *v = snap(*v + increment));
-    let dec = move |_| value.update(|v| *v = snap(*v - increment));
+    let local = create_rw_signal(value.get());
 
-    // ── Drag state ─────────────────────────────────────────────────────────
+    let commit: Rc<dyn Fn()> = Rc::new(move || {
+        let v = local.get();
+        value.set(v);
+        if let Some(ref f) = on_change {
+            f(v);
+        }
+    });
+
+    let inc = {
+        let commit = Rc::clone(&commit);
+        move |_| {
+            local.update(|v| *v = snap(*v + increment));
+            commit();
+        }
+    };
+
+    let dec = {
+        let commit = Rc::clone(&commit);
+        move |_| {
+            local.update(|v| *v = snap(*v - increment));
+            commit();
+        }
+    };
+
+    create_effect(move |_| {
+        let v = value.get();
+        leptos::untrack(move || local.set(v));
+    });
+
     let dragging = create_rw_signal(false);
     let track_ref = create_node_ref::<html::Div>();
 
     let start_drag = move |ev: MouseEvent| {
         dragging.set(true);
-        update_from_event(&value, &snap, min, max, &track_ref, &ev);
+        update_from_event(&local, &snap, min, max, &track_ref, &ev);
     };
 
-    // Attach global listeners when dragging starts
-    let _ = window_event_listener(ev::mousemove, move |ev| {
-        if dragging.get() {
-            update_from_event(&value, &snap, min, max, &track_ref, &ev);
+    let _ = window_event_listener(ev::mousemove, {
+        let local = local;
+        move |ev| {
+            if dragging.get() {
+                update_from_event(&local, &snap, min, max, &track_ref, &ev);
+            }
         }
     });
 
-    let _ = window_event_listener(ev::mouseup, move |_| {
-        dragging.set(false);
-    });
+    {
+        let commit = Rc::clone(&commit);
+        let _ = window_event_listener(ev::mouseup, move |_| {
+            if dragging.get() {
+                dragging.set(false);
+                commit();
+            }
+        });
+    }
 
     let pct = move || {
-        let v = value.get();
+        let v = local.get();
         if (max - min).abs() < f64::EPSILON {
             50.0
         } else {
@@ -52,7 +90,6 @@ pub fn NumberSlider(
         <div class=classes::SLIDER_ROW>
             <span class=classes::SETTINGS_LABEL>{label}</span>
 
-            // ── Drag track ──────────────────────────────────────────────────
             <div
                 ref=track_ref
                 class=classes::SLIDER_TRACK
@@ -69,12 +106,10 @@ pub fn NumberSlider(
                 />
             </div>
 
-            // ── Numeric readout ─────────────────────────────────────────────
             <span class=classes::SLIDER_READOUT>
-                {move || format!("{}", value.get().round() as i64)}
+                {move || format!("{}", local.get().round() as i64)}
             </span>
 
-            // ── Arrow stepper pill ──────────────────────────────────────────
             <div class=classes::SLIDER_STEPPER>
                 <button
                     class=classes::SLIDER_STEP_BTN

@@ -4,12 +4,7 @@ pub mod point;
 pub mod resize;
 
 pub use color::ShapeColor;
-pub use elements::{
-    Element, ElementData, ElementId, Ellipse, Freehand, Line, Rectangle, Text,
-};
-pub use elements::{
-    Bounds, FromDrag, HitTest, Offset, PathPoints, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
-};
+pub use elements::*;
 pub use point::Point;
 
 

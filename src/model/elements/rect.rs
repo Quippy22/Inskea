@@ -37,7 +37,10 @@ impl FromDrag for Rectangle {
                 world_point: pt,
                 width: w,
                 height: h,
-                stroke_color: color,
+                style: super::ElementStyle {
+                    stroke_color: color,
+                    ..Default::default()
+                },
                 ..ElementData::new(0)
             },
         }
@@ -59,9 +62,9 @@ impl Render for Rectangle {
         let y = self.data.world_point.y;
         let w = self.data.width;
         let h = self.data.height;
-        let sw = self.data.stroke_width;
-        let fill = Self::fill_paint(&self.data.fill_color);
-        let stroke = Self::stroke_hex(self.data.stroke_color);
+        let sw = self.data.style.stroke_width;
+        let fill = Self::fill_paint(&self.data.style.fill_color);
+        let stroke = Self::stroke_hex(self.data.style.stroke_color);
         if self.data.rotation == 0.0 {
             leptos::view! {
                 <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw />
@@ -88,7 +91,7 @@ impl HitTest for Rectangle {
         let pt = Point::unrotate(point, cx, cy, self.data.rotation);
         let px = pt.x;
         let py = pt.y;
-        let has_fill = self.data.fill_color.is_some();
+        let has_fill = self.data.style.fill_color.is_some();
         if has_fill {
             px >= self.data.world_point.x - margin
                 && px <= self.data.world_point.x + self.data.width + margin
@@ -100,7 +103,7 @@ impl HitTest for Rectangle {
             let dt = (py - self.data.world_point.y).abs();
             let db = (py - (self.data.world_point.y + self.data.height)).abs();
             let near_edge = dl.min(dr).min(dt).min(db);
-            near_edge <= margin + self.data.stroke_width
+            near_edge <= margin + self.data.style.stroke_width
                 && px >= self.data.world_point.x - margin
                 && px <= self.data.world_point.x + self.data.width + margin
                 && py >= self.data.world_point.y - margin

@@ -82,7 +82,7 @@ fn el_svg(el: &Element) -> String {
     use std::fmt::Write;
     match el {
         Element::Rectangle(r) => {
-            let fill = r.data.fill_color.map(|c| c.to_hex()).unwrap_or("none");
+            let fill = r.data.style.fill_color.map(|c| c.to_hex()).unwrap_or("none");
             let rect = format!(
                 r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" stroke="{}" stroke-width="{}"/>"#,
                 r.data.world_point.x,
@@ -90,8 +90,8 @@ fn el_svg(el: &Element) -> String {
                 r.data.width,
                 r.data.height,
                 fill,
-                r.data.stroke_color.to_hex(),
-                r.data.stroke_width,
+                r.data.style.stroke_color.to_hex(),
+                r.data.style.stroke_width,
             );
             if r.data.rotation == 0.0 {
                 rect
@@ -103,7 +103,7 @@ fn el_svg(el: &Element) -> String {
             }
         }
         Element::Ellipse(e) => {
-            let fill = e.data.fill_color.map(|c| c.to_hex()).unwrap_or("none");
+            let fill = e.data.style.fill_color.map(|c| c.to_hex()).unwrap_or("none");
             let cx = e.data.world_point.x + e.data.width / 2.0;
             let cy = e.data.world_point.y + e.data.height / 2.0;
             let ellipse = format!(
@@ -113,8 +113,8 @@ fn el_svg(el: &Element) -> String {
                 e.data.width / 2.0,
                 e.data.height / 2.0,
                 fill,
-                e.data.stroke_color.to_hex(),
-                e.data.stroke_width,
+                e.data.style.stroke_color.to_hex(),
+                e.data.style.stroke_width,
             );
             if e.data.rotation == 0.0 {
                 ellipse
@@ -124,14 +124,14 @@ fn el_svg(el: &Element) -> String {
             }
         }
         Element::Line(l) => {
-            let d = crate::model::elements::path::path_d(&l.points, l.curve_mode);
+            let d = crate::model::elements::path::path_d(&l.points, l.line_style.curve_mode);
             let mut out = format!(
                 r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
                 d,
-                l.data.stroke_color.to_hex(),
-                l.data.stroke_width,
+                l.data.style.stroke_color.to_hex(),
+                l.data.style.stroke_width,
             );
-            if l.has_arrowhead && l.points.len() >= 2 {
+            if l.line_style.has_arrowhead && l.points.len() >= 2 {
                 let tail = &l.points[l.points.len() - 2];
                 let tip = &l.points[l.points.len() - 1];
                 let dx = tip.x - tail.x;
@@ -140,7 +140,7 @@ fn el_svg(el: &Element) -> String {
                 if len > 1.0 {
                     let ux = dx / len;
                     let uy = dy / len;
-                    let hl = (l.data.stroke_width * 4.0).max(8.0);
+                    let hl = (l.data.style.stroke_width * 4.0).max(8.0);
                     let hw = hl * 0.4;
                     let bx = tip.x - ux * hl;
                     let by = tip.y - uy * hl;
@@ -153,8 +153,8 @@ fn el_svg(el: &Element) -> String {
                         by + ux * hw,
                         bx + uy * hw,
                         by - ux * hw,
-                        l.data.stroke_color.to_hex(),
-                        l.data.stroke_width,
+                        l.data.style.stroke_color.to_hex(),
+                        l.data.style.stroke_width,
                     );
                 }
             }
@@ -164,9 +164,9 @@ fn el_svg(el: &Element) -> String {
             let mut out = format!(
                 r#"<text x="{}" y="{}" font-size="{}" fill="{}">"#,
                 t.data.world_point.x,
-                t.data.world_point.y + t.data.font_size,
-                t.data.font_size,
-                t.data.stroke_color.to_hex(),
+                t.data.world_point.y + t.data.style.font_size,
+                t.data.style.font_size,
+                t.data.style.stroke_color.to_hex(),
             );
             for (i, line) in t.wrapped.lines.iter().enumerate() {
                 let esc = line
@@ -176,7 +176,7 @@ fn el_svg(el: &Element) -> String {
                 let dy = if i == 0 {
                     "0"
                 } else {
-                    &format!("{}", t.data.font_size)
+                    &format!("{}", t.data.style.font_size)
                 };
                 let _ = write!(
                     out,
@@ -207,8 +207,8 @@ fn el_svg(el: &Element) -> String {
             format!(
                 r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}" stroke-linecap="round"/>"#,
                 d,
-                f.data.stroke_color.to_hex(),
-                f.data.stroke_width,
+                f.data.style.stroke_color.to_hex(),
+                f.data.style.stroke_width,
             )
         }
     }

@@ -40,11 +40,11 @@ pub fn draw_pointer_down(
         data.world_point.set(world.0, world.1);
         data.width = 0.0;
         data.height = 0.0;
-        data.stroke_color = color;
+        data.style.stroke_color = color;
         let id = props.scene.with(|s| s.next_id);
         props.scene.update(|s| {
             let w = data.width;
-            let fs = data.font_size;
+            let fs = data.style.font_size;
             s.add_element(Element::Text(Text {
                 data,
                 wrapped: WrappedText::new("", w, fs),
@@ -59,7 +59,7 @@ pub fn draw_pointer_down(
         (props.push_snapshot)();
         props.scene.update(|s| {
             let mut data = ElementData::new(0);
-            data.stroke_color = color;
+            data.style.stroke_color = color;
             s.add_element(Element::Freehand(Freehand {
                 data,
                 points: vec![Point {
@@ -126,7 +126,7 @@ pub fn draw_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut Canva
             Tool::Line => Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
             Tool::Arrow => {
                 let mut line = Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get());
-                line.has_arrowhead = true;
+                line.line_style.has_arrowhead = true;
                 Element::Line(line)
             }
             Tool::Text => Text::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),

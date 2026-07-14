@@ -110,14 +110,14 @@ impl Text {
     /// becomes `data.width` so the hitbox aligns with the wrap boundary.
     /// Height is auto-sized to fit all wrapped lines.
     fn recalc_height(&mut self) {
-        let fs = self.data.font_size.max(MIN_FONT_SIZE);
+        let fs = self.data.style.font_size.max(MIN_FONT_SIZE);
         let line_h = fs * 1.2;
         let num_lines = self.wrapped.lines.len().max(1);
         self.data.height = num_lines as f64 * line_h;
     }
 
     pub fn set_content(&mut self, raw: &str, wrap_width: f64) {
-        self.wrapped.set_raw(raw, wrap_width, self.data.font_size);
+        self.wrapped.set_raw(raw, wrap_width, self.data.style.font_size);
         self.data.width = wrap_width;
         self.recalc_height();
     }
@@ -128,7 +128,7 @@ impl Text {
     /// `data.width` stays at `new_width`; only the height is recomputed.
     pub fn resize_text(&mut self, new_width: f64) {
         self.data.width = new_width;
-        self.wrapped.rewrap(new_width, self.data.font_size);
+        self.wrapped.rewrap(new_width, self.data.style.font_size);
         self.recalc_height();
     }
 }
@@ -139,9 +139,9 @@ impl FromDrag for Text {
         data.world_point.set(anchor.x, anchor.y);
         data.width = 0.0;
         data.height = 0.0;
-        data.stroke_color = color;
+        data.style.stroke_color = color;
         let w = data.width;
-        let fs = data.font_size;
+        let fs = data.style.font_size;
         Self {
             data,
             wrapped: WrappedText::new("", w, fs),
@@ -157,15 +157,16 @@ impl UpdateDrag for Text {
 
 impl Render for Text {
     fn render(&self, _zoom: f64) -> leptos::View {
-        let font_size = self.data.font_size.max(MIN_FONT_SIZE);
+        let font_size = self.data.style.font_size.max(MIN_FONT_SIZE);
         let lines = &self.wrapped.lines;
         let x = self.data.world_point.x;
         let baseline = self.data.world_point.y + font_size * TEXT_ASCENT_RATIO;
         let fill = self
             .data
+            .style
             .fill_color
             .map(|c| c.to_hex())
-            .unwrap_or_else(|| self.data.stroke_color.to_hex());
+            .unwrap_or_else(|| self.data.style.stroke_color.to_hex());
 
         let inner = if lines.len() <= 1 {
             leptos::view! {

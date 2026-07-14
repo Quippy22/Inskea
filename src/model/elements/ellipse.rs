@@ -31,7 +31,10 @@ impl FromDrag for Ellipse {
                 world_point: pt,
                 width: w,
                 height: h,
-                stroke_color: color,
+                style: super::ElementStyle {
+                    stroke_color: color,
+                    ..Default::default()
+                },
                 ..ElementData::new(0)
             },
         }
@@ -53,9 +56,9 @@ impl Render for Ellipse {
         let cy = self.data.world_point.y + self.data.height / 2.0;
         let rx = self.data.width / 2.0;
         let ry = self.data.height / 2.0;
-        let sw = self.data.stroke_width;
-        let fill = Self::fill_paint(&self.data.fill_color);
-        let stroke = super::ShapeColor::to_hex(self.data.stroke_color);
+        let sw = self.data.style.stroke_width;
+        let fill = Self::fill_paint(&self.data.style.fill_color);
+        let stroke = super::ShapeColor::to_hex(self.data.style.stroke_color);
         if self.data.rotation == 0.0 {
             leptos::view! {
                 <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw />
@@ -80,7 +83,7 @@ impl HitTest for Ellipse {
         let pt = Point::unrotate(point, cx, cy, self.data.rotation);
         let px = pt.x;
         let py = pt.y;
-        let has_fill = self.data.fill_color.is_some();
+        let has_fill = self.data.style.fill_color.is_some();
         if has_fill {
             px >= self.data.world_point.x - margin
                 && px <= self.data.world_point.x + self.data.width + margin
@@ -95,7 +98,7 @@ impl HitTest for Ellipse {
             let dy = (py - cy) / hh.max(1.0);
             let dist = (dx * dx + dy * dy).sqrt();
             let edge_dist = (dist - 1.0).abs() * hw.min(hh).max(1.0);
-            edge_dist <= margin + self.data.stroke_width
+            edge_dist <= margin + self.data.style.stroke_width
         }
     }
 }

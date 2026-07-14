@@ -321,6 +321,7 @@ pub fn resize_scale_element(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::elements::{EdgeStyle, ElementStyle, StrokeStyle};
 
     fn default_data() -> ElementData {
         ElementData {
@@ -329,10 +330,14 @@ mod tests {
             width: 100.0,
             height: 100.0,
             rotation: 0.0,
-            font_size: 24.0,
-            stroke_color: super::super::ShapeColor::Blue,
-            fill_color: None,
-            stroke_width: 2.0,
+            style: ElementStyle {
+                font_size: 24.0,
+                stroke_color: super::super::ShapeColor::Blue,
+                fill_color: None,
+                stroke_width: 2.0,
+                stroke_style: StrokeStyle::Solid,
+                edge_style: EdgeStyle::Sharp,
+            },
         }
     }
 
@@ -470,10 +475,14 @@ mod tests {
             width: 100.0,
             height: 50.0,
             rotation: 0.0,
-            font_size: 24.0,
-            stroke_color: super::super::ShapeColor::Blue,
-            fill_color: None,
-            stroke_width: 2.0,
+            style: ElementStyle {
+                font_size: 24.0,
+                stroke_color: super::super::ShapeColor::Blue,
+                fill_color: None,
+                stroke_width: 2.0,
+                stroke_style: StrokeStyle::Solid,
+                edge_style: EdgeStyle::Sharp,
+            },
         };
         let orig = ElementData {
             id: 1,
@@ -481,10 +490,14 @@ mod tests {
             width: 100.0,
             height: 50.0,
             rotation: 0.0,
-            font_size: 24.0,
-            stroke_color: super::super::ShapeColor::Blue,
-            fill_color: None,
-            stroke_width: 2.0,
+            style: ElementStyle {
+                font_size: 24.0,
+                stroke_color: super::super::ShapeColor::Blue,
+                fill_color: None,
+                stroke_width: 2.0,
+                stroke_style: StrokeStyle::Solid,
+                edge_style: EdgeStyle::Sharp,
+            },
         };
         resize_scale_element(&mut data, &orig, Point::new(0.0, 0.0), 200.0, 100.0, 0.0, 0.0, 100.0, 50.0, true);
         assert!((data.width - 200.0).abs() < 0.01);
@@ -501,10 +514,14 @@ mod tests {
             width: 100.0,
             height: 50.0,
             rotation: 0.0,
-            font_size: 24.0,
-            stroke_color: super::super::ShapeColor::Blue,
-            fill_color: None,
-            stroke_width: 2.0,
+            style: ElementStyle {
+                font_size: 24.0,
+                stroke_color: super::super::ShapeColor::Blue,
+                fill_color: None,
+                stroke_width: 2.0,
+                stroke_style: StrokeStyle::Solid,
+                edge_style: EdgeStyle::Sharp,
+            },
         };
         let orig = ElementData {
             id: 1,
@@ -512,10 +529,14 @@ mod tests {
             width: 100.0,
             height: 50.0,
             rotation: 0.0,
-            font_size: 24.0,
-            stroke_color: super::super::ShapeColor::Blue,
-            fill_color: None,
-            stroke_width: 2.0,
+            style: ElementStyle {
+                font_size: 24.0,
+                stroke_color: super::super::ShapeColor::Blue,
+                fill_color: None,
+                stroke_width: 2.0,
+                stroke_style: StrokeStyle::Solid,
+                edge_style: EdgeStyle::Sharp,
+            },
         };
         resize_scale_element(&mut data, &orig, Point::new(0.0, 0.0), 200.0, 100.0, 0.0, 0.0, 100.0, 50.0, false);
         assert!((data.width - 200.0).abs() < 0.01);

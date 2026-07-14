@@ -1,13 +1,15 @@
 use std::rc::Rc;
 
 use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
-use crate::model::{Element, ElementId, Scene, ShapeColor};
 use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
 use crate::hotkeys::{HotkeysContext, register_hotkeys, ShortcutsModal};
+use crate::model::{Element, ElementId, Scene, ShapeColor};
+use crate::tauri_bridge;
+use crate::ui::classes;
+use crate::ui::components::StylingPanel;
+use crate::ui::dock::{Dock, Tool};
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::{SettingsPanel, ToolBar};
-use crate::tauri_bridge;
-use crate::ui::dock::{Dock, Tool};
 use leptos::*;
 use wasm_bindgen_futures::spawn_local;
 
@@ -135,6 +137,29 @@ pub fn App() -> impl IntoView {
         }
     });
 
+    // ── Panel visibility / kind (no scene tracking → no reactive cycle) ───
+    let show_panel = Signal::derive(move || {
+        let mode = canvas_mode.get();
+        if mode == CanvasMode::Select && selected_ids.get().len() == 1 {
+            return true;
+        }
+        if mode == CanvasMode::Draw && !eraser_active.get() {
+            return true;
+        }
+        false
+    });
+
+    let styling_kind = Signal::derive(move || {
+        let ids = selected_ids.get();
+        if ids.len() == 1 {
+            let el = leptos::untrack(|| single_selected_element(scene.get_untracked(), ids));
+            if let Some(el) = el {
+                return el.styling_kind();
+            }
+        }
+        selected_tool.get().styling_kind()
+    });
+
     view! {
         <div class=move || {
             let bg = if settings.get().canvas_bg == CanvasBg::Dark { "bg-bg" } else { "bg-white" };
@@ -178,6 +203,41 @@ pub fn App() -> impl IntoView {
                 settings=settings
             />
             <ShortcutsModal shortcuts_open=shortcuts_open />
+
+            {move || {
+                let kind = styling_kind.get();
+                if !show_panel.get() {
+                    return view! {}.into_view();
+                }
+                view! {
+                    <div class="fixed left-[4.5rem] top-1/2 -translate-y-1/2 z-50">
+                        <div class=classes::PANEL>
+                            <div class="py-2 px-3">
+                                <StylingPanel
+                                    kind=kind
+                                    scene=scene
+                                    selected_ids=selected_ids
+                                    selected_color=selected_color
+                                    selected_tool=selected_tool
+                                />
+                            </div>
+                        </div>
+                    </div>
+                }.into_view()
+            }}
         </div>
     }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+fn single_selected_element(
+    scene: Scene,
+    ids: Vec<ElementId>,
+) -> Option<Element> {
+    if ids.len() != 1 {
+        return None;
+    }
+    let id = ids[0];
+    scene.elements().iter().find(|e| e.id() == id).cloned()
 }

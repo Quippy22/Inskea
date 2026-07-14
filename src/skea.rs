@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::Scene;
 
-pub const FORMAT_VERSION: u32 = 3;
+pub const FORMAT_VERSION: u32 = 4;
 
 #[derive(Serialize, Deserialize)]
 struct SkeaFile {
@@ -99,6 +99,57 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
         }
     }
 
+    let version = raw
+        .get("format_version")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+
+    if version == 3 {
+        // Migrate v3 → v4: wrap flat style fields into ElementStyle/LineStyle
+        if let Some(elements) = raw.pointer_mut("/scene/elements") {
+            if let Some(arr) = elements.as_array_mut() {
+                for el in arr.iter_mut() {
+                    // data.* → data.style.*
+                    if let Some(data) = el.get_mut("data") {
+                        if let Some(data_obj) = data.as_object_mut() {
+                            let style_fields =
+                                ["stroke_color", "fill_color", "stroke_width", "font_size", "stroke_style", "edge_style"];
+                            let has_any_style = style_fields.iter().any(|f| data_obj.contains_key(*f));
+                            if has_any_style {
+                                let mut style = serde_json::Map::new();
+                                for field in &style_fields {
+                                    if let Some(val) = data_obj.remove(*field) {
+                                        style.insert(field.to_string(), val);
+                                    }
+                                }
+                                data_obj.insert("style".to_string(), serde_json::Value::Object(style));
+                            }
+                        }
+                    }
+                    // Line.{curve_mode,has_arrowhead} → Line.line_style
+                    let type_name = el.get("type").and_then(|v| v.as_str());
+                    if type_name == Some("Line") {
+                        if let Some(obj) = el.as_object_mut() {
+                            if obj.contains_key("curve_mode") || obj.contains_key("has_arrowhead") {
+                                let mut line_style = serde_json::Map::new();
+                                if let Some(curve) = obj.remove("curve_mode") {
+                                    line_style.insert("curve_mode".to_string(), curve);
+                                }
+                                if let Some(arrow) = obj.remove("has_arrowhead") {
+                                    line_style.insert("has_arrowhead".to_string(), arrow);
+                                }
+                                obj.insert("line_style".to_string(), serde_json::Value::Object(line_style));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(obj) = raw.as_object_mut() {
+            obj.insert("format_version".to_string(), serde_json::json!(4));
+        }
+    }
+
     let version_after = raw
         .get("format_version")
         .and_then(|v| v.as_u64())
@@ -122,7 +173,8 @@ mod tests {
     use crate::model::elements::path::CurveMode;
     use crate::model::elements::text::WrappedText;
     use crate::model::{
-        Element, ElementData, Ellipse, Freehand, Line, Point, Rectangle, ShapeColor, Text,
+        Element, ElementData, Ellipse, Freehand, Line, LineStyle, Point, Rectangle, ShapeColor,
+        Text,
     };
 
     fn make_scene() -> Scene {
@@ -131,47 +183,51 @@ mod tests {
         rd.world_point.set(10.0, 20.0);
         rd.width = 100.0;
         rd.height = 50.0;
-        rd.stroke_color = ShapeColor::Blue;
-        rd.fill_color = Some(ShapeColor::Cyan);
+        rd.style.stroke_color = ShapeColor::Blue;
+        rd.style.fill_color = Some(ShapeColor::Cyan);
         s.add_element(Element::Rectangle(Rectangle { data: rd }));
 
         let mut ed = ElementData::new(0);
         ed.world_point.set(5.0, 5.0);
         ed.width = 60.0;
         ed.height = 60.0;
-        ed.stroke_color = ShapeColor::Red;
+        ed.style.stroke_color = ShapeColor::Red;
         s.add_element(Element::Ellipse(Ellipse { data: ed }));
 
         let mut ld = ElementData::new(0);
-        ld.stroke_color = ShapeColor::Green;
-        ld.stroke_width = 3.0;
+        ld.style.stroke_color = ShapeColor::Green;
+        ld.style.stroke_width = 3.0;
         s.add_element(Element::Line(Line {
             data: ld,
             points: vec![Point { x: 0.0, y: 0.0 }, Point { x: 100.0, y: 100.0 }],
-            curve_mode: CurveMode::Straight,
-            has_arrowhead: false,
+            line_style: LineStyle {
+                curve_mode: CurveMode::Straight,
+                has_arrowhead: false,
+            },
         }));
 
         let mut ad = ElementData::new(0);
-        ad.stroke_color = ShapeColor::Orange;
+        ad.style.stroke_color = ShapeColor::Orange;
         s.add_element(Element::Line(Line {
             data: ad,
             points: vec![Point { x: 10.0, y: 10.0 }, Point { x: 200.0, y: 50.0 }],
-            curve_mode: CurveMode::Straight,
-            has_arrowhead: true,
+            line_style: LineStyle {
+                curve_mode: CurveMode::Straight,
+                has_arrowhead: true,
+            },
         }));
 
         let mut td = ElementData::new(0);
         td.world_point.set(30.0, 40.0);
-        td.fill_color = Some(ShapeColor::White);
+        td.style.fill_color = Some(ShapeColor::White);
         s.add_element(Element::Text(Text {
             data: td,
             wrapped: WrappedText::new("hello world", 0.0, 24.0),
         }));
 
         let mut fd = ElementData::new(0);
-        fd.stroke_color = ShapeColor::Purple;
-        fd.stroke_width = 1.5;
+        fd.style.stroke_color = ShapeColor::Purple;
+        fd.style.stroke_width = 1.5;
         s.add_element(Element::Freehand(Freehand {
             data: fd,
             points: vec![
@@ -197,7 +253,7 @@ mod tests {
         let mut s = Scene::new();
         let mut td = ElementData::new(0);
         td.world_point.set(10.0, 10.0);
-        td.fill_color = Some(ShapeColor::White);
+        td.style.fill_color = Some(ShapeColor::White);
         s.add_element(Element::Text(Text {
             data: td,
             wrapped: WrappedText::new("line one\nline two\nline three", 200.0, 24.0),
@@ -214,14 +270,14 @@ mod tests {
         rd.world_point.set(10.0, 10.0);
         rd.width = 100.0;
         rd.height = 50.0;
-        rd.stroke_color = ShapeColor::Blue;
+        rd.style.stroke_color = ShapeColor::Blue;
         rd.rotation = 0.785398; // ~45 degrees
         s.add_element(Element::Rectangle(Rectangle { data: rd }));
 
         let mut td = ElementData::new(0);
         td.world_point.set(50.0, 50.0);
-        td.fill_color = Some(ShapeColor::White);
-        td.font_size = 36.0;
+        td.style.fill_color = Some(ShapeColor::White);
+        td.style.font_size = 36.0;
         s.add_element(Element::Text(Text {
             data: td,
             wrapped: WrappedText::new("big text", 200.0, 36.0),
@@ -275,7 +331,7 @@ mod tests {
             assert_eq!(line.points[0].y, 0.0);
             assert_eq!(line.points[1].x, 100.0);
             assert_eq!(line.points[1].y, 100.0);
-            assert_eq!(line.curve_mode, CurveMode::Straight);
+            assert_eq!(line.line_style.curve_mode, CurveMode::Straight);
         } else {
             panic!("expected Line element at index 1");
         }
@@ -286,8 +342,8 @@ mod tests {
             assert_eq!(line.points[0].y, 10.0);
             assert_eq!(line.points[1].x, 200.0);
             assert_eq!(line.points[1].y, 50.0);
-            assert_eq!(line.curve_mode, CurveMode::Straight);
-            assert!(line.has_arrowhead);
+            assert_eq!(line.line_style.curve_mode, CurveMode::Straight);
+            assert!(line.line_style.has_arrowhead);
         } else {
             panic!("expected Line (was Arrow) element at index 2");
         }
@@ -310,7 +366,7 @@ mod tests {
         assert_eq!(scene.elements().len(), 3);
         // Line unchanged
         if let Element::Line(line) = &scene.elements()[1] {
-            assert!(!line.has_arrowhead);
+            assert!(!line.line_style.has_arrowhead);
         } else {
             panic!("expected Line element at index 1");
         }
@@ -320,7 +376,7 @@ mod tests {
             assert_eq!(line.points[0].y, 10.0);
             assert_eq!(line.points[1].x, 200.0);
             assert_eq!(line.points[1].y, 50.0);
-            assert!(line.has_arrowhead);
+            assert!(line.line_style.has_arrowhead);
         } else {
             panic!("expected Line (was Arrow) element at index 2");
         }

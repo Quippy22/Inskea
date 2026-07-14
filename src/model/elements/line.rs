@@ -11,6 +11,23 @@ use crate::model::resize::ResizeContext;
 use crate::model::Point;
 use leptos::IntoView;
 
+/// Line/arrow-specific properties.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct LineStyle {
+    pub curve_mode: CurveMode,
+    #[serde(default)]
+    pub has_arrowhead: bool,
+}
+
+impl Default for LineStyle {
+    fn default() -> Self {
+        Self {
+            curve_mode: CurveMode::Straight,
+            has_arrowhead: false,
+        }
+    }
+}
+
 /// A line defined by an ordered list of path points.
 ///
 /// When first created via `FromDrag` this always has exactly 2 points
@@ -22,11 +39,8 @@ pub struct Line {
     pub data: ElementData,
     /// Ordered path points. At minimum 2 endpoints.
     pub points: Vec<Point>,
-    /// How the points are connected when rendering.
-    pub curve_mode: CurveMode,
-    /// Whether this line has an arrowhead at its tip.
-    #[serde(default)]
-    pub has_arrowhead: bool,
+    /// Line-specific properties (curve mode, arrowhead).
+    pub line_style: LineStyle,
 }
 
 impl FromDrag for Line {
@@ -34,12 +48,14 @@ impl FromDrag for Line {
         let (a, b) = line_endpoints(anchor, current, shift);
         Self {
             data: ElementData {
-                stroke_color: color,
+                style: super::ElementStyle {
+                    stroke_color: color,
+                    ..Default::default()
+                },
                 ..ElementData::new(0)
             },
             points: vec![a, b],
-            curve_mode: CurveMode::default(),
-            has_arrowhead: false,
+            line_style: LineStyle::default(),
         }
     }
 }
@@ -58,11 +74,11 @@ const ARROW_HEAD_MULT: f64 = 4.0;
 
 impl Render for Line {
     fn render(&self, _zoom: f64) -> leptos::View {
-        let sw = self.data.stroke_width;
-        let stroke = ShapeColor::to_hex(self.data.stroke_color);
-        let d = path_d(&self.points, self.curve_mode);
+        let sw = self.data.style.stroke_width;
+        let stroke = ShapeColor::to_hex(self.data.style.stroke_color);
+        let d = path_d(&self.points, self.line_style.curve_mode);
 
-        if self.has_arrowhead && self.points.len() >= 2 {
+        if self.line_style.has_arrowhead && self.points.len() >= 2 {
             let (ux, uy) = {
                 let tail = &self.points[self.points.len() - 2];
                 let tip = &self.points[self.points.len() - 1];
@@ -110,9 +126,9 @@ impl HitTest for Line {
     fn hit_test(&self, point: Point, margin: f64) -> bool {
         hit_test_path(
             &self.points,
-            self.curve_mode,
+            self.line_style.curve_mode,
             (point.x, point.y),
-            margin + self.data.stroke_width,
+            margin + self.data.style.stroke_width,
         )
     }
 }

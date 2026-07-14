@@ -58,16 +58,17 @@ pub fn text_edit_overlay(
             })
         })?;
         let zoom = viewport.get().zoom;
-        let font_size = text_elem.data.font_size.max(12.0);
+        let font_size = text_elem.data.style.font_size.max(12.0);
         let (sw, sh) = screen_size.get();
         let (sx, sy) = viewport
             .get()
             .world_to_screen((text_elem.data.world_point.x, text_elem.data.world_point.y), (sw, sh));
         let fill = text_elem
             .data
+            .style
             .fill_color
             .map(|c| c.to_hex())
-            .unwrap_or_else(|| text_elem.data.stroke_color.to_hex());
+            .unwrap_or_else(|| text_elem.data.style.stroke_color.to_hex());
 
         let default_ta_w = (20.0_f64 * font_size * CHAR_WIDTH_RATIO).max(120.0);
         let ta_w = if text_elem.data.width > 0.0 {

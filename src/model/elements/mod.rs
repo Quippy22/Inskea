@@ -8,13 +8,77 @@ mod utils;
 
 pub use ellipse::Ellipse;
 pub use freehand::Freehand;
-pub use line::Line;
+#[allow(unused_imports)]
+pub use line::{Line, LineStyle};
 pub use rect::Rectangle;
 pub use text::Text;
 
 use super::ShapeColor;
 use crate::model::Point;
-use path::CurveMode;
+pub use path::CurveMode;
+
+/// Stroke dash style.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum StrokeStyle {
+    Solid,
+    Dashed,
+    Dotted,
+}
+
+impl Default for StrokeStyle {
+    fn default() -> Self {
+        Self::Solid
+    }
+}
+
+/// Edge corner style for shapes.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum EdgeStyle {
+    Sharp,
+    Rounded,
+}
+
+impl Default for EdgeStyle {
+    fn default() -> Self {
+        Self::Sharp
+    }
+}
+
+/// Shared appearance properties for every element type.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct ElementStyle {
+    pub stroke_color: ShapeColor,
+    pub fill_color: Option<ShapeColor>,
+    pub stroke_width: f64,
+    pub font_size: f64,
+    pub stroke_style: StrokeStyle,
+    pub edge_style: EdgeStyle,
+}
+
+impl Default for ElementStyle {
+    fn default() -> Self {
+        Self {
+            stroke_color: ShapeColor::default(),
+            fill_color: None,
+            stroke_width: 2.0,
+            font_size: 24.0,
+            stroke_style: StrokeStyle::default(),
+            edge_style: EdgeStyle::default(),
+        }
+    }
+}
+
+/// Categorisation of an element for the styling panel.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum StylingKind {
+    Rectangle,
+    Ellipse,
+    Line,
+    Arrow,
+    Text,
+    Freehand,
+}
 
 /// Unique identifier for an element in the scene.
 pub type ElementId = u64;
@@ -32,19 +96,12 @@ pub struct ElementData {
     pub height: f64,
     /// Clockwise rotation in radians around the element's center.
     pub rotation: f64,
-    /// Font size in world-space units (used by [`Text`]).
-    pub font_size: f64,
-    /// Stroke (outline) color.
-    pub stroke_color: ShapeColor,
-    /// Optional fill color. `None` means transparent.
-    pub fill_color: Option<ShapeColor>,
-    /// Stroke width in world-space units.
-    pub stroke_width: f64,
+    /// Shared appearance properties (stroke, fill, etc.).
+    pub style: ElementStyle,
 }
 
 impl ElementData {
-    /// Creates an `ElementData` with defaults: position (0,0), size 100×100,
-    /// no rotation, font size 24, white stroke, no fill, stroke width 2.
+    /// Creates an `ElementData` with defaults.
     pub fn new(id: ElementId) -> Self {
         Self {
             id,
@@ -52,10 +109,7 @@ impl ElementData {
             width: 100.0,
             height: 100.0,
             rotation: 0.0,
-            font_size: 24.0,
-            stroke_color: ShapeColor::default(),
-            fill_color: None,
-            stroke_width: 2.0,
+            style: ElementStyle::default(),
         }
     }
 }
@@ -109,6 +163,23 @@ impl Element {
             Element::Line(e) => &mut e.data,
             Element::Text(e) => &mut e.data,
             Element::Freehand(e) => &mut e.data,
+        }
+    }
+
+    /// The kind of styling panel to show for this element.
+    pub fn styling_kind(&self) -> StylingKind {
+        match self {
+            Element::Rectangle(_) => StylingKind::Rectangle,
+            Element::Ellipse(_) => StylingKind::Ellipse,
+            Element::Line(l) => {
+                if l.line_style.has_arrowhead {
+                    StylingKind::Arrow
+                } else {
+                    StylingKind::Line
+                }
+            }
+            Element::Text(_) => StylingKind::Text,
+            Element::Freehand(_) => StylingKind::Freehand,
         }
     }
 }
@@ -227,10 +298,10 @@ impl PathPoints for Line {
         Some(&mut self.points)
     }
     fn curve_mode(&self) -> CurveMode {
-        self.curve_mode
+        self.line_style.curve_mode
     }
     fn set_curve_mode(&mut self, mode: CurveMode) {
-        self.curve_mode = mode;
+        self.line_style.curve_mode = mode;
     }
 }
 
@@ -249,12 +320,12 @@ impl PathPoints for Element {
     }
     fn curve_mode(&self) -> CurveMode {
         match self {
-            Element::Line(e) => e.curve_mode,
+            Element::Line(e) => e.line_style.curve_mode,
             _ => CurveMode::Straight,
         }
     }
     fn set_curve_mode(&mut self, mode: CurveMode) {
-        if let Element::Line(e) = self { e.curve_mode = mode }
+        if let Element::Line(e) = self { e.line_style.curve_mode = mode }
     }
 }
 

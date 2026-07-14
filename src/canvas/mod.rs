@@ -525,7 +525,7 @@ pub fn Canvas(
                 Tool::Line => Line::from_drag(anchor, world_pt, state.color, shift).into(),
                 Tool::Arrow => {
                     let mut line = Line::from_drag(anchor, world_pt, state.color, shift);
-                    line.has_arrowhead = true;
+                    line.line_style.has_arrowhead = true;
                     Element::Line(line)
                 }
                 Tool::Text => Text::from_drag(anchor, world_pt, state.color, shift).into(),
