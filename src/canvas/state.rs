@@ -1,6 +1,6 @@
 use crate::model::resize::ResizeHandle;
 use crate::model::ShapeColor;
-use crate::model::{Bounds, Element, ElementId, HitTest, Point, Scene};
+use crate::model::{Bounds, Element, ElementId, ElementStyle, HitTest, Point, Scene};
 use crate::ui::dock::Tool;
 use crate::canvas::settings::CanvasSettings;
 use leptos::*;
@@ -146,6 +146,7 @@ pub struct CanvasInputs {
     pub push_snapshot: Rc<dyn Fn()>,
     pub export_crop_active: RwSignal<bool>,
     pub on_crop_export: RwSignal<Option<CropExportCallback>>,
+    pub default_style: RwSignal<ElementStyle>,
 }
 
 // ── Helper functions used by pointer event handlers ──────────────────────

@@ -9,7 +9,7 @@ use leptos::*;
 fn read_panel_state(
     scene: &Scene,
     ids: &[ElementId],
-    color: ShapeColor,
+    default_style: &ElementStyle,
     tool: Tool,
 ) -> (ElementStyle, LineStyle) {
     if ids.len() == 1 {
@@ -24,10 +24,7 @@ fn read_panel_state(
         }
     }
     (
-        ElementStyle {
-            stroke_color: color,
-            ..Default::default()
-        },
+        default_style.clone(),
         LineStyle {
             has_arrowhead: matches!(tool, Tool::Arrow),
             ..Default::default()
@@ -40,23 +37,21 @@ pub fn StylingPanel(
     kind: StylingKind,
     scene: RwSignal<Scene>,
     selected_ids: RwSignal<Vec<ElementId>>,
-    selected_color: RwSignal<ShapeColor>,
     selected_tool: RwSignal<Tool>,
+    default_style: RwSignal<ElementStyle>,
 ) -> impl IntoView {
     let is_text = kind == StylingKind::Text;
     let is_line = kind == StylingKind::Line || kind == StylingKind::Arrow;
     let is_arrow = kind == StylingKind::Arrow;
     let base_kind = !is_text && !is_line;
 
-    // Read initial state from scene (called once per mount).
     let (init_style, init_line_style) = read_panel_state(
         &scene.get_untracked(),
         &selected_ids.get_untracked(),
-        selected_color.get_untracked(),
+        &default_style.get_untracked(),
         selected_tool.get_untracked(),
     );
 
-    // Local signals for reactive rendering inside the panel.
     let local_style = create_rw_signal(init_style);
     let local_line_style = create_rw_signal(init_line_style);
 
@@ -70,107 +65,118 @@ pub fn StylingPanel(
         ("Stroke size", 1.0, 5.0)
     };
 
-    // ── Callbacks ────────────────────────────────────────────────────────
-    // Each writes directly to the scene and updates local signals so the
-    // panel view re-renders instantly. No reactive wires to the parent.
-
-    let update_scene_style = {
+    // ── Mutator: write to scene element when selected, else default_style ─
+    let update_style = {
         let scene = scene;
         let selected_ids = selected_ids;
+        let default_style = default_style;
         move |f: &dyn Fn(&mut ElementStyle)| {
             let ids = selected_ids.get_untracked();
-            if ids.len() != 1 { return; }
-            scene.update(|s| {
-                if let Some(el) = s.element_by_id_mut(ids[0]) {
-                    f(&mut el.data_mut().style);
-                }
-            });
+            if ids.len() == 1 {
+                scene.update(|s| {
+                    if let Some(el) = s.element_by_id_mut(ids[0]) {
+                        f(&mut el.data_mut().style);
+                    }
+                });
+            } else {
+                default_style.update(|s| f(s));
+            }
         }
     };
 
-    let update_scene_line_style = {
+    let update_line_style = {
         let scene = scene;
         let selected_ids = selected_ids;
         move |f: &dyn Fn(&mut LineStyle)| {
             let ids = selected_ids.get_untracked();
-            if ids.len() != 1 { return; }
-            scene.update(|s| {
-                if let Some(el) = s.element_by_id_mut(ids[0]) {
-                    if let Element::Line(l) = el {
-                        f(&mut l.line_style);
+            if ids.len() == 1 {
+                scene.update(|s| {
+                    if let Some(el) = s.element_by_id_mut(ids[0]) {
+                        if let Element::Line(l) = el {
+                            f(&mut l.line_style);
+                        }
                     }
-                }
-            });
+                });
+            }
+            // line-style makes no sense in draw-mode; only persist when selected.
         }
     };
 
+    // ── Callbacks ────────────────────────────────────────────────────────
     let set_color: Rc<dyn Fn(ShapeColor)> = Rc::new({
         let local_style = local_style;
-        let update_scene_style = update_scene_style;
+        let update_style = update_style;
         move |c| {
             local_style.update(|s| s.stroke_color = c);
-            update_scene_style(&|s| s.stroke_color = c);
+            update_style(&|s| s.stroke_color = c);
         }
     });
 
     let set_fill: Rc<dyn Fn(Option<ShapeColor>)> = Rc::new({
         let local_style = local_style;
-        let update_scene_style = update_scene_style;
+        let update_style = update_style;
         move |c| {
             local_style.update(|s| s.fill_color = c);
-            update_scene_style(&|s| s.fill_color = c);
+            update_style(&|s| s.fill_color = c);
         }
     });
 
     let set_stroke_style: Rc<dyn Fn(StrokeStyle)> = Rc::new({
         let local_style = local_style;
-        let update_scene_style = update_scene_style;
+        let update_style = update_style;
         move |v| {
             local_style.update(|s| s.stroke_style = v);
-            update_scene_style(&|s| s.stroke_style = v);
+            update_style(&|s| s.stroke_style = v);
         }
     });
 
     let set_edge_style: Rc<dyn Fn(EdgeStyle)> = Rc::new({
         let local_style = local_style;
-        let update_scene_style = update_scene_style;
+        let update_style = update_style;
         move |v| {
             local_style.update(|s| s.edge_style = v);
-            update_scene_style(&|s| s.edge_style = v);
+            update_style(&|s| s.edge_style = v);
         }
     });
 
     let set_curve_mode: Rc<dyn Fn(CurveMode)> = Rc::new({
         let local_line_style = local_line_style;
-        let update_scene_line_style = update_scene_line_style;
+        let update_line_style = update_line_style;
         move |v| {
             local_line_style.update(|ls| ls.curve_mode = v);
-            update_scene_line_style(&|ls| ls.curve_mode = v);
+            update_line_style(&|ls| ls.curve_mode = v);
         }
     });
 
     let set_has_arrowhead: Rc<dyn Fn(bool)> = Rc::new({
         let local_line_style = local_line_style;
-        let update_scene_line_style = update_scene_line_style;
+        let update_line_style = update_line_style;
         move |v| {
             local_line_style.update(|ls| ls.has_arrowhead = v);
-            update_scene_line_style(&|ls| ls.has_arrowhead = v);
+            update_line_style(&|ls| ls.has_arrowhead = v);
         }
     });
 
     let size_cb: Rc<dyn Fn(f64)> = Rc::new({
         let scene = scene;
         let selected_ids = selected_ids;
-        move |val: f64| {
+        let default_style = default_style;
+        move |val| {
             let ids = selected_ids.get_untracked();
-            if ids.len() != 1 { return; }
-            scene.update(|s| {
-                if let Some(el) = s.element_by_id_mut(ids[0]) {
-                    let d = el.data_mut();
-                    d.style.stroke_width = val;
-                    d.style.font_size = val;
-                }
-            });
+            if ids.len() == 1 {
+                scene.update(|s| {
+                    if let Some(el) = s.element_by_id_mut(ids[0]) {
+                        let d = el.data_mut();
+                        d.style.stroke_width = val;
+                        d.style.font_size = val;
+                    }
+                });
+            } else {
+                default_style.update(|s| {
+                    s.stroke_width = val;
+                    s.font_size = val;
+                });
+            }
         }
     });
 

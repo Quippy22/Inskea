@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
 use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
 use crate::hotkeys::{HotkeysContext, register_hotkeys, ShortcutsModal};
-use crate::model::{Element, ElementId, Scene, ShapeColor};
+use crate::model::{Element, ElementId, ElementStyle, Scene, ShapeColor};
 use crate::tauri_bridge;
 use crate::ui::classes;
 use crate::ui::components::StylingPanel;
@@ -137,6 +137,12 @@ pub fn App() -> impl IntoView {
         }
     });
 
+    // ── Default style for new shapes (draw-mode panel changes) ────────────
+    let default_style = create_rw_signal(ElementStyle {
+        stroke_color: selected_color.get_untracked(),
+        ..Default::default()
+    });
+
     // ── Panel visibility / kind (no scene tracking → no reactive cycle) ───
     let show_panel = Signal::derive(move || {
         let mode = canvas_mode.get();
@@ -179,6 +185,7 @@ pub fn App() -> impl IntoView {
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
                 selected_ids=selected_ids
+                default_style=default_style
             />
             <ToolBar
                 scene=scene
@@ -217,8 +224,8 @@ pub fn App() -> impl IntoView {
                                     kind=kind
                                     scene=scene
                                     selected_ids=selected_ids
-                                    selected_color=selected_color
                                     selected_tool=selected_tool
+                                    default_style=default_style
                                 />
                             </div>
                         </div>

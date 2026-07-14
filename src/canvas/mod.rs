@@ -87,6 +87,7 @@ pub fn Canvas(
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<CropExportCallback>>,
     selected_ids: RwSignal<Vec<ElementId>>,
+    default_style: RwSignal<ElementStyle>,
 ) -> impl IntoView {
     let mut st = CanvasState::new();
     st.selected_ids = selected_ids;
@@ -103,6 +104,7 @@ pub fn Canvas(
         push_snapshot,
         export_crop_active,
         on_crop_export,
+        default_style,
     };
 
     st.screen_size.set(window_size());
