@@ -1,5 +1,6 @@
 mod app;
 mod canvas;
+mod hotkeys;
 mod model;
 mod skea;
 mod tauri_bridge;

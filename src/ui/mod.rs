@@ -4,6 +4,7 @@ pub(crate) mod classes;
 pub mod components;
 pub mod dock;
 pub(crate) mod export;
+pub(crate) mod file_ops;
 pub(crate) mod icon;
 pub(crate) mod settings;
 mod toolbar;
