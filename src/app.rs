@@ -102,6 +102,12 @@ pub fn App() -> impl IntoView {
             (false, "s") => canvas_mode.set(CanvasMode::Select),
             (false, "a") => canvas_mode.set(CanvasMode::Pan),
             (false, "e") => canvas_mode.set(CanvasMode::Erase),
+            (false, "1") => { selected_tool.set(Tool::Rectangle); canvas_mode.set(CanvasMode::Draw); }
+            (false, "2") => { selected_tool.set(Tool::Ellipse); canvas_mode.set(CanvasMode::Draw); }
+            (false, "3") => { selected_tool.set(Tool::Line); canvas_mode.set(CanvasMode::Draw); }
+            (false, "4") => { selected_tool.set(Tool::Arrow); canvas_mode.set(CanvasMode::Draw); }
+            (false, "5") => { selected_tool.set(Tool::Text); canvas_mode.set(CanvasMode::Draw); }
+            (false, "f") => { selected_tool.set(Tool::Freehand); canvas_mode.set(CanvasMode::Draw); }
             (false, "d") => canvas_mode.set(CanvasMode::Draw),
             (false, "Escape") => {}  // handled inside Canvas component
             (false, "Delete") | (false, "Backspace") => {
