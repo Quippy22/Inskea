@@ -75,6 +75,7 @@ pub fn ToolBar<F1, F2>(
     can_redo: Signal<bool>,
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<CropExportCallback>>,
+    shortcuts_open: RwSignal<bool>,
 ) -> impl IntoView
 where
     F1: Fn() + 'static,
@@ -166,6 +167,14 @@ where
             });
         }
     };
+    let on_shortcuts = {
+        let close_menu = close_menu;
+        move || {
+            close_menu();
+            shortcuts_open.set(true);
+        }
+    };
+
     let on_import = {
         let close_menu = close_menu;
         move || {
@@ -285,6 +294,11 @@ where
         DropdownItem::Action {
             label: "Import",
             on_click: Rc::new(on_import),
+        },
+        DropdownItem::Separator,
+        DropdownItem::Action {
+            label: "Keyboard Shortcuts",
+            on_click: Rc::new(on_shortcuts),
         },
     ];
 
@@ -445,7 +459,16 @@ where
                         }
                     }}
                 </div>
+                <IconButton
+                    on_click=move || shortcuts_open.update(|v| *v = !*v)
+                    title="Keyboard shortcuts"
+                    class=classes::BTN_GHOST
+                >
+                    {icon::help()}
+                </IconButton>
             </div>
         </div>
     }
 }
+
+
