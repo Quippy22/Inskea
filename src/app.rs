@@ -93,10 +93,28 @@ pub fn App() -> impl IntoView {
         false
     };
 
-    let handle_shortcut = move |key: &str, ctrl: bool, shift: bool| {
+    let push_snapshot2 = push_snapshot.clone();
+    let handle_shortcut = move |key: &str, ctrl: bool, _shift: bool| {
         match (ctrl, key) {
             (true, "z") => {
-                if shift { do_redo(); } else { do_undo(); }
+                if _shift { do_redo(); } else { do_undo(); }
+            }
+            (false, "s") => canvas_mode.set(CanvasMode::Select),
+            (false, "a") => canvas_mode.set(CanvasMode::Pan),
+            (false, "e") => canvas_mode.set(CanvasMode::Erase),
+            (false, "d") => canvas_mode.set(CanvasMode::Draw),
+            (false, "Escape") => {}  // handled inside Canvas component
+            (false, "Delete") | (false, "Backspace") => {
+                let ids = selected_ids.get();
+                if !ids.is_empty() {
+                    push_snapshot2();
+                    scene.update(|s| {
+                        for id in &ids {
+                            s.remove_by_id(*id);
+                        }
+                    });
+                    selected_ids.set(Vec::new());
+                }
             }
             _ => {}
         }

@@ -135,6 +135,41 @@ pub fn Canvas(
         }
     });
 
+    // Esc: deselect / cancel draw / exit text edit
+    // Priority: (a) textarea handles its own Esc → do nothing,
+    //            (b) cancel in-progress draw, (c) clear selection.
+    // Never changes canvas_mode or selected_tool.
+    {
+        let _st = st;
+        let _props = props.clone();
+        let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
+            if ev.key() != "Escape" {
+                return;
+            }
+            // (a) If a text element is being edited, the textarea's own
+            // keydown handler will have already committed it. Do nothing.
+            if _st.text_edit.editing_id.get().is_some() {
+                return;
+            }
+            // (b) Cancel an in-progress draw. For Freehand the element was
+            // added to the scene on pointer_down, so remove it.
+            if _st.drawing.get().is_some() {
+                let tool = _st.drawing.get().unwrap().tool;
+                _st.drawing.set(None);
+                if tool == Tool::Freehand {
+                    _props.scene.update(|s| {
+                        s.elements_mut().pop();
+                    });
+                }
+                return;
+            }
+            // (c) Clear the current selection.
+            if !_st.selected_ids.get_untracked().is_empty() {
+                _st.selected_ids.set(Vec::new());
+            }
+        });
+    }
+
     let commit_edit = text_edit::make_commit_edit(
         st.text_edit.editing_id,
         st.text_edit.edit_text,
