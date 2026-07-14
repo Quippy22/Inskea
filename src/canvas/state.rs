@@ -15,9 +15,11 @@ pub enum CanvasMode {
     /// Select, move, resize, and edit existing elements.
     Select,
     /// Pan the viewport by dragging.
-    Hand,
+    Pan,
     /// Draw a new element based on the active tool.
     Draw,
+    /// Erase elements by clicking or dragging over them.
+    Erase,
 }
 
 /// Which handle a drag operation is acting on.

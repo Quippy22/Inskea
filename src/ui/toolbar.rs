@@ -341,8 +341,8 @@ where
         <div class=classes::CONTAINER_STATUSBAR>
             <div class=classes::TBAR_INNER>
                 <button
-                    class=move || btn(CanvasMode::Hand)
-                    on:click=move |_| canvas_mode.set(CanvasMode::Hand)
+                    class=move || btn(CanvasMode::Pan)
+                    on:click=move |_| canvas_mode.set(CanvasMode::Pan)
                     title="Hand / Pan"
                 >
                     {icon::hand()}

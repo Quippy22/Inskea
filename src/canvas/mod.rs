@@ -43,14 +43,15 @@ pub(crate) const DASH_PREVIEW: &str = "4 2";
 /// Root SVG canvas component.
 ///
 /// Owns the full `<svg>` element and handles all pointer / keyboard interaction.
-/// Every pointer event is **routed by mode** (`Select` / `Hand` / `Draw`) to a
+/// Every pointer event is **routed by mode** (`Select` / `Pan` / `Draw` / `Erase`) to a
 /// dedicated handler in [`modes`] through a simple match-dispatch pattern:
 ///
 /// ```ignore
 /// on_pointer_down → match canvas_mode {
 ///     Select → modes::select_pointer_down(…)
-///     Hand   → (inline) set pan_anchor
+///     Pan    → (inline) set pan_anchor
 ///     Draw   → modes::draw_pointer_down(…)
+///     Erase  → hit_and_erase(…)
 /// }
 /// ```
 ///
@@ -61,7 +62,7 @@ pub(crate) const DASH_PREVIEW: &str = "4 2";
 /// | `cursor_screen` | Latest pointer position in CSS pixels relative to the SVG |
 /// | `cursor_world`  | Latest pointer position in world-space (transformed through viewport) |
 /// | `viewport`      | Camera – offset + zoom |
-/// | `canvas_mode`   | Which interaction mode is active (Select / Hand / Draw) |
+/// | `canvas_mode`   | Which interaction mode is active (Select / Pan / Draw / Erase) |
 /// | `selected_tool` | Active drawing tool (Rectangle, Ellipse, Line, Arrow, Text, Freehand) |
 /// | `selected_color` | Stroke / fill colour for newly created elements |
 /// | `scene`         | The document model – all elements live here |
@@ -235,12 +236,13 @@ pub fn Canvas(
     // 3. If the eraser toggle is on, snapshots the scene and erases the
     //    topmost element under the cursor.
     // 4. Otherwise, dispatches by `CanvasMode`:
-    //    - `Hand` → stores the initial client position for panning.
+    //    - `Pan` → stores the initial client position for panning.
     //    - `Select` → `modes::select_pointer_down` – handles double-click text
     //      editing, handle grab (resize/move/rotate), element selection,
     //      and marquee anchor.
     //    - `Draw` → `modes::draw_pointer_down` – creates a new element
     //      (snapshot taken before creation) and enters the drawing state.
+    //    - `Erase` → the guard above catches this, so this match arm is unreachable.
     let on_pointer_down = {
         let mut st = st;
         let mut props = props.clone();
@@ -252,7 +254,7 @@ pub fn Canvas(
             let mode = props.canvas_mode.get();
             let world = update_world(&ev);
 
-            if props.eraser_active.get() {
+            if props.eraser_active.get() || props.canvas_mode.get() == CanvasMode::Erase {
                 (props.push_snapshot)();
                 st.erasing.set(true);
                 hit_and_erase(world, props.scene);
@@ -265,7 +267,7 @@ pub fn Canvas(
             }
 
             match mode {
-                CanvasMode::Hand => {
+                CanvasMode::Pan => {
                     st.pan_anchor
                         .set(Some((ev.client_x() as f64, ev.client_y() as f64)));
                 }
@@ -275,6 +277,7 @@ pub fn Canvas(
                 CanvasMode::Draw => {
                     draw_pointer_down(&ev, world, &mut st, &mut props);
                 }
+                CanvasMode::Erase => {}
             }
         }
     };
@@ -284,10 +287,10 @@ pub fn Canvas(
     //
     // Routing:
     // 1. Updates world coordinates.
-    // 2. If the eraser is active and the button is held, erases elements
-    //    under the cursor (continuous erasing).
+    // 2. If the eraser is active (toggle or Erase mode) and the button is held,
+    //    erases elements under the cursor (continuous erasing).
     // 3. Dispatches by mode:
-    //    - `Hand` → pans the viewport by the delta between successive
+    //    - `Pan` → pans the viewport by the delta between successive
     //      client-space positions.
     //    - `Select` → `modes::select_pointer_move` – handles resize drag
     //      (with per-frame deltas for scale), rotation drag (angle tracking
@@ -296,6 +299,7 @@ pub fn Canvas(
     //      `UpdateDrag::update_drag` which appends the latest point to
     //      the stroke path. Other tools do nothing during move (the preview
     //      is handled reactively by the drawing preview closure).
+    //    - `Erase` → the guard above catches this arm is unreachable.
     let on_pointer_move = {
         let mut st = st;
         let mut props = props.clone();
@@ -304,7 +308,7 @@ pub fn Canvas(
             let mode = props.canvas_mode.get();
             let world = update_world(&ev);
 
-            if props.eraser_active.get() && st.erasing.get() {
+            if (props.eraser_active.get() || props.canvas_mode.get() == CanvasMode::Erase) && st.erasing.get() {
                 hit_and_erase(world, props.scene);
             }
 
@@ -314,7 +318,7 @@ pub fn Canvas(
             }
 
             match mode {
-                CanvasMode::Hand => {
+                CanvasMode::Pan => {
                     if let Some((ax, ay)) = st.pan_anchor.get() {
                         let dx = ev.client_x() as f64 - ax;
                         let dy = ev.client_y() as f64 - ay;
@@ -340,6 +344,7 @@ pub fn Canvas(
                         }
                     }
                 }
+                CanvasMode::Erase => {}
             }
         }
     };
@@ -348,10 +353,11 @@ pub fn Canvas(
     // Handler for every pointer-up event on the SVG.
     //
     // Routing:
-    // 1. If the eraser is active, performs one final erase at the release point.
+    // 1. If the eraser is active (toggle or Erase mode), performs one final
+    //    erase at the release point.
     // 2. Resets the `erasing` flag.
     // 3. Dispatches by mode:
-    //    - `Hand` → clears the pan anchor (stops panning).
+    //    - `Pan` → clears the pan anchor (stops panning).
     //    - `Select` → `modes::select_pointer_up` – if a move/resize/rotate
     //      drag just finished, optionally snaps to grid (shift held), then
     //      clears all drag state. If a marquee drag just finished, selects
@@ -359,12 +365,13 @@ pub fn Canvas(
     //    - `Draw` → `modes::draw_pointer_up` – finalises the element from
     //      the drag parameters (skipped for Freehand which is built incrementally,
     //      and skipped if the drag distance is below `MIN_DRAG_DIST`).
+    //    - `Erase` → the guard above catches this; arm is unreachable.
     let on_pointer_up = {
         let mut st = st;
         let mut props = props.clone();
         let update_world = update_world;
         move |ev: ev::PointerEvent| {
-            if props.eraser_active.get() {
+            if props.eraser_active.get() || props.canvas_mode.get() == CanvasMode::Erase {
                 let world = update_world(&ev);
                 hit_and_erase(world, props.scene);
             }
@@ -394,7 +401,7 @@ pub fn Canvas(
 
             let world = update_world(&ev);
             match props.canvas_mode.get() {
-                CanvasMode::Hand => {
+                CanvasMode::Pan => {
                     st.pan_anchor.set(None);
                 }
                 CanvasMode::Select => {
@@ -403,6 +410,7 @@ pub fn Canvas(
                 CanvasMode::Draw => {
                     draw_pointer_up(&ev, world, &mut st, &mut props);
                 }
+                CanvasMode::Erase => {}
             }
         }
     };

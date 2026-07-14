@@ -9,6 +9,7 @@ use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::{SettingsPanel, ToolBar};
 use leptos::ev;
 use leptos::*;
+use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 #[component]
@@ -19,7 +20,7 @@ pub fn App() -> impl IntoView {
 
     let selected_tool = create_rw_signal(Tool::Rectangle);
     let selected_color = create_rw_signal(ShapeColor::White);
-    let canvas_mode = create_rw_signal(CanvasMode::Hand);
+    let canvas_mode = create_rw_signal(CanvasMode::Select);
 
     let scene = create_rw_signal(Scene::new());
     let selected_ids = create_rw_signal(Vec::<ElementId>::new());
@@ -75,14 +76,42 @@ pub fn App() -> impl IntoView {
     let can_undo = Signal::derive(move || !undo_stack.get().is_empty());
     let can_redo = Signal::derive(move || !redo_stack.get().is_empty());
 
-    let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
-        if ev.ctrl_key() && ev.key() == "z" {
-            if ev.shift_key() {
-                do_redo();
-            } else {
-                do_undo();
+    // ── Keyboard shortcuts ─────────────────────────────────────────────────
+    let is_text_input = |target: &web_sys::EventTarget| -> bool {
+        let node = target.clone().dyn_into::<web_sys::Node>();
+        if let Ok(node) = node {
+            if let Some(el) = node.dyn_ref::<web_sys::HtmlElement>() {
+                let tag = el.tag_name().to_lowercase();
+                if tag == "input" || tag == "textarea" {
+                    return true;
+                }
+                if el.get_attribute("contenteditable").as_deref() == Some("true") {
+                    return true;
+                }
             }
         }
+        false
+    };
+
+    let handle_shortcut = move |key: &str, ctrl: bool, shift: bool| {
+        match (ctrl, key) {
+            (true, "z") => {
+                if shift { do_redo(); } else { do_undo(); }
+            }
+            _ => {}
+        }
+    };
+
+    let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
+        if let Some(target) = ev.target() {
+            if is_text_input(&target) {
+                return;
+            }
+        }
+        let key = ev.key();
+        let ctrl = ev.ctrl_key();
+        let shift = ev.shift_key();
+        handle_shortcut(&key, ctrl, shift);
     });
 
     // ── Settings persistence ───────────────────────────────────────────────
