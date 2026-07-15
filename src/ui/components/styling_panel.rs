@@ -63,6 +63,7 @@ pub fn StylingPanel(
     let is_text = Signal::derive(move || styling_kind.get() == StylingKind::Text);
     let is_line = Signal::derive(move || styling_kind.get() == StylingKind::Line || styling_kind.get() == StylingKind::Arrow);
     let is_arrow = Signal::derive(move || styling_kind.get() == StylingKind::Arrow);
+    let is_rect = Signal::derive(move || styling_kind.get() == StylingKind::Rectangle);
     let base_kind = Signal::derive(move || !is_text.get() && !is_line.get());
 
     let (init_style, init_line_style) = read_panel_state(
@@ -77,6 +78,8 @@ pub fn StylingPanel(
 
     let stroke_size = create_rw_signal(local_style.get_untracked().stroke_width);
     let text_size = create_rw_signal(local_style.get_untracked().font_size);
+    let roundness = create_rw_signal(local_style.get_untracked().roundness);
+    let is_rounded = Signal::derive(move || local_style.get().edge_style == EdgeStyle::Rounded);
 
     // ── Sync: when selection/scene changes, pull back into local signals ─
     create_effect(move |_| {
@@ -92,6 +95,7 @@ pub fn StylingPanel(
         local_line_style.set(new_line_style);
         stroke_size.set(new_style.stroke_width);
         text_size.set(new_style.font_size);
+        roundness.set(new_style.roundness);
     });
 
     // ── Mutator: write to scene element when selected, else default_style ─
@@ -218,6 +222,15 @@ pub fn StylingPanel(
             } else {
                 default_style.update(|s| s.font_size = val);
             }
+        }
+    });
+
+    let roundness_cb: Rc<dyn Fn(f64)> = Rc::new({
+        let local_style = local_style;
+        let update_style = update_style;
+        move |val| {
+            local_style.update(|s| s.roundness = val);
+            update_style(&|s| s.roundness = val);
         }
     });
 
@@ -358,6 +371,16 @@ pub fn StylingPanel(
                     <div>
                         <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Edge style"</div>
                         {uniform_seg(edge_opts, Signal::derive(move || local_style.get().edge_style), set_edge_style)}
+                    </div>
+                    <div class:hidden=move || !(is_rounded.get() && is_rect.get())>
+                        <NumberSlider
+                            value=roundness
+                            min=2.0
+                            max=20.0
+                            increment=2.0
+                            label="Roundness"
+                            on_change=roundness_cb
+                        />
                     </div>
                 </div>
             </div>

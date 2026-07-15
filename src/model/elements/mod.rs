@@ -54,6 +54,15 @@ impl Default for EdgeStyle {
     }
 }
 
+impl EdgeStyle {
+    pub fn stroke_linejoin(&self) -> &'static str {
+        match self {
+            EdgeStyle::Sharp => "miter",
+            EdgeStyle::Rounded => "round",
+        }
+    }
+}
+
 /// Shared appearance properties for every element type.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
@@ -64,6 +73,8 @@ pub struct ElementStyle {
     pub font_size: f64,
     pub stroke_style: StrokeStyle,
     pub edge_style: EdgeStyle,
+    #[serde(default)]
+    pub roundness: f64,
 }
 
 impl Default for ElementStyle {
@@ -75,6 +86,7 @@ impl Default for ElementStyle {
             font_size: 24.0,
             stroke_style: StrokeStyle::default(),
             edge_style: EdgeStyle::default(),
+            roundness: 6.0,
         }
     }
 }

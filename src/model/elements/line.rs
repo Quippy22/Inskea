@@ -77,6 +77,11 @@ impl Render for Line {
         let sw = self.data.style.stroke_width;
         let stroke = ShapeColor::to_hex(self.data.style.stroke_color);
         let dash = self.data.style.stroke_style.stroke_dasharray();
+        let linejoin = self.data.style.edge_style.stroke_linejoin();
+        let linecap = match self.data.style.edge_style {
+            super::EdgeStyle::Sharp => "butt",
+            super::EdgeStyle::Rounded => "round",
+        };
         let d = path_d(&self.points, self.line_style.curve_mode);
 
         if self.line_style.has_arrowhead && self.points.len() >= 2 {
@@ -104,7 +109,7 @@ impl Render for Line {
             let points = format!("{},{} {},{} {},{}", lx, ly, tip_x, tip_y, rx, ry);
 
             leptos::view! {
-                <g stroke=stroke stroke-width=sw fill="none" stroke-linejoin="round" stroke-dasharray=dash>
+                <g stroke=stroke stroke-width=sw fill="none" stroke-linejoin=linejoin stroke-linecap=linecap stroke-dasharray=dash>
                     <path d=d />
                     <polyline points=points />
                 </g>
@@ -115,7 +120,7 @@ impl Render for Line {
                 <path
                     d=d
                     fill="none"
-                    stroke=stroke stroke-width=sw stroke-dasharray=dash
+                    stroke=stroke stroke-width=sw stroke-linejoin=linejoin stroke-linecap=linecap stroke-dasharray=dash
                 />
             }
             .into_view()
