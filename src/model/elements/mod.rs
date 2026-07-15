@@ -31,6 +31,16 @@ impl Default for StrokeStyle {
     }
 }
 
+impl StrokeStyle {
+    pub fn stroke_dasharray(&self) -> &'static str {
+        match self {
+            StrokeStyle::Solid => "none",
+            StrokeStyle::Dashed => "6 3",
+            StrokeStyle::Dotted => "2 2",
+        }
+    }
+}
+
 /// Edge corner style for shapes.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum EdgeStyle {

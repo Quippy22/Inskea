@@ -65,9 +65,10 @@ impl Render for Rectangle {
         let sw = self.data.style.stroke_width;
         let fill = Self::fill_paint(&self.data.style.fill_color);
         let stroke = Self::stroke_hex(self.data.style.stroke_color);
+        let dash = self.data.style.stroke_style.stroke_dasharray();
         if self.data.rotation == 0.0 {
             leptos::view! {
-                <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw />
+                <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw stroke-dasharray=dash />
             }
             .into_view()
         } else {
@@ -76,7 +77,7 @@ impl Render for Rectangle {
             let deg = self.data.rotation.to_degrees();
             leptos::view! {
                 <g transform={format!("rotate({} {} {})", deg, cx, cy)}>
-                    <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw />
+                    <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw stroke-dasharray=dash />
                 </g>
             }
             .into_view()

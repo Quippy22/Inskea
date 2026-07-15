@@ -125,9 +125,10 @@ impl Render for Freehand {
     fn render(&self, _zoom: f64) -> leptos::View {
         let sw = self.data.style.stroke_width;
         let stroke = ShapeColor::to_hex(self.data.style.stroke_color);
+        let dash = self.data.style.stroke_style.stroke_dasharray();
         let d = build_smooth_path(&self.points);
         leptos::view! {
-            <path d=d fill="none" stroke=stroke stroke-width=sw stroke-linecap="round" stroke-linejoin="round" />
+            <path d=d fill="none" stroke=stroke stroke-width=sw stroke-linecap="round" stroke-linejoin="round" stroke-dasharray=dash />
         }
         .into_view()
     }

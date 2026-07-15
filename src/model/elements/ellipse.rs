@@ -59,16 +59,17 @@ impl Render for Ellipse {
         let sw = self.data.style.stroke_width;
         let fill = Self::fill_paint(&self.data.style.fill_color);
         let stroke = super::ShapeColor::to_hex(self.data.style.stroke_color);
+        let dash = self.data.style.stroke_style.stroke_dasharray();
         if self.data.rotation == 0.0 {
             leptos::view! {
-                <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw />
+                <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw stroke-dasharray=dash />
             }
             .into_view()
         } else {
             let deg = self.data.rotation.to_degrees();
             leptos::view! {
                 <g transform={format!("rotate({} {} {})", deg, cx, cy)}>
-                    <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw />
+                    <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw stroke-dasharray=dash />
                 </g>
             }
             .into_view()
