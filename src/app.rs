@@ -198,8 +198,6 @@ pub fn App() -> impl IntoView {
                 selected_tool=selected_tool
                 canvas_mode=canvas_mode
                 eraser_active=eraser_active
-                scene=scene
-                selected_ids=selected_ids
             />
             <SettingsPanel
                 settings=settings

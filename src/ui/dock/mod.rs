@@ -4,7 +4,6 @@ mod drawing;
 pub use drawing::Tool;
 
 use crate::canvas::CanvasMode;
-use crate::model::{ElementId, Scene};
 use crate::ui::classes;
 use crate::ui::icon;
 use leptos::*;
@@ -19,8 +18,6 @@ pub fn Dock(
     selected_tool: RwSignal<Tool>,
     canvas_mode: RwSignal<CanvasMode>,
     eraser_active: RwSignal<bool>,
-    scene: RwSignal<Scene>,
-    selected_ids: RwSignal<Vec<ElementId>>,
 ) -> impl IntoView {
     let select_tool = move |tool: Tool| {
         selected_tool.set(tool);
