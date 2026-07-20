@@ -131,31 +131,35 @@ fn el_svg(el: &Element) -> String {
                 l.data.style.stroke_color.to_hex(),
                 l.data.style.stroke_width,
             );
-            if l.line_style.has_arrowhead && l.points.len() >= 2 {
-                let tail = &l.points[l.points.len() - 2];
-                let tip = &l.points[l.points.len() - 1];
-                let dx = tip.x - tail.x;
-                let dy = tip.y - tail.y;
-                let len = dx.hypot(dy);
-                if len > 1.0 {
-                    let ux = dx / len;
-                    let uy = dy / len;
-                    let hl = (l.data.style.stroke_width * 4.0).max(8.0);
-                    let hw = hl * 0.4;
-                    let bx = tip.x - ux * hl;
-                    let by = tip.y - uy * hl;
-                    let _ = write!(
-                        out,
-                        r#"<polyline points="{},{},{} {},{} {}" fill="none" stroke="{}" stroke-width="{}"/>"#,
-                        tip.x,
-                        tip.y,
-                        bx - uy * hw,
-                        by + ux * hw,
-                        bx + uy * hw,
-                        by - ux * hw,
-                        l.data.style.stroke_color.to_hex(),
-                        l.data.style.stroke_width,
+            if l.points.len() >= 2 {
+                let sw = l.data.style.stroke_width;
+                if l.line_style.has_start_arrowhead {
+                    let pts = crate::model::elements::utils::arrowhead_polyline(&l.points[1], &l.points[0], sw);
+                    if !pts.is_empty() {
+                        let _ = write!(
+                            out,
+                            r#"<polyline points="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
+                            pts,
+                            l.data.style.stroke_color.to_hex(),
+                            sw,
+                        );
+                    }
+                }
+                if l.line_style.has_end_arrowhead {
+                    let pts = crate::model::elements::utils::arrowhead_polyline(
+                        &l.points[l.points.len() - 2],
+                        &l.points[l.points.len() - 1],
+                        sw,
                     );
+                    if !pts.is_empty() {
+                        let _ = write!(
+                            out,
+                            r#"<polyline points="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
+                            pts,
+                            l.data.style.stroke_color.to_hex(),
+                            sw,
+                        );
+                    }
                 }
             }
             out

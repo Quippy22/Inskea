@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::Scene;
 
-pub const FORMAT_VERSION: u32 = 4;
+pub const FORMAT_VERSION: u32 = 5;
 
 #[derive(Serialize, Deserialize)]
 struct SkeaFile {
@@ -150,6 +150,33 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
         }
     }
 
+    let version = raw
+        .get("format_version")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+
+    if version == 4 {
+        // Migrate v4 → v5: has_arrowhead → has_end_arrowhead
+        if let Some(elements) = raw.pointer_mut("/scene/elements") {
+            if let Some(arr) = elements.as_array_mut() {
+                for el in arr.iter_mut() {
+                    if let Some(obj) = el.as_object_mut() {
+                        if let Some(ls) = obj.get_mut("line_style") {
+                            if let Some(ls_obj) = ls.as_object_mut() {
+                                if let Some(old) = ls_obj.remove("has_arrowhead") {
+                                    ls_obj.insert("has_end_arrowhead".to_string(), old);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(obj) = raw.as_object_mut() {
+            obj.insert("format_version".to_string(), serde_json::json!(5));
+        }
+    }
+
     let version_after = raw
         .get("format_version")
         .and_then(|v| v.as_u64())
@@ -202,7 +229,8 @@ mod tests {
             points: vec![Point { x: 0.0, y: 0.0 }, Point { x: 100.0, y: 100.0 }],
             line_style: LineStyle {
                 curve_mode: CurveMode::Straight,
-                has_arrowhead: false,
+                has_start_arrowhead: false,
+                has_end_arrowhead: false,
             },
         }));
 
@@ -213,7 +241,8 @@ mod tests {
             points: vec![Point { x: 10.0, y: 10.0 }, Point { x: 200.0, y: 50.0 }],
             line_style: LineStyle {
                 curve_mode: CurveMode::Straight,
-                has_arrowhead: true,
+                has_start_arrowhead: false,
+                has_end_arrowhead: true,
             },
         }));
 
@@ -343,7 +372,7 @@ mod tests {
             assert_eq!(line.points[1].x, 200.0);
             assert_eq!(line.points[1].y, 50.0);
             assert_eq!(line.line_style.curve_mode, CurveMode::Straight);
-            assert!(line.line_style.has_arrowhead);
+            assert!(line.line_style.has_end_arrowhead);
         } else {
             panic!("expected Line (was Arrow) element at index 2");
         }
@@ -366,7 +395,7 @@ mod tests {
         assert_eq!(scene.elements().len(), 3);
         // Line unchanged
         if let Element::Line(line) = &scene.elements()[1] {
-            assert!(!line.line_style.has_arrowhead);
+            assert!(!line.line_style.has_end_arrowhead);
         } else {
             panic!("expected Line element at index 1");
         }
@@ -376,7 +405,7 @@ mod tests {
             assert_eq!(line.points[0].y, 10.0);
             assert_eq!(line.points[1].x, 200.0);
             assert_eq!(line.points[1].y, 50.0);
-            assert!(line.line_style.has_arrowhead);
+            assert!(line.line_style.has_end_arrowhead);
         } else {
             panic!("expected Line (was Arrow) element at index 2");
         }

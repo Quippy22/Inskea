@@ -88,6 +88,7 @@ pub fn Canvas(
     on_crop_export: RwSignal<Option<CropExportCallback>>,
     selected_ids: RwSignal<Vec<ElementId>>,
     default_style: RwSignal<ElementStyle>,
+    default_line_style: RwSignal<LineStyle>,
 ) -> impl IntoView {
     let mut st = CanvasState::new();
     st.selected_ids = selected_ids;
@@ -105,6 +106,7 @@ pub fn Canvas(
         export_crop_active,
         on_crop_export,
         default_style,
+        default_line_style,
     };
 
     st.screen_size.set(window_size());
@@ -526,14 +528,16 @@ pub fn Canvas(
                 Tool::Ellipse => Ellipse::from_drag(anchor, world_pt, state.color, shift).into(),
                 Tool::Line => Line::from_drag(anchor, world_pt, state.color, shift).into(),
                 Tool::Arrow => {
-                    let mut line = Line::from_drag(anchor, world_pt, state.color, shift);
-                    line.line_style.has_arrowhead = true;
+                    let line = Line::from_drag(anchor, world_pt, state.color, shift);
                     Element::Line(line)
                 }
                 Tool::Text => Text::from_drag(anchor, world_pt, state.color, shift).into(),
                 Tool::Freehand => Freehand::from_drag(anchor, world_pt, state.color, shift).into(),
             };
             el.data_mut().style = props.default_style.get();
+            if let Element::Line(ref mut l) = el {
+                l.line_style = props.default_line_style.get();
+            }
             Some(view! { <g stroke-dasharray={DASH_PREVIEW}>{el.render(props.viewport.get().zoom)}</g> }.into_view())
         }
     };

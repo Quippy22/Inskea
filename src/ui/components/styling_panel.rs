@@ -9,7 +9,8 @@ fn read_panel_state(
     scene: &Scene,
     ids: &[ElementId],
     default_style: &ElementStyle,
-    tool: Tool,
+    default_line_style: &LineStyle,
+    _tool: Tool,
 ) -> (ElementStyle, LineStyle) {
     if ids.len() == 1 {
         if let Some(el) = scene.elements().iter().find(|e| e.id() == ids[0]) {
@@ -19,16 +20,10 @@ fn read_panel_state(
             } else {
                 LineStyle::default()
             };
-            return (d.style.clone(), ls);
+            return (d.style, ls);
         }
     }
-    (
-        default_style.clone(),
-        LineStyle {
-            has_arrowhead: matches!(tool, Tool::Arrow),
-            ..Default::default()
-        },
-    )
+    (*default_style, default_line_style.clone())
 }
 
 fn single_selected_element(
@@ -48,6 +43,7 @@ pub fn StylingPanel(
     selected_ids: RwSignal<Vec<ElementId>>,
     selected_tool: RwSignal<Tool>,
     default_style: RwSignal<ElementStyle>,
+    default_line_style: RwSignal<LineStyle>,
 ) -> impl IntoView {
     let styling_kind = Signal::derive(move || {
         let ids = selected_ids.get();
@@ -70,6 +66,7 @@ pub fn StylingPanel(
         &scene.get_untracked(),
         &selected_ids.get_untracked(),
         &default_style.get_untracked(),
+        &default_line_style.get_untracked(),
         selected_tool.get_untracked(),
     );
 
@@ -89,9 +86,10 @@ pub fn StylingPanel(
             &scene.get_untracked(),
             &selected_ids.get_untracked(),
             &default_style.get_untracked(),
+            &default_line_style.get_untracked(),
             selected_tool.get_untracked(),
         ));
-        local_style.set(new_style.clone());
+        local_style.set(new_style);
         local_line_style.set(new_line_style);
         stroke_size.set(new_style.stroke_width);
         text_size.set(new_style.font_size);
@@ -120,6 +118,7 @@ pub fn StylingPanel(
     let update_line_style = {
         let scene = scene;
         let selected_ids = selected_ids;
+        let default_line_style = default_line_style;
         move |f: &dyn Fn(&mut LineStyle)| {
             let ids = selected_ids.get_untracked();
             if ids.len() == 1 {
@@ -130,6 +129,8 @@ pub fn StylingPanel(
                         }
                     }
                 });
+            } else {
+                default_line_style.update(|ls| f(ls));
             }
         }
     };
@@ -180,12 +181,23 @@ pub fn StylingPanel(
         }
     });
 
-    let set_has_arrowhead: Rc<dyn Fn(bool)> = Rc::new({
+    let set_start_arrowhead: Rc<dyn Fn()> = Rc::new({
         let local_line_style = local_line_style;
         let update_line_style = update_line_style;
-        move |v| {
-            local_line_style.update(|ls| ls.has_arrowhead = v);
-            update_line_style(&|ls| ls.has_arrowhead = v);
+        move || {
+            let new = !local_line_style.get_untracked().has_start_arrowhead;
+            local_line_style.update(|ls| ls.has_start_arrowhead = new);
+            update_line_style(&|ls| ls.has_start_arrowhead = new);
+        }
+    });
+
+    let set_end_arrowhead: Rc<dyn Fn()> = Rc::new({
+        let local_line_style = local_line_style;
+        let update_line_style = update_line_style;
+        move || {
+            let new = !local_line_style.get_untracked().has_end_arrowhead;
+            local_line_style.update(|ls| ls.has_end_arrowhead = new);
+            update_line_style(&|ls| ls.has_end_arrowhead = new);
         }
     });
 
@@ -251,7 +263,7 @@ pub fn StylingPanel(
         (CurveMode::Curved, "Curved"),
     ];
 
-    let arrowhead_opts: &[(bool, &str)] = &[(false, "None"), (true, "Triangle")];
+
 
     let color_swatches: &[ShapeColor] = &[
         ShapeColor::White,
@@ -387,11 +399,56 @@ pub fn StylingPanel(
 
             <div class:hidden=move || !is_arrow.get()>
                 <div>
-                    <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Arrowhead style"</div>
-                    {uniform_seg(arrowhead_opts, Signal::derive(move || local_line_style.get().has_arrowhead), set_has_arrowhead)}
+                    <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Arrow direction"</div>
+                    <div class="flex gap-1">
+                        <button
+                            class=move || {
+                                if local_line_style.get().has_start_arrowhead {
+                                    classes::BTN_SWATCH_SEL
+                                } else {
+                                    classes::BTN_SWATCH_OFF
+                                }
+                            }
+                            on:click=move |_| set_start_arrowhead()
+                            title="Arrowhead at start"
+                        >
+                            {move || arrowhead_icon(local_line_style.get().has_start_arrowhead, false)}
+                        </button>
+                        <button
+                            class=move || {
+                                if local_line_style.get().has_end_arrowhead {
+                                    classes::BTN_SWATCH_SEL
+                                } else {
+                                    classes::BTN_SWATCH_OFF
+                                }
+                            }
+                            on:click=move |_| set_end_arrowhead()
+                            title="Arrowhead at end"
+                        >
+                            {move || arrowhead_icon(local_line_style.get().has_end_arrowhead, true)}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
+    }
+}
+
+fn arrowhead_icon(on: bool, is_end: bool) -> impl IntoView {
+    let (tx, ty, lx, ly, rx, ry) = if is_end {
+        (20.0, 12.0, 13.0, 6.0, 13.0, 18.0)
+    } else {
+        (4.0, 12.0, 11.0, 6.0, 11.0, 18.0)
+    };
+    view! {
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6">
+            <line x1="4" y1="12" x2="20" y2="12" />
+            {if on {
+                Some(leptos::view! { <polyline points=format!("{:.0},{:.0} {:.0},{:.0} {:.0},{:.0}", lx, ly, tx, ty, rx, ry) /> }.into_view())
+            } else {
+                None
+            }}
+        </svg>
     }
 }
 

@@ -4,7 +4,7 @@ pub(crate) mod line;
 pub mod path;
 pub mod rect;
 pub(crate) mod text;
-mod utils;
+pub(crate) mod utils;
 
 pub use ellipse::Ellipse;
 pub use freehand::Freehand;
@@ -194,7 +194,7 @@ impl Element {
             Element::Rectangle(_) => StylingKind::Rectangle,
             Element::Ellipse(_) => StylingKind::Ellipse,
             Element::Line(l) => {
-                if l.line_style.has_arrowhead {
+                if l.line_style.has_end_arrowhead || l.line_style.has_start_arrowhead {
                     StylingKind::Arrow
                 } else {
                     StylingKind::Line

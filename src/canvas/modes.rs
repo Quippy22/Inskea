@@ -125,14 +125,16 @@ pub fn draw_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut Canva
             Tool::Ellipse => Ellipse::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
             Tool::Line => Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
             Tool::Arrow => {
-                let mut line = Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get());
-                line.line_style.has_arrowhead = true;
+                let line = Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get());
                 Element::Line(line)
             }
             Tool::Text => Text::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
             Tool::Freehand => Freehand::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
         };
         el.data_mut().style = props.default_style.get();
+        if let Element::Line(ref mut l) = el {
+            l.line_style = props.default_line_style.get();
+        }
         (props.push_snapshot)();
         props.scene.update(|s| {
             s.add_element(el);

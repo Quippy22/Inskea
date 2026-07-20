@@ -2,7 +2,7 @@ use super::path::{
     bounds_of_points, hit_test_path, offset_points, path_d, rotate_points,
     snap_points_to_grid, CurveMode,
 };
-use super::utils::{line_endpoints, scale_points};
+use super::utils::{arrowhead_polyline, line_endpoints, scale_points};
 use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
@@ -16,14 +16,17 @@ use leptos::IntoView;
 pub struct LineStyle {
     pub curve_mode: CurveMode,
     #[serde(default)]
-    pub has_arrowhead: bool,
+    pub has_start_arrowhead: bool,
+    #[serde(default)]
+    pub has_end_arrowhead: bool,
 }
 
 impl Default for LineStyle {
     fn default() -> Self {
         Self {
             curve_mode: CurveMode::Straight,
-            has_arrowhead: false,
+            has_start_arrowhead: false,
+            has_end_arrowhead: false,
         }
     }
 }
@@ -70,8 +73,6 @@ impl UpdateDrag for Line {
     }
 }
 
-const ARROW_HEAD_MULT: f64 = 4.0;
-
 impl Render for Line {
     fn render(&self, _zoom: f64) -> leptos::View {
         let sw = self.data.style.stroke_width;
@@ -83,35 +84,23 @@ impl Render for Line {
             super::EdgeStyle::Rounded => "round",
         };
         let d = path_d(&self.points, self.line_style.curve_mode);
+        let sw2 = sw;
 
-        if self.line_style.has_arrowhead && self.points.len() >= 2 {
-            let (ux, uy) = {
-                let tail = &self.points[self.points.len() - 2];
-                let tip = &self.points[self.points.len() - 1];
-                let dx = tip.x - tail.x;
-                let dy = tip.y - tail.y;
-                let len = (dx * dx + dy * dy).sqrt();
-                if len > 0.0 {
-                    (dx / len, dy / len)
-                } else {
-                    (1.0, 0.0)
-                }
-            };
+        let start_arrow = (self.line_style.has_start_arrowhead && self.points.len() >= 2).then(|| {
+            arrowhead_polyline(&self.points[1], &self.points[0], sw2)
+        });
+        let end_arrow = (self.line_style.has_end_arrowhead && self.points.len() >= 2).then(|| {
+            arrowhead_polyline(&self.points[self.points.len() - 2], &self.points[self.points.len() - 1], sw2)
+        });
 
-            let head_size = (sw * ARROW_HEAD_MULT).max(4.0);
-            let tip = &self.points[self.points.len() - 1];
-            let tip_x = tip.x;
-            let tip_y = tip.y;
-            let lx = tip_x - ux * head_size - uy * head_size * 0.4;
-            let ly = tip_y - uy * head_size + ux * head_size * 0.4;
-            let rx = tip_x - ux * head_size + uy * head_size * 0.4;
-            let ry = tip_y - uy * head_size - ux * head_size * 0.4;
-            let points = format!("{},{} {},{} {},{}", lx, ly, tip_x, tip_y, rx, ry);
+        let has_any_arrow = start_arrow.is_some() || end_arrow.is_some();
 
+        if has_any_arrow {
             leptos::view! {
                 <g stroke=stroke stroke-width=sw fill="none" stroke-linejoin=linejoin stroke-linecap=linecap stroke-dasharray=dash>
                     <path d=d />
-                    <polyline points=points />
+                    {start_arrow.map(|p| leptos::view! { <polyline points=p /> })}
+                    {end_arrow.map(|p| leptos::view! { <polyline points=p /> })}
                 </g>
             }
             .into_view()
