@@ -84,6 +84,7 @@ impl Render for Line {
             super::EdgeStyle::Rounded => "round",
         };
         let d = path_d(&self.points, self.line_style.curve_mode);
+        let opacity = self.data.style.opacity;
         let sw2 = sw;
 
         let start_arrow = (self.line_style.has_start_arrowhead && self.points.len() >= 2).then(|| {
@@ -97,7 +98,7 @@ impl Render for Line {
 
         if has_any_arrow {
             leptos::view! {
-                <g stroke=stroke stroke-width=sw fill="none" stroke-linejoin=linejoin stroke-linecap=linecap stroke-dasharray=dash>
+                <g stroke=stroke stroke-width=sw fill="none" stroke-linejoin=linejoin stroke-linecap=linecap stroke-dasharray=dash opacity=opacity>
                     <path d=d />
                     {start_arrow.map(|p| leptos::view! { <polyline points=p /> })}
                     {end_arrow.map(|p| leptos::view! { <polyline points=p /> })}
@@ -109,7 +110,7 @@ impl Render for Line {
                 <path
                     d=d
                     fill="none"
-                    stroke=stroke stroke-width=sw stroke-linejoin=linejoin stroke-linecap=linecap stroke-dasharray=dash
+                    stroke=stroke stroke-width=sw stroke-linejoin=linejoin stroke-linecap=linecap stroke-dasharray=dash opacity=opacity
                 />
             }
             .into_view()

@@ -71,9 +71,10 @@ impl Render for Rectangle {
             super::EdgeStyle::Rounded => (self.data.style.roundness, self.data.style.roundness),
             super::EdgeStyle::Sharp => (0.0, 0.0),
         };
+        let opacity = self.data.style.opacity;
         if self.data.rotation == 0.0 {
             leptos::view! {
-                <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw stroke-dasharray=dash stroke-linejoin=linejoin rx=rx ry=ry />
+                <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw stroke-dasharray=dash stroke-linejoin=linejoin rx=rx ry=ry opacity=opacity />
             }
             .into_view()
         } else {
@@ -82,7 +83,7 @@ impl Render for Rectangle {
             let deg = self.data.rotation.to_degrees();
             leptos::view! {
                 <g transform={format!("rotate({} {} {})", deg, cx, cy)}>
-                    <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw stroke-dasharray=dash stroke-linejoin=linejoin rx=rx ry=ry />
+                    <rect x=x y=y width=w height=h fill=fill stroke=stroke stroke-width=sw stroke-dasharray=dash stroke-linejoin=linejoin rx=rx ry=ry opacity=opacity />
                 </g>
             }
             .into_view()

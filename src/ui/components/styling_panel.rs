@@ -60,7 +60,8 @@ pub fn StylingPanel(
     let is_line = Signal::derive(move || styling_kind.get() == StylingKind::Line || styling_kind.get() == StylingKind::Arrow);
     let is_arrow = Signal::derive(move || styling_kind.get() == StylingKind::Arrow);
     let is_rect = Signal::derive(move || styling_kind.get() == StylingKind::Rectangle);
-    let base_kind = Signal::derive(move || !is_text.get() && !is_line.get());
+    let is_freehand = Signal::derive(move || styling_kind.get() == StylingKind::Freehand);
+    let base_kind = Signal::derive(move || !is_text.get() && !is_line.get() && !is_freehand.get());
 
     let (init_style, init_line_style) = read_panel_state(
         &scene.get_untracked(),
@@ -76,6 +77,7 @@ pub fn StylingPanel(
     let stroke_size = create_rw_signal(local_style.get_untracked().stroke_width);
     let text_size = create_rw_signal(local_style.get_untracked().font_size);
     let roundness = create_rw_signal(local_style.get_untracked().roundness);
+    let opacity = create_rw_signal(local_style.get_untracked().opacity * 100.0);
     let is_rounded = Signal::derive(move || local_style.get().edge_style == EdgeStyle::Rounded);
 
     // ── Sync: when selection/scene changes, pull back into local signals ─
@@ -94,6 +96,7 @@ pub fn StylingPanel(
         stroke_size.set(new_style.stroke_width);
         text_size.set(new_style.font_size);
         roundness.set(new_style.roundness);
+        opacity.set(new_style.opacity * 100.0);
     });
 
     // ── Mutator: write to scene element when selected, else default_style ─
@@ -246,6 +249,25 @@ pub fn StylingPanel(
         }
     });
 
+    let opacity_cb: Rc<dyn Fn(f64)> = Rc::new({
+        let scene = scene;
+        let selected_ids = selected_ids;
+        let default_style = default_style;
+        move |val| {
+            let v = (val / 100.0).clamp(0.0, 1.0);
+            let ids = selected_ids.get_untracked();
+            if ids.len() == 1 {
+                scene.update(|s| {
+                    if let Some(el) = s.element_by_id_mut(ids[0]) {
+                        el.data_mut().style.opacity = v;
+                    }
+                });
+            } else {
+                default_style.update(|s| s.opacity = v);
+            }
+        }
+    });
+
     // ── View ─────────────────────────────────────────────────────────────
     let stroke_opts: &[(StrokeStyle, &str)] = &[
         (StrokeStyle::Solid, "Solid"),
@@ -283,6 +305,14 @@ pub fn StylingPanel(
                     increment=1.0
                     label="Stroke size"
                     on_change=stroke_size_cb
+                />
+                <NumberSlider
+                    value=opacity
+                    min=5.0
+                    max=100.0
+                    increment=5.0
+                    label="Opacity"
+                    on_change=opacity_cb
                 />
             </div>
 
@@ -379,7 +409,7 @@ pub fn StylingPanel(
                         {uniform_seg(curve_opts, Signal::derive(move || local_line_style.get().curve_mode), set_curve_mode)}
                     </div>
                 </div>
-                <div class:hidden=move || is_line.get()>
+                <div class:hidden=move || is_line.get() || is_freehand.get()>
                     <div>
                         <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Edge style"</div>
                         {uniform_seg(edge_opts, Signal::derive(move || local_style.get().edge_style), set_edge_style)}

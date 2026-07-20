@@ -161,6 +161,7 @@ impl Render for Text {
         let lines = &self.wrapped.lines;
         let x = self.data.world_point.x;
         let baseline = self.data.world_point.y + font_size * TEXT_ASCENT_RATIO;
+        let opacity = self.data.style.opacity;
         let fill = self
             .data
             .style
@@ -178,6 +179,7 @@ impl Render for Text {
                     font-family="sans-serif"
                     pointer-events="none"
                     style="user-select: none; -webkit-user-select: none;"
+                    opacity=opacity
                 >
                     {lines.first().cloned().unwrap_or_default()}
                 </text>
@@ -193,6 +195,7 @@ impl Render for Text {
                     font-family="sans-serif"
                     pointer-events="none"
                     style="user-select: none; -webkit-user-select: none;"
+                    opacity=opacity
                 >
                     {lines
                         .iter()

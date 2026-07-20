@@ -131,9 +131,10 @@ impl Render for Freehand {
             super::EdgeStyle::Sharp => "butt",
             super::EdgeStyle::Rounded => "round",
         };
+        let opacity = self.data.style.opacity;
         let d = build_smooth_path(&self.points);
         leptos::view! {
-            <path d=d fill="none" stroke=stroke stroke-width=sw stroke-linecap=linecap stroke-linejoin=linejoin stroke-dasharray=dash />
+            <path d=d fill="none" stroke=stroke stroke-width=sw stroke-linecap=linecap stroke-linejoin=linejoin stroke-dasharray=dash opacity=opacity />
         }
         .into_view()
     }

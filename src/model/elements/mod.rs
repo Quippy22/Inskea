@@ -75,7 +75,11 @@ pub struct ElementStyle {
     pub edge_style: EdgeStyle,
     #[serde(default)]
     pub roundness: f64,
+    #[serde(default = "default_opacity")]
+    pub opacity: f64,
 }
+
+fn default_opacity() -> f64 { 1.0 }
 
 impl Default for ElementStyle {
     fn default() -> Self {
@@ -87,6 +91,7 @@ impl Default for ElementStyle {
             stroke_style: StrokeStyle::default(),
             edge_style: EdgeStyle::default(),
             roundness: 6.0,
+            opacity: 1.0,
         }
     }
 }

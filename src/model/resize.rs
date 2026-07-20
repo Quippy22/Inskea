@@ -338,6 +338,7 @@ mod tests {
                 stroke_style: StrokeStyle::Solid,
                 edge_style: EdgeStyle::Sharp,
                 roundness: 6.0,
+                opacity: 1.0,
             },
         }
     }
@@ -484,6 +485,7 @@ mod tests {
                 stroke_style: StrokeStyle::Solid,
                 edge_style: EdgeStyle::Sharp,
                 roundness: 6.0,
+                opacity: 1.0,
             },
         };
         let orig = ElementData {
@@ -500,6 +502,7 @@ mod tests {
                 stroke_style: StrokeStyle::Solid,
                 edge_style: EdgeStyle::Sharp,
                 roundness: 6.0,
+                opacity: 1.0,
             },
         };
         resize_scale_element(&mut data, &orig, Point::new(0.0, 0.0), 200.0, 100.0, 0.0, 0.0, 100.0, 50.0, true);
@@ -525,6 +528,7 @@ mod tests {
                 stroke_style: StrokeStyle::Solid,
                 edge_style: EdgeStyle::Sharp,
                 roundness: 6.0,
+                opacity: 1.0,
             },
         };
         let orig = ElementData {
@@ -541,6 +545,7 @@ mod tests {
                 stroke_style: StrokeStyle::Solid,
                 edge_style: EdgeStyle::Sharp,
                 roundness: 6.0,
+                opacity: 1.0,
             },
         };
         resize_scale_element(&mut data, &orig, Point::new(0.0, 0.0), 200.0, 100.0, 0.0, 0.0, 100.0, 50.0, false);
