@@ -4,8 +4,7 @@ mod drawing;
 pub use drawing::Tool;
 
 use crate::canvas::CanvasMode;
-use crate::model::elements::path::CurveMode;
-use crate::model::{ElementId, PathPoints, Scene};
+use crate::model::{ElementId, Scene};
 use crate::ui::classes;
 use crate::ui::icon;
 use leptos::*;
@@ -35,36 +34,6 @@ pub fn Dock(
         if new {
             canvas_mode.set(CanvasMode::Draw);
         }
-    };
-
-    let path_info = move || -> Option<CurveMode> {
-        let ids = selected_ids.get();
-        if ids.len() != 1 {
-            return None;
-        }
-        let els = scene.get().elements().to_vec();
-        let el = els.iter().find(|e| e.id() == ids[0])?;
-        el.path_points()?;
-        Some(el.curve_mode())
-    };
-
-    let toggle_curve_mode = move |_| {
-        let ids = selected_ids.get();
-        if ids.len() != 1 {
-            return;
-        }
-        let id = ids[0];
-        scene.update(|s| {
-            if let Some(el) = s.element_by_id_mut(id) {
-                if el.path_points().is_some() {
-                    let new_mode = match el.curve_mode() {
-                        CurveMode::Straight => CurveMode::Curved,
-                        CurveMode::Curved => CurveMode::Straight,
-                    };
-                    el.set_curve_mode(new_mode);
-                }
-            }
-        });
     };
 
     let tool_class = move |tool: Tool| -> &'static str {
@@ -135,40 +104,6 @@ pub fn Dock(
                     {icon::eraser()}
                 </button>
 
-                {move || {
-                    path_info().map(|_mode| {
-                        view! {
-                            <div class="mt-2 border-t border-border pt-2">
-                                <button
-                                    class=move || {
-                                        if let Some(m) = path_info() {
-                                            if m == CurveMode::Curved {
-                                                classes::BTN_TBAR_ACTIVE
-                                            } else {
-                                                classes::BTN_TBAR_INACTIVE
-                                            }
-                                        } else {
-                                            classes::BTN_TBAR_INACTIVE
-                                        }
-                                    }
-                                    on:click=toggle_curve_mode
-                                    title="Toggle curve mode"
-                                >
-                                    {move || {
-                                        if let Some(m) = path_info() {
-                                            match m {
-                                                CurveMode::Straight => icon::line().into_view(),
-                                                CurveMode::Curved => icon::freehand().into_view(),
-                                            }
-                                        } else {
-                                            icon::line().into_view()
-                                        }
-                                    }}
-                                </button>
-                            </div>
-                        }
-                    })
-                }}
             </div>
         </div>
     }
