@@ -521,7 +521,7 @@ pub fn Canvas(
             let shift = st.shift_pressed.get();
             let anchor = Point::from(state.anchor);
             let world_pt = Point::from(world);
-            let el: Element = match state.tool {
+            let mut el: Element = match state.tool {
                 Tool::Rectangle => Rectangle::from_drag(anchor, world_pt, state.color, shift).into(),
                 Tool::Ellipse => Ellipse::from_drag(anchor, world_pt, state.color, shift).into(),
                 Tool::Line => Line::from_drag(anchor, world_pt, state.color, shift).into(),
@@ -533,6 +533,7 @@ pub fn Canvas(
                 Tool::Text => Text::from_drag(anchor, world_pt, state.color, shift).into(),
                 Tool::Freehand => Freehand::from_drag(anchor, world_pt, state.color, shift).into(),
             };
+            el.data_mut().style = props.default_style.get();
             Some(view! { <g stroke-dasharray={DASH_PREVIEW}>{el.render(props.viewport.get().zoom)}</g> }.into_view())
         }
     };
