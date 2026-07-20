@@ -135,14 +135,6 @@ where
             file_ops::file_open(scene, saved_path);
         }
     };
-    let on_shortcuts = {
-        let close_menu = close_menu;
-        move || {
-            close_menu();
-            shortcuts_open.set(true);
-        }
-    };
-
     let on_import = {
         let close_menu = close_menu;
         move || {
@@ -262,11 +254,6 @@ where
         DropdownItem::Action {
             label: "Import",
             on_click: Rc::new(on_import),
-        },
-        DropdownItem::Separator,
-        DropdownItem::Action {
-            label: "Keyboard Shortcuts",
-            on_click: Rc::new(on_shortcuts),
         },
     ];
 
@@ -432,6 +419,14 @@ where
                                                 items=export_items.clone()
                                             />
                                         </div>
+
+                                        // ── Help ─────────────────────────────
+                                        <button
+                                            class=classes::MENU_ITEM
+                                            on:click=move |_| { close_menu(); shortcuts_open.set(true); }
+                                        >
+                                            <span>"Help"</span>
+                                        </button>
                                     </div>
                                 </>
                             }
@@ -441,13 +436,6 @@ where
                         }
                     }}
                 </div>
-                <IconButton
-                    on_click=move || shortcuts_open.update(|v| *v = !*v)
-                    title="Keyboard shortcuts"
-                    class=classes::BTN_GHOST
-                >
-                    {icon::help()}
-                </IconButton>
             </div>
         </div>
     }
