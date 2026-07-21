@@ -67,6 +67,7 @@ pub fn text_edit_overlay(
             .data
             .style
             .fill_color
+            .as_ref()
             .map(|c| c.to_hex())
             .unwrap_or_else(|| text_elem.data.style.stroke_color.to_hex());
 

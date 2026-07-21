@@ -1,45 +1,42 @@
-use crate::model::ShapeColor;
+use crate::model::Color;
 use crate::ui::classes;
 use leptos::*;
 
-/// Vertical panel of colour swatches representing the ShapeColor palette.
-///
-/// The selected colour gets a ring-accent border. Each swatch is rendered
-/// as a small coloured square button.
-#[component]
-pub fn ColorsPanel(selected_color: RwSignal<ShapeColor>) -> impl IntoView {
-    let colors = [
-        ShapeColor::Red,
-        ShapeColor::Orange,
-        ShapeColor::Yellow,
-        ShapeColor::Green,
-        ShapeColor::Cyan,
-        ShapeColor::Blue,
-        ShapeColor::Purple,
-        ShapeColor::White,
-    ];
+const COLOR_LIST: &[&str] = &[
+    Color::RED,
+    Color::ORANGE,
+    Color::YELLOW,
+    Color::GREEN,
+    Color::CYAN,
+    Color::BLUE,
+    Color::PURPLE,
+    Color::WHITE,
+];
 
+/// Vertical panel of colour swatches.
+#[component]
+pub fn ColorsPanel(selected_color: RwSignal<Color>) -> impl IntoView {
     view! {
         <div class="flex flex-col gap-1 p-2">
-            {colors
-                .into_iter()
-                .map(|c| {
-                    let hex = c.to_hex();
-                    let label = format!("{c}");
-                    let c_for_click = c;
-                    let c_for_sel = c;
+            {COLOR_LIST
+                .iter()
+                .map(|&hex| {
+                    let label = hex.to_string();
+                    let hex_for_style = hex.to_string();
+                    let hex_for_sel = hex.to_string();
+                    let c_for_click = Color::new(hex);
                     view! {
                         <button
                             class=move || {
-                                if selected_color.get() == c_for_sel {
+                                if selected_color.get() == Color::new(&hex_for_sel) {
                                     classes::BTN_SWATCH_SEL
                                 } else {
                                     classes::BTN_SWATCH_OFF
                                 }
                             }
-                            style=format!("background-color: {hex}")
+                            style=format!("background-color: {hex_for_style}")
                             title=label
-                            on:click=move |_| selected_color.set(c_for_click)
+                            on:click=move |_| selected_color.set(c_for_click.clone())
                         />
                     }
                 })

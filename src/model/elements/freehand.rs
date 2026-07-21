@@ -2,7 +2,7 @@ use super::utils::scale_points;
 use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
-use super::{ElementData, ShapeColor};
+use super::{ElementData, Color};
 use crate::model::resize::ResizeContext;
 use crate::model::Point;
 use leptos::IntoView;
@@ -86,7 +86,7 @@ fn perpendicular_dist(px: f64, py: f64, x1: f64, y1: f64, x2: f64, y2: f64) -> f
 // ── Trait implementations ──────────────────────────────────────────────
 
 impl FromDrag for Freehand {
-    fn from_drag(anchor: Point, _current: Point, color: ShapeColor, _shift: bool) -> Self {
+    fn from_drag(anchor: Point, _current: Point, color: Color, _shift: bool) -> Self {
         let mut fh = Self {
             data: ElementData {
                 style: super::ElementStyle {
@@ -124,7 +124,7 @@ impl UpdateDrag for Freehand {
 impl Render for Freehand {
     fn render(&self, _zoom: f64) -> leptos::View {
         let sw = self.data.style.stroke_width;
-        let stroke = ShapeColor::to_hex(self.data.style.stroke_color);
+        let stroke = self.data.style.stroke_color.to_hex();
         let dash = self.data.style.stroke_style.stroke_dasharray();
         let linejoin = self.data.style.edge_style.stroke_linejoin();
         let linecap = match self.data.style.edge_style {

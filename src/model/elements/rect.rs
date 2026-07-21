@@ -1,7 +1,7 @@
 use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
-use super::{ElementData, ShapeColor};
+use super::{ElementData, Color};
 use super::utils::{rect_from_drag, rotate_bbox, snap_bbox_to_grid};
 use crate::model::resize::{resize_bbox, resize_from_handle, resize_scale_element, ResizeContext};
 use crate::model::Point;
@@ -17,20 +17,20 @@ pub struct Rectangle {
 }
 
 impl Rectangle {
-    pub(crate) fn fill_paint(fill: &Option<ShapeColor>) -> String {
+    pub(crate) fn fill_paint(fill: &Option<Color>) -> String {
         match fill {
             Some(c) => c.to_hex().to_string(),
             None => "none".to_string(),
         }
     }
 
-    pub(crate) fn stroke_hex(stroke: ShapeColor) -> &'static str {
+    pub(crate) fn stroke_hex(stroke: &Color) -> String {
         stroke.to_hex()
     }
 }
 
 impl FromDrag for Rectangle {
-    fn from_drag(anchor: Point, current: Point, color: ShapeColor, shift: bool) -> Self {
+    fn from_drag(anchor: Point, current: Point, color: Color, shift: bool) -> Self {
         let (pt, w, h) = rect_from_drag(anchor, current, shift);
         Self {
             data: ElementData {
@@ -64,7 +64,7 @@ impl Render for Rectangle {
         let h = self.data.height;
         let sw = self.data.style.stroke_width;
         let fill = Self::fill_paint(&self.data.style.fill_color);
-        let stroke = Self::stroke_hex(self.data.style.stroke_color);
+        let stroke = Self::stroke_hex(&self.data.style.stroke_color);
         let dash = self.data.style.stroke_style.stroke_dasharray();
         let linejoin = self.data.style.edge_style.stroke_linejoin();
         let (rx, ry) = match self.data.style.edge_style {

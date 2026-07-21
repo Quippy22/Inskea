@@ -1,8 +1,10 @@
+pub mod color_picker;
 pub mod dropdown;
 pub mod icon_btn;
 pub mod number_slider;
 pub mod segmented;
 pub mod styling_panel;
+pub use color_picker::ColorPickerButton;
 pub use dropdown::{Dropdown, DropdownItem};
 pub use icon_btn::IconButton;
 pub use number_slider::NumberSlider;

@@ -3,7 +3,7 @@ pub mod elements;
 pub mod point;
 pub mod resize;
 
-pub use color::ShapeColor;
+pub use color::Color;
 pub use elements::*;
 pub use point::Point;
 

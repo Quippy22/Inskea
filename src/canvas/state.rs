@@ -1,5 +1,5 @@
 use crate::model::resize::ResizeHandle;
-use crate::model::ShapeColor;
+use crate::model::Color;
 use crate::model::{Bounds, Element, ElementId, ElementStyle, HitTest, LineStyle, Point, Scene};
 use crate::ui::dock::Tool;
 use crate::canvas::settings::CanvasSettings;
@@ -94,7 +94,7 @@ pub struct DrawingState {
     /// Which tool is being used.
     pub tool: Tool,
     /// Colour to apply to the new element.
-    pub color: ShapeColor,
+    pub color: Color,
 }
 
 /// All interior mutable state owned by the canvas component.
@@ -138,7 +138,7 @@ pub struct CanvasInputs {
     pub cursor_world: RwSignal<(f64, f64)>,
     pub viewport: RwSignal<super::viewport::Viewport>,
     pub selected_tool: RwSignal<Tool>,
-    pub selected_color: RwSignal<ShapeColor>,
+    pub selected_color: RwSignal<Color>,
     pub canvas_mode: RwSignal<CanvasMode>,
     pub scene: RwSignal<Scene>,
     pub eraser_active: RwSignal<bool>,

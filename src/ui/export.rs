@@ -82,7 +82,7 @@ fn el_svg(el: &Element) -> String {
     use std::fmt::Write;
     match el {
         Element::Rectangle(r) => {
-            let fill = r.data.style.fill_color.map(|c| c.to_hex()).unwrap_or("none");
+            let fill = r.data.style.fill_color.as_ref().map(|c| c.to_hex()).unwrap_or_else(|| "none".to_string());
             let rect = format!(
                 r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" stroke="{}" stroke-width="{}" opacity="{}"/>"#,
                 r.data.world_point.x,
@@ -104,7 +104,7 @@ fn el_svg(el: &Element) -> String {
             }
         }
         Element::Ellipse(e) => {
-            let fill = e.data.style.fill_color.map(|c| c.to_hex()).unwrap_or("none");
+            let fill = e.data.style.fill_color.as_ref().map(|c| c.to_hex()).unwrap_or_else(|| "none".to_string());
             let cx = e.data.world_point.x + e.data.width / 2.0;
             let cy = e.data.world_point.y + e.data.height / 2.0;
             let ellipse = format!(

@@ -6,7 +6,7 @@ use super::{DASH_PREVIEW, MIN_DRAG_DIST};
 use crate::model::elements::path::segment_midpoint;
 use crate::model::resize::{common_bounds, rotate_point_around};
 use crate::model::{
-    Bounds, Element, ElementId, Offset, PathPoints, Point, Resize, Rotate, Scene, ShapeColor,
+    Bounds, Color, Element, ElementId, Offset, PathPoints, Point, Resize, Rotate, Scene,
     SnapToGrid,
 };
 use crate::model::resize::ResizeContext;
@@ -54,7 +54,7 @@ pub fn selection_preview_overlay(
         if w < 1.0 || h < 1.0 {
             return None;
         }
-        let hex = ShapeColor::Blue.to_hex();
+        let hex = Color::BLUE;
         Some(
             view! {
                 <rect x=x y=y width=w height=h fill=format!("{}33", hex) stroke=hex
@@ -77,7 +77,7 @@ pub fn selection_handle_overlay(
             return None;
         }
         let els = scene.get().elements().to_vec();
-        let hex = ShapeColor::Blue.to_hex();
+        let hex = Color::BLUE;
 
         if ids.len() == 1 {
             if let Some(el) = els.iter().find(|el| el.id() == ids[0]) {

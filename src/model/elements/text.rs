@@ -1,7 +1,7 @@
 use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
-use super::{ElementData, ShapeColor};
+use super::{ElementData, Color};
 use super::utils::{rotate_bbox, snap_bbox_to_grid};
 use crate::model::resize::{resize_bbox, resize_from_handle, resize_scale_element, ResizeContext};
 use crate::model::Point;
@@ -134,7 +134,7 @@ impl Text {
 }
 
 impl FromDrag for Text {
-    fn from_drag(anchor: Point, _current: Point, color: ShapeColor, _shift: bool) -> Self {
+    fn from_drag(anchor: Point, _current: Point, color: Color, _shift: bool) -> Self {
         let mut data = ElementData::new(0);
         data.world_point.set(anchor.x, anchor.y);
         data.width = 0.0;
@@ -166,6 +166,7 @@ impl Render for Text {
             .data
             .style
             .fill_color
+            .as_ref()
             .map(|c| c.to_hex())
             .unwrap_or_else(|| self.data.style.stroke_color.to_hex());
 

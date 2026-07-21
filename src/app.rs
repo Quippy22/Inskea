@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
 use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
 use crate::hotkeys::{HotkeysContext, register_hotkeys, ShortcutsModal};
-use crate::model::{Element, ElementId, ElementStyle, LineStyle, Scene, ShapeColor};
+use crate::model::{Color, Element, ElementId, ElementStyle, LineStyle, Scene};
 use crate::tauri_bridge;
 use crate::ui::classes;
 use crate::ui::components::StylingPanel;
@@ -20,7 +20,7 @@ pub fn App() -> impl IntoView {
     let viewport = create_rw_signal(Viewport::default());
 
     let selected_tool = create_rw_signal(Tool::Rectangle);
-    let selected_color = create_rw_signal(ShapeColor::White);
+    let selected_color = create_rw_signal(Color::new(Color::WHITE));
     let canvas_mode = create_rw_signal(CanvasMode::Select);
 
     let scene = create_rw_signal(Scene::new());

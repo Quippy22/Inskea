@@ -1,9 +1,14 @@
 use std::rc::Rc;
-use crate::model::{CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle, Scene, ShapeColor, StrokeStyle, StylingKind};
+use crate::model::{Color, CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle, Scene, StrokeStyle, StylingKind};
+use crate::ui::components::ColorPickerButton;
 use crate::ui::dock::Tool;
 use crate::ui::classes;
 use crate::ui::components::NumberSlider;
 use leptos::*;
+use wasm_bindgen::JsCast;
+use leptos_color::Color as LpcColor;
+use leptos_color::components::color_picker::ColorPicker as LpcCp;
+use leptos_color::theme::Theme;
 
 fn read_panel_state(
     scene: &Scene,
@@ -20,10 +25,10 @@ fn read_panel_state(
             } else {
                 LineStyle::default()
             };
-            return (d.style, ls);
+            return (d.style.clone(), ls);
         }
     }
-    (*default_style, default_line_style.clone())
+    (default_style.clone(), default_line_style.clone())
 }
 
 fn single_selected_element(
@@ -80,6 +85,27 @@ pub fn StylingPanel(
     let opacity = create_rw_signal(local_style.get_untracked().opacity * 100.0);
     let is_rounded = Signal::derive(move || local_style.get().edge_style == EdgeStyle::Rounded);
 
+    #[derive(Clone, Copy, PartialEq)]
+    enum ColorSlot { Stroke, Fill }
+    let active_slot = create_rw_signal(None::<ColorSlot>);
+    let picker_ref: NodeRef<html::Div> = create_node_ref();
+
+    create_effect(move |_| {
+        if active_slot.get().is_some() {
+            let handle = window_event_listener(leptos::ev::click, move |ev: web_sys::MouseEvent| {
+                if let Some(el) = picker_ref.get() {
+                    if let Some(target) = ev.target() {
+                        let target: web_sys::Node = target.unchecked_into();
+                        if !el.contains(Some(&target)) {
+                            active_slot.set(None);
+                        }
+                    }
+                }
+            });
+            on_cleanup(move || handle.remove());
+        }
+    });
+
     // ── Sync: when selection/scene changes, pull back into local signals ─
     create_effect(move |_| {
         let _ids = selected_ids.get();
@@ -91,12 +117,12 @@ pub fn StylingPanel(
             &default_line_style.get_untracked(),
             selected_tool.get_untracked(),
         ));
-        local_style.set(new_style);
-        local_line_style.set(new_line_style);
         stroke_size.set(new_style.stroke_width);
         text_size.set(new_style.font_size);
         roundness.set(new_style.roundness);
         opacity.set(new_style.opacity * 100.0);
+        local_style.set(new_style);
+        local_line_style.set(new_line_style);
     });
 
     // ── Mutator: write to scene element when selected, else default_style ─
@@ -139,21 +165,45 @@ pub fn StylingPanel(
     };
 
     // ── Callbacks ────────────────────────────────────────────────────────
-    let set_color: Rc<dyn Fn(ShapeColor)> = Rc::new({
+    let set_color: Rc<dyn Fn(Color)> = Rc::new({
         let local_style = local_style;
         let update_style = update_style;
         move |c| {
-            local_style.update(|s| s.stroke_color = c);
-            update_style(&|s| s.stroke_color = c);
+            local_style.update(|s| s.stroke_color = c.clone());
+            update_style(&|s| s.stroke_color = c.clone());
         }
     });
 
-    let set_fill: Rc<dyn Fn(Option<ShapeColor>)> = Rc::new({
+    let set_fill: Rc<dyn Fn(Option<Color>)> = Rc::new({
         let local_style = local_style;
         let update_style = update_style;
         move |c| {
-            local_style.update(|s| s.fill_color = c);
-            update_style(&|s| s.fill_color = c);
+            local_style.update(|s| s.fill_color = c.clone());
+            update_style(&|s| s.fill_color = c.clone());
+        }
+    });
+
+    let picker_set_color = set_color.clone();
+    let picker_set_fill = set_fill.clone();
+
+    let picker_color = Signal::derive(move || {
+        let hex_str = match active_slot.get() {
+            Some(ColorSlot::Stroke) => local_style.get().stroke_color.to_hex(),
+            Some(ColorSlot::Fill) => {
+                local_style.get().fill_color.as_ref().map_or_else(|| Color::new(Color::WHITE).to_hex(), |c| c.to_hex())
+            }
+            _ => String::new(),
+        };
+        LpcColor::from_html(&hex_str).unwrap_or_default()
+    });
+
+    let picker_on_change = Callback::new(move |lc: LpcColor| {
+        let hex = lc.to_css_hex();
+        let c = if hex.len() == 9 { Color::new(&hex[..7]) } else { Color::new(&hex) };
+        match active_slot.get() {
+            Some(ColorSlot::Stroke) => picker_set_color(c),
+            Some(ColorSlot::Fill) => picker_set_fill(Some(c)),
+            None => {}
         }
     });
 
@@ -285,18 +335,16 @@ pub fn StylingPanel(
         (CurveMode::Curved, "Curved"),
     ];
 
-
-
-    let color_swatches: &[ShapeColor] = &[
-        ShapeColor::White,
-        ShapeColor::Yellow,
-        ShapeColor::Green,
-        ShapeColor::Blue,
-        ShapeColor::Red,
+    let color_swatches: &[&str] = &[
+        Color::WHITE,
+        Color::YELLOW,
+        Color::GREEN,
+        Color::BLUE,
+        Color::RED,
     ];
 
     view! {
-        <div class="flex flex-col gap-4">
+        <div class="flex flex-col gap-4 select-none">
             <div class:hidden=move || is_text.get()>
                 <NumberSlider
                     value=stroke_size
@@ -336,34 +384,38 @@ pub fn StylingPanel(
 
             <div>
                 <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Color"</div>
-                <div class="flex gap-1">
+                <div class="flex gap-1 items-center flex-wrap">
                     {color_swatches
                         .iter()
-                        .map(|c| {
-                            let c = *c;
+                        .map(|&hex| {
                             let set_color = set_color.clone();
+                            let c = Color::new(hex);
+                            let cc = c.clone();
                             view! {
                                 <button
                                     class=move || {
-                                        if local_style.get().stroke_color == c {
+                                        if local_style.get().stroke_color == cc {
                                             classes::BTN_SWATCH_SEL
                                         } else {
                                             classes::BTN_SWATCH_OFF
                                         }
                                     }
-                                    style:background-color=c.to_hex()
-                                    on:click=move |_| set_color(c)
+                                    style:background-color=hex
+                                    on:click=move |_| set_color(c.clone())
                                 />
                             }
                         })
                         .collect::<Vec<_>>()}
+                    <ColorPickerButton
+                        on_click=Rc::new(move || active_slot.set(Some(ColorSlot::Stroke)))
+                    />
                 </div>
             </div>
 
             <div class:hidden=move || !base_kind.get()>
                 <div>
                     <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Background"</div>
-                    <div class="flex gap-1 items-center">
+                    <div class="flex gap-1 items-center flex-wrap">
                         <button
                             class=move || {
                                 if local_style.get().fill_color.is_none() {
@@ -377,27 +429,32 @@ pub fn StylingPanel(
                                 move |_| set_fill(None)
                             }
                             title="No fill"
-                        />
+                        >
+                        </button>
                         <div class="w-px h-5 bg-border mx-1"></div>
                         {color_swatches
                             .iter()
-                            .map(|c| {
-                                let c = *c;
+                            .map(|&hex| {
                                 let set_fill = set_fill.clone();
+                                let c = Color::new(hex);
+                                let cc = c.clone();
                                 view! {
                                     <button
                                         class=move || {
                                             match local_style.get().fill_color {
-                                                Some(fc) if fc == c => classes::BTN_SWATCH_SEL,
+                                                Some(ref fc) if *fc == cc => classes::BTN_SWATCH_SEL,
                                                 _ => classes::BTN_SWATCH_OFF,
                                             }
                                         }
-                                        style:background-color=c.to_hex()
-                                        on:click=move |_| set_fill(Some(c))
+                                        style:background-color=hex
+                                        on:click=move |_| set_fill(Some(c.clone()))
                                     />
                                 }
                             })
                             .collect::<Vec<_>>()}
+                        <ColorPickerButton
+                            on_click=Rc::new(move || active_slot.set(Some(ColorSlot::Fill)))
+                        />
                     </div>
                 </div>
             </div>
@@ -461,6 +518,28 @@ pub fn StylingPanel(
                 </div>
             </div>
         </div>
+        <Show when=move || active_slot.get().is_some()>
+            <div class="absolute left-full top-1/2 -translate-y-1/2 ml-4" style="z-index: 9999;">
+                <div node_ref=picker_ref>
+                    {let lpc_theme = Theme::custom(
+                        LpcColor::from_html("#24283b").unwrap(),
+                        LpcColor::from_html("#1e1f2e").unwrap(),
+                        LpcColor::from_html("#a9b1d6").unwrap(),
+                        LpcColor::from_html("#3b4261").unwrap(),
+                        "8px".to_string(),
+                        "0 4px 12px rgba(0,0,0,0.3)".to_string(),
+                        "280px".to_string(),
+                    ); view! {
+                        <LpcCp
+                            color=picker_color
+                            on_change=picker_on_change
+                            hide_alpha=true
+                            theme=lpc_theme
+                        />
+                    }}
+                </div>
+            </div>
+        </Show>
     }
 }
 

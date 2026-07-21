@@ -189,6 +189,7 @@ pub fn resize_from_handle(
         width: new_w,
         height: new_h,
         rotation: original.rotation,
+        style: original.style.clone(),
         ..*original
     }
 }
@@ -332,7 +333,7 @@ mod tests {
             rotation: 0.0,
             style: ElementStyle {
                 font_size: 24.0,
-                stroke_color: super::super::ShapeColor::Blue,
+                stroke_color: super::super::Color::new(super::super::Color::BLUE),
                 fill_color: None,
                 stroke_width: 2.0,
                 stroke_style: StrokeStyle::Solid,
@@ -479,7 +480,7 @@ mod tests {
             rotation: 0.0,
             style: ElementStyle {
                 font_size: 24.0,
-                stroke_color: super::super::ShapeColor::Blue,
+                stroke_color: super::super::Color::new(super::super::Color::BLUE),
                 fill_color: None,
                 stroke_width: 2.0,
                 stroke_style: StrokeStyle::Solid,
@@ -496,7 +497,7 @@ mod tests {
             rotation: 0.0,
             style: ElementStyle {
                 font_size: 24.0,
-                stroke_color: super::super::ShapeColor::Blue,
+                stroke_color: super::super::Color::new(super::super::Color::BLUE),
                 fill_color: None,
                 stroke_width: 2.0,
                 stroke_style: StrokeStyle::Solid,
@@ -522,7 +523,7 @@ mod tests {
             rotation: 0.0,
             style: ElementStyle {
                 font_size: 24.0,
-                stroke_color: super::super::ShapeColor::Blue,
+                stroke_color: super::super::Color::new(super::super::Color::BLUE),
                 fill_color: None,
                 stroke_width: 2.0,
                 stroke_style: StrokeStyle::Solid,
@@ -539,7 +540,7 @@ mod tests {
             rotation: 0.0,
             style: ElementStyle {
                 font_size: 24.0,
-                stroke_color: super::super::ShapeColor::Blue,
+                stroke_color: super::super::Color::new(super::super::Color::BLUE),
                 fill_color: None,
                 stroke_width: 2.0,
                 stroke_style: StrokeStyle::Solid,

@@ -15,7 +15,7 @@ pub struct Ellipse {
 }
 
 impl Ellipse {
-    fn fill_paint(fill: &Option<super::ShapeColor>) -> String {
+    fn fill_paint(fill: &Option<super::Color>) -> String {
         match fill {
             Some(c) => c.to_hex().to_string(),
             None => "none".to_string(),
@@ -24,7 +24,7 @@ impl Ellipse {
 }
 
 impl FromDrag for Ellipse {
-    fn from_drag(anchor: Point, current: Point, color: super::ShapeColor, shift: bool) -> Self {
+    fn from_drag(anchor: Point, current: Point, color: super::Color, shift: bool) -> Self {
         let (pt, w, h) = rect_from_drag(anchor, current, shift);
         Self {
             data: ElementData {
@@ -58,7 +58,7 @@ impl Render for Ellipse {
         let ry = self.data.height / 2.0;
         let sw = self.data.style.stroke_width;
         let fill = Self::fill_paint(&self.data.style.fill_color);
-        let stroke = super::ShapeColor::to_hex(self.data.style.stroke_color);
+        let stroke = self.data.style.stroke_color.to_hex();
         let dash = self.data.style.stroke_style.stroke_dasharray();
         let linejoin = self.data.style.edge_style.stroke_linejoin();
         let opacity = self.data.style.opacity;

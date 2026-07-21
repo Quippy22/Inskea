@@ -13,7 +13,7 @@ pub use line::{Line, LineStyle};
 pub use rect::Rectangle;
 pub use text::Text;
 
-use super::ShapeColor;
+use super::Color;
 use crate::model::Point;
 pub use path::CurveMode;
 
@@ -64,11 +64,11 @@ impl EdgeStyle {
 }
 
 /// Shared appearance properties for every element type.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct ElementStyle {
-    pub stroke_color: ShapeColor,
-    pub fill_color: Option<ShapeColor>,
+    pub stroke_color: Color,
+    pub fill_color: Option<Color>,
     pub stroke_width: f64,
     pub font_size: f64,
     pub stroke_style: StrokeStyle,
@@ -84,7 +84,7 @@ fn default_opacity() -> f64 { 1.0 }
 impl Default for ElementStyle {
     fn default() -> Self {
         Self {
-            stroke_color: ShapeColor::default(),
+            stroke_color: Color::default(),
             fill_color: None,
             stroke_width: 2.0,
             font_size: 24.0,
@@ -367,7 +367,7 @@ pub trait Resize {
 /// Construct an element from a mouse-drag operation (anchor → current position).
 pub trait FromDrag: Sized {
     /// Create a new element of this type given the drag start and current world-space points.
-    fn from_drag(anchor: Point, current: Point, color: ShapeColor, shift: bool) -> Self;
+    fn from_drag(anchor: Point, current: Point, color: Color, shift: bool) -> Self;
 }
 
 /// Update an element while it is being drawn (e.g. freehand adding points).

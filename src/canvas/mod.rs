@@ -78,7 +78,7 @@ pub fn Canvas(
     cursor_world: RwSignal<(f64, f64)>,
     viewport: RwSignal<Viewport>,
     selected_tool: RwSignal<Tool>,
-    selected_color: RwSignal<ShapeColor>,
+    selected_color: RwSignal<Color>,
     canvas_mode: RwSignal<CanvasMode>,
     scene: RwSignal<Scene>,
     eraser_active: RwSignal<bool>,

@@ -6,7 +6,7 @@ use super::utils::{arrowhead_polyline, line_endpoints, scale_points};
 use super::{
     Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
 };
-use super::{ElementData, ShapeColor};
+use super::{ElementData, Color};
 use crate::model::resize::ResizeContext;
 use crate::model::Point;
 use leptos::IntoView;
@@ -47,7 +47,7 @@ pub struct Line {
 }
 
 impl FromDrag for Line {
-    fn from_drag(anchor: Point, current: Point, color: ShapeColor, shift: bool) -> Self {
+    fn from_drag(anchor: Point, current: Point, color: Color, shift: bool) -> Self {
         let (a, b) = line_endpoints(anchor, current, shift);
         Self {
             data: ElementData {
@@ -76,7 +76,7 @@ impl UpdateDrag for Line {
 impl Render for Line {
     fn render(&self, _zoom: f64) -> leptos::View {
         let sw = self.data.style.stroke_width;
-        let stroke = ShapeColor::to_hex(self.data.style.stroke_color);
+        let stroke = self.data.style.stroke_color.to_hex();
         let dash = self.data.style.stroke_style.stroke_dasharray();
         let linejoin = self.data.style.edge_style.stroke_linejoin();
         let linecap = match self.data.style.edge_style {
