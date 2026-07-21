@@ -4,28 +4,6 @@
 /// `currentColor` so they inherit the text colour of their parent.
 use leptos::*;
 
-/// Palette / colours icon.
-pub fn palette() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <circle cx="13.5" cy="6.5" r="0.5" fill="currentColor" />
-            <circle cx="17.5" cy="10.5" r="0.5" fill="currentColor" />
-            <circle cx="8.5" cy="7.5" r="0.5" fill="currentColor" />
-            <circle cx="6.5" cy="12.5" r="0.5" fill="currentColor" />
-            <circle cx="12" cy="12" r="10" />
-        </svg>
-    }
-}
-
 /// Pencil / drawing icon.
 pub fn pencil() -> impl IntoView {
     view! {
@@ -41,24 +19,6 @@ pub fn pencil() -> impl IntoView {
         >
             <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
             <path d="m15 5 4 4" />
-        </svg>
-    }
-}
-
-/// Chevron pointing left (collapse).
-pub fn chevron_left() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <polyline points="15 18 9 12 15 6" />
         </svg>
     }
 }
@@ -188,25 +148,6 @@ pub fn freehand() -> impl IntoView {
             class="w-5 h-5"
         >
             <path d="M3 19c4-4 6-2 8 0s4-4 6-6 4 2 5 0" />
-        </svg>
-    }
-}
-
-/// Group / layers icon.
-pub fn group() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <circle cx="9" cy="12" r="6" />
-            <circle cx="15" cy="12" r="6" />
         </svg>
     }
 }
@@ -363,26 +304,6 @@ pub fn gear() -> impl IntoView {
         >
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
-    }
-}
-
-/// Help / question-mark icon.
-pub fn help() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <circle cx="12" cy="12" r="10" />
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
         </svg>
     }
 }

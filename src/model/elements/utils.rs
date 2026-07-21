@@ -1,9 +1,6 @@
+use crate::model::elements::rect::MIN_DIMENSION;
 use crate::model::resize::ResizeContext;
-use crate::model::Point;
-
-use super::rect::MIN_DIMENSION;
-use super::Element;
-use super::ElementData;
+use crate::model::{Element, ElementData, Point};
 
 pub(crate) fn snap_bbox_to_grid(world_point: &mut Point, width: f64, height: f64, grid: f64) {
     let cx = world_point.x + width / 2.0;

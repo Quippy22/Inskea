@@ -1,10 +1,10 @@
-use std::rc::Rc;
 use crate::canvas::CanvasMode;
 use crate::model::{Element, ElementId, Offset, Scene};
 use crate::ui::dock::Tool;
 use crate::ui::file_ops;
 use leptos::ev;
 use leptos::*;
+use std::rc::Rc;
 use wasm_bindgen::JsCast;
 
 pub(crate) const MODE_SHORTCUTS: &[(&str, &str)] = &[
@@ -67,87 +67,118 @@ fn is_text_input(target: &web_sys::EventTarget) -> bool {
 }
 
 pub fn register_hotkeys(ctx: HotkeysContext) {
-    let handle_shortcut = move |key: &str, ctrl: bool, shift: bool| {
-        match (ctrl, key) {
-            (true, "z") | (true, "Z") => {
-                if shift { (ctx.do_redo)(); } else { (ctx.do_undo)(); }
+    let handle_shortcut = move |key: &str, ctrl: bool, shift: bool| match (ctrl, key) {
+        (true, "z") | (true, "Z") => {
+            if shift {
+                (ctx.do_redo)();
+            } else {
+                (ctx.do_undo)();
             }
-            (false, "s") => ctx.canvas_mode.set(CanvasMode::Select),
-            (false, "a") => ctx.canvas_mode.set(CanvasMode::Pan),
-            (true, "d") => {
-                let ids = ctx.selected_ids.get();
-                if !ids.is_empty() {
-                    (ctx.push_snapshot)();
-                    let mut new_ids = Vec::new();
-                    ctx.scene.update(|s| {
-                        let elements = s.elements().to_vec();
-                        for id in &ids {
-                            if let Some(el) = elements.iter().find(|e| e.id() == *id) {
-                                let mut clone = el.clone();
-                                clone.offset(20.0, 20.0);
-                                clone.data_mut().id = 0;
-                                s.add_element(clone);
-                                new_ids.push(s.next_id - 1);
-                            }
-                        }
-                    });
-                    ctx.selected_ids.set(new_ids);
-                }
-            }
-            (true, "n") | (true, "N") => file_ops::file_new(ctx.scene, ctx.saved_path, ctx.selected_ids),
-            (true, "o") | (true, "O") => file_ops::file_open(ctx.scene, ctx.saved_path, ctx.selected_ids),
-            (true, "s") | (true, "S") => {
-                if shift { file_ops::file_save_as(ctx.scene, ctx.saved_path); }
-                else { file_ops::file_save(ctx.scene, ctx.saved_path); }
-            }
-            (false, "?") => ctx.shortcuts_open.update(|v| *v = !*v),
-            (false, "e") => ctx.canvas_mode.set(CanvasMode::Erase),
-            (false, "1") => { ctx.selected_tool.set(Tool::Rectangle); ctx.canvas_mode.set(CanvasMode::Draw); }
-            (false, "2") => { ctx.selected_tool.set(Tool::Ellipse); ctx.canvas_mode.set(CanvasMode::Draw); }
-            (false, "3") => { ctx.selected_tool.set(Tool::Line); ctx.canvas_mode.set(CanvasMode::Draw); }
-            (false, "4") => { ctx.selected_tool.set(Tool::Arrow); ctx.canvas_mode.set(CanvasMode::Draw); }
-            (false, "5") => { ctx.selected_tool.set(Tool::Text); ctx.canvas_mode.set(CanvasMode::Draw); }
-            (false, "f") => { ctx.selected_tool.set(Tool::Freehand); ctx.canvas_mode.set(CanvasMode::Draw); }
-            (false, "d") => ctx.canvas_mode.set(CanvasMode::Draw),
-            (false, "Escape") => {}
-            (true, "c") => {
-                let ids = ctx.selected_ids.get();
-                let els = ctx.scene.with(|s| {
-                    s.elements().iter().filter(|e| ids.contains(&e.id())).cloned().collect::<Vec<_>>()
-                });
-                ctx.clipboard.set(els);
-                web_sys::console::log_1(&"Copied".into());
-            }
-            (true, "v") => {
-                let els = ctx.clipboard.get();
-                if !els.is_empty() {
-                    (ctx.push_snapshot)();
-                    let mut new_ids = Vec::new();
-                    ctx.scene.update(|s| {
-                        for el in els {
-                            let mut el = el;
-                            el.data_mut().id = 0;
-                            s.add_element(el);
+        }
+        (false, "s") => ctx.canvas_mode.set(CanvasMode::Select),
+        (false, "a") => ctx.canvas_mode.set(CanvasMode::Pan),
+        (true, "d") => {
+            let ids = ctx.selected_ids.get();
+            if !ids.is_empty() {
+                (ctx.push_snapshot)();
+                let mut new_ids = Vec::new();
+                ctx.scene.update(|s| {
+                    let elements = s.elements().to_vec();
+                    for id in &ids {
+                        if let Some(el) = elements.iter().find(|e| e.id() == *id) {
+                            let mut clone = el.clone();
+                            clone.offset(20.0, 20.0);
+                            clone.data_mut().id = 0;
+                            s.add_element(clone);
                             new_ids.push(s.next_id - 1);
                         }
-                    });
-                    ctx.selected_ids.set(new_ids);
-                }
+                    }
+                });
+                ctx.selected_ids.set(new_ids);
             }
-            (false, "Delete") | (false, "Backspace") => {
-                let ids = ctx.selected_ids.get();
-                if !ids.is_empty() {
-                    (ctx.push_snapshot)();
-                    ctx.scene.update(|s| {
-                        for id in &ids {
-                            s.remove_by_id(*id);
-                        }
-                    });
-                    ctx.selected_ids.set(Vec::new());
-                }
-            }
-            _ => {}
         }
+        (true, "n") | (true, "N") => {
+            file_ops::file_new(ctx.scene, ctx.saved_path, ctx.selected_ids)
+        }
+        (true, "o") | (true, "O") => {
+            file_ops::file_open(ctx.scene, ctx.saved_path, ctx.selected_ids)
+        }
+        (true, "s") | (true, "S") => {
+            if shift {
+                file_ops::file_save_as(ctx.scene, ctx.saved_path);
+            } else {
+                file_ops::file_save(ctx.scene, ctx.saved_path);
+            }
+        }
+        (false, "?") => ctx.shortcuts_open.update(|v| *v = !*v),
+        (false, "e") => ctx.canvas_mode.set(CanvasMode::Erase),
+        (false, "1") => {
+            ctx.selected_tool.set(Tool::Rectangle);
+            ctx.canvas_mode.set(CanvasMode::Draw);
+        }
+        (false, "2") => {
+            ctx.selected_tool.set(Tool::Ellipse);
+            ctx.canvas_mode.set(CanvasMode::Draw);
+        }
+        (false, "3") => {
+            ctx.selected_tool.set(Tool::Line);
+            ctx.canvas_mode.set(CanvasMode::Draw);
+        }
+        (false, "4") => {
+            ctx.selected_tool.set(Tool::Arrow);
+            ctx.canvas_mode.set(CanvasMode::Draw);
+        }
+        (false, "5") => {
+            ctx.selected_tool.set(Tool::Text);
+            ctx.canvas_mode.set(CanvasMode::Draw);
+        }
+        (false, "f") => {
+            ctx.selected_tool.set(Tool::Freehand);
+            ctx.canvas_mode.set(CanvasMode::Draw);
+        }
+        (false, "d") => ctx.canvas_mode.set(CanvasMode::Draw),
+        (false, "Escape") => {}
+        (true, "c") => {
+            let ids = ctx.selected_ids.get();
+            let els = ctx.scene.with(|s| {
+                s.elements()
+                    .iter()
+                    .filter(|e| ids.contains(&e.id()))
+                    .cloned()
+                    .collect::<Vec<_>>()
+            });
+            ctx.clipboard.set(els);
+            web_sys::console::log_1(&"Copied".into());
+        }
+        (true, "v") => {
+            let els = ctx.clipboard.get();
+            if !els.is_empty() {
+                (ctx.push_snapshot)();
+                let mut new_ids = Vec::new();
+                ctx.scene.update(|s| {
+                    for el in els {
+                        let mut el = el;
+                        el.data_mut().id = 0;
+                        s.add_element(el);
+                        new_ids.push(s.next_id - 1);
+                    }
+                });
+                ctx.selected_ids.set(new_ids);
+            }
+        }
+        (false, "Delete") | (false, "Backspace") => {
+            let ids = ctx.selected_ids.get();
+            if !ids.is_empty() {
+                (ctx.push_snapshot)();
+                ctx.scene.update(|s| {
+                    for id in &ids {
+                        s.remove_by_id(*id);
+                    }
+                });
+                ctx.selected_ids.set(Vec::new());
+            }
+        }
+        _ => {}
     };
 
     let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
@@ -180,7 +211,16 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                                 on:click=move |_| shortcuts_open.set(false)
                                 title="Close"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    class="w-5 h-5"
+                                >
                                     <line x1="18" y1="6" x2="6" y2="18" />
                                     <line x1="6" y1="6" x2="18" y2="18" />
                                 </svg>
@@ -188,47 +228,68 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                             <h2 class="text-lg font-semibold mb-4">"Keyboard Shortcuts"</h2>
                             <div class="flex gap-10">
                                 <div>
-                                    <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">"Shapes"</h3>
+                                    <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">
+                                        "Shapes"
+                                    </h3>
                                     <table class="text-sm">
                                         <tbody>
-                                            {TOOL_SHORTCUTS.iter().map(|(key, desc)| {
-                                                view! {
-                                                    <tr>
-                                                        <td class="py-1 pr-5 font-mono text-accent whitespace-nowrap">{*key}</td>
-                                                        <td class="py-1 text-fg whitespace-nowrap">{*desc}</td>
-                                                    </tr>
-                                                }
-                                            }).collect::<Vec<_>>()}
+                                            {TOOL_SHORTCUTS
+                                                .iter()
+                                                .map(|(key, desc)| {
+                                                    view! {
+                                                        <tr>
+                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-nowrap">
+                                                                {*key}
+                                                            </td>
+                                                            <td class="py-1 text-fg whitespace-nowrap">{*desc}</td>
+                                                        </tr>
+                                                    }
+                                                })
+                                                .collect::<Vec<_>>()}
                                         </tbody>
                                     </table>
                                 </div>
                                 <div>
-                                    <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">"Modes"</h3>
+                                    <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">
+                                        "Modes"
+                                    </h3>
                                     <table class="text-sm">
                                         <tbody>
-                                            {MODE_SHORTCUTS.iter().map(|(key, desc)| {
-                                                view! {
-                                                    <tr>
-                                                        <td class="py-1 pr-5 font-mono text-accent whitespace-nowrap">{*key}</td>
-                                                        <td class="py-1 text-fg whitespace-nowrap">{*desc}</td>
-                                                    </tr>
-                                                }
-                                            }).collect::<Vec<_>>()}
+                                            {MODE_SHORTCUTS
+                                                .iter()
+                                                .map(|(key, desc)| {
+                                                    view! {
+                                                        <tr>
+                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-nowrap">
+                                                                {*key}
+                                                            </td>
+                                                            <td class="py-1 text-fg whitespace-nowrap">{*desc}</td>
+                                                        </tr>
+                                                    }
+                                                })
+                                                .collect::<Vec<_>>()}
                                         </tbody>
                                     </table>
                                 </div>
                                 <div>
-                                    <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">"File & Edit"</h3>
+                                    <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">
+                                        "File & Edit"
+                                    </h3>
                                     <table class="text-sm">
                                         <tbody>
-                                            {FILE_SHORTCUTS.iter().map(|(key, desc)| {
-                                                view! {
-                                                    <tr>
-                                                        <td class="py-1 pr-5 font-mono text-accent whitespace-nowrap">{*key}</td>
-                                                        <td class="py-1 text-fg whitespace-nowrap">{*desc}</td>
-                                                    </tr>
-                                                }
-                                            }).collect::<Vec<_>>()}
+                                            {FILE_SHORTCUTS
+                                                .iter()
+                                                .map(|(key, desc)| {
+                                                    view! {
+                                                        <tr>
+                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-nowrap">
+                                                                {*key}
+                                                            </td>
+                                                            <td class="py-1 text-fg whitespace-nowrap">{*desc}</td>
+                                                        </tr>
+                                                    }
+                                                })
+                                                .collect::<Vec<_>>()}
                                         </tbody>
                                     </table>
                                 </div>

@@ -200,7 +200,10 @@ pub fn scale_points(points: &mut [Point], ctx: &ResizeContext, orig: &[Point]) {
     use crate::model::resize::MIN_ELEMENT_SIZE;
     let rctx = ctx;
     let (pos, (nw, nh)) = match resize_bbox(
-        Point { x: rctx.bx, y: rctx.by },
+        Point {
+            x: rctx.bx,
+            y: rctx.by,
+        },
         (rctx.bw, rctx.bh),
         rctx.pointer_world,
         rctx.handle,
@@ -215,10 +218,7 @@ pub fn scale_points(points: &mut [Point], ctx: &ResizeContext, orig: &[Point]) {
     let sx = nw / obw;
     let sy = nh / obh;
     for (p, op) in points.iter_mut().zip(orig.iter()) {
-        p.set(
-            (op.x - rctx.bx) * sx + pos.x,
-            (op.y - rctx.by) * sy + pos.y,
-        );
+        p.set((op.x - rctx.bx) * sx + pos.x, (op.y - rctx.by) * sy + pos.y);
     }
 }
 
@@ -358,5 +358,4 @@ mod tests {
         assert_eq!(pts[0].x, 20.0);
         assert_eq!(pts[0].y, 20.0);
     }
-
 }

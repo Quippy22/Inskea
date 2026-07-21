@@ -1,7 +1,7 @@
-use std::rc::Rc;
-use crate::ui::classes;
-use leptos::*;
+use crate::ui::styles;
 use leptos::ev;
+use leptos::*;
+use std::rc::Rc;
 use web_sys::MouseEvent;
 
 #[component]
@@ -11,8 +11,7 @@ pub fn NumberSlider(
     max: f64,
     increment: f64,
     label: &'static str,
-    #[prop(optional)]
-    on_change: Option<Rc<dyn Fn(f64)>>,
+    #[prop(optional)] on_change: Option<Rc<dyn Fn(f64)>>,
 ) -> impl IntoView {
     let snap = move |v: f64| -> f64 {
         let snapped = (v / increment).round() * increment;
@@ -88,46 +87,49 @@ pub fn NumberSlider(
 
     view! {
         <div class="flex flex-col gap-1">
-            <span class=classes::SETTINGS_LABEL>{label}</span>
-            <div class=classes::SLIDER_ROW>
-                <div
-                    ref=track_ref
-                    class=classes::SLIDER_TRACK
-                    on:mousedown=start_drag
-                >
+            <span class=styles::SETTINGS_LABEL>{label}</span>
+            <div class=styles::SLIDER_ROW>
+                <div ref=track_ref class=styles::SLIDER_TRACK on:mousedown=start_drag>
+                    <div class=styles::SLIDER_FILL style:width=move || format!("{}%", pct()) />
                     <div
-                        class=classes::SLIDER_FILL
-                        style:width=move || format!("{}%", pct())
-                    />
-                    <div
-                        class=classes::SLIDER_THUMB
+                        class=styles::SLIDER_THUMB
                         style:left=move || format!("calc({}% - 0.125rem)", pct())
                         class:scale-125=move || dragging.get()
                     />
                 </div>
 
-                <span class=classes::SLIDER_READOUT>
+                <span class=styles::SLIDER_READOUT>
                     {move || format!("{}", local.get().round() as i64)}
                 </span>
 
-                <div class=classes::SLIDER_STEPPER>
-                    <button
-                        class=classes::SLIDER_STEP_BTN
-                        on:click=inc
-                        title="Increase"
-                    >
-                        <svg width="8" height="5" viewBox="0 0 8 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M1 4 L4 1 L7 4"/>
+                <div class=styles::SLIDER_STEPPER>
+                    <button class=styles::SLIDER_STEP_BTN on:click=inc title="Increase">
+                        <svg
+                            width="8"
+                            height="5"
+                            viewBox="0 0 8 5"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path d="M1 4 L4 1 L7 4" />
                         </svg>
                     </button>
                     <div class="border-t border-border" />
-                    <button
-                        class=classes::SLIDER_STEP_BTN
-                        on:click=dec
-                        title="Decrease"
-                    >
-                        <svg width="8" height="5" viewBox="0 0 8 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M1 1 L4 4 L7 1"/>
+                    <button class=styles::SLIDER_STEP_BTN on:click=dec title="Decrease">
+                        <svg
+                            width="8"
+                            height="5"
+                            viewBox="0 0 8 5"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path d="M1 1 L4 4 L7 1" />
                         </svg>
                     </button>
                 </div>

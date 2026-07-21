@@ -22,12 +22,6 @@ pub const CONTAINER_DOCK: &str =
 pub const CONTAINER_STATUSBAR: &str =
     "fixed max-sm:top-2 top-4 inset-x-0 flex justify-center pointer-events-none z-50";
 
-/// Active state for a dock category / eraser button.
-pub const BTN_CAT_ACTIVE: &str = "flex items-center justify-center h-9 w-9 rounded-md transition-colors text-accent bg-accent/10";
-
-/// Inactive state for a dock category / eraser button.
-pub const BTN_CAT_INACTIVE: &str = "flex items-center justify-center h-9 w-9 rounded-md transition-colors text-subtle hover:text-fg hover:bg-surface/50";
-
 /// Active toolbar button (hand / select / draw).
 pub const BTN_TBAR_ACTIVE: &str = "flex items-center justify-center h-8 w-8 rounded-md transition-colors text-accent bg-accent/10";
 
@@ -75,7 +69,8 @@ pub const SLIDER_ROW: &str = "flex items-center gap-2 w-full";
 pub const SLIDER_TRACK: &str = "relative flex-1 h-1 bg-surface/50 rounded-sm cursor-pointer";
 
 /// NumberSlider fill bar (accent-coloured progress).
-pub const SLIDER_FILL: &str = "absolute inset-y-0 left-0 rounded-sm bg-accent transition-[width] duration-75";
+pub const SLIDER_FILL: &str =
+    "absolute inset-y-0 left-0 rounded-sm bg-accent transition-[width] duration-75";
 
 /// NumberSlider draggable thumb.
 pub const SLIDER_THUMB: &str = "absolute top-1/2 -translate-y-1/2 w-1 h-4 rounded-xs bg-accent cursor-pointer transition-[left] duration-75";
@@ -84,7 +79,8 @@ pub const SLIDER_THUMB: &str = "absolute top-1/2 -translate-y-1/2 w-1 h-4 rounde
 pub const SLIDER_READOUT: &str = "text-xs text-fg font-mono tabular-nums w-8 text-right shrink-0";
 
 /// NumberSlider arrow stepper pill container.
-pub const SLIDER_STEPPER: &str = "flex flex-col rounded border border-border overflow-hidden shrink-0";
+pub const SLIDER_STEPPER: &str =
+    "flex flex-col rounded border border-border overflow-hidden shrink-0";
 
 /// NumberSlider stepper button (up/down arrow).
 pub const SLIDER_STEP_BTN: &str = "flex items-center justify-center px-1 py-0.5 text-subtle hover:text-fg hover:bg-accent/10 transition-colors";

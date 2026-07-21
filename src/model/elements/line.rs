@@ -1,14 +1,9 @@
-use super::path::{
-    bounds_of_points, hit_test_path, offset_points, path_d, rotate_points,
-    snap_points_to_grid, CurveMode,
+use crate::model::elements::path::{
+    bounds_of_points, hit_test_path, offset_points, path_d, rotate_points, snap_points_to_grid,
 };
-use super::utils::{arrowhead_polyline, line_endpoints, scale_points};
-use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
-};
-use super::{ElementData, Color};
+use crate::model::elements::utils::{arrowhead_polyline, line_endpoints, scale_points};
 use crate::model::resize::ResizeContext;
-use crate::model::Point;
+use crate::model::*;
 use leptos::IntoView;
 
 /// Line/arrow-specific properties.
@@ -26,7 +21,7 @@ impl Default for LineStyle {
         Self {
             curve_mode: CurveMode::Straight,
             has_start_arrowhead: false,
-            has_end_arrowhead: false,
+            has_end_arrowhead: true,
         }
     }
 }
@@ -87,18 +82,29 @@ impl Render for Line {
         let opacity = self.data.style.opacity;
         let sw2 = sw;
 
-        let start_arrow = (self.line_style.has_start_arrowhead && self.points.len() >= 2).then(|| {
-            arrowhead_polyline(&self.points[1], &self.points[0], sw2)
-        });
+        let start_arrow = (self.line_style.has_start_arrowhead && self.points.len() >= 2)
+            .then(|| arrowhead_polyline(&self.points[1], &self.points[0], sw2));
         let end_arrow = (self.line_style.has_end_arrowhead && self.points.len() >= 2).then(|| {
-            arrowhead_polyline(&self.points[self.points.len() - 2], &self.points[self.points.len() - 1], sw2)
+            arrowhead_polyline(
+                &self.points[self.points.len() - 2],
+                &self.points[self.points.len() - 1],
+                sw2,
+            )
         });
 
         let has_any_arrow = start_arrow.is_some() || end_arrow.is_some();
 
         if has_any_arrow {
             leptos::view! {
-                <g stroke=stroke stroke-width=sw fill="none" stroke-linejoin=linejoin stroke-linecap=linecap stroke-dasharray=dash opacity=opacity>
+                <g
+                    stroke=stroke
+                    stroke-width=sw
+                    fill="none"
+                    stroke-linejoin=linejoin
+                    stroke-linecap=linecap
+                    stroke-dasharray=dash
+                    opacity=opacity
+                >
                     <path d=d />
                     {start_arrow.map(|p| leptos::view! { <polyline points=p /> })}
                     {end_arrow.map(|p| leptos::view! { <polyline points=p /> })}
@@ -110,7 +116,12 @@ impl Render for Line {
                 <path
                     d=d
                     fill="none"
-                    stroke=stroke stroke-width=sw stroke-linejoin=linejoin stroke-linecap=linecap stroke-dasharray=dash opacity=opacity
+                    stroke=stroke
+                    stroke-width=sw
+                    stroke-linejoin=linejoin
+                    stroke-linecap=linecap
+                    stroke-dasharray=dash
+                    opacity=opacity
                 />
             }
             .into_view()

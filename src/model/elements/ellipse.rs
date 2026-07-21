@@ -1,10 +1,6 @@
-use super::ElementData;
-use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
-};
-use super::utils::{rect_from_drag, rotate_bbox, snap_bbox_to_grid};
+use crate::model::elements::utils::{rect_from_drag, rotate_bbox, snap_bbox_to_grid};
 use crate::model::resize::{resize_bbox, resize_from_handle, resize_scale_element, ResizeContext};
-use crate::model::Point;
+use crate::model::*;
 use leptos::IntoView;
 
 /// An ellipse (oval) shape defined by its bounding-box top-left, width, and height.
@@ -64,14 +60,36 @@ impl Render for Ellipse {
         let opacity = self.data.style.opacity;
         if self.data.rotation == 0.0 {
             leptos::view! {
-                <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw stroke-dasharray=dash stroke-linejoin=linejoin opacity=opacity />
+                <ellipse
+                    cx=cx
+                    cy=cy
+                    rx=rx
+                    ry=ry
+                    fill=fill
+                    stroke=stroke
+                    stroke-width=sw
+                    stroke-dasharray=dash
+                    stroke-linejoin=linejoin
+                    opacity=opacity
+                />
             }
             .into_view()
         } else {
             let deg = self.data.rotation.to_degrees();
             leptos::view! {
-                <g transform={format!("rotate({} {} {})", deg, cx, cy)}>
-                    <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw stroke-dasharray=dash stroke-linejoin=linejoin opacity=opacity />
+                <g transform=format!("rotate({} {} {})", deg, cx, cy)>
+                    <ellipse
+                        cx=cx
+                        cy=cy
+                        rx=rx
+                        ry=ry
+                        fill=fill
+                        stroke=stroke
+                        stroke-width=sw
+                        stroke-dasharray=dash
+                        stroke-linejoin=linejoin
+                        opacity=opacity
+                    />
                 </g>
             }
             .into_view()
@@ -108,7 +126,12 @@ impl HitTest for Ellipse {
 
 impl Bounds for Ellipse {
     fn bounds(&self) -> (f64, f64, f64, f64) {
-        (self.data.world_point.x, self.data.world_point.y, self.data.width, self.data.height)
+        (
+            self.data.world_point.x,
+            self.data.world_point.y,
+            self.data.width,
+            self.data.height,
+        )
     }
 }
 
@@ -120,7 +143,12 @@ impl Offset for Ellipse {
 
 impl SnapToGrid for Ellipse {
     fn snap_to_grid(&mut self, grid: f64) {
-        snap_bbox_to_grid(&mut self.data.world_point, self.data.width, self.data.height, grid);
+        snap_bbox_to_grid(
+            &mut self.data.world_point,
+            self.data.width,
+            self.data.height,
+            grid,
+        );
     }
 }
 
@@ -134,7 +162,10 @@ impl Resize for Ellipse {
     fn resize(&mut self, ctx: &ResizeContext) {
         if ctx.multi {
             let (pos, (nw, nh)) = match resize_bbox(
-                Point { x: ctx.bx, y: ctx.by },
+                Point {
+                    x: ctx.bx,
+                    y: ctx.by,
+                },
                 (ctx.bw, ctx.bh),
                 ctx.pointer_world,
                 ctx.handle,
@@ -144,7 +175,18 @@ impl Resize for Ellipse {
                 Some(v) => v,
                 None => return,
             };
-            resize_scale_element(&mut self.data, ctx.orig.data(), pos, nw, nh, ctx.bx, ctx.by, ctx.bw, ctx.bh, true);
+            resize_scale_element(
+                &mut self.data,
+                ctx.orig.data(),
+                pos,
+                nw,
+                nh,
+                ctx.bx,
+                ctx.by,
+                ctx.bw,
+                ctx.bh,
+                true,
+            );
         } else {
             let result = resize_from_handle(
                 &self.data,

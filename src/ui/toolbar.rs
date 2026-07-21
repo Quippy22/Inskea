@@ -3,12 +3,12 @@ use crate::canvas::{CanvasMode, CropExportCallback, Viewport};
 use crate::model::{ElementId, Scene};
 use crate::skea;
 use crate::tauri_bridge;
-use crate::util::window_size;
-use crate::ui::classes;
 use crate::ui::components::{Dropdown, DropdownItem, IconButton};
 use crate::ui::export;
 use crate::ui::file_ops;
 use crate::ui::icon;
+use crate::ui::styles;
+use crate::util::window_size;
 use leptos::*;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
@@ -190,7 +190,10 @@ where
     };
 
     #[derive(Clone, Copy)]
-    enum ExportFormat { Svg, Png }
+    enum ExportFormat {
+        Svg,
+        Png,
+    }
 
     let on_export = {
         let _close_menu = close_menu;
@@ -210,12 +213,18 @@ where
                     let svg = export::scene_to_svg_crop(&s, rect);
                     match fmt {
                         ExportFormat::Svg => {
-                            if tauri { export::tauri_export_svg(svg, true); }
-                            else { export::download_string(&svg, "selection.svg"); }
+                            if tauri {
+                                export::tauri_export_svg(svg, true);
+                            } else {
+                                export::download_string(&svg, "selection.svg");
+                            }
                         }
                         ExportFormat::Png => {
-                            if tauri { export::tauri_export_png(svg, true); }
-                            else { export::download_png_from_svg(svg, "selection.png".to_string()); }
+                            if tauri {
+                                export::tauri_export_png(svg, true);
+                            } else {
+                                export::download_png_from_svg(svg, "selection.png".to_string());
+                            }
                         }
                     }
                 })));
@@ -228,12 +237,18 @@ where
             let svg = export::scene_to_svg(&s, &vp, size, None);
             match fmt {
                 ExportFormat::Svg => {
-                    if tauri { export::tauri_export_svg(svg, false); }
-                    else { export::download_string(&svg, "canvas.svg"); }
+                    if tauri {
+                        export::tauri_export_svg(svg, false);
+                    } else {
+                        export::download_string(&svg, "canvas.svg");
+                    }
                 }
                 ExportFormat::Png => {
-                    if tauri { export::tauri_export_png(svg, false); }
-                    else { export::download_png_from_svg(svg, "canvas.png".to_string()); }
+                    if tauri {
+                        export::tauri_export_png(svg, false);
+                    } else {
+                        export::download_png_from_svg(svg, "canvas.png".to_string());
+                    }
                 }
             }
         }
@@ -308,15 +323,15 @@ where
 
     let btn = move |mode: CanvasMode| -> &'static str {
         if canvas_mode.get() == mode {
-            classes::BTN_TBAR_ACTIVE
+            styles::BTN_TBAR_ACTIVE
         } else {
-            classes::BTN_TBAR_INACTIVE
+            styles::BTN_TBAR_INACTIVE
         }
     };
 
     view! {
-        <div class=classes::CONTAINER_STATUSBAR>
-            <div class=classes::TBAR_INNER>
+        <div class=styles::CONTAINER_STATUSBAR>
+            <div class=styles::TBAR_INNER>
                 <button
                     class=move || btn(CanvasMode::Pan)
                     on:click=move |_| canvas_mode.set(CanvasMode::Pan)
@@ -338,7 +353,7 @@ where
                 >
                     {icon::pencil()}
                 </button>
-                <IconButton on_click=on_home title="Home" class=classes::BTN_GHOST>
+                <IconButton on_click=on_home title="Home" class=styles::BTN_GHOST>
                     {icon::home()}
                 </IconButton>
                 <button
@@ -348,7 +363,7 @@ where
                     {icon::pages()}
                 </button>
                 <button
-                    class=classes::BTN_GHOST
+                    class=styles::BTN_GHOST
                     class:opacity-40=move || !can_undo.get()
                     class:cursor-not-allowed=move || !can_undo.get()
                     on:click=move |_| on_undo()
@@ -367,7 +382,7 @@ where
                     }}
                 </button>
                 <button
-                    class=classes::BTN_GHOST
+                    class=styles::BTN_GHOST
                     class:opacity-40=move || !can_redo.get()
                     class:cursor-not-allowed=move || !can_redo.get()
                     on:click=move |_| on_redo()
@@ -379,7 +394,7 @@ where
                     <IconButton
                         on_click=move || menu_open.update(|v| *v = !*v)
                         title="Menu"
-                        class=classes::BTN_GHOST
+                        class=styles::BTN_GHOST
                     >
                         {icon::menu()}
                     </IconButton>
@@ -391,21 +406,27 @@ where
                                         class="fixed inset-0 z-40"
                                         on:click=move |_| close_menu()
                                     ></div>
-                                    <div class=classes::MENU_DROPDOWN>
+                                    <div class=styles::MENU_DROPDOWN>
                                         // ── File ─────────────────────────────
                                         <div
                                             class="relative"
                                             on:mouseenter=move |_| file_hover.set(true)
                                             on:mouseleave=move |_| file_hover.set(false)
                                         >
-                                            <button class=classes::MENU_ITEM>
+                                            <button class=styles::MENU_ITEM>
                                                 <span>"File"</span>
                                                 {icon::chevron_right()}
                                             </button>
                                             <Dropdown
                                                 show=show_file
-                                                on_mouseenter=Rc::new({ let s = file_sub_hover; move || s.set(true) })
-                                                on_mouseleave=Rc::new({ let s = file_sub_hover; move || s.set(false) })
+                                                on_mouseenter=Rc::new({
+                                                    let s = file_sub_hover;
+                                                    move || s.set(true)
+                                                })
+                                                on_mouseleave=Rc::new({
+                                                    let s = file_sub_hover;
+                                                    move || s.set(false)
+                                                })
                                                 items=file_items.clone()
                                             />
                                         </div>
@@ -416,22 +437,31 @@ where
                                             on:mouseenter=move |_| export_hover.set(true)
                                             on:mouseleave=move |_| export_hover.set(false)
                                         >
-                                            <button class=classes::MENU_ITEM>
+                                            <button class=styles::MENU_ITEM>
                                                 <span>"Export"</span>
                                                 {icon::chevron_right()}
                                             </button>
                                             <Dropdown
                                                 show=show_export
-                                                on_mouseenter=Rc::new({ let s = export_sub_hover; move || s.set(true) })
-                                                on_mouseleave=Rc::new({ let s = export_sub_hover; move || s.set(false) })
+                                                on_mouseenter=Rc::new({
+                                                    let s = export_sub_hover;
+                                                    move || s.set(true)
+                                                })
+                                                on_mouseleave=Rc::new({
+                                                    let s = export_sub_hover;
+                                                    move || s.set(false)
+                                                })
                                                 items=export_items.clone()
                                             />
                                         </div>
 
                                         // ── Help ─────────────────────────────
                                         <button
-                                            class=classes::MENU_ITEM
-                                            on:click=move |_| { close_menu(); shortcuts_open.set(true); }
+                                            class=styles::MENU_ITEM
+                                            on:click=move |_| {
+                                                close_menu();
+                                                shortcuts_open.set(true);
+                                            }
                                         >
                                             <span>"Help"</span>
                                         </button>
@@ -448,5 +478,3 @@ where
         </div>
     }
 }
-
-

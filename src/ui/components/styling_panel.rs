@@ -1,14 +1,17 @@
-use std::rc::Rc;
-use crate::model::{Color, CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle, Scene, StrokeStyle, StylingKind};
+use crate::model::{
+    Color, CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle, Scene, StrokeStyle,
+    StylingKind,
+};
 use crate::ui::components::ColorPickerButton;
-use crate::ui::dock::Tool;
-use crate::ui::classes;
 use crate::ui::components::NumberSlider;
+use crate::ui::dock::Tool;
+use crate::ui::styles;
 use leptos::*;
-use wasm_bindgen::JsCast;
-use leptos_color::Color as LpcColor;
 use leptos_color::components::color_picker::ColorPicker as LpcCp;
 use leptos_color::theme::Theme;
+use leptos_color::Color as LpcColor;
+use std::rc::Rc;
+use wasm_bindgen::JsCast;
 
 fn read_panel_state(
     scene: &Scene,
@@ -31,10 +34,7 @@ fn read_panel_state(
     (default_style.clone(), default_line_style.clone())
 }
 
-fn single_selected_element(
-    scene: Scene,
-    ids: Vec<ElementId>,
-) -> Option<Element> {
+fn single_selected_element(scene: Scene, ids: Vec<ElementId>) -> Option<Element> {
     if ids.len() != 1 {
         return None;
     }
@@ -62,7 +62,9 @@ pub fn StylingPanel(
     });
 
     let is_text = Signal::derive(move || styling_kind.get() == StylingKind::Text);
-    let is_line = Signal::derive(move || styling_kind.get() == StylingKind::Line || styling_kind.get() == StylingKind::Arrow);
+    let is_line = Signal::derive(move || {
+        styling_kind.get() == StylingKind::Line || styling_kind.get() == StylingKind::Arrow
+    });
     let is_arrow = Signal::derive(move || styling_kind.get() == StylingKind::Arrow);
     let is_rect = Signal::derive(move || styling_kind.get() == StylingKind::Rectangle);
     let is_freehand = Signal::derive(move || styling_kind.get() == StylingKind::Freehand);
@@ -86,22 +88,26 @@ pub fn StylingPanel(
     let is_rounded = Signal::derive(move || local_style.get().edge_style == EdgeStyle::Rounded);
 
     #[derive(Clone, Copy, PartialEq)]
-    enum ColorSlot { Stroke, Fill }
+    enum ColorSlot {
+        Stroke,
+        Fill,
+    }
     let active_slot = create_rw_signal(None::<ColorSlot>);
     let picker_ref: NodeRef<html::Div> = create_node_ref();
 
     create_effect(move |_| {
         if active_slot.get().is_some() {
-            let handle = window_event_listener(leptos::ev::click, move |ev: web_sys::MouseEvent| {
-                if let Some(el) = picker_ref.get() {
-                    if let Some(target) = ev.target() {
-                        let target: web_sys::Node = target.unchecked_into();
-                        if !el.contains(Some(&target)) {
-                            active_slot.set(None);
+            let handle =
+                window_event_listener(leptos::ev::click, move |ev: web_sys::MouseEvent| {
+                    if let Some(el) = picker_ref.get() {
+                        if let Some(target) = ev.target() {
+                            let target: web_sys::Node = target.unchecked_into();
+                            if !el.contains(Some(&target)) {
+                                active_slot.set(None);
+                            }
                         }
                     }
-                }
-            });
+                });
             on_cleanup(move || handle.remove());
         }
     });
@@ -110,13 +116,16 @@ pub fn StylingPanel(
     create_effect(move |_| {
         let _ids = selected_ids.get();
         let _s = scene.get();
-        let (new_style, new_line_style) = leptos::untrack(|| read_panel_state(
-            &scene.get_untracked(),
-            &selected_ids.get_untracked(),
-            &default_style.get_untracked(),
-            &default_line_style.get_untracked(),
-            selected_tool.get_untracked(),
-        ));
+        let _dls = default_line_style.get();
+        let (new_style, new_line_style) = leptos::untrack(|| {
+            read_panel_state(
+                &scene.get_untracked(),
+                &selected_ids.get_untracked(),
+                &default_style.get_untracked(),
+                &default_line_style.get_untracked(),
+                selected_tool.get_untracked(),
+            )
+        });
         stroke_size.set(new_style.stroke_width);
         text_size.set(new_style.font_size);
         roundness.set(new_style.roundness);
@@ -152,10 +161,8 @@ pub fn StylingPanel(
             let ids = selected_ids.get_untracked();
             if ids.len() == 1 {
                 scene.update(|s| {
-                    if let Some(el) = s.element_by_id_mut(ids[0]) {
-                        if let Element::Line(l) = el {
-                            f(&mut l.line_style);
-                        }
+                    if let Some(Element::Line(l)) = s.element_by_id_mut(ids[0]) {
+                        f(&mut l.line_style);
                     }
                 });
             } else {
@@ -189,9 +196,11 @@ pub fn StylingPanel(
     let picker_color = Signal::derive(move || {
         let hex_str = match active_slot.get() {
             Some(ColorSlot::Stroke) => local_style.get().stroke_color.to_hex(),
-            Some(ColorSlot::Fill) => {
-                local_style.get().fill_color.as_ref().map_or_else(|| Color::new(Color::WHITE).to_hex(), |c| c.to_hex())
-            }
+            Some(ColorSlot::Fill) => local_style
+                .get()
+                .fill_color
+                .as_ref()
+                .map_or_else(|| Color::new(Color::WHITE).to_hex(), |c| c.to_hex()),
             _ => String::new(),
         };
         LpcColor::from_html(&hex_str).unwrap_or_default()
@@ -199,7 +208,11 @@ pub fn StylingPanel(
 
     let picker_on_change = Callback::new(move |lc: LpcColor| {
         let hex = lc.to_css_hex();
-        let c = if hex.len() == 9 { Color::new(&hex[..7]) } else { Color::new(&hex) };
+        let c = if hex.len() == 9 {
+            Color::new(&hex[..7])
+        } else {
+            Color::new(&hex)
+        };
         match active_slot.get() {
             Some(ColorSlot::Stroke) => picker_set_color(c),
             Some(ColorSlot::Fill) => picker_set_fill(Some(c)),
@@ -325,10 +338,8 @@ pub fn StylingPanel(
         (StrokeStyle::Dotted, "Dotted"),
     ];
 
-    let edge_opts: &[(EdgeStyle, &str)] = &[
-        (EdgeStyle::Sharp, "Sharp"),
-        (EdgeStyle::Rounded, "Rounded"),
-    ];
+    let edge_opts: &[(EdgeStyle, &str)] =
+        &[(EdgeStyle::Sharp, "Sharp"), (EdgeStyle::Rounded, "Rounded")];
 
     let curve_opts: &[(CurveMode, &str)] = &[
         (CurveMode::Straight, "Straight"),
@@ -342,6 +353,32 @@ pub fn StylingPanel(
         Color::BLUE,
         Color::RED,
     ];
+
+    let swatch_row =
+        move |is_active: Rc<dyn Fn(&Color) -> bool>, on_click: Rc<dyn Fn(Color)>| -> Vec<_> {
+            color_swatches
+                .iter()
+                .map(|&hex| {
+                    let on_click = on_click.clone();
+                    let is_active = is_active.clone();
+                    let c = Color::new(hex);
+                    let cc = c.clone();
+                    view! {
+                        <button
+                            class=move || {
+                                if is_active(&cc) {
+                                    styles::BTN_SWATCH_SEL
+                                } else {
+                                    styles::BTN_SWATCH_OFF
+                                }
+                            }
+                            style:background-color=hex
+                            on:click=move |_| on_click(c.clone())
+                        />
+                    }
+                })
+                .collect()
+        };
 
     view! {
         <div class="flex flex-col gap-4 select-none">
@@ -377,51 +414,44 @@ pub fn StylingPanel(
 
             <div class:hidden=move || is_text.get()>
                 <div>
-                    <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Stroke style"</div>
-                    {uniform_seg(stroke_opts, Signal::derive(move || local_style.get().stroke_style), set_stroke_style)}
+                    <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
+                        "Stroke style"
+                    </div>
+                    {uniform_seg(
+                        stroke_opts,
+                        Signal::derive(move || local_style.get().stroke_style),
+                        set_stroke_style,
+                    )}
                 </div>
             </div>
 
             <div>
-                <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Color"</div>
+                <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
+                    "Color"
+                </div>
                 <div class="flex gap-1 items-center flex-wrap">
-                    {color_swatches
-                        .iter()
-                        .map(|&hex| {
-                            let set_color = set_color.clone();
-                            let c = Color::new(hex);
-                            let cc = c.clone();
-                            view! {
-                                <button
-                                    class=move || {
-                                        if local_style.get().stroke_color == cc {
-                                            classes::BTN_SWATCH_SEL
-                                        } else {
-                                            classes::BTN_SWATCH_OFF
-                                        }
-                                    }
-                                    style:background-color=hex
-                                    on:click=move |_| set_color(c.clone())
-                                />
-                            }
-                        })
-                        .collect::<Vec<_>>()}
-                    <ColorPickerButton
-                        on_click=Rc::new(move || active_slot.set(Some(ColorSlot::Stroke)))
-                    />
+                    {swatch_row(
+                        Rc::new(move |c| local_style.get().stroke_color == *c),
+                        Rc::new(move |c| set_color(c)),
+                    )}
+                    <ColorPickerButton on_click=Rc::new(move || {
+                        active_slot.set(Some(ColorSlot::Stroke))
+                    }) />
                 </div>
             </div>
 
             <div class:hidden=move || !base_kind.get()>
                 <div>
-                    <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Background"</div>
+                    <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
+                        "Background"
+                    </div>
                     <div class="flex gap-1 items-center flex-wrap">
                         <button
                             class=move || {
                                 if local_style.get().fill_color.is_none() {
-                                    classes::BTN_SWATCH_SEL
+                                    styles::BTN_SWATCH_SEL
                                 } else {
-                                    classes::BTN_SWATCH_OFF
+                                    styles::BTN_SWATCH_OFF
                                 }
                             }
                             on:click={
@@ -429,32 +459,15 @@ pub fn StylingPanel(
                                 move |_| set_fill(None)
                             }
                             title="No fill"
-                        >
-                        </button>
+                        ></button>
                         <div class="w-px h-5 bg-border mx-1"></div>
-                        {color_swatches
-                            .iter()
-                            .map(|&hex| {
-                                let set_fill = set_fill.clone();
-                                let c = Color::new(hex);
-                                let cc = c.clone();
-                                view! {
-                                    <button
-                                        class=move || {
-                                            match local_style.get().fill_color {
-                                                Some(ref fc) if *fc == cc => classes::BTN_SWATCH_SEL,
-                                                _ => classes::BTN_SWATCH_OFF,
-                                            }
-                                        }
-                                        style:background-color=hex
-                                        on:click=move |_| set_fill(Some(c.clone()))
-                                    />
-                                }
-                            })
-                            .collect::<Vec<_>>()}
-                        <ColorPickerButton
-                            on_click=Rc::new(move || active_slot.set(Some(ColorSlot::Fill)))
-                        />
+                        {swatch_row(
+                            Rc::new(move |c| local_style.get().fill_color.as_ref() == Some(c)),
+                            Rc::new(move |c| set_fill(Some(c))),
+                        )}
+                        <ColorPickerButton on_click=Rc::new(move || {
+                            active_slot.set(Some(ColorSlot::Fill))
+                        }) />
                     </div>
                 </div>
             </div>
@@ -462,14 +475,26 @@ pub fn StylingPanel(
             <div class:hidden=move || is_text.get()>
                 <div class:hidden=move || !is_line.get()>
                     <div>
-                        <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Line style"</div>
-                        {uniform_seg(curve_opts, Signal::derive(move || local_line_style.get().curve_mode), set_curve_mode)}
+                        <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
+                            "Line style"
+                        </div>
+                        {uniform_seg(
+                            curve_opts,
+                            Signal::derive(move || local_line_style.get().curve_mode),
+                            set_curve_mode,
+                        )}
                     </div>
                 </div>
-                <div class:hidden=move || is_line.get() || is_freehand.get()>
+                <div class:hidden=move || !is_rect.get()>
                     <div>
-                        <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Edge style"</div>
-                        {uniform_seg(edge_opts, Signal::derive(move || local_style.get().edge_style), set_edge_style)}
+                        <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
+                            "Edge style"
+                        </div>
+                        {uniform_seg(
+                            edge_opts,
+                            Signal::derive(move || local_style.get().edge_style),
+                            set_edge_style,
+                        )}
                     </div>
                     <div class:hidden=move || !(is_rounded.get() && is_rect.get())>
                         <NumberSlider
@@ -486,27 +511,32 @@ pub fn StylingPanel(
 
             <div class:hidden=move || !is_arrow.get()>
                 <div>
-                    <div class=classes::SETTINGS_LABEL class:mb-1=move || true>"Arrow direction"</div>
+                    <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
+                        "Arrow direction"
+                    </div>
                     <div class="flex gap-1">
                         <button
                             class=move || {
                                 if local_line_style.get().has_start_arrowhead {
-                                    classes::BTN_SWATCH_SEL
+                                    styles::BTN_SWATCH_SEL
                                 } else {
-                                    classes::BTN_SWATCH_OFF
+                                    styles::BTN_SWATCH_OFF
                                 }
                             }
                             on:click=move |_| set_start_arrowhead()
                             title="Arrowhead at start"
                         >
-                            {move || arrowhead_icon(local_line_style.get().has_start_arrowhead, false)}
+                            {move || arrowhead_icon(
+                                local_line_style.get().has_start_arrowhead,
+                                false,
+                            )}
                         </button>
                         <button
                             class=move || {
                                 if local_line_style.get().has_end_arrowhead {
-                                    classes::BTN_SWATCH_SEL
+                                    styles::BTN_SWATCH_SEL
                                 } else {
-                                    classes::BTN_SWATCH_OFF
+                                    styles::BTN_SWATCH_OFF
                                 }
                             }
                             on:click=move |_| set_end_arrowhead()
@@ -521,22 +551,25 @@ pub fn StylingPanel(
         <Show when=move || active_slot.get().is_some()>
             <div class="absolute left-full top-1/2 -translate-y-1/2 ml-4" style="z-index: 9999;">
                 <div node_ref=picker_ref>
-                    {let lpc_theme = Theme::custom(
-                        LpcColor::from_html("#24283b").unwrap(),
-                        LpcColor::from_html("#1e1f2e").unwrap(),
-                        LpcColor::from_html("#a9b1d6").unwrap(),
-                        LpcColor::from_html("#3b4261").unwrap(),
-                        "8px".to_string(),
-                        "0 4px 12px rgba(0,0,0,0.3)".to_string(),
-                        "280px".to_string(),
-                    ); view! {
-                        <LpcCp
-                            color=picker_color
-                            on_change=picker_on_change
-                            hide_alpha=true
-                            theme=lpc_theme
-                        />
-                    }}
+                    {
+                        let lpc_theme = Theme::custom(
+                            LpcColor::from_html("#24283b").unwrap(),
+                            LpcColor::from_html("#1e1f2e").unwrap(),
+                            LpcColor::from_html("#a9b1d6").unwrap(),
+                            LpcColor::from_html("#3b4261").unwrap(),
+                            "8px".to_string(),
+                            "0 4px 12px rgba(0,0,0,0.3)".to_string(),
+                            "280px".to_string(),
+                        );
+                        view! {
+                            <LpcCp
+                                color=picker_color
+                                on_change=picker_on_change
+                                hide_alpha=true
+                                theme=lpc_theme
+                            />
+                        }
+                    }
                 </div>
             </div>
         </Show>
@@ -550,10 +583,32 @@ fn arrowhead_icon(on: bool, is_end: bool) -> impl IntoView {
         (4.0, 12.0, 11.0, 6.0, 11.0, 18.0)
     };
     view! {
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6">
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="w-6 h-6"
+        >
             <line x1="4" y1="12" x2="20" y2="12" />
             {if on {
-                Some(leptos::view! { <polyline points=format!("{:.0},{:.0} {:.0},{:.0} {:.0},{:.0}", lx, ly, tx, ty, rx, ry) /> }.into_view())
+                Some(
+                    leptos::view! {
+                        <polyline points=format!(
+                            "{:.0},{:.0} {:.0},{:.0} {:.0},{:.0}",
+                            lx,
+                            ly,
+                            tx,
+                            ty,
+                            rx,
+                            ry,
+                        ) />
+                    }
+                        .into_view(),
+                )
             } else {
                 None
             }}
@@ -580,9 +635,9 @@ fn uniform_seg<T: PartialEq + Copy + 'static>(
                         <button
                             class=move || {
                                 let base = if active.get() == val {
-                                    classes::SEG_BTN_ACTIVE
+                                    styles::SEG_BTN_ACTIVE
                                 } else {
-                                    classes::SEG_BTN_INACTIVE
+                                    styles::SEG_BTN_INACTIVE
                                 };
                                 format!("{} flex-1 justify-center", base)
                             }

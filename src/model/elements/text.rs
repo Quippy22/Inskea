@@ -1,10 +1,6 @@
-use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
-};
-use super::{ElementData, Color};
-use super::utils::{rotate_bbox, snap_bbox_to_grid};
+use crate::model::elements::utils::{rotate_bbox, snap_bbox_to_grid};
 use crate::model::resize::{resize_bbox, resize_from_handle, resize_scale_element, ResizeContext};
-use crate::model::Point;
+use crate::model::*;
 use leptos::IntoView;
 
 pub(crate) const MIN_FONT_SIZE: f64 = 12.0;
@@ -117,7 +113,8 @@ impl Text {
     }
 
     pub fn set_content(&mut self, raw: &str, wrap_width: f64) {
-        self.wrapped.set_raw(raw, wrap_width, self.data.style.font_size);
+        self.wrapped
+            .set_raw(raw, wrap_width, self.data.style.font_size);
         self.data.width = wrap_width;
         self.recalc_height();
     }
@@ -173,10 +170,10 @@ impl Render for Text {
         let inner = if lines.len() <= 1 {
             leptos::view! {
                 <text
-                    x={x.to_string()}
-                    y={baseline.to_string()}
+                    x=x.to_string()
+                    y=baseline.to_string()
                     fill=fill
-                    font-size={font_size.to_string()}
+                    font-size=font_size.to_string()
                     font-family="sans-serif"
                     pointer-events="none"
                     style="user-select: none; -webkit-user-select: none;"
@@ -189,10 +186,10 @@ impl Render for Text {
         } else {
             leptos::view! {
                 <text
-                    x={x.to_string()}
-                    y={baseline.to_string()}
+                    x=x.to_string()
+                    y=baseline.to_string()
                     fill=fill
-                    font-size={font_size.to_string()}
+                    font-size=font_size.to_string()
                     font-family="sans-serif"
                     pointer-events="none"
                     style="user-select: none; -webkit-user-select: none;"
@@ -204,7 +201,7 @@ impl Render for Text {
                         .map(|(i, line)| {
                             let dy = if i == 0 { "0" } else { "1.2em" };
                             leptos::view! {
-                                <tspan x={x.to_string()} dy=dy>
+                                <tspan x=x.to_string() dy=dy>
                                     {line.to_string()}
                                 </tspan>
                             }
@@ -221,10 +218,8 @@ impl Render for Text {
             let cx = x + self.data.width / 2.0;
             let cy = self.data.world_point.y + self.data.height / 2.0;
             let deg = self.data.rotation.to_degrees();
-            leptos::view! {
-                <g transform={format!("rotate({} {} {})", deg, cx, cy)}>{inner}</g>
-            }
-            .into_view()
+            leptos::view! { <g transform=format!("rotate({} {} {})", deg, cx, cy)>{inner}</g> }
+                .into_view()
         }
     }
 }
@@ -241,7 +236,12 @@ impl HitTest for Text {
 
 impl Bounds for Text {
     fn bounds(&self) -> (f64, f64, f64, f64) {
-        (self.data.world_point.x, self.data.world_point.y, self.data.width, self.data.height)
+        (
+            self.data.world_point.x,
+            self.data.world_point.y,
+            self.data.width,
+            self.data.height,
+        )
     }
 }
 
@@ -253,7 +253,12 @@ impl Offset for Text {
 
 impl SnapToGrid for Text {
     fn snap_to_grid(&mut self, grid: f64) {
-        snap_bbox_to_grid(&mut self.data.world_point, self.data.width, self.data.height, grid);
+        snap_bbox_to_grid(
+            &mut self.data.world_point,
+            self.data.width,
+            self.data.height,
+            grid,
+        );
     }
 }
 
@@ -267,7 +272,10 @@ impl Resize for Text {
     fn resize(&mut self, ctx: &ResizeContext) {
         if ctx.multi {
             let (pos, (nw, nh)) = match resize_bbox(
-                Point { x: ctx.bx, y: ctx.by },
+                Point {
+                    x: ctx.bx,
+                    y: ctx.by,
+                },
                 (ctx.bw, ctx.bh),
                 ctx.pointer_world,
                 ctx.handle,
@@ -277,7 +285,18 @@ impl Resize for Text {
                 Some(v) => v,
                 None => return,
             };
-            resize_scale_element(&mut self.data, ctx.orig.data(), pos, nw, nh, ctx.bx, ctx.by, ctx.bw, ctx.bh, false);
+            resize_scale_element(
+                &mut self.data,
+                ctx.orig.data(),
+                pos,
+                nw,
+                nh,
+                ctx.bx,
+                ctx.by,
+                ctx.bw,
+                ctx.bh,
+                false,
+            );
         } else {
             let result = resize_from_handle(
                 &self.data,

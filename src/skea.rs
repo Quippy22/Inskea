@@ -38,8 +38,10 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                             let has_x = data_obj.contains_key("x");
                             let has_y = data_obj.contains_key("y");
                             if has_x || has_y {
-                                let old_x = data_obj.remove("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                                let old_y = data_obj.remove("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                                let old_x =
+                                    data_obj.remove("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                                let old_y =
+                                    data_obj.remove("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
                                 data_obj.insert(
                                     "world_point".to_string(),
                                     serde_json::json!({"x": old_x, "y": old_y}),
@@ -50,22 +52,20 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
 
                     let type_name = el.get("type").and_then(|v| v.as_str());
                     if (type_name == Some("Line") || type_name == Some("Arrow"))
-                        && el.get("points").is_none() {
-                            let a = el.get("a").and_then(|v| serde_json::to_value(v).ok());
-                            let b = el.get("b").and_then(|v| serde_json::to_value(v).ok());
-                            if let (Some(a_val), Some(b_val)) = (a, b) {
-                                if let Some(obj) = el.as_object_mut() {
-                                    obj.remove("a");
-                                    obj.remove("b");
-                                    let points = serde_json::json!([a_val, b_val]);
-                                    obj.insert("points".to_string(), points);
-                                    obj.insert(
-                                        "curve_mode".to_string(),
-                                        serde_json::json!("Straight"),
-                                    );
-                                }
+                        && el.get("points").is_none()
+                    {
+                        let a = el.get("a").and_then(|v| serde_json::to_value(v).ok());
+                        let b = el.get("b").and_then(|v| serde_json::to_value(v).ok());
+                        if let (Some(a_val), Some(b_val)) = (a, b) {
+                            if let Some(obj) = el.as_object_mut() {
+                                obj.remove("a");
+                                obj.remove("b");
+                                let points = serde_json::json!([a_val, b_val]);
+                                obj.insert("points".to_string(), points);
+                                obj.insert("curve_mode".to_string(), serde_json::json!("Straight"));
                             }
                         }
+                    }
                 }
             }
         }
@@ -112,9 +112,16 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                     // data.* → data.style.*
                     if let Some(data) = el.get_mut("data") {
                         if let Some(data_obj) = data.as_object_mut() {
-                            let style_fields =
-                                ["stroke_color", "fill_color", "stroke_width", "font_size", "stroke_style", "edge_style"];
-                            let has_any_style = style_fields.iter().any(|f| data_obj.contains_key(*f));
+                            let style_fields = [
+                                "stroke_color",
+                                "fill_color",
+                                "stroke_width",
+                                "font_size",
+                                "stroke_style",
+                                "edge_style",
+                            ];
+                            let has_any_style =
+                                style_fields.iter().any(|f| data_obj.contains_key(*f));
                             if has_any_style {
                                 let mut style = serde_json::Map::new();
                                 for field in &style_fields {
@@ -122,7 +129,8 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                                         style.insert(field.to_string(), val);
                                     }
                                 }
-                                data_obj.insert("style".to_string(), serde_json::Value::Object(style));
+                                data_obj
+                                    .insert("style".to_string(), serde_json::Value::Object(style));
                             }
                         }
                     }
@@ -138,7 +146,10 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
                                 if let Some(arrow) = obj.remove("has_arrowhead") {
                                     line_style.insert("has_arrowhead".to_string(), arrow);
                                 }
-                                obj.insert("line_style".to_string(), serde_json::Value::Object(line_style));
+                                obj.insert(
+                                    "line_style".to_string(),
+                                    serde_json::Value::Object(line_style),
+                                );
                             }
                         }
                     }
@@ -210,7 +221,7 @@ mod tests {
         rd.width = 100.0;
         rd.height = 50.0;
         rd.style.stroke_color = Color::new(Color::BLUE);
-        rd.style.fill_color = Some(Color::new(Color::CYAN));
+        rd.style.fill_color = Some(Color::new(Color::YELLOW));
         s.add_element(Element::Rectangle(Rectangle { data: rd }));
 
         let mut ed = ElementData::new(0);
@@ -234,7 +245,7 @@ mod tests {
         }));
 
         let mut ad = ElementData::new(0);
-        ad.style.stroke_color = Color::new(Color::ORANGE);
+        ad.style.stroke_color = Color::new(Color::RED);
         s.add_element(Element::Line(Line {
             data: ad,
             points: vec![Point { x: 10.0, y: 10.0 }, Point { x: 200.0, y: 50.0 }],
@@ -254,7 +265,7 @@ mod tests {
         }));
 
         let mut fd = ElementData::new(0);
-        fd.style.stroke_color = Color::new(Color::PURPLE);
+        fd.style.stroke_color = Color::new(Color::GREEN);
         fd.style.stroke_width = 1.5;
         s.add_element(Element::Freehand(Freehand {
             data: fd,
@@ -335,6 +346,4 @@ mod tests {
         let err = load_from_str(input).unwrap_err();
         assert!(err.contains("unsupported format version"));
     }
-
-
 }

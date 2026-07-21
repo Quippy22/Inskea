@@ -1,5 +1,5 @@
 use crate::model::Color;
-use crate::ui::classes;
+use crate::ui::styles;
 use leptos::*;
 
 const COLOR_LIST: &[&str] = &[
@@ -29,9 +29,9 @@ pub fn ColorsPanel(selected_color: RwSignal<Color>) -> impl IntoView {
                         <button
                             class=move || {
                                 if selected_color.get() == Color::new(&hex_for_sel) {
-                                    classes::BTN_SWATCH_SEL
+                                    styles::BTN_SWATCH_SEL
                                 } else {
-                                    classes::BTN_SWATCH_OFF
+                                    styles::BTN_SWATCH_OFF
                                 }
                             }
                             style=format!("background-color: {hex_for_style}")

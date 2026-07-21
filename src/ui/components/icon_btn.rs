@@ -9,7 +9,7 @@ pub fn IconButton<F>(
     on_click: F,
     /// ARIA tooltip.
     title: &'static str,
-    /// Extra Tailwind classes (e.g. `classes::BTN_COLLAPSE`).
+    /// Extra Tailwind classes (e.g. `styles::BTN_COLLAPSE`).
     class: &'static str,
     /// The icon (or any content) rendered inside the button.
     children: Children,

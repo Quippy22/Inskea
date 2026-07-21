@@ -11,7 +11,10 @@ impl Color {
     pub fn new(hex: &str) -> Self {
         let clean = hex.trim_start_matches('#');
         if clean.len() == 3 {
-            let expanded: String = clean.chars().flat_map(|c| std::iter::repeat(c).take(2)).collect();
+            let expanded: String = clean
+                .chars()
+                .flat_map(|c| std::iter::repeat_n(c, 2))
+                .collect();
             Self(format!("#{expanded}"))
         } else if clean.len() == 6 {
             Self(format!("#{clean}"))
@@ -27,10 +30,7 @@ impl Color {
     pub const WHITE: &'static str = "#ffffff";
     pub const YELLOW: &'static str = "#eab308";
     pub const GREEN: &'static str = "#22c55e";
-    pub const CYAN: &'static str = "#06b6d4";
     pub const BLUE: &'static str = "#3b82f6";
-    pub const PURPLE: &'static str = "#a855f7";
-    pub const ORANGE: &'static str = "#f97316";
     pub const RED: &'static str = "#ef4444";
 }
 

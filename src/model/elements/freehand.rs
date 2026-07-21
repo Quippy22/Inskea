@@ -1,10 +1,6 @@
-use super::utils::scale_points;
-use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
-};
-use super::{ElementData, Color};
+use crate::model::elements::utils::scale_points;
 use crate::model::resize::ResizeContext;
-use crate::model::Point;
+use crate::model::*;
 use leptos::IntoView;
 use std::fmt::Write;
 
@@ -134,7 +130,16 @@ impl Render for Freehand {
         let opacity = self.data.style.opacity;
         let d = build_smooth_path(&self.points);
         leptos::view! {
-            <path d=d fill="none" stroke=stroke stroke-width=sw stroke-linecap=linecap stroke-linejoin=linejoin stroke-dasharray=dash opacity=opacity />
+            <path
+                d=d
+                fill="none"
+                stroke=stroke
+                stroke-width=sw
+                stroke-linecap=linecap
+                stroke-linejoin=linejoin
+                stroke-dasharray=dash
+                opacity=opacity
+            />
         }
         .into_view()
     }

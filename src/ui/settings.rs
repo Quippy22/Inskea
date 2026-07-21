@@ -1,7 +1,7 @@
 use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
-use crate::ui::classes;
 use crate::ui::components::{IconButton, NumberSlider, SegmentedControl};
 use crate::ui::icon;
+use crate::ui::styles;
 use leptos::*;
 use serde::{Deserialize, Serialize};
 
@@ -54,9 +54,7 @@ pub fn from_toml(content: &str) -> Option<(CenterStyle, GridStyle, GridSize, boo
 // ── Settings panel ──────────────────────────────────────────────────────────
 
 #[component]
-pub fn SettingsPanel(
-    settings: RwSignal<CanvasSettings>,
-) -> impl IntoView {
+pub fn SettingsPanel(settings: RwSignal<CanvasSettings>) -> impl IntoView {
     let open = create_rw_signal(false);
 
     let center_style = create_rw_signal(settings.get().center_style);
@@ -67,11 +65,21 @@ pub fn SettingsPanel(
 
     create_effect(move |_| {
         let s = settings.get();
-        if center_style.get_untracked() != s.center_style { center_style.set(s.center_style); }
-        if grid_style.get_untracked() != s.grid_style { grid_style.set(s.grid_style); }
-        if grid_size.get_untracked() != s.grid_size.px() { grid_size.set(s.grid_size.px()); }
-        if autosave.get_untracked() != s.autosave { autosave.set(s.autosave); }
-        if canvas_bg.get_untracked() != s.canvas_bg { canvas_bg.set(s.canvas_bg); }
+        if center_style.get_untracked() != s.center_style {
+            center_style.set(s.center_style);
+        }
+        if grid_style.get_untracked() != s.grid_style {
+            grid_style.set(s.grid_style);
+        }
+        if grid_size.get_untracked() != s.grid_size.px() {
+            grid_size.set(s.grid_size.px());
+        }
+        if autosave.get_untracked() != s.autosave {
+            autosave.set(s.autosave);
+        }
+        if canvas_bg.get_untracked() != s.canvas_bg {
+            canvas_bg.set(s.canvas_bg);
+        }
     });
 
     create_effect(move |_| {
@@ -113,8 +121,8 @@ pub fn SettingsPanel(
     view! {
         <div class="fixed top-4 right-4 z-50 pointer-events-none">
             <div class="relative pointer-events-auto">
-                <div class=classes::PANEL>
-                    <IconButton on_click=toggle title="Settings" class=classes::BTN_COLLAPSE>
+                <div class=styles::PANEL>
+                    <IconButton on_click=toggle title="Settings" class=styles::BTN_COLLAPSE>
                         {icon::gear()}
                     </IconButton>
                 </div>
@@ -128,21 +136,15 @@ pub fn SettingsPanel(
                         <>
                             <div class="fixed inset-0 z-40" on:click=move |_| close()></div>
 
-                            <div class=classes::SETTINGS_WINDOW>
+                            <div class=styles::SETTINGS_WINDOW>
                                 <div class="flex items-center justify-between mb-3">
-                                    <span class=classes::SETTINGS_LABEL>"Center"</span>
-                                    <SegmentedControl
-                                        options=center_opts
-                                        active=center_style
-                                    />
+                                    <span class=styles::SETTINGS_LABEL>"Center"</span>
+                                    <SegmentedControl options=center_opts active=center_style />
                                 </div>
 
                                 <div class="flex items-center justify-between mb-3">
-                                    <span class=classes::SETTINGS_LABEL>"Grid"</span>
-                                    <SegmentedControl
-                                        options=grid_opts
-                                        active=grid_style
-                                    />
+                                    <span class=styles::SETTINGS_LABEL>"Grid"</span>
+                                    <SegmentedControl options=grid_opts active=grid_style />
                                 </div>
 
                                 <div class="mb-3">
@@ -156,19 +158,13 @@ pub fn SettingsPanel(
                                 </div>
 
                                 <div class="flex items-center justify-between mb-3">
-                                    <span class=classes::SETTINGS_LABEL>"Canvas bg"</span>
-                                    <SegmentedControl
-                                        options=bg_opts
-                                        active=canvas_bg
-                                    />
+                                    <span class=styles::SETTINGS_LABEL>"Canvas bg"</span>
+                                    <SegmentedControl options=bg_opts active=canvas_bg />
                                 </div>
 
                                 <div class="flex items-center justify-between">
-                                    <span class=classes::SETTINGS_LABEL>"Autosave"</span>
-                                    <SegmentedControl
-                                        options=toggle_opts
-                                        active=autosave
-                                    />
+                                    <span class=styles::SETTINGS_LABEL>"Autosave"</span>
+                                    <SegmentedControl options=toggle_opts active=autosave />
                                 </div>
                             </div>
                         </>

@@ -4,15 +4,14 @@ mod drawing;
 pub use drawing::Tool;
 
 use crate::canvas::CanvasMode;
-use crate::ui::classes;
 use crate::ui::icon;
+use crate::ui::styles;
 use leptos::*;
 
 /// Side dock with drawing tools, eraser, and curve-mode toggle.
 ///
 /// The dock sits on the left side of the screen and provides direct access to
-/// all drawing tools. When exactly one `Line` or `Arrow` is selected, a
-/// curve-mode toggle button appears at the bottom.
+/// all drawing tools.
 #[component]
 pub fn Dock(
     selected_tool: RwSignal<Tool>,
@@ -35,9 +34,9 @@ pub fn Dock(
 
     let tool_class = move |tool: Tool| -> &'static str {
         if canvas_mode.get() == CanvasMode::Draw && selected_tool.get() == tool {
-            classes::BTN_TBAR_ACTIVE
+            styles::BTN_TBAR_ACTIVE
         } else {
-            classes::BTN_TBAR_INACTIVE
+            styles::BTN_TBAR_INACTIVE
         }
     };
 
@@ -73,26 +72,31 @@ pub fn Dock(
     }
 
     view! {
-        <div class=classes::CONTAINER_DOCK>
-            <div class={format!("{} p-0.5", classes::PANEL)}>
-                {ALL_TOOLS.iter().map(|&tool| {
-                    view! {
-                        <button
-                            class=move || tool_class(tool)
-                            on:click=move |_| select_tool(tool)
-                            title=tool_title(tool)
-                        >
-                            {tool_icon(tool)}
-                        </button>
-                    }
-                }).collect::<Vec<_>>()}
-
+        <div class=styles::CONTAINER_DOCK>
+            <div class=format!(
+                "{} p-0.5",
+                styles::PANEL,
+            )>
+                {ALL_TOOLS
+                    .iter()
+                    .map(|&tool| {
+                        view! {
+                            <button
+                                class=move || tool_class(tool)
+                                on:click=move |_| select_tool(tool)
+                                title=tool_title(tool)
+                            >
+                                {tool_icon(tool)}
+                            </button>
+                        }
+                    })
+                    .collect::<Vec<_>>()}
                 <button
                     class=move || {
                         if eraser_active.get() {
-                            classes::BTN_TBAR_ACTIVE
+                            styles::BTN_TBAR_ACTIVE
                         } else {
-                            classes::BTN_TBAR_INACTIVE
+                            styles::BTN_TBAR_INACTIVE
                         }
                     }
                     on:click=toggle_eraser

@@ -1,3 +1,4 @@
+#![allow(clippy::redundant_locals)]
 mod app;
 mod canvas;
 mod hotkeys;

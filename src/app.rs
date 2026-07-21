@@ -1,14 +1,14 @@
 use std::rc::Rc;
 
-use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
 use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
-use crate::hotkeys::{HotkeysContext, register_hotkeys, ShortcutsModal};
+use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
+use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
 use crate::model::{Color, Element, ElementId, ElementStyle, LineStyle, Scene};
 use crate::tauri_bridge;
-use crate::ui::classes;
 use crate::ui::components::StylingPanel;
 use crate::ui::dock::{Dock, Tool};
 use crate::ui::settings::{from_toml, to_toml};
+use crate::ui::styles;
 use crate::ui::{SettingsPanel, ToolBar};
 use leptos::*;
 use wasm_bindgen_futures::spawn_local;
@@ -130,7 +130,13 @@ pub fn App() -> impl IntoView {
         let s = settings.get();
         let _ = s;
         if initialized.get() && is_tauri {
-            let content = to_toml(s.center_style, s.grid_style, s.grid_size, s.autosave, s.canvas_bg);
+            let content = to_toml(
+                s.center_style,
+                s.grid_style,
+                s.grid_size,
+                s.autosave,
+                s.canvas_bg,
+            );
             spawn_local(async move {
                 let _ = tauri_bridge::save_settings(&content).await;
             });
@@ -142,9 +148,11 @@ pub fn App() -> impl IntoView {
         stroke_color: selected_color.get_untracked(),
         ..Default::default()
     });
-    let default_line_style = create_rw_signal(LineStyle {
-        has_end_arrowhead: selected_tool.get_untracked() == Tool::Arrow,
-        ..Default::default()
+    let default_line_style = create_rw_signal(LineStyle::default());
+
+    create_effect(move |_| {
+        let is_arrow = selected_tool.get() == Tool::Arrow;
+        default_line_style.update(|ls| ls.has_end_arrowhead = is_arrow);
     });
 
     // ── Panel visibility ───────────────────────────────────────────────────
@@ -158,7 +166,6 @@ pub fn App() -> impl IntoView {
         }
         false
     });
-
 
     view! {
         <div class=move || {
@@ -195,21 +202,15 @@ pub fn App() -> impl IntoView {
                 shortcuts_open=shortcuts_open
                 selected_ids=selected_ids
             />
-            <Dock
-                selected_tool=selected_tool
-                canvas_mode=canvas_mode
-                eraser_active=eraser_active
-            />
-            <SettingsPanel
-                settings=settings
-            />
+            <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />
+            <SettingsPanel settings=settings />
             <ShortcutsModal shortcuts_open=shortcuts_open />
 
             <div
                 class="fixed left-[4.5rem] top-1/2 -translate-y-1/2 z-50"
                 class:hidden=move || !show_panel.get()
             >
-                <div class=classes::PANEL>
+                <div class=styles::PANEL>
                     <div class="py-2 px-3">
                         <StylingPanel
                             scene=scene

@@ -4,12 +4,11 @@ use super::state::{
 };
 use super::{DASH_PREVIEW, MIN_DRAG_DIST};
 use crate::model::elements::path::segment_midpoint;
+use crate::model::resize::ResizeContext;
 use crate::model::resize::{common_bounds, rotate_point_around};
 use crate::model::{
-    Bounds, Color, Element, ElementId, Offset, PathPoints, Point, Resize, Rotate, Scene,
-    SnapToGrid,
+    Bounds, Color, Element, ElementId, Offset, PathPoints, Point, Resize, Rotate, Scene, SnapToGrid,
 };
-use crate::model::resize::ResizeContext;
 
 fn selection_bounds(ids: &[ElementId], els: &[Element]) -> Option<(f64, f64, f64, f64)> {
     if ids.len() == 1 {
@@ -18,7 +17,8 @@ fn selection_bounds(ids: &[ElementId], els: &[Element]) -> Option<(f64, f64, f64
             .map(|el| el.bounds())
             .or_else(|| combined_bounds(ids, els))
     } else {
-        let data_refs: Vec<_> = els.iter()
+        let data_refs: Vec<_> = els
+            .iter()
             .filter(|el| ids.contains(&el.id()))
             .map(|el| el.data())
             .collect();
@@ -57,8 +57,17 @@ pub fn selection_preview_overlay(
         let hex = Color::BLUE;
         Some(
             view! {
-                <rect x=x y=y width=w height=h fill=format!("{}33", hex) stroke=hex
-                    stroke-width="1" stroke-dasharray={DASH_PREVIEW} pointer-events="none" />
+                <rect
+                    x=x
+                    y=y
+                    width=w
+                    height=h
+                    fill=format!("{}33", hex)
+                    stroke=hex
+                    stroke-width="1"
+                    stroke-dasharray=DASH_PREVIEW
+                    pointer-events="none"
+                />
             }
             .into_view(),
         )
@@ -87,20 +96,57 @@ pub fn selection_handle_overlay(
                     let mx = bx + bw / 2.0;
                     let my = by - 25.0;
 
-                    let path_handles: Vec<_> = points.iter().map(|p| {
-                        view! { <circle cx=p.x cy=p.y r="5" fill="white" stroke=hex stroke-width="1.5" pointer-events="none" /> }.into_view()
-                    }).collect();
+                    let path_handles: Vec<_> = points
+                        .iter()
+                        .map(|p| {
+                            view! {
+                                <circle
+                                    cx=p.x
+                                    cy=p.y
+                                    r="5"
+                                    fill="white"
+                                    stroke=hex
+                                    stroke-width="1.5"
+                                    pointer-events="none"
+                                />
+                            }
+                            .into_view()
+                        })
+                        .collect();
 
                     let cm = el.curve_mode();
-                    let ghost_handles: Vec<_> = (0..n.saturating_sub(1)).filter_map(|i| {
-                        let (gx, gy) = segment_midpoint(points, cm, i)?;
-                        Some(view! { <circle cx=gx cy=gy r="3.5" fill="none" stroke=hex stroke-width="1" pointer-events="none" /> }.into_view())
-                    }).collect();
+                    let ghost_handles: Vec<_> = (0..n.saturating_sub(1))
+                        .filter_map(|i| {
+                            let (gx, gy) = segment_midpoint(points, cm, i)?;
+                            Some(
+                                view! {
+                                    <circle
+                                        cx=gx
+                                        cy=gy
+                                        r="3.5"
+                                        fill="none"
+                                        stroke=hex
+                                        stroke-width="1"
+                                        pointer-events="none"
+                                    />
+                                }
+                                .into_view(),
+                            )
+                        })
+                        .collect();
 
                     let move_icon = view! {
-                        <g stroke=hex stroke-width="1.5" fill="none"
-                            transform=format!("translate({} {}) scale(0.9375)", mx - 11.25, my - 11.25)
-                            pointer-events="none">
+                        <g
+                            stroke=hex
+                            stroke-width="1.5"
+                            fill="none"
+                            transform=format!(
+                                "translate({} {}) scale(0.9375)",
+                                mx - 11.25,
+                                my - 11.25,
+                            )
+                            pointer-events="none"
+                        >
                             <path d="M12 3 L12 21 M3 12 L21 12" />
                             <path d="M9 6 L12 3 L15 6" />
                             <path d="M9 18 L12 21 L15 18" />
@@ -143,13 +189,18 @@ pub fn selection_handle_overlay(
         // during the drag gesture, so when rotation_delta is non-zero we use it even
         // for single-select.
         let rot: f64 = if ids.len() == 1 {
-            let el_rot = els.iter()
+            let el_rot = els
+                .iter()
                 .find(|el| el.id() == ids[0])
                 .map(|el| el.data().rotation)
                 .unwrap_or(0.0);
             let delta = rotation_delta.get();
             // Point-based types (data.rotation == 0) use rotation_delta during drag
-            if el_rot == 0.0 && delta != 0.0 { delta } else { el_rot }
+            if el_rot == 0.0 && delta != 0.0 {
+                delta
+            } else {
+                el_rot
+            }
         } else {
             rotation_delta.get()
         };
@@ -166,23 +217,51 @@ pub fn selection_handle_overlay(
                 (bx + bw, by + bh),
             ];
             view! {
-                <rect x=bx y=by width=bw height=bh fill="none" stroke=hex
-                    stroke-width="1" stroke-dasharray={DASH_BOUNDS} pointer-events="none" />
+                <rect
+                    x=bx
+                    y=by
+                    width=bw
+                    height=bh
+                    fill="none"
+                    stroke=hex
+                    stroke-width="1"
+                    stroke-dasharray=DASH_BOUNDS
+                    pointer-events="none"
+                />
                 <line x1=cx y1=by x2=rx y2=ry stroke=hex stroke-width="1" pointer-events="none" />
-                {corners.iter().map(|&(hx, hy)| {
-                    view! { <circle cx=hx cy=hy r=hr fill="white" stroke=hex stroke-width="1.5" pointer-events="none" /> }.into_view()
-                }).collect_view()}
-            }.into_view()
+                {corners
+                    .iter()
+                    .map(|&(hx, hy)| {
+                        view! {
+                            <circle
+                                cx=hx
+                                cy=hy
+                                r=hr
+                                fill="white"
+                                stroke=hex
+                                stroke-width="1.5"
+                                pointer-events="none"
+                            />
+                        }
+                            .into_view()
+                    })
+                    .collect_view()}
+            }
+            .into_view()
         };
 
         let icons = render_move_rotate_icons(hex, cx, cy, rx, ry);
 
         let content = if rot != 0.0 {
             let deg = rot.to_degrees();
-            view! { <g transform={format!("rotate({} {} {})", deg, cx, cy)}>{inner}{icons}</g> }
+            view! { <g transform=format!("rotate({} {} {})", deg, cx, cy)>{inner}{icons}</g> }
                 .into_view()
         } else {
-            view! { {inner}{icons} }.into_view()
+            view! {
+                {inner}
+                {icons}
+            }
+            .into_view()
         };
 
         Some(content)
@@ -191,9 +270,13 @@ pub fn selection_handle_overlay(
 
 fn render_move_rotate_icons(hex: &'static str, cx: f64, cy: f64, rx: f64, ry: f64) -> leptos::View {
     let move_icon = view! {
-        <g stroke=hex stroke-width="1.5" fill="none"
+        <g
+            stroke=hex
+            stroke-width="1.5"
+            fill="none"
             transform=format!("translate({} {}) scale(0.9375)", cx - 11.25, cy - 11.25)
-            pointer-events="none">
+            pointer-events="none"
+        >
             <path d="M12 3 L12 21 M3 12 L21 12" />
             <path d="M9 6 L12 3 L15 6" />
             <path d="M9 18 L12 21 L15 18" />
@@ -202,15 +285,23 @@ fn render_move_rotate_icons(hex: &'static str, cx: f64, cy: f64, rx: f64, ry: f6
         </g>
     };
     let rotate_icon = view! {
-        <g stroke=hex stroke-width="1.5" fill="none"
+        <g
+            stroke=hex
+            stroke-width="1.5"
+            fill="none"
             transform=format!("translate({} {}) scale(0.75)", rx - 9.0, ry - 9.0)
-            pointer-events="none">
+            pointer-events="none"
+        >
             <circle cx="12" cy="12" r="9.25" fill="white" stroke=hex stroke-width="1.5" />
             <path d="M12 4 A8 8 0 1 1 4 12" />
             <path d="M1.8 11.6 L4 9 L6.2 11.6" />
         </g>
     };
-    view! { {move_icon} {rotate_icon} }.into_view()
+    view! {
+        {move_icon}
+        {rotate_icon}
+    }
+    .into_view()
 }
 
 pub fn handle_positions(bx: f64, by: f64, bw: f64, bh: f64) -> [(f64, f64); 10] {
@@ -343,12 +434,17 @@ fn handle_selection_handles(
     for (i, &(hx, hy)) in hpos[..8].iter().enumerate() {
         if ((test_x - hx).powi(2) + (test_y - hy).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
             (props.push_snapshot)();
-            st.drag.drag_action.set(Some(Handle::Resize(ResizeHandle::from(i))));
+            st.drag
+                .drag_action
+                .set(Some(Handle::Resize(ResizeHandle::from(i))));
             st.drag.moving_anchor.set(Some(world));
             st.drag.drag_bounds.set(Some(bounds));
             st.drag.last_world.set(Some(world));
             st.drag.drag_originals.set(
-                els.iter().filter(|el| ids.contains(&el.id())).cloned().collect(),
+                els.iter()
+                    .filter(|el| ids.contains(&el.id()))
+                    .cloned()
+                    .collect(),
             );
             return true;
         }
@@ -370,12 +466,17 @@ fn handle_selection_handles(
         let cx = bx + bw / 2.0;
         let cy = by + bh / 2.0;
         st.drag.drag_action.set(Some(Handle::Rotate));
-        st.drag.drag_angle.set(Some((world.1 - cy).atan2(world.0 - cx) + std::f64::consts::FRAC_PI_2));
+        st.drag.drag_angle.set(Some(
+            (world.1 - cy).atan2(world.0 - cx) + std::f64::consts::FRAC_PI_2,
+        ));
         st.drag.moving_anchor.set(Some(world));
         st.drag.drag_bounds.set(Some(bounds));
         st.drag.overlay_freeze.set(Some(bounds));
         st.drag.drag_originals.set(
-            els.iter().filter(|el| ids.contains(&el.id())).cloned().collect(),
+            els.iter()
+                .filter(|el| ids.contains(&el.id()))
+                .cloned()
+                .collect(),
         );
         return true;
     }
@@ -478,22 +579,25 @@ pub fn select_pointer_move(
                     let alt = st.alt_pressed.get();
                     let shift = st.shift_pressed.get();
                     props.scene.update(|s| {
-                    for el in s.elements_mut().iter_mut() {
-                        if ids.contains(&el.id()) {
-                            if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
-                                let ctx = ResizeContext {
-                                    orig,
-                                    handle,
-                                    pointer_world: world,
-                                    shift,
-                                    alt,
-                                    multi,
-                                    bx, by, bw, bh,
-                                };
-                                el.resize(&ctx);
+                        for el in s.elements_mut().iter_mut() {
+                            if ids.contains(&el.id()) {
+                                if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
+                                    let ctx = ResizeContext {
+                                        orig,
+                                        handle,
+                                        pointer_world: world,
+                                        shift,
+                                        alt,
+                                        multi,
+                                        bx,
+                                        by,
+                                        bw,
+                                        bh,
+                                    };
+                                    el.resize(&ctx);
+                                }
                             }
                         }
-                    }
                     });
                 }
             }
@@ -502,7 +606,8 @@ pub fn select_pointer_move(
                     let cx = bx + bw / 2.0;
                     let cy = by + bh / 2.0;
                     if let Some(initial_angle) = st.drag.drag_angle.get() {
-                        let current_angle = (world.1 - cy).atan2(world.0 - cx) + std::f64::consts::FRAC_PI_2;
+                        let current_angle =
+                            (world.1 - cy).atan2(world.0 - cx) + std::f64::consts::FRAC_PI_2;
                         let mut delta = current_angle - initial_angle;
                         if st.shift_pressed.get() {
                             let step = std::f64::consts::TAU / 24.0;
@@ -514,7 +619,8 @@ pub fn select_pointer_move(
                         props.scene.update(|s| {
                             for el in s.elements_mut().iter_mut() {
                                 if ids.contains(&el.id()) {
-                                    if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
+                                    if let Some(orig) = originals.iter().find(|o| o.id() == el.id())
+                                    {
                                         *el = orig.clone();
                                         el.rotate_around(Point { x: cx, y: cy }, delta);
                                     }
@@ -579,7 +685,12 @@ pub fn select_pointer_move(
     }
 }
 
-pub fn select_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut CanvasState, props: &mut CanvasInputs) {
+pub fn select_pointer_up(
+    _ev: &ev::PointerEvent,
+    world: (f64, f64),
+    st: &mut CanvasState,
+    props: &mut CanvasInputs,
+) {
     if st.drag.moving_anchor.get().is_some() {
         let drag_action = st.drag.drag_action.get();
         let ids = st.selected_ids.get();
@@ -623,7 +734,7 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut Can
                 });
                 if exists {
                     props.scene.update(|s| {
-                    if let Some(el) = s.element_by_id_mut(ids[0]) {
+                        if let Some(el) = s.element_by_id_mut(ids[0]) {
                             if let Some(pts) = el.path_points_mut() {
                                 let sx = (pts[idx].x / GRID_SIZE).round() * GRID_SIZE;
                                 let sy = (pts[idx].y / GRID_SIZE).round() * GRID_SIZE;
@@ -674,5 +785,3 @@ pub fn select_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut Can
         st.select_anchor.set(None);
     }
 }
-
-

@@ -7,7 +7,6 @@ pub use color::Color;
 pub use elements::*;
 pub use point::Point;
 
-
 /// The single source of truth for everything on the canvas.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Scene {
@@ -53,5 +52,3 @@ impl Scene {
         self.elements.push(element);
     }
 }
-
-

@@ -1,8 +1,8 @@
+use crate::canvas::settings::CanvasSettings;
 use crate::model::resize::ResizeHandle;
 use crate::model::Color;
 use crate::model::{Bounds, Element, ElementId, ElementStyle, HitTest, LineStyle, Point, Scene};
 use crate::ui::dock::Tool;
-use crate::canvas::settings::CanvasSettings;
 use leptos::*;
 use std::rc::Rc;
 
@@ -158,7 +158,15 @@ pub fn hit_and_erase(point: (f64, f64), scene: RwSignal<Scene>) {
         s.elements()
             .iter()
             .rev()
-            .find(|el| el.hit_test(Point { x: point.0, y: point.1 }, HIT_MARGIN))
+            .find(|el| {
+                el.hit_test(
+                    Point {
+                        x: point.0,
+                        y: point.1,
+                    },
+                    HIT_MARGIN,
+                )
+            })
             .map(|el| el.id())
     });
     if let Some(id) = id {
@@ -195,7 +203,15 @@ pub fn hit_test_topmost(point: (f64, f64), elements: &[Element]) -> Option<Eleme
     elements
         .iter()
         .rev()
-        .find(|el| el.hit_test(Point { x: point.0, y: point.1 }, HIT_MARGIN))
+        .find(|el| {
+            el.hit_test(
+                Point {
+                    x: point.0,
+                    y: point.1,
+                },
+                HIT_MARGIN,
+            )
+        })
         .map(|el| el.id())
 }
 
