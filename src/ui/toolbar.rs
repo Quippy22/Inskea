@@ -1,6 +1,6 @@
 #![allow(clippy::redundant_locals)]
 use crate::canvas::{CanvasMode, CropExportCallback, Viewport};
-use crate::model::Scene;
+use crate::model::{ElementId, Scene};
 use crate::skea;
 use crate::tauri_bridge;
 use crate::util::window_size;
@@ -15,7 +15,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
-fn browser_import(scene: RwSignal<Scene>) {
+fn browser_import(scene: RwSignal<Scene>, selected_ids: RwSignal<Vec<ElementId>>) {
     let document = web_sys::window().unwrap().document().unwrap();
     let input = document
         .create_element("input")
@@ -39,11 +39,15 @@ fn browser_import(scene: RwSignal<Scene>) {
             let reader = web_sys::FileReader::new().expect("failed to create FileReader");
             let reader_c = reader.clone();
             let scene_c = scene;
+            let sid = selected_ids;
             let on_load = Closure::wrap(Box::new(move || {
                 if let Ok(val) = reader_c.result() {
                     if let Some(text) = val.as_string() {
                         match skea::load_from_str(&text) {
-                            Ok(loaded) => scene_c.set(loaded),
+                            Ok(loaded) => {
+                                sid.set(Vec::new());
+                                scene_c.set(loaded);
+                            }
                             Err(e) => {
                                 web_sys::console::error_1(&format!("parse error: {e}").into());
                             }
@@ -77,6 +81,7 @@ pub fn ToolBar<F1, F2>(
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<CropExportCallback>>,
     shortcuts_open: RwSignal<bool>,
+    selected_ids: RwSignal<Vec<ElementId>>,
 ) -> impl IntoView
 where
     F1: Fn() + 'static,
@@ -111,7 +116,7 @@ where
         let close_menu = close_menu;
         move || {
             close_menu();
-            file_ops::file_new(scene, saved_path);
+            file_ops::file_new(scene, saved_path, selected_ids);
         }
     };
     let on_save_as = {
@@ -132,7 +137,7 @@ where
         let close_menu = close_menu;
         move || {
             close_menu();
-            file_ops::file_open(scene, saved_path);
+            file_ops::file_open(scene, saved_path, selected_ids);
         }
     };
     let on_import = {
@@ -146,7 +151,10 @@ where
                         saved_path.set(Some(path.clone()));
                         match tauri_bridge::load_skea(&path).await {
                             Ok(c) => match skea::load_from_str(&c) {
-                                Ok(loaded) => scene.set(loaded),
+                                Ok(loaded) => {
+                                    selected_ids.set(Vec::new());
+                                    scene.set(loaded);
+                                }
                                 Err(e) => web_sys::console::error_1(&format!("parse: {e}").into()),
                             },
                             Err(e) => web_sys::console::error_1(&format!("load: {e}").into()),
@@ -154,7 +162,7 @@ where
                     }
                 });
             } else {
-                browser_import(scene);
+                browser_import(scene, selected_ids);
             }
         }
     };

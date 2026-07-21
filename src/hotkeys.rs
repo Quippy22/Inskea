@@ -94,8 +94,8 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
                     ctx.selected_ids.set(new_ids);
                 }
             }
-            (true, "n") | (true, "N") => file_ops::file_new(ctx.scene, ctx.saved_path),
-            (true, "o") | (true, "O") => file_ops::file_open(ctx.scene, ctx.saved_path),
+            (true, "n") | (true, "N") => file_ops::file_new(ctx.scene, ctx.saved_path, ctx.selected_ids),
+            (true, "o") | (true, "O") => file_ops::file_open(ctx.scene, ctx.saved_path, ctx.selected_ids),
             (true, "s") | (true, "S") => {
                 if shift { file_ops::file_save_as(ctx.scene, ctx.saved_path); }
                 else { file_ops::file_save(ctx.scene, ctx.saved_path); }

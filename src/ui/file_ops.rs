@@ -1,11 +1,12 @@
-use crate::model::Scene;
+use crate::model::{ElementId, Scene};
 use crate::skea;
 use crate::tauri_bridge;
 use leptos::*;
 use wasm_bindgen_futures::spawn_local;
 
-pub fn file_new(scene: RwSignal<Scene>, saved_path: RwSignal<Option<String>>) {
+pub fn file_new(scene: RwSignal<Scene>, saved_path: RwSignal<Option<String>>, selected_ids: RwSignal<Vec<ElementId>>) {
     saved_path.set(None);
+    selected_ids.set(Vec::new());
     scene.set(Scene::new());
 }
 
@@ -35,7 +36,7 @@ pub fn file_save_as(scene: RwSignal<Scene>, saved_path: RwSignal<Option<String>>
     });
 }
 
-pub fn file_open(scene: RwSignal<Scene>, saved_path: RwSignal<Option<String>>) {
+pub fn file_open(scene: RwSignal<Scene>, saved_path: RwSignal<Option<String>>, selected_ids: RwSignal<Vec<ElementId>>) {
     spawn_local(async move {
         let dir = tauri_bridge::get_app_data_dir().await.ok();
         let path = tauri_bridge::pick_open_path(dir.as_deref()).await;
@@ -43,7 +44,10 @@ pub fn file_open(scene: RwSignal<Scene>, saved_path: RwSignal<Option<String>>) {
             saved_path.set(Some(path.clone()));
             match tauri_bridge::load_skea(&path).await {
                 Ok(c) => match skea::load_from_str(&c) {
-                    Ok(loaded) => scene.set(loaded),
+                    Ok(loaded) => {
+                        selected_ids.set(Vec::new());
+                        scene.set(loaded);
+                    }
                     Err(e) => web_sys::console::error_1(&format!("parse: {e}").into()),
                 },
                 Err(e) => web_sys::console::error_1(&format!("load: {e}").into()),

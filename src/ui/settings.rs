@@ -66,6 +66,15 @@ pub fn SettingsPanel(
     let canvas_bg = create_rw_signal(settings.get().canvas_bg);
 
     create_effect(move |_| {
+        let s = settings.get();
+        if center_style.get_untracked() != s.center_style { center_style.set(s.center_style); }
+        if grid_style.get_untracked() != s.grid_style { grid_style.set(s.grid_style); }
+        if grid_size.get_untracked() != s.grid_size.px() { grid_size.set(s.grid_size.px()); }
+        if autosave.get_untracked() != s.autosave { autosave.set(s.autosave); }
+        if canvas_bg.get_untracked() != s.canvas_bg { canvas_bg.set(s.canvas_bg); }
+    });
+
+    create_effect(move |_| {
         settings.update(|s| s.center_style = center_style.get());
     });
     create_effect(move |_| {

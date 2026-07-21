@@ -193,6 +193,7 @@ pub fn App() -> impl IntoView {
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
                 shortcuts_open=shortcuts_open
+                selected_ids=selected_ids
             />
             <Dock
                 selected_tool=selected_tool
