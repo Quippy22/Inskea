@@ -1,10 +1,6 @@
-use super::utils::scale_points;
-use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
-};
-use super::{ElementData, ShapeColor};
+use crate::model::elements::utils::scale_points;
 use crate::model::resize::ResizeContext;
-use crate::model::Point;
+use crate::model::*;
 use leptos::IntoView;
 use std::fmt::Write;
 
@@ -86,10 +82,13 @@ fn perpendicular_dist(px: f64, py: f64, x1: f64, y1: f64, x2: f64, y2: f64) -> f
 // ── Trait implementations ──────────────────────────────────────────────
 
 impl FromDrag for Freehand {
-    fn from_drag(anchor: Point, _current: Point, color: ShapeColor, _shift: bool) -> Self {
+    fn from_drag(anchor: Point, _current: Point, color: Color, _shift: bool) -> Self {
         let mut fh = Self {
             data: ElementData {
-                stroke_color: color,
+                style: super::ElementStyle {
+                    stroke_color: color,
+                    ..Default::default()
+                },
                 ..ElementData::new(0)
             },
             points: vec![Point {
@@ -120,11 +119,27 @@ impl UpdateDrag for Freehand {
 
 impl Render for Freehand {
     fn render(&self, _zoom: f64) -> leptos::View {
-        let sw = self.data.stroke_width;
-        let stroke = ShapeColor::to_hex(self.data.stroke_color);
+        let sw = self.data.style.stroke_width;
+        let stroke = self.data.style.stroke_color.to_hex();
+        let dash = self.data.style.stroke_style.stroke_dasharray();
+        let linejoin = self.data.style.edge_style.stroke_linejoin();
+        let linecap = match self.data.style.edge_style {
+            super::EdgeStyle::Sharp => "butt",
+            super::EdgeStyle::Rounded => "round",
+        };
+        let opacity = self.data.style.opacity;
         let d = build_smooth_path(&self.points);
         leptos::view! {
-            <path d=d fill="none" stroke=stroke stroke-width=sw stroke-linecap="round" stroke-linejoin="round" />
+            <path
+                d=d
+                fill="none"
+                stroke=stroke
+                stroke-width=sw
+                stroke-linecap=linecap
+                stroke-linejoin=linejoin
+                stroke-dasharray=dash
+                opacity=opacity
+            />
         }
         .into_view()
     }
@@ -180,7 +195,7 @@ impl HitTest for Freehand {
             &self.points,
             crate::model::elements::path::CurveMode::Straight,
             (point.x, point.y),
-            margin + self.data.stroke_width,
+            margin + self.data.style.stroke_width,
         )
     }
 }

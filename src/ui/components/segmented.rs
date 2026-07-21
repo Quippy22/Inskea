@@ -1,4 +1,4 @@
-use crate::ui::classes;
+use crate::ui::styles;
 use leptos::*;
 
 #[component]
@@ -18,10 +18,12 @@ pub fn SegmentedControl<T: PartialEq + Copy + 'static>(
                     let val = *val;
                     view! {
                         <button
-                            class=move || if active.get() == val {
-                                classes::SEG_BTN_ACTIVE
-                            } else {
-                                classes::SEG_BTN_INACTIVE
+                            class=move || {
+                                if active.get() == val {
+                                    styles::SEG_BTN_ACTIVE
+                                } else {
+                                    styles::SEG_BTN_INACTIVE
+                                }
                             }
                             class:border-r=move || !is_last
                             class:border-border=move || !is_last

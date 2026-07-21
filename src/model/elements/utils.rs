@@ -1,9 +1,6 @@
+use crate::model::elements::rect::MIN_DIMENSION;
 use crate::model::resize::ResizeContext;
-use crate::model::Point;
-
-use super::rect::MIN_DIMENSION;
-use super::Element;
-use super::ElementData;
+use crate::model::{Element, ElementData, Point};
 
 pub(crate) fn snap_bbox_to_grid(world_point: &mut Point, width: f64, height: f64, grid: f64) {
     let cx = world_point.x + width / 2.0;
@@ -126,6 +123,25 @@ mod tests {
         assert_eq!(w, 10.0);
         assert_eq!(h, 20.0);
     }
+}
+
+pub(crate) fn arrowhead_polyline(tail: &Point, tip: &Point, sw: f64) -> String {
+    let dx = tip.x - tail.x;
+    let dy = tip.y - tail.y;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len <= 0.0 {
+        return String::new();
+    }
+    let ux = dx / len;
+    let uy = dy / len;
+    let head_size = (sw * 4.0).max(4.0);
+    let tip_x = tip.x;
+    let tip_y = tip.y;
+    let lx = tip_x - ux * head_size - uy * head_size * 0.4;
+    let ly = tip_y - uy * head_size + ux * head_size * 0.4;
+    let rx = tip_x - ux * head_size + uy * head_size * 0.4;
+    let ry = tip_y - uy * head_size - ux * head_size * 0.4;
+    format!("{},{} {},{} {},{}", lx, ly, tip_x, tip_y, rx, ry)
 }
 
 pub(crate) fn rect_from_drag(anchor: Point, current: Point, shift: bool) -> (Point, f64, f64) {

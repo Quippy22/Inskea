@@ -40,11 +40,11 @@ pub fn draw_pointer_down(
         data.world_point.set(world.0, world.1);
         data.width = 0.0;
         data.height = 0.0;
-        data.stroke_color = color;
+        data.style = props.default_style.get();
         let id = props.scene.with(|s| s.next_id);
         props.scene.update(|s| {
             let w = data.width;
-            let fs = data.font_size;
+            let fs = data.style.font_size;
             s.add_element(Element::Text(Text {
                 data,
                 wrapped: WrappedText::new("", w, fs),
@@ -59,7 +59,7 @@ pub fn draw_pointer_down(
         (props.push_snapshot)();
         props.scene.update(|s| {
             let mut data = ElementData::new(0);
-            data.stroke_color = color;
+            data.style = props.default_style.get();
             s.add_element(Element::Freehand(Freehand {
                 data,
                 points: vec![Point {
@@ -100,7 +100,12 @@ pub fn draw_pointer_down(
 ///   **after** construction (so the undo snapshot happens before the element
 ///   is added), then the element is added to the scene and the drawing state
 ///   is cleared.
-pub fn draw_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut CanvasState, props: &mut CanvasInputs) {
+pub fn draw_pointer_up(
+    _ev: &ev::PointerEvent,
+    world: (f64, f64),
+    st: &mut CanvasState,
+    props: &mut CanvasInputs,
+) {
     if let Some(state) = st.drawing.get() {
         if state.tool == Tool::Freehand {
             props.scene.update(|s| {
@@ -120,18 +125,31 @@ pub fn draw_pointer_up(_ev: &ev::PointerEvent, world: (f64, f64), st: &mut Canva
         }
         let anchor = Point::from(state.anchor);
         let world_pt = Point::from(world);
-        let el: Element = match state.tool {
-            Tool::Rectangle => Rectangle::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
-            Tool::Ellipse => Ellipse::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
-            Tool::Line => Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
+        let mut el: Element = match state.tool {
+            Tool::Rectangle => {
+                Rectangle::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into()
+            }
+            Tool::Ellipse => {
+                Ellipse::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into()
+            }
+            Tool::Line => {
+                Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into()
+            }
             Tool::Arrow => {
-                let mut line = Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get());
-                line.has_arrowhead = true;
+                let line = Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get());
                 Element::Line(line)
             }
-            Tool::Text => Text::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
-            Tool::Freehand => Freehand::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into(),
+            Tool::Text => {
+                Text::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into()
+            }
+            Tool::Freehand => {
+                Freehand::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into()
+            }
         };
+        el.data_mut().style = props.default_style.get();
+        if let Element::Line(ref mut l) = el {
+            l.line_style = props.default_line_style.get();
+        }
         (props.push_snapshot)();
         props.scene.update(|s| {
             s.add_element(el);

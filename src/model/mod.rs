@@ -3,15 +3,9 @@ pub mod elements;
 pub mod point;
 pub mod resize;
 
-pub use color::ShapeColor;
-pub use elements::{
-    Element, ElementData, ElementId, Ellipse, Freehand, Line, Rectangle, Text,
-};
-pub use elements::{
-    Bounds, FromDrag, HitTest, Offset, PathPoints, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
-};
+pub use color::Color;
+pub use elements::*;
 pub use point::Point;
-
 
 /// The single source of truth for everything on the canvas.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -58,5 +52,3 @@ impl Scene {
         self.elements.push(element);
     }
 }
-
-

@@ -1,13 +1,15 @@
 use std::rc::Rc;
 
-use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
-use crate::model::{Element, ElementId, Scene, ShapeColor};
 use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
-use crate::hotkeys::{HotkeysContext, register_hotkeys, ShortcutsModal};
-use crate::ui::settings::{from_toml, to_toml};
-use crate::ui::{SettingsPanel, ToolBar};
+use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
+use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
+use crate::model::{Color, Element, ElementId, ElementStyle, LineStyle, Scene};
 use crate::tauri_bridge;
+use crate::ui::components::StylingPanel;
 use crate::ui::dock::{Dock, Tool};
+use crate::ui::settings::{from_toml, to_toml};
+use crate::ui::styles;
+use crate::ui::{SettingsPanel, ToolBar};
 use leptos::*;
 use wasm_bindgen_futures::spawn_local;
 
@@ -18,7 +20,7 @@ pub fn App() -> impl IntoView {
     let viewport = create_rw_signal(Viewport::default());
 
     let selected_tool = create_rw_signal(Tool::Rectangle);
-    let selected_color = create_rw_signal(ShapeColor::White);
+    let selected_color = create_rw_signal(Color::new(Color::WHITE));
     let canvas_mode = create_rw_signal(CanvasMode::Select);
 
     let scene = create_rw_signal(Scene::new());
@@ -32,7 +34,7 @@ pub fn App() -> impl IntoView {
     let settings = create_rw_signal(CanvasSettings {
         center_style: CenterStyle::Crosshair,
         grid_style: GridStyle::Dot,
-        grid_size: GridSize::Px30,
+        grid_size: GridSize::new(30.0),
         autosave: false,
         canvas_bg: CanvasBg::Dark,
     });
@@ -128,11 +130,41 @@ pub fn App() -> impl IntoView {
         let s = settings.get();
         let _ = s;
         if initialized.get() && is_tauri {
-            let content = to_toml(s.center_style, s.grid_style, s.grid_size, s.autosave, s.canvas_bg);
+            let content = to_toml(
+                s.center_style,
+                s.grid_style,
+                s.grid_size,
+                s.autosave,
+                s.canvas_bg,
+            );
             spawn_local(async move {
                 let _ = tauri_bridge::save_settings(&content).await;
             });
         }
+    });
+
+    // ── Default style for new shapes (draw-mode panel changes) ────────────
+    let default_style = create_rw_signal(ElementStyle {
+        stroke_color: selected_color.get_untracked(),
+        ..Default::default()
+    });
+    let default_line_style = create_rw_signal(LineStyle::default());
+
+    create_effect(move |_| {
+        let is_arrow = selected_tool.get() == Tool::Arrow;
+        default_line_style.update(|ls| ls.has_end_arrowhead = is_arrow);
+    });
+
+    // ── Panel visibility ───────────────────────────────────────────────────
+    let show_panel = Signal::derive(move || {
+        let mode = canvas_mode.get();
+        if mode == CanvasMode::Select && selected_ids.get().len() == 1 {
+            return true;
+        }
+        if mode == CanvasMode::Draw && !eraser_active.get() {
+            return true;
+        }
+        false
     });
 
     view! {
@@ -154,6 +186,8 @@ pub fn App() -> impl IntoView {
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
                 selected_ids=selected_ids
+                default_style=default_style
+                default_line_style=default_line_style
             />
             <ToolBar
                 scene=scene
@@ -166,19 +200,28 @@ pub fn App() -> impl IntoView {
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
                 shortcuts_open=shortcuts_open
-            />
-            <Dock
-                selected_tool=selected_tool
-                selected_color=selected_color
-                canvas_mode=canvas_mode
-                eraser_active=eraser_active
-                scene=scene
                 selected_ids=selected_ids
             />
-            <SettingsPanel
-                settings=settings
-            />
+            <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />
+            <SettingsPanel settings=settings />
             <ShortcutsModal shortcuts_open=shortcuts_open />
+
+            <div
+                class="fixed left-[4.5rem] top-1/2 -translate-y-1/2 z-50"
+                class:hidden=move || !show_panel.get()
+            >
+                <div class=styles::PANEL>
+                    <div class="py-2 px-3">
+                        <StylingPanel
+                            scene=scene
+                            selected_ids=selected_ids
+                            selected_tool=selected_tool
+                            default_style=default_style
+                            default_line_style=default_line_style
+                        />
+                    </div>
+                </div>
+            </div>
         </div>
     }
 }

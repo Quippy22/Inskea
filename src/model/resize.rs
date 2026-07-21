@@ -36,7 +36,9 @@ impl ResizeHandle {
     /// Which axes are free to change when dragging this handle.
     pub fn free_axes(self) -> (bool, bool) {
         match self {
-            ResizeHandle::Nw | ResizeHandle::Ne | ResizeHandle::Sw | ResizeHandle::Se => (true, true),
+            ResizeHandle::Nw | ResizeHandle::Ne | ResizeHandle::Sw | ResizeHandle::Se => {
+                (true, true)
+            }
             ResizeHandle::N | ResizeHandle::S => (false, true),
             ResizeHandle::W | ResizeHandle::E => (true, false),
         }
@@ -80,7 +82,10 @@ pub fn common_bounds(elements: &[&ElementData]) -> (f64, f64, f64, f64) {
     let mut max_x = f64::MIN;
     let mut max_y = f64::MIN;
     for el in elements {
-        for c in el.world_point.rect_corners(el.width, el.height, el.rotation) {
+        for c in el
+            .world_point
+            .rect_corners(el.width, el.height, el.rotation)
+        {
             min_x = min_x.min(c.x);
             min_y = min_y.min(c.y);
             max_x = max_x.max(c.x);
@@ -138,21 +143,21 @@ pub fn resize_from_handle(
         }
     }
 
-        if shift {
-            let ratio = original.width / original.height;
-            let nratio = new_w / new_h;
-            if nratio > ratio {
-                new_h = new_w / ratio;
-                if !alt && free_y && handle == ResizeHandle::N {
-                    new_local_y = anchor.1 - new_h;
-                }
-            } else {
-                new_w = new_h * ratio;
-                if !alt && free_x && handle == ResizeHandle::W {
-                    new_local_x = anchor.0 - new_w;
-                }
+    if shift {
+        let ratio = original.width / original.height;
+        let nratio = new_w / new_h;
+        if nratio > ratio {
+            new_h = new_w / ratio;
+            if !alt && free_y && handle == ResizeHandle::N {
+                new_local_y = anchor.1 - new_h;
+            }
+        } else {
+            new_w = new_h * ratio;
+            if !alt && free_x && handle == ResizeHandle::W {
+                new_local_x = anchor.0 - new_w;
             }
         }
+    }
 
     // For edge handles (non-corner), the constrained axis keeps its original size.
     // But for corner handles where alt is active, we already computed both from center.
@@ -189,6 +194,7 @@ pub fn resize_from_handle(
         width: new_w,
         height: new_h,
         rotation: original.rotation,
+        style: original.style.clone(),
         ..*original
     }
 }
@@ -239,14 +245,40 @@ pub fn resize_bbox(
         }
     } else {
         match handle {
-            ResizeHandle::Nw => { nx = pointer_world.0; ny = pointer_world.1; nw = (bx + bw) - pointer_world.0; nh = (by + bh) - pointer_world.1; }
-            ResizeHandle::N => { ny = pointer_world.1; nh = (by + bh) - pointer_world.1; }
-            ResizeHandle::Ne => { ny = pointer_world.1; nw = pointer_world.0 - bx; nh = (by + bh) - pointer_world.1; }
-            ResizeHandle::W => { nx = pointer_world.0; nw = (bx + bw) - pointer_world.0; }
-            ResizeHandle::E => { nw = pointer_world.0 - bx; }
-            ResizeHandle::Sw => { nx = pointer_world.0; nw = (bx + bw) - pointer_world.0; nh = pointer_world.1 - by; }
-            ResizeHandle::S => { nh = pointer_world.1 - by; }
-            ResizeHandle::Se => { nw = pointer_world.0 - bx; nh = pointer_world.1 - by; }
+            ResizeHandle::Nw => {
+                nx = pointer_world.0;
+                ny = pointer_world.1;
+                nw = (bx + bw) - pointer_world.0;
+                nh = (by + bh) - pointer_world.1;
+            }
+            ResizeHandle::N => {
+                ny = pointer_world.1;
+                nh = (by + bh) - pointer_world.1;
+            }
+            ResizeHandle::Ne => {
+                ny = pointer_world.1;
+                nw = pointer_world.0 - bx;
+                nh = (by + bh) - pointer_world.1;
+            }
+            ResizeHandle::W => {
+                nx = pointer_world.0;
+                nw = (bx + bw) - pointer_world.0;
+            }
+            ResizeHandle::E => {
+                nw = pointer_world.0 - bx;
+            }
+            ResizeHandle::Sw => {
+                nx = pointer_world.0;
+                nw = (bx + bw) - pointer_world.0;
+                nh = pointer_world.1 - by;
+            }
+            ResizeHandle::S => {
+                nh = pointer_world.1 - by;
+            }
+            ResizeHandle::Se => {
+                nw = pointer_world.0 - bx;
+                nh = pointer_world.1 - by;
+            }
         }
 
         if nw < MIN_ELEMENT_SIZE || nh < MIN_ELEMENT_SIZE {
@@ -262,16 +294,29 @@ pub fn resize_bbox(
                 nw = nh * ratio;
             }
             match handle {
-                ResizeHandle::Nw => { nx = bx + bw - nw; ny = by + bh - nh; }
-                ResizeHandle::N | ResizeHandle::Ne => { ny = by + bh - nh; }
-                ResizeHandle::W | ResizeHandle::Sw => { nx = bx + bw - nw; }
+                ResizeHandle::Nw => {
+                    nx = bx + bw - nw;
+                    ny = by + bh - nh;
+                }
+                ResizeHandle::N | ResizeHandle::Ne => {
+                    ny = by + bh - nh;
+                }
+                ResizeHandle::W | ResizeHandle::Sw => {
+                    nx = bx + bw - nw;
+                }
                 _ => {}
             }
         }
 
         match handle {
-            ResizeHandle::N | ResizeHandle::S => { nx = bx; nw = bw; }
-            ResizeHandle::W | ResizeHandle::E => { ny = by; nh = bh; }
+            ResizeHandle::N | ResizeHandle::S => {
+                nx = bx;
+                nw = bw;
+            }
+            ResizeHandle::W | ResizeHandle::E => {
+                ny = by;
+                nh = bh;
+            }
             _ => {}
         }
     }
@@ -320,6 +365,7 @@ pub fn resize_scale_element(
 
 #[cfg(test)]
 mod tests {
+    use super::super::elements::{EdgeStyle, ElementStyle, StrokeStyle};
     use super::*;
 
     fn default_data() -> ElementData {
@@ -329,10 +375,16 @@ mod tests {
             width: 100.0,
             height: 100.0,
             rotation: 0.0,
-            font_size: 24.0,
-            stroke_color: super::super::ShapeColor::Blue,
-            fill_color: None,
-            stroke_width: 2.0,
+            style: ElementStyle {
+                font_size: 24.0,
+                stroke_color: super::super::Color::new(super::super::Color::BLUE),
+                fill_color: None,
+                stroke_width: 2.0,
+                stroke_style: StrokeStyle::Solid,
+                edge_style: EdgeStyle::Sharp,
+                roundness: 6.0,
+                opacity: 1.0,
+            },
         }
     }
 
@@ -405,7 +457,9 @@ mod tests {
     #[test]
     fn rotated_corners_unrotated() {
         let el = default_data();
-        let corners = el.world_point.rect_corners(el.width, el.height, el.rotation);
+        let corners = el
+            .world_point
+            .rect_corners(el.width, el.height, el.rotation);
         assert_eq!(corners[0], Point { x: 0.0, y: 0.0 });
         assert_eq!(corners[1], Point { x: 100.0, y: 0.0 });
         assert_eq!(corners[2], Point { x: 100.0, y: 100.0 });
@@ -470,10 +524,16 @@ mod tests {
             width: 100.0,
             height: 50.0,
             rotation: 0.0,
-            font_size: 24.0,
-            stroke_color: super::super::ShapeColor::Blue,
-            fill_color: None,
-            stroke_width: 2.0,
+            style: ElementStyle {
+                font_size: 24.0,
+                stroke_color: super::super::Color::new(super::super::Color::BLUE),
+                fill_color: None,
+                stroke_width: 2.0,
+                stroke_style: StrokeStyle::Solid,
+                edge_style: EdgeStyle::Sharp,
+                roundness: 6.0,
+                opacity: 1.0,
+            },
         };
         let orig = ElementData {
             id: 1,
@@ -481,12 +541,29 @@ mod tests {
             width: 100.0,
             height: 50.0,
             rotation: 0.0,
-            font_size: 24.0,
-            stroke_color: super::super::ShapeColor::Blue,
-            fill_color: None,
-            stroke_width: 2.0,
+            style: ElementStyle {
+                font_size: 24.0,
+                stroke_color: super::super::Color::new(super::super::Color::BLUE),
+                fill_color: None,
+                stroke_width: 2.0,
+                stroke_style: StrokeStyle::Solid,
+                edge_style: EdgeStyle::Sharp,
+                roundness: 6.0,
+                opacity: 1.0,
+            },
         };
-        resize_scale_element(&mut data, &orig, Point::new(0.0, 0.0), 200.0, 100.0, 0.0, 0.0, 100.0, 50.0, true);
+        resize_scale_element(
+            &mut data,
+            &orig,
+            Point::new(0.0, 0.0),
+            200.0,
+            100.0,
+            0.0,
+            0.0,
+            100.0,
+            50.0,
+            true,
+        );
         assert!((data.width - 200.0).abs() < 0.01);
         assert!((data.height - 100.0).abs() < 0.01);
         assert!((data.world_point.x - 0.0).abs() < 0.01);
@@ -501,10 +578,16 @@ mod tests {
             width: 100.0,
             height: 50.0,
             rotation: 0.0,
-            font_size: 24.0,
-            stroke_color: super::super::ShapeColor::Blue,
-            fill_color: None,
-            stroke_width: 2.0,
+            style: ElementStyle {
+                font_size: 24.0,
+                stroke_color: super::super::Color::new(super::super::Color::BLUE),
+                fill_color: None,
+                stroke_width: 2.0,
+                stroke_style: StrokeStyle::Solid,
+                edge_style: EdgeStyle::Sharp,
+                roundness: 6.0,
+                opacity: 1.0,
+            },
         };
         let orig = ElementData {
             id: 1,
@@ -512,12 +595,29 @@ mod tests {
             width: 100.0,
             height: 50.0,
             rotation: 0.0,
-            font_size: 24.0,
-            stroke_color: super::super::ShapeColor::Blue,
-            fill_color: None,
-            stroke_width: 2.0,
+            style: ElementStyle {
+                font_size: 24.0,
+                stroke_color: super::super::Color::new(super::super::Color::BLUE),
+                fill_color: None,
+                stroke_width: 2.0,
+                stroke_style: StrokeStyle::Solid,
+                edge_style: EdgeStyle::Sharp,
+                roundness: 6.0,
+                opacity: 1.0,
+            },
         };
-        resize_scale_element(&mut data, &orig, Point::new(0.0, 0.0), 200.0, 100.0, 0.0, 0.0, 100.0, 50.0, false);
+        resize_scale_element(
+            &mut data,
+            &orig,
+            Point::new(0.0, 0.0),
+            200.0,
+            100.0,
+            0.0,
+            0.0,
+            100.0,
+            50.0,
+            false,
+        );
         assert!((data.width - 200.0).abs() < 0.01);
         assert!((data.height - 50.0).abs() < 0.01); // unchanged
     }

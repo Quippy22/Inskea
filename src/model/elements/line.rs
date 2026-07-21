@@ -1,15 +1,30 @@
-use super::path::{
-    bounds_of_points, hit_test_path, offset_points, path_d, rotate_points,
-    snap_points_to_grid, CurveMode,
+use crate::model::elements::path::{
+    bounds_of_points, hit_test_path, offset_points, path_d, rotate_points, snap_points_to_grid,
 };
-use super::utils::{line_endpoints, scale_points};
-use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
-};
-use super::{ElementData, ShapeColor};
+use crate::model::elements::utils::{arrowhead_polyline, line_endpoints, scale_points};
 use crate::model::resize::ResizeContext;
-use crate::model::Point;
+use crate::model::*;
 use leptos::IntoView;
+
+/// Line/arrow-specific properties.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct LineStyle {
+    pub curve_mode: CurveMode,
+    #[serde(default)]
+    pub has_start_arrowhead: bool,
+    #[serde(default)]
+    pub has_end_arrowhead: bool,
+}
+
+impl Default for LineStyle {
+    fn default() -> Self {
+        Self {
+            curve_mode: CurveMode::Straight,
+            has_start_arrowhead: false,
+            has_end_arrowhead: true,
+        }
+    }
+}
 
 /// A line defined by an ordered list of path points.
 ///
@@ -22,24 +37,23 @@ pub struct Line {
     pub data: ElementData,
     /// Ordered path points. At minimum 2 endpoints.
     pub points: Vec<Point>,
-    /// How the points are connected when rendering.
-    pub curve_mode: CurveMode,
-    /// Whether this line has an arrowhead at its tip.
-    #[serde(default)]
-    pub has_arrowhead: bool,
+    /// Line-specific properties (curve mode, arrowhead).
+    pub line_style: LineStyle,
 }
 
 impl FromDrag for Line {
-    fn from_drag(anchor: Point, current: Point, color: ShapeColor, shift: bool) -> Self {
+    fn from_drag(anchor: Point, current: Point, color: Color, shift: bool) -> Self {
         let (a, b) = line_endpoints(anchor, current, shift);
         Self {
             data: ElementData {
-                stroke_color: color,
+                style: super::ElementStyle {
+                    stroke_color: color,
+                    ..Default::default()
+                },
                 ..ElementData::new(0)
             },
             points: vec![a, b],
-            curve_mode: CurveMode::default(),
-            has_arrowhead: false,
+            line_style: LineStyle::default(),
         }
     }
 }
@@ -54,42 +68,46 @@ impl UpdateDrag for Line {
     }
 }
 
-const ARROW_HEAD_MULT: f64 = 4.0;
-
 impl Render for Line {
     fn render(&self, _zoom: f64) -> leptos::View {
-        let sw = self.data.stroke_width;
-        let stroke = ShapeColor::to_hex(self.data.stroke_color);
-        let d = path_d(&self.points, self.curve_mode);
+        let sw = self.data.style.stroke_width;
+        let stroke = self.data.style.stroke_color.to_hex();
+        let dash = self.data.style.stroke_style.stroke_dasharray();
+        let linejoin = self.data.style.edge_style.stroke_linejoin();
+        let linecap = match self.data.style.edge_style {
+            super::EdgeStyle::Sharp => "butt",
+            super::EdgeStyle::Rounded => "round",
+        };
+        let d = path_d(&self.points, self.line_style.curve_mode);
+        let opacity = self.data.style.opacity;
+        let sw2 = sw;
 
-        if self.has_arrowhead && self.points.len() >= 2 {
-            let (ux, uy) = {
-                let tail = &self.points[self.points.len() - 2];
-                let tip = &self.points[self.points.len() - 1];
-                let dx = tip.x - tail.x;
-                let dy = tip.y - tail.y;
-                let len = (dx * dx + dy * dy).sqrt();
-                if len > 0.0 {
-                    (dx / len, dy / len)
-                } else {
-                    (1.0, 0.0)
-                }
-            };
+        let start_arrow = (self.line_style.has_start_arrowhead && self.points.len() >= 2)
+            .then(|| arrowhead_polyline(&self.points[1], &self.points[0], sw2));
+        let end_arrow = (self.line_style.has_end_arrowhead && self.points.len() >= 2).then(|| {
+            arrowhead_polyline(
+                &self.points[self.points.len() - 2],
+                &self.points[self.points.len() - 1],
+                sw2,
+            )
+        });
 
-            let head_size = (sw * ARROW_HEAD_MULT).max(4.0);
-            let tip = &self.points[self.points.len() - 1];
-            let tip_x = tip.x;
-            let tip_y = tip.y;
-            let lx = tip_x - ux * head_size - uy * head_size * 0.4;
-            let ly = tip_y - uy * head_size + ux * head_size * 0.4;
-            let rx = tip_x - ux * head_size + uy * head_size * 0.4;
-            let ry = tip_y - uy * head_size - ux * head_size * 0.4;
-            let points = format!("{},{} {},{} {},{}", lx, ly, tip_x, tip_y, rx, ry);
+        let has_any_arrow = start_arrow.is_some() || end_arrow.is_some();
 
+        if has_any_arrow {
             leptos::view! {
-                <g stroke=stroke stroke-width=sw fill="none" stroke-linejoin="round">
+                <g
+                    stroke=stroke
+                    stroke-width=sw
+                    fill="none"
+                    stroke-linejoin=linejoin
+                    stroke-linecap=linecap
+                    stroke-dasharray=dash
+                    opacity=opacity
+                >
                     <path d=d />
-                    <polyline points=points />
+                    {start_arrow.map(|p| leptos::view! { <polyline points=p /> })}
+                    {end_arrow.map(|p| leptos::view! { <polyline points=p /> })}
                 </g>
             }
             .into_view()
@@ -98,7 +116,12 @@ impl Render for Line {
                 <path
                     d=d
                     fill="none"
-                    stroke=stroke stroke-width=sw
+                    stroke=stroke
+                    stroke-width=sw
+                    stroke-linejoin=linejoin
+                    stroke-linecap=linecap
+                    stroke-dasharray=dash
+                    opacity=opacity
                 />
             }
             .into_view()
@@ -110,9 +133,9 @@ impl HitTest for Line {
     fn hit_test(&self, point: Point, margin: f64) -> bool {
         hit_test_path(
             &self.points,
-            self.curve_mode,
+            self.line_style.curve_mode,
             (point.x, point.y),
-            margin + self.data.stroke_width,
+            margin + self.data.style.stroke_width,
         )
     }
 }

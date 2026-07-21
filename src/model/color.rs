@@ -1,47 +1,67 @@
-/// Stroke or fill color for a shape, drawn from a fixed palette that works
-/// well with the Tokyo-Night-based dark theme.
-///
-/// Each variant maps to the Tailwind 500‑shade hex value.
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum ShapeColor {
-    Purple,
-    Blue,
-    Cyan,
-    Green,
-    Yellow,
-    Orange,
-    Red,
-    #[default]
-    White,
+use serde::de::{self, Deserializer, Unexpected};
+use serde::ser::Serializer;
+use serde::{Deserialize, Serialize};
+use std::fmt;
+
+/// An RGB color stored as a `#rrggbb` hex string.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Color(String);
+
+impl Color {
+    pub fn new(hex: &str) -> Self {
+        let clean = hex.trim_start_matches('#');
+        if clean.len() == 3 {
+            let expanded: String = clean
+                .chars()
+                .flat_map(|c| std::iter::repeat_n(c, 2))
+                .collect();
+            Self(format!("#{expanded}"))
+        } else if clean.len() == 6 {
+            Self(format!("#{clean}"))
+        } else {
+            Self("#ffffff".to_string())
+        }
+    }
+
+    pub fn to_hex(&self) -> String {
+        self.0.clone()
+    }
+
+    pub const WHITE: &'static str = "#ffffff";
+    pub const YELLOW: &'static str = "#eab308";
+    pub const GREEN: &'static str = "#22c55e";
+    pub const BLUE: &'static str = "#3b82f6";
+    pub const RED: &'static str = "#ef4444";
 }
 
-impl std::fmt::Display for ShapeColor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Purple => write!(f, "Purple"),
-            Self::Blue => write!(f, "Blue"),
-            Self::Cyan => write!(f, "Cyan"),
-            Self::Green => write!(f, "Green"),
-            Self::Yellow => write!(f, "Yellow"),
-            Self::Orange => write!(f, "Orange"),
-            Self::Red => write!(f, "Red"),
-            Self::White => write!(f, "White"),
-        }
+impl Default for Color {
+    fn default() -> Self {
+        Self("#ffffff".to_string())
     }
 }
 
-impl ShapeColor {
-    /// Return the Tailwind 500‑shade hex string for this color.
-    pub fn to_hex(self) -> &'static str {
-        match self {
-            Self::Purple => "#a855f7",
-            Self::Blue => "#3b82f6",
-            Self::Cyan => "#06b6d4",
-            Self::Green => "#22c55e",
-            Self::Yellow => "#eab308",
-            Self::Orange => "#f97316",
-            Self::Red => "#ef4444",
-            Self::White => "#ffffff",
+impl fmt::Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Serialize for Color {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Color {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        if s.starts_with('#') && (s.len() == 7 || s.len() == 4) {
+            Ok(Color::new(&s))
+        } else {
+            Err(de::Error::invalid_value(
+                Unexpected::Str(&s),
+                &"a hex colour string (#rrggbb or #rgb)",
+            ))
         }
     }
 }

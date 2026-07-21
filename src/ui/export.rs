@@ -82,16 +82,23 @@ fn el_svg(el: &Element) -> String {
     use std::fmt::Write;
     match el {
         Element::Rectangle(r) => {
-            let fill = r.data.fill_color.map(|c| c.to_hex()).unwrap_or("none");
+            let fill = r
+                .data
+                .style
+                .fill_color
+                .as_ref()
+                .map(|c| c.to_hex())
+                .unwrap_or_else(|| "none".to_string());
             let rect = format!(
-                r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" stroke="{}" stroke-width="{}"/>"#,
+                r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" stroke="{}" stroke-width="{}" opacity="{}"/>"#,
                 r.data.world_point.x,
                 r.data.world_point.y,
                 r.data.width,
                 r.data.height,
                 fill,
-                r.data.stroke_color.to_hex(),
-                r.data.stroke_width,
+                r.data.style.stroke_color.to_hex(),
+                r.data.style.stroke_width,
+                r.data.style.opacity,
             );
             if r.data.rotation == 0.0 {
                 rect
@@ -103,18 +110,25 @@ fn el_svg(el: &Element) -> String {
             }
         }
         Element::Ellipse(e) => {
-            let fill = e.data.fill_color.map(|c| c.to_hex()).unwrap_or("none");
+            let fill = e
+                .data
+                .style
+                .fill_color
+                .as_ref()
+                .map(|c| c.to_hex())
+                .unwrap_or_else(|| "none".to_string());
             let cx = e.data.world_point.x + e.data.width / 2.0;
             let cy = e.data.world_point.y + e.data.height / 2.0;
             let ellipse = format!(
-                r#"<ellipse cx="{}" cy="{}" rx="{}" ry="{}" fill="{}" stroke="{}" stroke-width="{}"/>"#,
+                r#"<ellipse cx="{}" cy="{}" rx="{}" ry="{}" fill="{}" stroke="{}" stroke-width="{}" opacity="{}"/>"#,
                 cx,
                 cy,
                 e.data.width / 2.0,
                 e.data.height / 2.0,
                 fill,
-                e.data.stroke_color.to_hex(),
-                e.data.stroke_width,
+                e.data.style.stroke_color.to_hex(),
+                e.data.style.stroke_width,
+                e.data.style.opacity,
             );
             if e.data.rotation == 0.0 {
                 ellipse
@@ -124,49 +138,62 @@ fn el_svg(el: &Element) -> String {
             }
         }
         Element::Line(l) => {
-            let d = crate::model::elements::path::path_d(&l.points, l.curve_mode);
+            let d = crate::model::elements::path::path_d(&l.points, l.line_style.curve_mode);
+            let opacity = l.data.style.opacity;
             let mut out = format!(
-                r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
+                r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}" opacity="{}"/>"#,
                 d,
-                l.data.stroke_color.to_hex(),
-                l.data.stroke_width,
+                l.data.style.stroke_color.to_hex(),
+                l.data.style.stroke_width,
+                opacity,
             );
-            if l.has_arrowhead && l.points.len() >= 2 {
-                let tail = &l.points[l.points.len() - 2];
-                let tip = &l.points[l.points.len() - 1];
-                let dx = tip.x - tail.x;
-                let dy = tip.y - tail.y;
-                let len = dx.hypot(dy);
-                if len > 1.0 {
-                    let ux = dx / len;
-                    let uy = dy / len;
-                    let hl = (l.data.stroke_width * 4.0).max(8.0);
-                    let hw = hl * 0.4;
-                    let bx = tip.x - ux * hl;
-                    let by = tip.y - uy * hl;
-                    let _ = write!(
-                        out,
-                        r#"<polyline points="{},{},{} {},{} {}" fill="none" stroke="{}" stroke-width="{}"/>"#,
-                        tip.x,
-                        tip.y,
-                        bx - uy * hw,
-                        by + ux * hw,
-                        bx + uy * hw,
-                        by - ux * hw,
-                        l.data.stroke_color.to_hex(),
-                        l.data.stroke_width,
+            if l.points.len() >= 2 {
+                let sw = l.data.style.stroke_width;
+                if l.line_style.has_start_arrowhead {
+                    let pts = crate::model::elements::utils::arrowhead_polyline(
+                        &l.points[1],
+                        &l.points[0],
+                        sw,
                     );
+                    if !pts.is_empty() {
+                        let _ = write!(
+                            out,
+                            r#"<polyline points="{}" fill="none" stroke="{}" stroke-width="{}" opacity="{}"/>"#,
+                            pts,
+                            l.data.style.stroke_color.to_hex(),
+                            sw,
+                            opacity,
+                        );
+                    }
+                }
+                if l.line_style.has_end_arrowhead {
+                    let pts = crate::model::elements::utils::arrowhead_polyline(
+                        &l.points[l.points.len() - 2],
+                        &l.points[l.points.len() - 1],
+                        sw,
+                    );
+                    if !pts.is_empty() {
+                        let _ = write!(
+                            out,
+                            r#"<polyline points="{}" fill="none" stroke="{}" stroke-width="{}" opacity="{}"/>"#,
+                            pts,
+                            l.data.style.stroke_color.to_hex(),
+                            sw,
+                            opacity,
+                        );
+                    }
                 }
             }
             out
         }
         Element::Text(t) => {
             let mut out = format!(
-                r#"<text x="{}" y="{}" font-size="{}" fill="{}">"#,
+                r#"<text x="{}" y="{}" font-size="{}" fill="{}" opacity="{}">"#,
                 t.data.world_point.x,
-                t.data.world_point.y + t.data.font_size,
-                t.data.font_size,
-                t.data.stroke_color.to_hex(),
+                t.data.world_point.y + t.data.style.font_size,
+                t.data.style.font_size,
+                t.data.style.stroke_color.to_hex(),
+                t.data.style.opacity,
             );
             for (i, line) in t.wrapped.lines.iter().enumerate() {
                 let esc = line
@@ -176,7 +203,7 @@ fn el_svg(el: &Element) -> String {
                 let dy = if i == 0 {
                     "0"
                 } else {
-                    &format!("{}", t.data.font_size)
+                    &format!("{}", t.data.style.font_size)
                 };
                 let _ = write!(
                     out,
@@ -205,10 +232,11 @@ fn el_svg(el: &Element) -> String {
                 }
             }
             format!(
-                r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}" stroke-linecap="round"/>"#,
+                r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}" stroke-linecap="round" opacity="{}"/>"#,
                 d,
-                f.data.stroke_color.to_hex(),
-                f.data.stroke_width,
+                f.data.style.stroke_color.to_hex(),
+                f.data.style.stroke_width,
+                f.data.style.opacity,
             )
         }
     }

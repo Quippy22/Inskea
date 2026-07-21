@@ -1,10 +1,6 @@
-use super::ElementData;
-use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
-};
-use super::utils::{rect_from_drag, rotate_bbox, snap_bbox_to_grid};
+use crate::model::elements::utils::{rect_from_drag, rotate_bbox, snap_bbox_to_grid};
 use crate::model::resize::{resize_bbox, resize_from_handle, resize_scale_element, ResizeContext};
-use crate::model::Point;
+use crate::model::*;
 use leptos::IntoView;
 
 /// An ellipse (oval) shape defined by its bounding-box top-left, width, and height.
@@ -15,7 +11,7 @@ pub struct Ellipse {
 }
 
 impl Ellipse {
-    fn fill_paint(fill: &Option<super::ShapeColor>) -> String {
+    fn fill_paint(fill: &Option<super::Color>) -> String {
         match fill {
             Some(c) => c.to_hex().to_string(),
             None => "none".to_string(),
@@ -24,14 +20,17 @@ impl Ellipse {
 }
 
 impl FromDrag for Ellipse {
-    fn from_drag(anchor: Point, current: Point, color: super::ShapeColor, shift: bool) -> Self {
+    fn from_drag(anchor: Point, current: Point, color: super::Color, shift: bool) -> Self {
         let (pt, w, h) = rect_from_drag(anchor, current, shift);
         Self {
             data: ElementData {
                 world_point: pt,
                 width: w,
                 height: h,
-                stroke_color: color,
+                style: super::ElementStyle {
+                    stroke_color: color,
+                    ..Default::default()
+                },
                 ..ElementData::new(0)
             },
         }
@@ -53,19 +52,44 @@ impl Render for Ellipse {
         let cy = self.data.world_point.y + self.data.height / 2.0;
         let rx = self.data.width / 2.0;
         let ry = self.data.height / 2.0;
-        let sw = self.data.stroke_width;
-        let fill = Self::fill_paint(&self.data.fill_color);
-        let stroke = super::ShapeColor::to_hex(self.data.stroke_color);
+        let sw = self.data.style.stroke_width;
+        let fill = Self::fill_paint(&self.data.style.fill_color);
+        let stroke = self.data.style.stroke_color.to_hex();
+        let dash = self.data.style.stroke_style.stroke_dasharray();
+        let linejoin = self.data.style.edge_style.stroke_linejoin();
+        let opacity = self.data.style.opacity;
         if self.data.rotation == 0.0 {
             leptos::view! {
-                <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw />
+                <ellipse
+                    cx=cx
+                    cy=cy
+                    rx=rx
+                    ry=ry
+                    fill=fill
+                    stroke=stroke
+                    stroke-width=sw
+                    stroke-dasharray=dash
+                    stroke-linejoin=linejoin
+                    opacity=opacity
+                />
             }
             .into_view()
         } else {
             let deg = self.data.rotation.to_degrees();
             leptos::view! {
-                <g transform={format!("rotate({} {} {})", deg, cx, cy)}>
-                    <ellipse cx=cx cy=cy rx=rx ry=ry fill=fill stroke=stroke stroke-width=sw />
+                <g transform=format!("rotate({} {} {})", deg, cx, cy)>
+                    <ellipse
+                        cx=cx
+                        cy=cy
+                        rx=rx
+                        ry=ry
+                        fill=fill
+                        stroke=stroke
+                        stroke-width=sw
+                        stroke-dasharray=dash
+                        stroke-linejoin=linejoin
+                        opacity=opacity
+                    />
                 </g>
             }
             .into_view()
@@ -80,7 +104,7 @@ impl HitTest for Ellipse {
         let pt = Point::unrotate(point, cx, cy, self.data.rotation);
         let px = pt.x;
         let py = pt.y;
-        let has_fill = self.data.fill_color.is_some();
+        let has_fill = self.data.style.fill_color.is_some();
         if has_fill {
             px >= self.data.world_point.x - margin
                 && px <= self.data.world_point.x + self.data.width + margin
@@ -95,14 +119,19 @@ impl HitTest for Ellipse {
             let dy = (py - cy) / hh.max(1.0);
             let dist = (dx * dx + dy * dy).sqrt();
             let edge_dist = (dist - 1.0).abs() * hw.min(hh).max(1.0);
-            edge_dist <= margin + self.data.stroke_width
+            edge_dist <= margin + self.data.style.stroke_width
         }
     }
 }
 
 impl Bounds for Ellipse {
     fn bounds(&self) -> (f64, f64, f64, f64) {
-        (self.data.world_point.x, self.data.world_point.y, self.data.width, self.data.height)
+        (
+            self.data.world_point.x,
+            self.data.world_point.y,
+            self.data.width,
+            self.data.height,
+        )
     }
 }
 
@@ -114,7 +143,12 @@ impl Offset for Ellipse {
 
 impl SnapToGrid for Ellipse {
     fn snap_to_grid(&mut self, grid: f64) {
-        snap_bbox_to_grid(&mut self.data.world_point, self.data.width, self.data.height, grid);
+        snap_bbox_to_grid(
+            &mut self.data.world_point,
+            self.data.width,
+            self.data.height,
+            grid,
+        );
     }
 }
 
@@ -128,7 +162,10 @@ impl Resize for Ellipse {
     fn resize(&mut self, ctx: &ResizeContext) {
         if ctx.multi {
             let (pos, (nw, nh)) = match resize_bbox(
-                Point { x: ctx.bx, y: ctx.by },
+                Point {
+                    x: ctx.bx,
+                    y: ctx.by,
+                },
                 (ctx.bw, ctx.bh),
                 ctx.pointer_world,
                 ctx.handle,
@@ -138,7 +175,18 @@ impl Resize for Ellipse {
                 Some(v) => v,
                 None => return,
             };
-            resize_scale_element(&mut self.data, ctx.orig.data(), pos, nw, nh, ctx.bx, ctx.by, ctx.bw, ctx.bh, true);
+            resize_scale_element(
+                &mut self.data,
+                ctx.orig.data(),
+                pos,
+                nw,
+                nh,
+                ctx.bx,
+                ctx.by,
+                ctx.bw,
+                ctx.bh,
+                true,
+            );
         } else {
             let result = resize_from_handle(
                 &self.data,

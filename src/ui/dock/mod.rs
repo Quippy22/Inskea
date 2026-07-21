@@ -1,262 +1,110 @@
-/// Floating tool dock with categories and panels.
-///
-/// The dock sits on the left side of the screen and provides access to
-/// drawing tools, colours, grouping, and page management via expandable
-/// category panels.
-mod colors;
+/// Floating tool dock with drawing tools and utilities.
 mod drawing;
-mod group;
-mod pages;
 
-pub use colors::ColorsPanel;
-pub use drawing::{DrawingPanel, Tool};
-pub use group::GroupPanel;
-pub use pages::PagesPanel;
+pub use drawing::Tool;
 
 use crate::canvas::CanvasMode;
-use crate::model::elements::path::CurveMode;
-use crate::model::{ElementId, PathPoints, Scene, ShapeColor};
-use crate::ui::classes;
 use crate::ui::icon;
+use crate::ui::styles;
 use leptos::*;
 
-/// Dock category variant used to select which panel is shown.
-#[derive(Clone, Copy, PartialEq)]
-enum Category {
-    Drawing,
-    Colors,
-    Group,
-    Pages,
-}
-
-/// Floating dock with tool categories, colour palette, and eraser.
+/// Side dock with drawing tools, eraser, and curve-mode toggle.
 ///
-/// Clicking a category while collapsed expands the dock and opens that
-/// category's panel. The eraser button sits at the bottom of the category
-/// list with the same highlight style.
-///
-/// When exactly one `Line` or `Arrow` is selected, a curve-mode toggle
-/// button appears that switches between Straight and Curved rendering.
+/// The dock sits on the left side of the screen and provides direct access to
+/// all drawing tools.
 #[component]
 pub fn Dock(
     selected_tool: RwSignal<Tool>,
-    selected_color: RwSignal<ShapeColor>,
     canvas_mode: RwSignal<CanvasMode>,
     eraser_active: RwSignal<bool>,
-    scene: RwSignal<Scene>,
-    selected_ids: RwSignal<Vec<ElementId>>,
 ) -> impl IntoView {
-    let collapsed = create_rw_signal(true);
-    let active = create_rw_signal(Category::Drawing);
-    let show_panel = create_rw_signal(false);
-
-    let toggle_collapse = move |_| {
-        let was_collapsed = collapsed.get();
-        collapsed.set(!was_collapsed);
-        show_panel.set(was_collapsed);
+    let select_tool = move |tool: Tool| {
+        selected_tool.set(tool);
+        canvas_mode.set(CanvasMode::Draw);
         eraser_active.set(false);
-    };
-
-    let select_category = move |cat: Category| {
-        eraser_active.set(false);
-        if collapsed.get() {
-            active.set(cat);
-            collapsed.set(false);
-            show_panel.set(true);
-        } else {
-            active.set(cat);
-        }
-    };
-
-    let panel_visible = move || !collapsed.get() || show_panel.get();
-
-    let panel = move || match active.get() {
-        Category::Drawing => {
-            view! { <DrawingPanel selected_tool=selected_tool canvas_mode=canvas_mode /> }
-                .into_view()
-        }
-        Category::Colors => view! { <ColorsPanel selected_color=selected_color /> }.into_view(),
-        Category::Group => view! { <GroupPanel /> }.into_view(),
-        Category::Pages => view! { <PagesPanel /> }.into_view(),
-    };
-
-    let btn_class = move |cat: Category| -> &'static str {
-        if !eraser_active.get() && panel_visible() && active.get() == cat {
-            classes::BTN_CAT_ACTIVE
-        } else {
-            classes::BTN_CAT_INACTIVE
-        }
     };
 
     let toggle_eraser = move |_| {
         let new = !eraser_active.get();
         eraser_active.set(new);
         if new {
-            collapsed.set(true);
-            show_panel.set(false);
             canvas_mode.set(CanvasMode::Draw);
         }
     };
 
-    // Determine whether a single Line or Arrow is selected and its curve mode
-    let path_info = move || -> Option<CurveMode> {
-        let ids = selected_ids.get();
-        if ids.len() != 1 {
-            return None;
+    let tool_class = move |tool: Tool| -> &'static str {
+        if canvas_mode.get() == CanvasMode::Draw && selected_tool.get() == tool {
+            styles::BTN_TBAR_ACTIVE
+        } else {
+            styles::BTN_TBAR_INACTIVE
         }
-        let els = scene.get().elements().to_vec();
-        let el = els.iter().find(|e| e.id() == ids[0])?;
-        el.path_points()?; // ensure it's a path element
-        Some(el.curve_mode())
     };
 
-    let toggle_curve_mode = move |_| {
-        let ids = selected_ids.get();
-        if ids.len() != 1 {
-            return;
-        }
-        let id = ids[0];
-        scene.update(|s| {
-            if let Some(el) = s.element_by_id_mut(id) {
-                if el.path_points().is_some() {
-                    let new_mode = match el.curve_mode() {
-                        CurveMode::Straight => CurveMode::Curved,
-                        CurveMode::Curved => CurveMode::Straight,
-                    };
-                    el.set_curve_mode(new_mode);
-                }
-            }
-        });
-    };
+    const ALL_TOOLS: [Tool; 6] = [
+        Tool::Rectangle,
+        Tool::Ellipse,
+        Tool::Line,
+        Tool::Arrow,
+        Tool::Text,
+        Tool::Freehand,
+    ];
 
-    fn cat_icon(cat: Category) -> leptos::View {
-        match cat {
-            Category::Drawing => icon::pencil().into_view(),
-            Category::Colors => icon::palette().into_view(),
-            Category::Group => icon::group().into_view(),
-            Category::Pages => icon::pages().into_view(),
+    fn tool_title(tool: Tool) -> &'static str {
+        match tool {
+            Tool::Rectangle => "Rectangle",
+            Tool::Ellipse => "Ellipse",
+            Tool::Line => "Line",
+            Tool::Arrow => "Arrow",
+            Tool::Text => "Text",
+            Tool::Freehand => "Freehand",
         }
     }
 
-    fn cat_title(cat: Category) -> &'static str {
-        match cat {
-            Category::Drawing => "Drawing",
-            Category::Colors => "Colors",
-            Category::Group => "Group",
-            Category::Pages => "Pages",
+    fn tool_icon(tool: Tool) -> leptos::View {
+        match tool {
+            Tool::Rectangle => icon::rect().into_view(),
+            Tool::Ellipse => icon::ellipse().into_view(),
+            Tool::Line => icon::line().into_view(),
+            Tool::Arrow => icon::arrow().into_view(),
+            Tool::Text => icon::text().into_view(),
+            Tool::Freehand => icon::freehand().into_view(),
         }
     }
-
-    const ALL_CATS: [Category; 4] = [Category::Drawing, Category::Colors, Category::Group, Category::Pages];
 
     view! {
-        // Wrapper centers everything
-        <div class=classes::CONTAINER_DOCK>
-            // Collapse button — separate floating object above the dock
-            <div class=classes::PANEL>
-                <button class=classes::BTN_COLLAPSE on:click=toggle_collapse>
-                    {move || {
-                        if collapsed.get() {
-                            icon::chevron_right().into_view()
-                        } else {
-                            icon::chevron_left().into_view()
-                        }
-                    }}
-                </button>
-            </div>
-
-            // Main dock
-            <div class="relative flex">
-                <div class=classes::PANEL>
-                    {ALL_CATS.iter().map(|&cat| {
+        <div class=styles::CONTAINER_DOCK>
+            <div class=format!(
+                "{} p-0.5",
+                styles::PANEL,
+            )>
+                {ALL_TOOLS
+                    .iter()
+                    .map(|&tool| {
                         view! {
                             <button
-                                class=move || btn_class(cat)
-                                on:click=move |_| select_category(cat)
-                                title=cat_title(cat)
-                                style=move || {
-                                    if cat == Category::Colors {
-                                        if selected_color.get() != ShapeColor::White {
-                                            format!("color: {}", selected_color.get().to_hex())
-                                        } else {
-                                            String::new()
-                                        }
-                                    } else {
-                                        String::new()
-                                    }
-                                }
+                                class=move || tool_class(tool)
+                                on:click=move |_| select_tool(tool)
+                                title=tool_title(tool)
                             >
-                                {cat_icon(cat)}
+                                {tool_icon(tool)}
                             </button>
                         }
-                    }).collect::<Vec<_>>()}
-
-                    // Eraser
-                    <button
-                        class=move || {
-                            if eraser_active.get() {
-                                classes::BTN_CAT_ACTIVE
-                            } else {
-                                classes::BTN_CAT_INACTIVE
-                            }
+                    })
+                    .collect::<Vec<_>>()}
+                <button
+                    class=move || {
+                        if eraser_active.get() {
+                            styles::BTN_TBAR_ACTIVE
+                        } else {
+                            styles::BTN_TBAR_INACTIVE
                         }
-                        on:click=toggle_eraser
-                        title="Eraser"
-                    >
-                        {icon::eraser()}
-                    </button>
-
-                    // Curve mode toggle — only shown when a single Line/Arrow is selected
-                    {move || {
-                        path_info().map(|_mode| {
-                            view! {
-                                <div class="mt-2 border-t border-border pt-2">
-                                    <button
-                                        class=move || {
-                                            if let Some(m) = path_info() {
-                                                if m == CurveMode::Curved {
-                                                    classes::BTN_CAT_ACTIVE
-                                                } else {
-                                                    classes::BTN_CAT_INACTIVE
-                                                }
-                                            } else {
-                                                classes::BTN_CAT_INACTIVE
-                                            }
-                                        }
-                                        on:click=toggle_curve_mode
-                                        title="Toggle curve mode"
-                                    >
-                                        {move || {
-                                            if let Some(m) = path_info() {
-                                                match m {
-                                                    CurveMode::Straight => icon::line().into_view(),
-                                                    CurveMode::Curved => icon::freehand().into_view(),
-                                                }
-                                            } else {
-                                                icon::line().into_view()
-                                            }
-                                        }}
-                                    </button>
-                                </div>
-                            }
-                        })
-                    }}
-                </div>
-
-                // Right column — panel
-                {move || {
-                    if panel_visible() {
-                        Some(
-                            view! {
-                                <div class="absolute left-[calc(100%+2px)] top-1/2 -translate-y-1/2 rounded-lg bg-panel/80 backdrop-blur-sm border border-border shadow-lg pointer-events-auto">
-                                    {panel()}
-                                </div>
-                            },
-                        )
-                    } else {
-                        None
                     }
-                }}
+                    on:click=toggle_eraser
+                    title="Eraser"
+                >
+                    {icon::eraser()}
+                </button>
+
             </div>
         </div>
     }

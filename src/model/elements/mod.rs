@@ -4,17 +4,99 @@ pub(crate) mod line;
 pub mod path;
 pub mod rect;
 pub(crate) mod text;
-mod utils;
+pub(crate) mod utils;
 
 pub use ellipse::Ellipse;
 pub use freehand::Freehand;
-pub use line::Line;
+#[allow(unused_imports)]
+pub use line::{Line, LineStyle};
 pub use rect::Rectangle;
 pub use text::Text;
 
-use super::ShapeColor;
-use crate::model::Point;
-use path::CurveMode;
+use crate::model::{Color, Point};
+pub use path::CurveMode;
+
+/// Stroke dash style.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize, Default)]
+pub enum StrokeStyle {
+    #[default]
+    Solid,
+    Dashed,
+    Dotted,
+}
+
+impl StrokeStyle {
+    pub fn stroke_dasharray(&self) -> &'static str {
+        match self {
+            StrokeStyle::Solid => "none",
+            StrokeStyle::Dashed => "6 3",
+            StrokeStyle::Dotted => "2 2",
+        }
+    }
+}
+
+/// Edge corner style for shapes.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize, Default)]
+pub enum EdgeStyle {
+    #[default]
+    Sharp,
+    Rounded,
+}
+
+impl EdgeStyle {
+    pub fn stroke_linejoin(&self) -> &'static str {
+        match self {
+            EdgeStyle::Sharp => "miter",
+            EdgeStyle::Rounded => "round",
+        }
+    }
+}
+
+/// Shared appearance properties for every element type.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct ElementStyle {
+    pub stroke_color: Color,
+    pub fill_color: Option<Color>,
+    pub stroke_width: f64,
+    pub font_size: f64,
+    pub stroke_style: StrokeStyle,
+    pub edge_style: EdgeStyle,
+    #[serde(default)]
+    pub roundness: f64,
+    #[serde(default = "default_opacity")]
+    pub opacity: f64,
+}
+
+fn default_opacity() -> f64 {
+    1.0
+}
+
+impl Default for ElementStyle {
+    fn default() -> Self {
+        Self {
+            stroke_color: Color::default(),
+            fill_color: None,
+            stroke_width: 2.0,
+            font_size: 24.0,
+            stroke_style: StrokeStyle::default(),
+            edge_style: EdgeStyle::default(),
+            roundness: 6.0,
+            opacity: 1.0,
+        }
+    }
+}
+
+/// Categorisation of an element for the styling panel.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum StylingKind {
+    Rectangle,
+    Ellipse,
+    Line,
+    Arrow,
+    Text,
+    Freehand,
+}
 
 /// Unique identifier for an element in the scene.
 pub type ElementId = u64;
@@ -32,19 +114,12 @@ pub struct ElementData {
     pub height: f64,
     /// Clockwise rotation in radians around the element's center.
     pub rotation: f64,
-    /// Font size in world-space units (used by [`Text`]).
-    pub font_size: f64,
-    /// Stroke (outline) color.
-    pub stroke_color: ShapeColor,
-    /// Optional fill color. `None` means transparent.
-    pub fill_color: Option<ShapeColor>,
-    /// Stroke width in world-space units.
-    pub stroke_width: f64,
+    /// Shared appearance properties (stroke, fill, etc.).
+    pub style: ElementStyle,
 }
 
 impl ElementData {
-    /// Creates an `ElementData` with defaults: position (0,0), size 100×100,
-    /// no rotation, font size 24, white stroke, no fill, stroke width 2.
+    /// Creates an `ElementData` with defaults.
     pub fn new(id: ElementId) -> Self {
         Self {
             id,
@@ -52,10 +127,7 @@ impl ElementData {
             width: 100.0,
             height: 100.0,
             rotation: 0.0,
-            font_size: 24.0,
-            stroke_color: ShapeColor::default(),
-            fill_color: None,
-            stroke_width: 2.0,
+            style: ElementStyle::default(),
         }
     }
 }
@@ -109,6 +181,23 @@ impl Element {
             Element::Line(e) => &mut e.data,
             Element::Text(e) => &mut e.data,
             Element::Freehand(e) => &mut e.data,
+        }
+    }
+
+    /// The kind of styling panel to show for this element.
+    pub fn styling_kind(&self) -> StylingKind {
+        match self {
+            Element::Rectangle(_) => StylingKind::Rectangle,
+            Element::Ellipse(_) => StylingKind::Ellipse,
+            Element::Line(l) => {
+                if l.line_style.has_end_arrowhead || l.line_style.has_start_arrowhead {
+                    StylingKind::Arrow
+                } else {
+                    StylingKind::Line
+                }
+            }
+            Element::Text(_) => StylingKind::Text,
+            Element::Freehand(_) => StylingKind::Freehand,
         }
     }
 }
@@ -215,8 +304,6 @@ pub trait PathPoints {
     fn curve_mode(&self) -> CurveMode {
         CurveMode::Straight
     }
-    /// Set the curve mode.
-    fn set_curve_mode(&mut self, _mode: CurveMode) {}
 }
 
 impl PathPoints for Line {
@@ -227,10 +314,7 @@ impl PathPoints for Line {
         Some(&mut self.points)
     }
     fn curve_mode(&self) -> CurveMode {
-        self.curve_mode
-    }
-    fn set_curve_mode(&mut self, mode: CurveMode) {
-        self.curve_mode = mode;
+        self.line_style.curve_mode
     }
 }
 
@@ -249,12 +333,9 @@ impl PathPoints for Element {
     }
     fn curve_mode(&self) -> CurveMode {
         match self {
-            Element::Line(e) => e.curve_mode,
+            Element::Line(e) => e.line_style.curve_mode,
             _ => CurveMode::Straight,
         }
-    }
-    fn set_curve_mode(&mut self, mode: CurveMode) {
-        if let Element::Line(e) = self { e.curve_mode = mode }
     }
 }
 
@@ -269,7 +350,7 @@ pub trait Resize {
 /// Construct an element from a mouse-drag operation (anchor → current position).
 pub trait FromDrag: Sized {
     /// Create a new element of this type given the drag start and current world-space points.
-    fn from_drag(anchor: Point, current: Point, color: ShapeColor, shift: bool) -> Self;
+    fn from_drag(anchor: Point, current: Point, color: Color, shift: bool) -> Self;
 }
 
 /// Update an element while it is being drawn (e.g. freehand adding points).
@@ -280,101 +361,43 @@ pub trait UpdateDrag {
 
 // ── Blanket trait implementations on Element ───────────────────────────
 
-impl Render for Element {
-    fn render(&self, zoom: f64) -> leptos::View {
-        match self {
-            Element::Rectangle(e) => e.render(zoom),
-            Element::Ellipse(e) => e.render(zoom),
-            Element::Line(e) => e.render(zoom),
-            Element::Text(e) => e.render(zoom),
-            Element::Freehand(e) => e.render(zoom),
+macro_rules! dispatch_element {
+    ($trait:ident, $method:ident(&self $(, $arg:ident: $ty:ty)*) -> $ret:ty) => {
+        impl $trait for Element {
+            fn $method(&self, $($arg: $ty),*) -> $ret {
+                match self {
+                    Element::Rectangle(e) => e.$method($($arg),*),
+                    Element::Ellipse(e) => e.$method($($arg),*),
+                    Element::Line(e) => e.$method($($arg),*),
+                    Element::Text(e) => e.$method($($arg),*),
+                    Element::Freehand(e) => e.$method($($arg),*),
+                }
+            }
         }
-    }
+    };
+    ($trait:ident, $method:ident(&mut self $(, $arg:ident: $ty:ty)*)) => {
+        impl $trait for Element {
+            fn $method(&mut self, $($arg: $ty),*) {
+                match self {
+                    Element::Rectangle(e) => e.$method($($arg),*),
+                    Element::Ellipse(e) => e.$method($($arg),*),
+                    Element::Line(e) => e.$method($($arg),*),
+                    Element::Text(e) => e.$method($($arg),*),
+                    Element::Freehand(e) => e.$method($($arg),*),
+                }
+            }
+        }
+    };
 }
 
-impl HitTest for Element {
-    fn hit_test(&self, point: Point, margin: f64) -> bool {
-        match self {
-            Element::Rectangle(e) => e.hit_test(point, margin),
-            Element::Ellipse(e) => e.hit_test(point, margin),
-            Element::Line(e) => e.hit_test(point, margin),
-            Element::Text(e) => e.hit_test(point, margin),
-            Element::Freehand(e) => e.hit_test(point, margin),
-        }
-    }
-}
-
-impl Bounds for Element {
-    fn bounds(&self) -> (f64, f64, f64, f64) {
-        match self {
-            Element::Rectangle(e) => e.bounds(),
-            Element::Ellipse(e) => e.bounds(),
-            Element::Line(e) => e.bounds(),
-            Element::Text(e) => e.bounds(),
-            Element::Freehand(e) => e.bounds(),
-        }
-    }
-}
-
-impl Offset for Element {
-    fn offset(&mut self, dx: f64, dy: f64) {
-        match self {
-            Element::Rectangle(e) => e.offset(dx, dy),
-            Element::Ellipse(e) => e.offset(dx, dy),
-            Element::Line(e) => e.offset(dx, dy),
-            Element::Text(e) => e.offset(dx, dy),
-            Element::Freehand(e) => e.offset(dx, dy),
-        }
-    }
-}
-
-impl SnapToGrid for Element {
-    fn snap_to_grid(&mut self, grid: f64) {
-        match self {
-            Element::Rectangle(e) => e.snap_to_grid(grid),
-            Element::Ellipse(e) => e.snap_to_grid(grid),
-            Element::Line(e) => e.snap_to_grid(grid),
-            Element::Text(e) => e.snap_to_grid(grid),
-            Element::Freehand(e) => e.snap_to_grid(grid),
-        }
-    }
-}
-
-impl Rotate for Element {
-    fn rotate_around(&mut self, point: Point, delta: f64) {
-        match self {
-            Element::Rectangle(e) => e.rotate_around(point, delta),
-            Element::Ellipse(e) => e.rotate_around(point, delta),
-            Element::Line(e) => e.rotate_around(point, delta),
-            Element::Text(e) => e.rotate_around(point, delta),
-            Element::Freehand(e) => e.rotate_around(point, delta),
-        }
-    }
-}
-
-impl Resize for Element {
-    fn resize(&mut self, ctx: &ResizeContext) {
-        match self {
-            Element::Rectangle(e) => e.resize(ctx),
-            Element::Ellipse(e) => e.resize(ctx),
-            Element::Line(e) => e.resize(ctx),
-            Element::Text(e) => e.resize(ctx),
-            Element::Freehand(e) => e.resize(ctx),
-        }
-    }
-}
-
-impl UpdateDrag for Element {
-    fn update_drag(&mut self, current: Point, anchor: Point, shift: bool) {
-        match self {
-            Element::Rectangle(e) => e.update_drag(current, anchor, shift),
-            Element::Ellipse(e) => e.update_drag(current, anchor, shift),
-            Element::Line(e) => e.update_drag(current, anchor, shift),
-            Element::Text(e) => e.update_drag(current, anchor, shift),
-            Element::Freehand(e) => e.update_drag(current, anchor, shift),
-        }
-    }
-}
+dispatch_element!(Render, render(&self, zoom: f64) -> leptos::View);
+dispatch_element!(HitTest, hit_test(&self, point: Point, margin: f64) -> bool);
+dispatch_element!(Bounds, bounds(&self) -> (f64, f64, f64, f64));
+dispatch_element!(Offset, offset(&mut self, dx: f64, dy: f64));
+dispatch_element!(SnapToGrid, snap_to_grid(&mut self, grid: f64));
+dispatch_element!(Rotate, rotate_around(&mut self, point: Point, delta: f64));
+dispatch_element!(Resize, resize(&mut self, ctx: &ResizeContext));
+dispatch_element!(UpdateDrag, update_drag(&mut self, current: Point, anchor: Point, shift: bool));
 
 // ── Helpers ────────────────────────────────────────────────────────────
 

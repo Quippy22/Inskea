@@ -58,16 +58,19 @@ pub fn text_edit_overlay(
             })
         })?;
         let zoom = viewport.get().zoom;
-        let font_size = text_elem.data.font_size.max(12.0);
+        let font_size = text_elem.data.style.font_size.max(12.0);
         let (sw, sh) = screen_size.get();
-        let (sx, sy) = viewport
-            .get()
-            .world_to_screen((text_elem.data.world_point.x, text_elem.data.world_point.y), (sw, sh));
+        let (sx, sy) = viewport.get().world_to_screen(
+            (text_elem.data.world_point.x, text_elem.data.world_point.y),
+            (sw, sh),
+        );
         let fill = text_elem
             .data
+            .style
             .fill_color
+            .as_ref()
             .map(|c| c.to_hex())
-            .unwrap_or_else(|| text_elem.data.stroke_color.to_hex());
+            .unwrap_or_else(|| text_elem.data.style.stroke_color.to_hex());
 
         let default_ta_w = (20.0_f64 * font_size * CHAR_WIDTH_RATIO).max(120.0);
         let ta_w = if text_elem.data.width > 0.0 {
@@ -89,7 +92,7 @@ pub fn text_edit_overlay(
                 <textarea
                     autofocus="true"
                     _ref=textarea_ref
-                    style={format!(
+                    style=format!(
                         "position:fixed;left:{}px;top:{}px;\
                          width:{}px;height:{}px;\
                          font-size:{}px;font-family:sans-serif;\
@@ -101,22 +104,33 @@ pub fn text_edit_overlay(
                          white-space:pre-wrap;overflow-wrap:break-word;\
                          padding:0;margin:0;z-index:100;\
                          line-height:1.2;",
-                        sx, sy, ta_w, ta_h, font_size * zoom, fill, fill
-                    )}
+                        sx,
+                        sy,
+                        ta_w,
+                        ta_h,
+                        font_size * zoom,
+                        fill,
+                        fill,
+                    )
                     prop:value=move || edit_text.get()
                     on:input=move |ev| {
                         edit_text.set(event_target_value(&ev));
                         let ta = event_target::<web_sys::HtmlTextAreaElement>(&ev);
                         ta.style().set_property("height", "auto").ok();
-                        let _ = ta.style().set_property("height", &format!("{}px", ta.scroll_height()));
+                        let _ = ta
+                            .style()
+                            .set_property("height", &format!("{}px", ta.scroll_height()));
                     }
                     on:blur=move |_| ce_blur()
                     on:keydown=move |ev: ev::KeyboardEvent| {
-                        if ev.key() == "Escape" { ce_esc(); }
+                        if ev.key() == "Escape" {
+                            ce_esc();
+                        }
                         if ev.key() == "Tab" {
                             ev.prevent_default();
                             let target = event_target::<web_sys::HtmlTextAreaElement>(&ev);
-                            let cursor = target.selection_start().ok().flatten().unwrap_or(0) as usize;
+                            let cursor = target.selection_start().ok().flatten().unwrap_or(0)
+                                as usize;
                             let mut val = edit_text.get();
                             val.insert(cursor, '\t');
                             edit_text.set(val);
@@ -126,7 +140,8 @@ pub fn text_edit_overlay(
                         }
                     }
                 ></textarea>
-            }.into_view(),
+            }
+            .into_view(),
         )
     }
 }

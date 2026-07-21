@@ -1,10 +1,6 @@
-use super::{
-    Bounds, FromDrag, HitTest, Offset, Render, Resize, Rotate, SnapToGrid, UpdateDrag,
-};
-use super::{ElementData, ShapeColor};
-use super::utils::{rotate_bbox, snap_bbox_to_grid};
+use crate::model::elements::utils::{rotate_bbox, snap_bbox_to_grid};
 use crate::model::resize::{resize_bbox, resize_from_handle, resize_scale_element, ResizeContext};
-use crate::model::Point;
+use crate::model::*;
 use leptos::IntoView;
 
 pub(crate) const MIN_FONT_SIZE: f64 = 12.0;
@@ -110,14 +106,15 @@ impl Text {
     /// becomes `data.width` so the hitbox aligns with the wrap boundary.
     /// Height is auto-sized to fit all wrapped lines.
     fn recalc_height(&mut self) {
-        let fs = self.data.font_size.max(MIN_FONT_SIZE);
+        let fs = self.data.style.font_size.max(MIN_FONT_SIZE);
         let line_h = fs * 1.2;
         let num_lines = self.wrapped.lines.len().max(1);
         self.data.height = num_lines as f64 * line_h;
     }
 
     pub fn set_content(&mut self, raw: &str, wrap_width: f64) {
-        self.wrapped.set_raw(raw, wrap_width, self.data.font_size);
+        self.wrapped
+            .set_raw(raw, wrap_width, self.data.style.font_size);
         self.data.width = wrap_width;
         self.recalc_height();
     }
@@ -128,20 +125,20 @@ impl Text {
     /// `data.width` stays at `new_width`; only the height is recomputed.
     pub fn resize_text(&mut self, new_width: f64) {
         self.data.width = new_width;
-        self.wrapped.rewrap(new_width, self.data.font_size);
+        self.wrapped.rewrap(new_width, self.data.style.font_size);
         self.recalc_height();
     }
 }
 
 impl FromDrag for Text {
-    fn from_drag(anchor: Point, _current: Point, color: ShapeColor, _shift: bool) -> Self {
+    fn from_drag(anchor: Point, _current: Point, color: Color, _shift: bool) -> Self {
         let mut data = ElementData::new(0);
         data.world_point.set(anchor.x, anchor.y);
         data.width = 0.0;
         data.height = 0.0;
-        data.stroke_color = color;
+        data.style.stroke_color = color;
         let w = data.width;
-        let fs = data.font_size;
+        let fs = data.style.font_size;
         Self {
             data,
             wrapped: WrappedText::new("", w, fs),
@@ -157,26 +154,30 @@ impl UpdateDrag for Text {
 
 impl Render for Text {
     fn render(&self, _zoom: f64) -> leptos::View {
-        let font_size = self.data.font_size.max(MIN_FONT_SIZE);
+        let font_size = self.data.style.font_size.max(MIN_FONT_SIZE);
         let lines = &self.wrapped.lines;
         let x = self.data.world_point.x;
         let baseline = self.data.world_point.y + font_size * TEXT_ASCENT_RATIO;
+        let opacity = self.data.style.opacity;
         let fill = self
             .data
+            .style
             .fill_color
+            .as_ref()
             .map(|c| c.to_hex())
-            .unwrap_or_else(|| self.data.stroke_color.to_hex());
+            .unwrap_or_else(|| self.data.style.stroke_color.to_hex());
 
         let inner = if lines.len() <= 1 {
             leptos::view! {
                 <text
-                    x={x.to_string()}
-                    y={baseline.to_string()}
+                    x=x.to_string()
+                    y=baseline.to_string()
                     fill=fill
-                    font-size={font_size.to_string()}
+                    font-size=font_size.to_string()
                     font-family="sans-serif"
                     pointer-events="none"
                     style="user-select: none; -webkit-user-select: none;"
+                    opacity=opacity
                 >
                     {lines.first().cloned().unwrap_or_default()}
                 </text>
@@ -185,13 +186,14 @@ impl Render for Text {
         } else {
             leptos::view! {
                 <text
-                    x={x.to_string()}
-                    y={baseline.to_string()}
+                    x=x.to_string()
+                    y=baseline.to_string()
                     fill=fill
-                    font-size={font_size.to_string()}
+                    font-size=font_size.to_string()
                     font-family="sans-serif"
                     pointer-events="none"
                     style="user-select: none; -webkit-user-select: none;"
+                    opacity=opacity
                 >
                     {lines
                         .iter()
@@ -199,7 +201,7 @@ impl Render for Text {
                         .map(|(i, line)| {
                             let dy = if i == 0 { "0" } else { "1.2em" };
                             leptos::view! {
-                                <tspan x={x.to_string()} dy=dy>
+                                <tspan x=x.to_string() dy=dy>
                                     {line.to_string()}
                                 </tspan>
                             }
@@ -216,10 +218,8 @@ impl Render for Text {
             let cx = x + self.data.width / 2.0;
             let cy = self.data.world_point.y + self.data.height / 2.0;
             let deg = self.data.rotation.to_degrees();
-            leptos::view! {
-                <g transform={format!("rotate({} {} {})", deg, cx, cy)}>{inner}</g>
-            }
-            .into_view()
+            leptos::view! { <g transform=format!("rotate({} {} {})", deg, cx, cy)>{inner}</g> }
+                .into_view()
         }
     }
 }
@@ -236,7 +236,12 @@ impl HitTest for Text {
 
 impl Bounds for Text {
     fn bounds(&self) -> (f64, f64, f64, f64) {
-        (self.data.world_point.x, self.data.world_point.y, self.data.width, self.data.height)
+        (
+            self.data.world_point.x,
+            self.data.world_point.y,
+            self.data.width,
+            self.data.height,
+        )
     }
 }
 
@@ -248,7 +253,12 @@ impl Offset for Text {
 
 impl SnapToGrid for Text {
     fn snap_to_grid(&mut self, grid: f64) {
-        snap_bbox_to_grid(&mut self.data.world_point, self.data.width, self.data.height, grid);
+        snap_bbox_to_grid(
+            &mut self.data.world_point,
+            self.data.width,
+            self.data.height,
+            grid,
+        );
     }
 }
 
@@ -262,7 +272,10 @@ impl Resize for Text {
     fn resize(&mut self, ctx: &ResizeContext) {
         if ctx.multi {
             let (pos, (nw, nh)) = match resize_bbox(
-                Point { x: ctx.bx, y: ctx.by },
+                Point {
+                    x: ctx.bx,
+                    y: ctx.by,
+                },
                 (ctx.bw, ctx.bh),
                 ctx.pointer_world,
                 ctx.handle,
@@ -272,7 +285,18 @@ impl Resize for Text {
                 Some(v) => v,
                 None => return,
             };
-            resize_scale_element(&mut self.data, ctx.orig.data(), pos, nw, nh, ctx.bx, ctx.by, ctx.bw, ctx.bh, false);
+            resize_scale_element(
+                &mut self.data,
+                ctx.orig.data(),
+                pos,
+                nw,
+                nh,
+                ctx.bx,
+                ctx.by,
+                ctx.bw,
+                ctx.bh,
+                false,
+            );
         } else {
             let result = resize_from_handle(
                 &self.data,

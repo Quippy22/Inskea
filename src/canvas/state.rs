@@ -1,8 +1,8 @@
-use crate::model::resize::ResizeHandle;
-use crate::model::ShapeColor;
-use crate::model::{Bounds, Element, ElementId, HitTest, Point, Scene};
-use crate::ui::dock::Tool;
 use crate::canvas::settings::CanvasSettings;
+use crate::model::resize::ResizeHandle;
+use crate::model::Color;
+use crate::model::{Bounds, Element, ElementId, ElementStyle, HitTest, LineStyle, Point, Scene};
+use crate::ui::dock::Tool;
 use leptos::*;
 use std::rc::Rc;
 
@@ -94,7 +94,7 @@ pub struct DrawingState {
     /// Which tool is being used.
     pub tool: Tool,
     /// Colour to apply to the new element.
-    pub color: ShapeColor,
+    pub color: Color,
 }
 
 /// All interior mutable state owned by the canvas component.
@@ -138,7 +138,7 @@ pub struct CanvasInputs {
     pub cursor_world: RwSignal<(f64, f64)>,
     pub viewport: RwSignal<super::viewport::Viewport>,
     pub selected_tool: RwSignal<Tool>,
-    pub selected_color: RwSignal<ShapeColor>,
+    pub selected_color: RwSignal<Color>,
     pub canvas_mode: RwSignal<CanvasMode>,
     pub scene: RwSignal<Scene>,
     pub eraser_active: RwSignal<bool>,
@@ -146,6 +146,8 @@ pub struct CanvasInputs {
     pub push_snapshot: Rc<dyn Fn()>,
     pub export_crop_active: RwSignal<bool>,
     pub on_crop_export: RwSignal<Option<CropExportCallback>>,
+    pub default_style: RwSignal<ElementStyle>,
+    pub default_line_style: RwSignal<LineStyle>,
 }
 
 // ── Helper functions used by pointer event handlers ──────────────────────
@@ -156,7 +158,15 @@ pub fn hit_and_erase(point: (f64, f64), scene: RwSignal<Scene>) {
         s.elements()
             .iter()
             .rev()
-            .find(|el| el.hit_test(Point { x: point.0, y: point.1 }, HIT_MARGIN))
+            .find(|el| {
+                el.hit_test(
+                    Point {
+                        x: point.0,
+                        y: point.1,
+                    },
+                    HIT_MARGIN,
+                )
+            })
             .map(|el| el.id())
     });
     if let Some(id) = id {
@@ -193,7 +203,15 @@ pub fn hit_test_topmost(point: (f64, f64), elements: &[Element]) -> Option<Eleme
     elements
         .iter()
         .rev()
-        .find(|el| el.hit_test(Point { x: point.0, y: point.1 }, HIT_MARGIN))
+        .find(|el| {
+            el.hit_test(
+                Point {
+                    x: point.0,
+                    y: point.1,
+                },
+                HIT_MARGIN,
+            )
+        })
         .map(|el| el.id())
 }
 

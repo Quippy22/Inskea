@@ -1,21 +1,21 @@
 #![allow(clippy::redundant_locals)]
 use crate::canvas::{CanvasMode, CropExportCallback, Viewport};
-use crate::model::Scene;
+use crate::model::{ElementId, Scene};
 use crate::skea;
 use crate::tauri_bridge;
-use crate::util::window_size;
-use crate::ui::classes;
 use crate::ui::components::{Dropdown, DropdownItem, IconButton};
 use crate::ui::export;
 use crate::ui::file_ops;
 use crate::ui::icon;
+use crate::ui::styles;
+use crate::util::window_size;
 use leptos::*;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
-fn browser_import(scene: RwSignal<Scene>) {
+fn browser_import(scene: RwSignal<Scene>, selected_ids: RwSignal<Vec<ElementId>>) {
     let document = web_sys::window().unwrap().document().unwrap();
     let input = document
         .create_element("input")
@@ -39,11 +39,15 @@ fn browser_import(scene: RwSignal<Scene>) {
             let reader = web_sys::FileReader::new().expect("failed to create FileReader");
             let reader_c = reader.clone();
             let scene_c = scene;
+            let sid = selected_ids;
             let on_load = Closure::wrap(Box::new(move || {
                 if let Ok(val) = reader_c.result() {
                     if let Some(text) = val.as_string() {
                         match skea::load_from_str(&text) {
-                            Ok(loaded) => scene_c.set(loaded),
+                            Ok(loaded) => {
+                                sid.set(Vec::new());
+                                scene_c.set(loaded);
+                            }
                             Err(e) => {
                                 web_sys::console::error_1(&format!("parse error: {e}").into());
                             }
@@ -77,6 +81,7 @@ pub fn ToolBar<F1, F2>(
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<CropExportCallback>>,
     shortcuts_open: RwSignal<bool>,
+    selected_ids: RwSignal<Vec<ElementId>>,
 ) -> impl IntoView
 where
     F1: Fn() + 'static,
@@ -111,7 +116,7 @@ where
         let close_menu = close_menu;
         move || {
             close_menu();
-            file_ops::file_new(scene, saved_path);
+            file_ops::file_new(scene, saved_path, selected_ids);
         }
     };
     let on_save_as = {
@@ -132,17 +137,9 @@ where
         let close_menu = close_menu;
         move || {
             close_menu();
-            file_ops::file_open(scene, saved_path);
+            file_ops::file_open(scene, saved_path, selected_ids);
         }
     };
-    let on_shortcuts = {
-        let close_menu = close_menu;
-        move || {
-            close_menu();
-            shortcuts_open.set(true);
-        }
-    };
-
     let on_import = {
         let close_menu = close_menu;
         move || {
@@ -154,7 +151,10 @@ where
                         saved_path.set(Some(path.clone()));
                         match tauri_bridge::load_skea(&path).await {
                             Ok(c) => match skea::load_from_str(&c) {
-                                Ok(loaded) => scene.set(loaded),
+                                Ok(loaded) => {
+                                    selected_ids.set(Vec::new());
+                                    scene.set(loaded);
+                                }
                                 Err(e) => web_sys::console::error_1(&format!("parse: {e}").into()),
                             },
                             Err(e) => web_sys::console::error_1(&format!("load: {e}").into()),
@@ -162,7 +162,7 @@ where
                     }
                 });
             } else {
-                browser_import(scene);
+                browser_import(scene, selected_ids);
             }
         }
     };
@@ -190,7 +190,10 @@ where
     };
 
     #[derive(Clone, Copy)]
-    enum ExportFormat { Svg, Png }
+    enum ExportFormat {
+        Svg,
+        Png,
+    }
 
     let on_export = {
         let _close_menu = close_menu;
@@ -210,12 +213,18 @@ where
                     let svg = export::scene_to_svg_crop(&s, rect);
                     match fmt {
                         ExportFormat::Svg => {
-                            if tauri { export::tauri_export_svg(svg, true); }
-                            else { export::download_string(&svg, "selection.svg"); }
+                            if tauri {
+                                export::tauri_export_svg(svg, true);
+                            } else {
+                                export::download_string(&svg, "selection.svg");
+                            }
                         }
                         ExportFormat::Png => {
-                            if tauri { export::tauri_export_png(svg, true); }
-                            else { export::download_png_from_svg(svg, "selection.png".to_string()); }
+                            if tauri {
+                                export::tauri_export_png(svg, true);
+                            } else {
+                                export::download_png_from_svg(svg, "selection.png".to_string());
+                            }
                         }
                     }
                 })));
@@ -228,12 +237,18 @@ where
             let svg = export::scene_to_svg(&s, &vp, size, None);
             match fmt {
                 ExportFormat::Svg => {
-                    if tauri { export::tauri_export_svg(svg, false); }
-                    else { export::download_string(&svg, "canvas.svg"); }
+                    if tauri {
+                        export::tauri_export_svg(svg, false);
+                    } else {
+                        export::download_string(&svg, "canvas.svg");
+                    }
                 }
                 ExportFormat::Png => {
-                    if tauri { export::tauri_export_png(svg, false); }
-                    else { export::download_png_from_svg(svg, "canvas.png".to_string()); }
+                    if tauri {
+                        export::tauri_export_png(svg, false);
+                    } else {
+                        export::download_png_from_svg(svg, "canvas.png".to_string());
+                    }
                 }
             }
         }
@@ -262,11 +277,6 @@ where
         DropdownItem::Action {
             label: "Import",
             on_click: Rc::new(on_import),
-        },
-        DropdownItem::Separator,
-        DropdownItem::Action {
-            label: "Keyboard Shortcuts",
-            on_click: Rc::new(on_shortcuts),
         },
     ];
 
@@ -313,15 +323,15 @@ where
 
     let btn = move |mode: CanvasMode| -> &'static str {
         if canvas_mode.get() == mode {
-            classes::BTN_TBAR_ACTIVE
+            styles::BTN_TBAR_ACTIVE
         } else {
-            classes::BTN_TBAR_INACTIVE
+            styles::BTN_TBAR_INACTIVE
         }
     };
 
     view! {
-        <div class=classes::CONTAINER_STATUSBAR>
-            <div class=classes::TBAR_INNER>
+        <div class=styles::CONTAINER_STATUSBAR>
+            <div class=styles::TBAR_INNER>
                 <button
                     class=move || btn(CanvasMode::Pan)
                     on:click=move |_| canvas_mode.set(CanvasMode::Pan)
@@ -343,12 +353,17 @@ where
                 >
                     {icon::pencil()}
                 </button>
-                <div class=classes::SEP_V />
-                <IconButton on_click=on_home title="Home" class=classes::BTN_GHOST>
+                <IconButton on_click=on_home title="Home" class=styles::BTN_GHOST>
                     {icon::home()}
                 </IconButton>
                 <button
-                    class=classes::BTN_GHOST
+                    class="flex items-center justify-center h-8 w-8 rounded-md opacity-40 cursor-default"
+                    title="Pages"
+                >
+                    {icon::pages()}
+                </button>
+                <button
+                    class=styles::BTN_GHOST
                     class:opacity-40=move || !can_undo.get()
                     class:cursor-not-allowed=move || !can_undo.get()
                     on:click=move |_| on_undo()
@@ -357,7 +372,17 @@ where
                     {icon::undo()}
                 </button>
                 <button
-                    class=classes::BTN_GHOST
+                    class="flex items-center justify-center h-8 rounded-md text-xs text-subtle hover:text-fg transition-colors tabular-nums min-w-[2.5rem]"
+                    on:click=move |_| viewport.set(Viewport::default())
+                    title="Reset zoom to 100%"
+                >
+                    {move || {
+                        let pct = (viewport.get().zoom * 100.0).round() as i64;
+                        format!("{}%", pct)
+                    }}
+                </button>
+                <button
+                    class=styles::BTN_GHOST
                     class:opacity-40=move || !can_redo.get()
                     class:cursor-not-allowed=move || !can_redo.get()
                     on:click=move |_| on_redo()
@@ -365,12 +390,11 @@ where
                 >
                     {icon::redo()}
                 </button>
-                <div class=classes::SEP_V />
                 <div class="relative">
                     <IconButton
                         on_click=move || menu_open.update(|v| *v = !*v)
                         title="Menu"
-                        class=classes::BTN_GHOST
+                        class=styles::BTN_GHOST
                     >
                         {icon::menu()}
                     </IconButton>
@@ -382,21 +406,27 @@ where
                                         class="fixed inset-0 z-40"
                                         on:click=move |_| close_menu()
                                     ></div>
-                                    <div class=classes::MENU_DROPDOWN>
+                                    <div class=styles::MENU_DROPDOWN>
                                         // ── File ─────────────────────────────
                                         <div
                                             class="relative"
                                             on:mouseenter=move |_| file_hover.set(true)
                                             on:mouseleave=move |_| file_hover.set(false)
                                         >
-                                            <button class=classes::MENU_ITEM>
+                                            <button class=styles::MENU_ITEM>
                                                 <span>"File"</span>
                                                 {icon::chevron_right()}
                                             </button>
                                             <Dropdown
                                                 show=show_file
-                                                on_mouseenter=Rc::new({ let s = file_sub_hover; move || s.set(true) })
-                                                on_mouseleave=Rc::new({ let s = file_sub_hover; move || s.set(false) })
+                                                on_mouseenter=Rc::new({
+                                                    let s = file_sub_hover;
+                                                    move || s.set(true)
+                                                })
+                                                on_mouseleave=Rc::new({
+                                                    let s = file_sub_hover;
+                                                    move || s.set(false)
+                                                })
                                                 items=file_items.clone()
                                             />
                                         </div>
@@ -407,17 +437,34 @@ where
                                             on:mouseenter=move |_| export_hover.set(true)
                                             on:mouseleave=move |_| export_hover.set(false)
                                         >
-                                            <button class=classes::MENU_ITEM>
+                                            <button class=styles::MENU_ITEM>
                                                 <span>"Export"</span>
                                                 {icon::chevron_right()}
                                             </button>
                                             <Dropdown
                                                 show=show_export
-                                                on_mouseenter=Rc::new({ let s = export_sub_hover; move || s.set(true) })
-                                                on_mouseleave=Rc::new({ let s = export_sub_hover; move || s.set(false) })
+                                                on_mouseenter=Rc::new({
+                                                    let s = export_sub_hover;
+                                                    move || s.set(true)
+                                                })
+                                                on_mouseleave=Rc::new({
+                                                    let s = export_sub_hover;
+                                                    move || s.set(false)
+                                                })
                                                 items=export_items.clone()
                                             />
                                         </div>
+
+                                        // ── Help ─────────────────────────────
+                                        <button
+                                            class=styles::MENU_ITEM
+                                            on:click=move |_| {
+                                                close_menu();
+                                                shortcuts_open.set(true);
+                                            }
+                                        >
+                                            <span>"Help"</span>
+                                        </button>
                                     </div>
                                 </>
                             }
@@ -427,16 +474,7 @@ where
                         }
                     }}
                 </div>
-                <IconButton
-                    on_click=move || shortcuts_open.update(|v| *v = !*v)
-                    title="Keyboard shortcuts"
-                    class=classes::BTN_GHOST
-                >
-                    {icon::help()}
-                </IconButton>
             </div>
         </div>
     }
 }
-
-

@@ -1,4 +1,4 @@
-use crate::ui::classes;
+use crate::ui::styles;
 use leptos::*;
 use std::rc::Rc;
 
@@ -30,7 +30,7 @@ pub fn Dropdown(
     on_mouseleave: Rc<dyn Fn()>,
     /// Items to render inside the panel.
     items: Vec<DropdownItem>,
-    /// Optional extra CSS classes beyond `classes::MENU_DROPDOWN`.
+    /// Optional extra CSS classes beyond `styles::MENU_DROPDOWN`.
     #[prop(optional)]
     _extra_class: &'static str,
 ) -> impl IntoView {
@@ -44,35 +44,38 @@ pub fn Dropdown(
 
         view! {
             <div
-                class=classes::MENU_DROPDOWN
+                class=styles::MENU_DROPDOWN
                 style="left: 100%; top: -4px;"
                 on:mouseenter=move |_| me()
                 on:mouseleave=move |_| ml()
             >
-                {items.iter().map(|item| {
-                    match item {
-                        DropdownItem::Action { label, on_click } => {
-                            let cb = on_click.clone();
-                            view! {
-                                <button class=classes::MENU_ITEM on:click=move |_| (cb)()>
-                                    {*label}
-                                </button>
-                            }.into_view()
+                {items
+                    .iter()
+                    .map(|item| {
+                        match item {
+                            DropdownItem::Action { label, on_click } => {
+                                let cb = on_click.clone();
+                                view! {
+                                    <button class=styles::MENU_ITEM on:click=move |_| (cb)()>
+                                        {*label}
+                                    </button>
+                                }
+                                    .into_view()
+                            }
+                            DropdownItem::Header { label } => {
+                                view! {
+                                    <span class="block px-4 py-1 text-xs text-subtle">
+                                        {*label}
+                                    </span>
+                                }
+                                    .into_view()
+                            }
+                            DropdownItem::Separator => {
+                                view! { <div class="h-px bg-border my-1"></div> }.into_view()
+                            }
                         }
-                        DropdownItem::Header { label } => {
-                            view! {
-                                <span class="block px-4 py-1 text-xs text-subtle">
-                                    {*label}
-                                </span>
-                            }.into_view()
-                        }
-                        DropdownItem::Separator => {
-                            view! {
-                                <div class="h-px bg-border my-1"></div>
-                            }.into_view()
-                        }
-                    }
-                }).collect_view()}
+                    })
+                    .collect_view()}
             </div>
         }
         .into_view()
