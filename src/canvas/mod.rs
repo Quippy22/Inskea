@@ -14,9 +14,11 @@ use selection::{select_pointer_down, select_pointer_move, select_pointer_up};
 pub use state::combined_bounds;
 pub use state::CanvasMode;
 pub use state::CropExportCallback;
+pub use state::Handle;
 use state::{hit_and_erase, CanvasInputs, CanvasState};
 
 use crate::model::*;
+use crate::ui::cursor::cursor_style;
 use crate::ui::dock::Tool;
 use crate::util::window_size;
 use leptos::ev;
@@ -240,6 +242,24 @@ pub fn Canvas(
                 }
             }
             (mode, tool)
+        });
+    }
+
+    // ── Cursor ───────────────────────────────────────────────────────────
+    // Reactively compute the CSS cursor style based on the current mode,
+    // tool, drag action, eraser toggle, and pan/crop state.
+    {
+        let st = st;
+        let props = props.clone();
+        create_effect(move |_| {
+            let mode = props.canvas_mode.get();
+            let tool = props.selected_tool.get();
+            let eraser = props.eraser_active.get();
+            let crop = props.export_crop_active.get();
+            let pan = st.pan_anchor.get().is_some();
+            let handle = st.drag.drag_action.get();
+            let cursor = cursor_style(mode, tool, handle, eraser, pan, crop);
+            st.cursor_style.set(cursor);
         });
     }
 
@@ -556,6 +576,7 @@ pub fn Canvas(
             width="100%"
             height="100%"
             style="display: block; user-select: none; -webkit-user-select: none;"
+            style:cursor=move || st.cursor_style.get()
             viewBox=view_box
             on:pointerdown=on_pointer_down
             on:pointermove=on_pointer_move

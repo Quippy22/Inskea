@@ -1,4 +1,5 @@
 pub mod components;
+pub(crate) mod cursor;
 pub mod dock;
 pub(crate) mod export;
 pub(crate) mod file_ops;

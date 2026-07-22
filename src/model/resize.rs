@@ -34,6 +34,20 @@ impl From<usize> for ResizeHandle {
 
 impl ResizeHandle {
     /// Which axes are free to change when dragging this handle.
+    /// CSS cursor keyword for this resize handle.
+    pub fn css_cursor(self) -> &'static str {
+        match self {
+            ResizeHandle::Nw => "nw-resize",
+            ResizeHandle::N => "n-resize",
+            ResizeHandle::Ne => "ne-resize",
+            ResizeHandle::W => "w-resize",
+            ResizeHandle::E => "e-resize",
+            ResizeHandle::Sw => "sw-resize",
+            ResizeHandle::S => "s-resize",
+            ResizeHandle::Se => "se-resize",
+        }
+    }
+
     pub fn free_axes(self) -> (bool, bool) {
         match self {
             ResizeHandle::Nw | ResizeHandle::Ne | ResizeHandle::Sw | ResizeHandle::Se => {

@@ -109,6 +109,7 @@ pub struct CanvasState {
     pub select_anchor: RwSignal<Option<(f64, f64)>>,
     pub erasing: RwSignal<bool>,
     pub selected_ids: RwSignal<Vec<ElementId>>,
+    pub cursor_style: RwSignal<String>,
     pub drag: DragState,
     pub text_edit: TextEditState,
 }
@@ -125,6 +126,7 @@ impl CanvasState {
             select_anchor: create_rw_signal(None),
             erasing: create_rw_signal(false),
             selected_ids: create_rw_signal(Vec::new()),
+            cursor_style: create_rw_signal("default".to_string()),
             drag: DragState::new(),
             text_edit: TextEditState::new(),
         }
