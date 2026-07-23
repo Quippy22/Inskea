@@ -177,7 +177,9 @@ pub fn segment_midpoint(points: &[Point], mode: CurveMode, i: usize) -> Option<(
 /// Compute the axis-aligned bounding box of a list of points.
 ///
 /// Returns `(min_x, min_y, width, height)`. Returns `(0, 0, 0, 0)` for an
-/// empty slice.
+/// empty slice. Width and height are clamped to a minimum of 1.0 so that
+/// selection handles and bounding boxes remain visible even for perfectly
+/// horizontal or vertical lines.
 pub fn bounds_of_points(points: &[Point]) -> (f64, f64, f64, f64) {
     if points.is_empty() {
         return (0.0, 0.0, 0.0, 0.0);
@@ -185,10 +187,10 @@ pub fn bounds_of_points(points: &[Point]) -> (f64, f64, f64, f64) {
     let min_x = points.iter().map(|p| p.x).reduce(f64::min).unwrap();
     let min_y = points.iter().map(|p| p.y).reduce(f64::min).unwrap();
     let max_x = points.iter().map(|p| p.x).reduce(f64::max).unwrap();
-    // Since the path is open and has no "far side", add the
-    // stroke width to the bounding box for selection purposes.
     let max_y = points.iter().map(|p| p.y).reduce(f64::max).unwrap();
-    (min_x, min_y, max_x - min_x, max_y - min_y)
+    let w = (max_x - min_x).max(1.0);
+    let h = (max_y - min_y).max(1.0);
+    (min_x, min_y, w, h)
 }
 
 /// Scale all points using the same affine bounding-box transform as the

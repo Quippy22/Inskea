@@ -7,7 +7,8 @@ use crate::model::elements::path::segment_midpoint;
 use crate::model::resize::ResizeContext;
 use crate::model::resize::{common_bounds, rotate_point_around};
 use crate::model::{
-    Bounds, Color, Element, ElementId, Offset, PathPoints, Point, Resize, Rotate, Scene, SnapToGrid,
+    Bounds, Color, Element, ElementData, ElementId, Offset, PathPoints, Point, Resize, Rotate, Scene,
+    SnapToGrid,
 };
 
 fn selection_bounds(ids: &[ElementId], els: &[Element]) -> Option<(f64, f64, f64, f64)> {
@@ -17,15 +18,28 @@ fn selection_bounds(ids: &[ElementId], els: &[Element]) -> Option<(f64, f64, f64
             .map(|el| el.bounds())
             .or_else(|| combined_bounds(ids, els))
     } else {
-        let data_refs: Vec<_> = els
+        let data_refs: Vec<ElementData> = els
             .iter()
             .filter(|el| ids.contains(&el.id()))
-            .map(|el| el.data())
+            .map(|el| {
+                if matches!(el, Element::Line(_) | Element::Freehand(_)) {
+                    let (bx, by, bw, bh) = el.bounds();
+                    let mut d = el.data().clone();
+                    d.world_point = Point { x: bx, y: by };
+                    d.width = bw;
+                    d.height = bh;
+                    d.rotation = 0.0;
+                    d
+                } else {
+                    el.data().clone()
+                }
+            })
             .collect();
         if data_refs.is_empty() {
             None
         } else {
-            Some(common_bounds(&data_refs))
+            let refs: Vec<&ElementData> = data_refs.iter().collect();
+            Some(common_bounds(&refs))
         }
     }
 }
