@@ -1,0 +1,364 @@
+mod arrow;
+mod color;
+mod fill;
+mod float_picker;
+mod layers;
+mod sliders;
+mod style;
+mod utils;
+
+use crate::model::{
+    Color, CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle, Scene, StrokeStyle,
+    StylingKind,
+};
+use self::arrow::arrow_section;
+use self::color::{color_section, ColorSlot};
+use self::fill::fill_section;
+use self::float_picker::float_picker;
+use self::layers::layers_section;
+use self::sliders::sliders_section;
+use self::style::style_section;
+use self::utils::{read_panel_state, single_selected_element};
+use crate::ui::dock::Tool;
+use leptos::*;
+use leptos_color::Color as LpcColor;
+use std::rc::Rc;
+use wasm_bindgen::JsCast;
+
+#[component]
+pub fn StylingPanel(
+    scene: RwSignal<Scene>,
+    selected_ids: RwSignal<Vec<ElementId>>,
+    selected_tool: RwSignal<Tool>,
+    default_style: RwSignal<ElementStyle>,
+    default_line_style: RwSignal<LineStyle>,
+) -> impl IntoView {
+    let styling_kind = Signal::derive(move || {
+        let ids = selected_ids.get();
+        if ids.len() == 1 {
+            let el = leptos::untrack(|| single_selected_element(scene.get_untracked(), ids));
+            if let Some(el) = el {
+                return el.styling_kind();
+            }
+        }
+        selected_tool.get().styling_kind()
+    });
+
+    let is_text = Signal::derive(move || styling_kind.get() == StylingKind::Text);
+    let is_line = Signal::derive(move || {
+        styling_kind.get() == StylingKind::Line || styling_kind.get() == StylingKind::Arrow
+    });
+    let is_arrow = Signal::derive(move || styling_kind.get() == StylingKind::Arrow);
+    let is_rect = Signal::derive(move || styling_kind.get() == StylingKind::Rectangle);
+    let is_freehand = Signal::derive(move || styling_kind.get() == StylingKind::Freehand);
+    let base_kind = Signal::derive(move || !is_text.get() && !is_line.get() && !is_freehand.get());
+
+    let (init_style, init_line_style) = read_panel_state(
+        &scene.get_untracked(),
+        &selected_ids.get_untracked(),
+        &default_style.get_untracked(),
+        &default_line_style.get_untracked(),
+        selected_tool.get_untracked(),
+    );
+
+    let local_style = create_rw_signal(init_style);
+    let local_line_style = create_rw_signal(init_line_style);
+
+    let stroke_size = create_rw_signal(local_style.get_untracked().stroke_width);
+    let text_size = create_rw_signal(local_style.get_untracked().font_size);
+    let roundness = create_rw_signal(local_style.get_untracked().roundness);
+    let opacity = create_rw_signal(local_style.get_untracked().opacity * 100.0);
+    let is_rounded = Signal::derive(move || local_style.get().edge_style == EdgeStyle::Rounded);
+
+    let active_slot = create_rw_signal(None::<ColorSlot>);
+    let picker_ref: NodeRef<html::Div> = create_node_ref();
+
+    create_effect(move |_| {
+        if active_slot.get().is_some() {
+            let handle =
+                window_event_listener(leptos::ev::click, move |ev: web_sys::MouseEvent| {
+                    if let Some(el) = picker_ref.get() {
+                        if let Some(target) = ev.target() {
+                            let target: web_sys::Node = target.unchecked_into();
+                            if !el.contains(Some(&target)) {
+                                active_slot.set(None);
+                            }
+                        }
+                    }
+                });
+            on_cleanup(move || handle.remove());
+        }
+    });
+
+    create_effect(move |_| {
+        let _ids = selected_ids.get();
+        let _s = scene.get();
+        let _dls = default_line_style.get();
+        let (new_style, new_line_style) = leptos::untrack(|| {
+            read_panel_state(
+                &scene.get_untracked(),
+                &selected_ids.get_untracked(),
+                &default_style.get_untracked(),
+                &default_line_style.get_untracked(),
+                selected_tool.get_untracked(),
+            )
+        });
+        stroke_size.set(new_style.stroke_width);
+        text_size.set(new_style.font_size);
+        roundness.set(new_style.roundness);
+        opacity.set(new_style.opacity * 100.0);
+        local_style.set(new_style);
+        local_line_style.set(new_line_style);
+    });
+
+    let update_style = {
+        let scene = scene;
+        let selected_ids = selected_ids;
+        let default_style = default_style;
+        move |f: &dyn Fn(&mut ElementStyle)| {
+            let ids = selected_ids.get_untracked();
+            if ids.len() == 1 {
+                scene.update(|s| {
+                    if let Some(el) = s.element_by_id_mut(ids[0]) {
+                        f(&mut el.data_mut().style);
+                    }
+                });
+            } else {
+                default_style.update(|s| f(s));
+            }
+        }
+    };
+
+    let update_line_style = {
+        let scene = scene;
+        let selected_ids = selected_ids;
+        let default_line_style = default_line_style;
+        move |f: &dyn Fn(&mut LineStyle)| {
+            let ids = selected_ids.get_untracked();
+            if ids.len() == 1 {
+                scene.update(|s| {
+                    if let Some(Element::Line(l)) = s.element_by_id_mut(ids[0]) {
+                        f(&mut l.line_style);
+                    }
+                });
+            } else {
+                default_line_style.update(|ls| f(ls));
+            }
+        }
+    };
+
+    let set_color: Rc<dyn Fn(Color)> = Rc::new({
+        let local_style = local_style;
+        let update_style = update_style;
+        move |c| {
+            local_style.update(|s| s.stroke_color = c.clone());
+            update_style(&|s| s.stroke_color = c.clone());
+        }
+    });
+
+    let set_fill: Rc<dyn Fn(Option<Color>)> = Rc::new({
+        let local_style = local_style;
+        let update_style = update_style;
+        move |c| {
+            local_style.update(|s| s.fill_color = c.clone());
+            update_style(&|s| s.fill_color = c.clone());
+        }
+    });
+
+    let picker_set_color = set_color.clone();
+    let picker_set_fill = set_fill.clone();
+
+    let picker_color = Signal::derive(move || {
+        let hex_str = match active_slot.get() {
+            Some(ColorSlot::Stroke) => local_style.get().stroke_color.to_hex(),
+            Some(ColorSlot::Fill) => local_style
+                .get()
+                .fill_color
+                .as_ref()
+                .map_or_else(|| Color::new(Color::WHITE).to_hex(), |c| c.to_hex()),
+            _ => String::new(),
+        };
+        LpcColor::from_html(&hex_str).unwrap_or_default()
+    });
+
+    let picker_on_change = Callback::new(move |lc: LpcColor| {
+        let hex = lc.to_css_hex();
+        let c = if hex.len() == 9 {
+            Color::new(&hex[..7])
+        } else {
+            Color::new(&hex)
+        };
+        match active_slot.get() {
+            Some(ColorSlot::Stroke) => picker_set_color(c),
+            Some(ColorSlot::Fill) => picker_set_fill(Some(c)),
+            None => {}
+        }
+    });
+
+    let set_stroke_style: Rc<dyn Fn(StrokeStyle)> = Rc::new({
+        let local_style = local_style;
+        let update_style = update_style;
+        move |v| {
+            local_style.update(|s| s.stroke_style = v);
+            update_style(&|s| s.stroke_style = v);
+        }
+    });
+
+    let set_edge_style: Rc<dyn Fn(EdgeStyle)> = Rc::new({
+        let local_style = local_style;
+        let update_style = update_style;
+        move |v| {
+            local_style.update(|s| s.edge_style = v);
+            update_style(&|s| s.edge_style = v);
+        }
+    });
+
+    let set_curve_mode: Rc<dyn Fn(CurveMode)> = Rc::new({
+        let local_line_style = local_line_style;
+        let update_line_style = update_line_style;
+        move |v| {
+            local_line_style.update(|ls| ls.curve_mode = v);
+            update_line_style(&|ls| ls.curve_mode = v);
+        }
+    });
+
+    let set_start_arrowhead: Rc<dyn Fn()> = Rc::new({
+        let local_line_style = local_line_style;
+        let update_line_style = update_line_style;
+        move || {
+            let new = !local_line_style.get_untracked().has_start_arrowhead;
+            local_line_style.update(|ls| ls.has_start_arrowhead = new);
+            update_line_style(&|ls| ls.has_start_arrowhead = new);
+        }
+    });
+
+    let set_end_arrowhead: Rc<dyn Fn()> = Rc::new({
+        let local_line_style = local_line_style;
+        let update_line_style = update_line_style;
+        move || {
+            let new = !local_line_style.get_untracked().has_end_arrowhead;
+            local_line_style.update(|ls| ls.has_end_arrowhead = new);
+            update_line_style(&|ls| ls.has_end_arrowhead = new);
+        }
+    });
+
+    let stroke_size_cb: Rc<dyn Fn(f64)> = Rc::new({
+        let scene = scene;
+        let selected_ids = selected_ids;
+        let default_style = default_style;
+        move |val| {
+            let ids = selected_ids.get_untracked();
+            if ids.len() == 1 {
+                scene.update(|s| {
+                    if let Some(el) = s.element_by_id_mut(ids[0]) {
+                        el.data_mut().style.stroke_width = val;
+                    }
+                });
+            } else {
+                default_style.update(|s| s.stroke_width = val);
+            }
+        }
+    });
+
+    let text_size_cb: Rc<dyn Fn(f64)> = Rc::new({
+        let scene = scene;
+        let selected_ids = selected_ids;
+        let default_style = default_style;
+        move |val| {
+            let ids = selected_ids.get_untracked();
+            if ids.len() == 1 {
+                scene.update(|s| {
+                    if let Some(el) = s.element_by_id_mut(ids[0]) {
+                        el.data_mut().style.font_size = val;
+                    }
+                });
+            } else {
+                default_style.update(|s| s.font_size = val);
+            }
+        }
+    });
+
+    let roundness_cb: Rc<dyn Fn(f64)> = Rc::new({
+        let local_style = local_style;
+        let update_style = update_style;
+        move |val| {
+            local_style.update(|s| s.roundness = val);
+            update_style(&|s| s.roundness = val);
+        }
+    });
+
+    let opacity_cb: Rc<dyn Fn(f64)> = Rc::new({
+        let scene = scene;
+        let selected_ids = selected_ids;
+        let default_style = default_style;
+        move |val| {
+            let v = (val / 100.0).clamp(0.0, 1.0);
+            let ids = selected_ids.get_untracked();
+            if ids.len() == 1 {
+                scene.update(|s| {
+                    if let Some(el) = s.element_by_id_mut(ids[0]) {
+                        el.data_mut().style.opacity = v;
+                    }
+                });
+            } else {
+                default_style.update(|s| s.opacity = v);
+            }
+        }
+    });
+
+    let color_swatches: &[&str] = &[
+        Color::WHITE,
+        Color::YELLOW,
+        Color::GREEN,
+        Color::BLUE,
+        Color::RED,
+    ];
+
+    view! {
+        <div class="flex flex-col gap-4 select-none">
+            {sliders_section(
+                stroke_size,
+                stroke_size_cb,
+                opacity,
+                opacity_cb,
+                text_size,
+                text_size_cb,
+                is_text,
+            )}
+            {style_section(
+                local_style,
+                local_line_style,
+                set_stroke_style,
+                set_curve_mode,
+                set_edge_style,
+                roundness,
+                roundness_cb,
+                is_text,
+                is_line,
+                is_rect,
+                is_rounded,
+            )}
+            {color_section(
+                local_style,
+                set_color,
+                active_slot,
+                color_swatches,
+            )}
+            {fill_section(
+                local_style,
+                set_fill,
+                active_slot,
+                base_kind,
+                color_swatches,
+            )}
+            {arrow_section(
+                is_arrow,
+                local_line_style,
+                set_start_arrowhead,
+                set_end_arrowhead,
+            )}
+            {layers_section(scene, selected_ids)}
+        </div>
+        {float_picker(active_slot, picker_color, picker_on_change, picker_ref)}
+    }
+}
