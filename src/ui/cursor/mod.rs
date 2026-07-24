@@ -4,7 +4,7 @@ use crate::canvas::{CanvasMode, Handle};
 use crate::ui::dock::Tool;
 
 fn to_cursor(svg: &str, x: u32, y: u32, fallback: &str) -> String {
-    let svg = svg.replace('\n', "").replace('\r', "");
+    let svg = svg.replace(['\n', '\r'], "");
     format!(
         r#"url("data:image/svg+xml,{}") {} {}, {}"#,
         svg, x, y, fallback

@@ -51,4 +51,42 @@ impl Scene {
         self.next_id += 1;
         self.elements.push(element);
     }
+
+    /// Move element to the front of the z-order (top of canvas).
+    pub fn bring_to_front(&mut self, id: ElementId) {
+        if let Some(idx) = self.elements.iter().position(|e| e.id() == id) {
+            let el = self.elements.remove(idx);
+            self.elements.push(el);
+        }
+    }
+
+    /// Move element to the back of the z-order (bottom of canvas).
+    pub fn send_to_back(&mut self, id: ElementId) {
+        if let Some(idx) = self.elements.iter().position(|e| e.id() == id) {
+            let el = self.elements.remove(idx);
+            self.elements.insert(0, el);
+        }
+    }
+
+    /// Move element one step toward the front.
+    pub fn bring_forward(&mut self, id: ElementId) {
+        let len = self.elements.len();
+        if len < 2 {
+            return;
+        }
+        if let Some(idx) = self.elements.iter().position(|e| e.id() == id) {
+            if idx < len - 1 {
+                self.elements.swap(idx, idx + 1);
+            }
+        }
+    }
+
+    /// Move element one step toward the back.
+    pub fn send_backward(&mut self, id: ElementId) {
+        if let Some(idx) = self.elements.iter().position(|e| e.id() == id) {
+            if idx > 0 {
+                self.elements.swap(idx, idx - 1);
+            }
+        }
+    }
 }

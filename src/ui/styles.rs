@@ -41,6 +41,9 @@ pub const BTN_SWATCH_SEL: &str = "w-7 h-7 rounded-md border transition-transform
 pub const BTN_SWATCH_OFF: &str =
     "w-7 h-7 rounded-md border transition-transform hover:scale-110 border-border";
 
+/// Layer order button (centers an SVG icon).
+pub const BTN_LAYER: &str = "flex items-center justify-center w-6 h-6 rounded-md border border-border transition-transform hover:scale-110";
+
 /// Menu dropdown container (frosted panel anchored below the menu button).
 pub const MENU_DROPDOWN: &str = "absolute top-full right-0 mt-1 z-50 min-w-[160px] rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1 pointer-events-auto";
 
