@@ -201,13 +201,6 @@ pub fn selection_handle_overlay(
         let rx = cx;
         let ry = by - ROTATE_HANDLE_OFFSET;
 
-        // Single-select reads the persistent rotation from element data; multi-select
-        // uses rotation_delta because each element's data.rotation is a separate signal
-        // and applying the same delta to all of them requires an accumulator that lives
-        // outside any single element. For point-based elements (Line/Arrow/Freehand)
-        // data.rotation is always 0 — but we still want the selection box to rotate
-        // during the drag gesture, so when rotation_delta is non-zero we use it even
-        // for single-select.
         let rot: f64 = if ids.len() == 1 {
             let el_rot = els
                 .iter()
@@ -215,7 +208,6 @@ pub fn selection_handle_overlay(
                 .map(|el| el.data().rotation)
                 .unwrap_or(0.0);
             let delta = rotation_delta.get();
-            // Point-based types (data.rotation == 0) use rotation_delta during drag
             if el_rot == 0.0 && delta != 0.0 {
                 delta
             } else {
@@ -227,23 +219,47 @@ pub fn selection_handle_overlay(
 
         let individual_boxes: Vec<_> = if ids.len() > 1 {
             els.iter()
-                .filter(|el| ids.contains(&el.id()))
+                .filter(|el| ids.contains(&el.id()) && el.path_points().is_none())
                 .map(|el| {
-                    let (ex, ey, ew, eh) = el.bounds();
-                    view! {
-                        <rect
-                            x=ex
-                            y=ey
-                            width=ew
-                            height=eh
-                            fill="none"
-                            stroke=hex
-                            stroke-width="0.5"
-                            stroke-dasharray="3 2"
-                            pointer-events="none"
-                        />
+                    let d = el.data();
+                    let rot = d.rotation;
+                    if rot != 0.0 {
+                        let cx = d.world_point.x + d.width / 2.0;
+                        let cy = d.world_point.y + d.height / 2.0;
+                        let deg = rot.to_degrees();
+                        view! {
+                            <g transform=format!("rotate({} {} {})", deg, cx, cy)>
+                                <rect
+                                    x=d.world_point.x - SELECT_PADDING
+                                    y=d.world_point.y - SELECT_PADDING
+                                    width=d.width + SELECT_PADDING * 2.0
+                                    height=d.height + SELECT_PADDING * 2.0
+                                    fill="none"
+                                    stroke=hex
+                                    stroke-width="0.5"
+                                    stroke-dasharray="3 2"
+                                    pointer-events="none"
+                                />
+                            </g>
+                        }
+                        .into_view()
+                    } else {
+                        let (ex, ey, ew, eh) = el.bounds();
+                        view! {
+                            <rect
+                                x=ex - SELECT_PADDING
+                                y=ey - SELECT_PADDING
+                                width=ew + SELECT_PADDING * 2.0
+                                height=eh + SELECT_PADDING * 2.0
+                                fill="none"
+                                stroke=hex
+                                stroke-width="0.5"
+                                stroke-dasharray="3 2"
+                                pointer-events="none"
+                            />
+                        }
+                        .into_view()
                     }
-                    .into_view()
                 })
                 .collect()
         } else {
@@ -262,7 +278,6 @@ pub fn selection_handle_overlay(
                 (bx + bw, by + bh),
             ];
             view! {
-                {individual_boxes}
                 <rect
                     x=bx
                     y=by
@@ -298,10 +313,14 @@ pub fn selection_handle_overlay(
 
         let content = if rot != 0.0 {
             let deg = rot.to_degrees();
-            view! { <g transform=format!("rotate({} {} {})", deg, cx, cy)>{inner}{icons}</g> }
+            view! {
+                {individual_boxes}
+                <g transform=format!("rotate({} {} {})", deg, cx, cy)>{inner}{icons}</g>
+            }
                 .into_view()
         } else {
             view! {
+                {individual_boxes}
                 {inner}
                 {icons}
             }
@@ -727,11 +746,15 @@ pub fn select_pointer_move(
                         let current_angle =
                             (world.1 - cy).atan2(world.0 - cx) + std::f64::consts::FRAC_PI_2;
                         let mut delta = current_angle - initial_angle;
+                        if delta > std::f64::consts::PI {
+                            delta -= std::f64::consts::TAU;
+                        } else if delta < -std::f64::consts::PI {
+                            delta += std::f64::consts::TAU;
+                        }
                         if st.shift_pressed.get() {
                             let step = std::f64::consts::TAU / 24.0;
                             delta = (delta / step).round() * step;
                         }
-                        st.drag.rotation_delta.set(delta);
                         // Snapshot-based: restore from originals and apply total delta
                         let originals = st.drag.drag_originals.get();
                         props.scene.update(|s| {
@@ -745,6 +768,7 @@ pub fn select_pointer_move(
                                 }
                             }
                         });
+                        st.drag.rotation_delta.set(delta);
                     }
                 }
             }
