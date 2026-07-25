@@ -50,7 +50,8 @@ const HANDLE_MOVE_RADIUS: f64 = 6.0;
 const HANDLE_ROTATE_RADIUS: f64 = 7.0;
 const ROTATE_HANDLE_OFFSET: f64 = 25.0;
 const PATH_MERGE_DIST: f64 = 3.0;
-const DASH_BOUNDS: &str = "3 2";
+const SELECT_PADDING: f64 = 5.0;
+
 use crate::model::resize::ResizeHandle;
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, *};
 
@@ -183,13 +184,18 @@ pub fn selection_handle_overlay(
 
         // Use frozen overlay bounds if set (rotation drag active),
         // otherwise compute axis-aligned bounds from current scene.
-        let (bx, by, bw, bh) = if let Some(fb) = overlay_freeze.get() {
+        let padding = SELECT_PADDING;
+        let (mut bx, mut by, mut bw, mut bh) = if let Some(fb) = overlay_freeze.get() {
             fb
         } else {
             selection_bounds(&ids, &els).unwrap_or((0.0, 0.0, 0.0, 0.0))
         };
+        bx -= padding;
+        by -= padding;
+        bw += padding * 2.0;
+        bh += padding * 2.0;
 
-        let hr = 5.0;
+        let hr = 3.5;
         let cx = bx + bw / 2.0;
         let cy = by + bh / 2.0;
         let rx = cx;
@@ -219,6 +225,31 @@ pub fn selection_handle_overlay(
             rotation_delta.get()
         };
 
+        let individual_boxes: Vec<_> = if ids.len() > 1 {
+            els.iter()
+                .filter(|el| ids.contains(&el.id()))
+                .map(|el| {
+                    let (ex, ey, ew, eh) = el.bounds();
+                    view! {
+                        <rect
+                            x=ex
+                            y=ey
+                            width=ew
+                            height=eh
+                            fill="none"
+                            stroke=hex
+                            stroke-width="0.5"
+                            stroke-dasharray="3 2"
+                            pointer-events="none"
+                        />
+                    }
+                    .into_view()
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+
         let inner = {
             let corners = [
                 (bx, by),
@@ -231,6 +262,7 @@ pub fn selection_handle_overlay(
                 (bx + bw, by + bh),
             ];
             view! {
+                {individual_boxes}
                 <rect
                     x=bx
                     y=by
@@ -239,10 +271,8 @@ pub fn selection_handle_overlay(
                     fill="none"
                     stroke=hex
                     stroke-width="1"
-                    stroke-dasharray=DASH_BOUNDS
                     pointer-events="none"
                 />
-                <line x1=cx y1=by x2=rx y2=ry stroke=hex stroke-width="1" pointer-events="none" />
                 {corners
                     .iter()
                     .map(|&(hx, hy)| {
@@ -251,7 +281,7 @@ pub fn selection_handle_overlay(
                                 cx=hx
                                 cy=hy
                                 r=hr
-                                fill="white"
+                                fill="none"
                                 stroke=hex
                                 stroke-width="1.5"
                                 pointer-events="none"
@@ -306,7 +336,6 @@ fn render_move_rotate_icons(hex: &'static str, cx: f64, cy: f64, rx: f64, ry: f6
             transform=format!("translate({} {}) scale(0.75)", rx - 9.0, ry - 9.0)
             pointer-events="none"
         >
-            <circle cx="12" cy="12" r="9.25" fill="white" stroke=hex stroke-width="1.5" />
             <path d="M12 4 A8 8 0 1 1 4 12" />
             <path d="M1.8 11.6 L4 9 L6.2 11.6" />
         </g>
@@ -440,9 +469,13 @@ fn handle_selection_handles(
         world
     };
 
-    let Some(bounds @ (bx, by, bw, bh)) = selection_bounds(ids, els) else {
+    let Some(bounds @ (mut bx, mut by, mut bw, mut bh)) = selection_bounds(ids, els) else {
         return false;
     };
+    bx -= SELECT_PADDING;
+    by -= SELECT_PADDING;
+    bw += SELECT_PADDING * 2.0;
+    bh += SELECT_PADDING * 2.0;
     let hpos = handle_positions(bx, by, bw, bh);
 
     for (i, &(hx, hy)) in hpos[..8].iter().enumerate() {
@@ -580,6 +613,77 @@ pub fn select_pointer_move(
     st: &mut CanvasState,
     props: &mut CanvasInputs,
 ) {
+    if st.drag.moving_anchor.get().is_none() {
+        let ids = st.selected_ids.get();
+        let mut hovered: Option<Handle> = None;
+        if !ids.is_empty() {
+            let els = props.scene.get().elements().to_vec();
+
+            if ids.len() == 1 {
+                if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
+                    if let Some(points) = el.path_points() {
+                        for (i, p) in points.iter().enumerate() {
+                            if ((world.0 - p.x).powi(2) + (world.1 - p.y).powi(2)).sqrt()
+                                <= HANDLE_RESIZE_RADIUS
+                            {
+                                hovered = Some(Handle::PathPoint(i));
+                                break;
+                            }
+                        }
+                        if hovered.is_none() {
+                            let (bx, by, bw, _bh) = el.bounds();
+                            let mx = bx + bw / 2.0;
+                            let my = by - 25.0;
+                            if ((world.0 - mx).powi(2) + (world.1 - my).powi(2)).sqrt()
+                                <= HANDLE_MOVE_RADIUS
+                            {
+                                hovered = Some(Handle::Move);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if hovered.is_none() {
+                if let Some((mut bx, mut by, mut bw, mut bh)) = selection_bounds(&ids, &els) {
+                    bx -= SELECT_PADDING;
+                    by -= SELECT_PADDING;
+                    bw += SELECT_PADDING * 2.0;
+                    bh += SELECT_PADDING * 2.0;
+                    let hpos = handle_positions(bx, by, bw, bh);
+
+                    for (i, &(hx, hy)) in hpos[..8].iter().enumerate() {
+                        if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt()
+                            <= HANDLE_RESIZE_RADIUS
+                        {
+                            hovered = Some(Handle::Resize(ResizeHandle::from(i)));
+                            break;
+                        }
+                    }
+
+                    if hovered.is_none() {
+                        let (hx, hy) = hpos[8];
+                        if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt()
+                            <= HANDLE_MOVE_RADIUS
+                        {
+                            hovered = Some(Handle::Move);
+                        }
+                    }
+
+                    if hovered.is_none() {
+                        let (hx, hy) = hpos[9];
+                        if ((world.0 - hx).powi(2) + (world.1 - hy).powi(2)).sqrt()
+                            <= HANDLE_ROTATE_RADIUS
+                        {
+                            hovered = Some(Handle::Rotate);
+                        }
+                    }
+                }
+            }
+        }
+        st.drag.hovered_handle.set(hovered);
+    }
+
     if let Some(anchor) = st.drag.moving_anchor.get() {
         let dx = world.0 - anchor.0;
         let dy = world.1 - anchor.1;
@@ -776,6 +880,7 @@ pub fn select_pointer_up(
         st.drag.rotation_delta.set(0.0);
         st.drag.last_world.set(None);
         st.drag.drag_originals.set(Vec::new());
+        st.drag.hovered_handle.set(None);
         st.select_anchor.set(None);
         return;
     }

@@ -49,6 +49,7 @@ pub struct DragState {
     pub drag_originals: RwSignal<Vec<Element>>,
     pub overlay_freeze: RwSignal<Option<(f64, f64, f64, f64)>>,
     pub rotation_delta: RwSignal<f64>,
+    pub hovered_handle: RwSignal<Option<Handle>>,
 }
 
 impl DragState {
@@ -62,6 +63,7 @@ impl DragState {
             drag_originals: create_rw_signal(Vec::new()),
             overlay_freeze: create_rw_signal(None),
             rotation_delta: create_rw_signal(0.0),
+            hovered_handle: create_rw_signal(None),
         }
     }
 }

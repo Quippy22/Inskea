@@ -258,7 +258,8 @@ pub fn Canvas(
             let crop = props.export_crop_active.get();
             let pan = st.pan_anchor.get().is_some();
             let handle = st.drag.drag_action.get();
-            let cursor = cursor_style(mode, tool, handle, eraser, pan, crop);
+            let hovered = st.drag.hovered_handle.get();
+            let cursor = cursor_style(mode, tool, handle, eraser, pan, crop, hovered);
             st.cursor_style.set(cursor);
         });
     }
