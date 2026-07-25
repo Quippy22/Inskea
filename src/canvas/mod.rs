@@ -29,7 +29,7 @@ use std::rc::Rc;
 // ── Constants ──────────────────────────────────────────────────────────────
 /// Minimum distance (world-space) a drag must travel before it is recognised as a drag
 /// rather than a click. Prevents accidental element creation from tiny movements.
-const MIN_DRAG_DIST: f64 = 3.0;
+pub(crate) const MIN_DRAG_DIST: f64 = 3.0;
 
 /// Multiplier applied per scroll tick when zooming in (1.1×). Zoom-out uses its reciprocal.
 const ZOOM_FACTOR: f64 = 1.1;
