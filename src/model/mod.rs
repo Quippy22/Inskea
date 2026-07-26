@@ -1,11 +1,13 @@
 mod color;
 pub mod elements;
 pub mod point;
+pub mod rect;
 pub mod resize;
 
 pub use color::Color;
 pub use elements::*;
 pub use point::Point;
+pub use rect::Rect;
 
 /// The single source of truth for everything on the canvas.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
