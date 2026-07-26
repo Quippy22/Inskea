@@ -32,8 +32,6 @@ impl From<usize> for ResizeHandle {
 }
 
 impl ResizeHandle {
-    /// Which axes are free to change when dragging this handle.
-    /// CSS cursor keyword for this resize handle.
     pub fn css_cursor(self) -> &'static str {
         match self {
             ResizeHandle::Nw => "nw-resize",
@@ -57,33 +55,31 @@ impl ResizeHandle {
         }
     }
 
-    /// The local-space anchor point (corner/edge opposite the handle)
-    /// that stays fixed during a non-symmetric resize.
-    pub fn opposite_anchor(self, el: &ElementData) -> (f64, f64) {
+    pub fn opposite_anchor(self, el: &ElementData) -> Point {
         let x = el.world_point.x;
         let y = el.world_point.y;
         let w = el.width;
         let h = el.height;
         match self {
-            ResizeHandle::Nw => (x + w, y + h),
-            ResizeHandle::N => (x, y + h),
-            ResizeHandle::Ne => (x, y + h),
-            ResizeHandle::W => (x + w, y),
-            ResizeHandle::E => (x, y),
-            ResizeHandle::Sw => (x + w, y),
-            ResizeHandle::S => (x, y),
-            ResizeHandle::Se => (x, y),
+            ResizeHandle::Nw => Point::new(x + w, y + h),
+            ResizeHandle::N => Point::new(x, y + h),
+            ResizeHandle::Ne => Point::new(x, y + h),
+            ResizeHandle::W => Point::new(x + w, y),
+            ResizeHandle::E => Point::new(x, y),
+            ResizeHandle::Sw => Point::new(x + w, y),
+            ResizeHandle::S => Point::new(x, y),
+            ResizeHandle::Se => Point::new(x, y),
         }
     }
 }
 
-/// Rotate a point `p` around `center` by `angle` radians (counter-clockwise).
-pub fn rotate_point_around(p: (f64, f64), center: (f64, f64), angle: f64) -> (f64, f64) {
-    let (px, py) = (p.0 - center.0, p.1 - center.1);
+pub fn rotate_point_around(p: Point, center: Point, angle: f64) -> Point {
+    let dx = p.x - center.x;
+    let dy = p.y - center.y;
     let (cos_a, sin_a) = (angle.cos(), angle.sin());
-    (
-        center.0 + px * cos_a - py * sin_a,
-        center.1 + px * sin_a + py * cos_a,
+    Point::new(
+        center.x + dx * cos_a - dy * sin_a,
+        center.y + dx * sin_a + dy * cos_a,
     )
 }
 
@@ -106,23 +102,16 @@ pub fn common_bounds(elements: &[&ElementData]) -> Rect {
     Rect::new(min_x, min_y, max_x - min_x, max_y - min_y)
 }
 
-/// Resize an element using the local-frame approach.
-///
-/// 1. Un-rotate the pointer into the element's local (unrotated) frame.
-/// 2. Compute new width/height anchored on the opposite corner/edge.
-/// 3. Rotate the new center back into world space.
-///
-/// `shift` locks aspect ratio; `alt` resizes symmetrically around center.
 pub fn resize_from_handle(
     original: &ElementData,
     handle: ResizeHandle,
-    pointer_world: (f64, f64),
+    pointer_world: Point,
     shift: bool,
     alt: bool,
 ) -> ElementData {
     let cx = original.world_point.x + original.width / 2.0;
     let cy = original.world_point.y + original.height / 2.0;
-    let center = (cx, cy);
+    let center = Point::new(cx, cy);
 
     let local_pointer = rotate_point_around(pointer_world, center, -original.rotation);
 
@@ -136,21 +125,21 @@ pub fn resize_from_handle(
 
     if alt {
         if free_x {
-            let half_w = (local_pointer.0 - cx).abs().max(MIN_ELEMENT_SIZE / 2.0);
+            let half_w = (local_pointer.x - cx).abs().max(MIN_ELEMENT_SIZE / 2.0);
             new_w = 2.0 * half_w;
         }
         if free_y {
-            let half_h = (local_pointer.1 - cy).abs().max(MIN_ELEMENT_SIZE / 2.0);
+            let half_h = (local_pointer.y - cy).abs().max(MIN_ELEMENT_SIZE / 2.0);
             new_h = 2.0 * half_h;
         }
     } else {
         if free_x {
-            new_w = (local_pointer.0 - anchor.0).abs().max(MIN_ELEMENT_SIZE);
-            new_local_x = local_pointer.0.min(anchor.0);
+            new_w = (local_pointer.x - anchor.x).abs().max(MIN_ELEMENT_SIZE);
+            new_local_x = local_pointer.x.min(anchor.x);
         }
         if free_y {
-            new_h = (local_pointer.1 - anchor.1).abs().max(MIN_ELEMENT_SIZE);
-            new_local_y = local_pointer.1.min(anchor.1);
+            new_h = (local_pointer.y - anchor.y).abs().max(MIN_ELEMENT_SIZE);
+            new_local_y = local_pointer.y.min(anchor.y);
         }
     }
 
@@ -160,18 +149,16 @@ pub fn resize_from_handle(
         if nratio > ratio {
             new_h = new_w / ratio;
             if !alt && free_y && handle == ResizeHandle::N {
-                new_local_y = anchor.1 - new_h;
+                new_local_y = anchor.y - new_h;
             }
         } else {
             new_w = new_h * ratio;
             if !alt && free_x && handle == ResizeHandle::W {
-                new_local_x = anchor.0 - new_w;
+                new_local_x = anchor.x - new_w;
             }
         }
     }
 
-    // For edge handles (non-corner), the constrained axis keeps its original size.
-    // But for corner handles where alt is active, we already computed both from center.
     if !alt {
         match handle {
             ResizeHandle::N | ResizeHandle::S => {
@@ -193,15 +180,13 @@ pub fn resize_from_handle(
     let (new_cx, new_cy) = if alt {
         (cx, cy)
     } else {
-        let new_local_center = (new_local_x + new_w / 2.0, new_local_y + new_h / 2.0);
-        rotate_point_around(new_local_center, center, original.rotation)
+        let new_local_center = Point::new(new_local_x + new_w / 2.0, new_local_y + new_h / 2.0);
+        let c = rotate_point_around(new_local_center, center, original.rotation);
+        (c.x, c.y)
     };
 
     ElementData {
-        world_point: Point {
-            x: new_cx - new_w / 2.0,
-            y: new_cy - new_h / 2.0,
-        },
+        world_point: Point::new(new_cx - new_w / 2.0, new_cy - new_h / 2.0),
         width: new_w,
         height: new_h,
         rotation: original.rotation,
@@ -210,12 +195,11 @@ pub fn resize_from_handle(
     }
 }
 
-/// Parameters for resizing an element via drag handles.
 #[derive(Clone, Copy)]
 pub struct ResizeContext<'a> {
     pub orig: &'a Element,
     pub handle: ResizeHandle,
-    pub pointer_world: (f64, f64),
+    pub pointer_world: Point,
     pub shift: bool,
     pub alt: bool,
     pub multi: bool,
@@ -225,17 +209,16 @@ pub struct ResizeContext<'a> {
     pub bh: f64,
 }
 
-/// Compute the axis-aligned bounding-box change for multi-element scaling.
 pub fn resize_bbox(
     pos: Point,
-    size: (f64, f64),
-    pointer_world: (f64, f64),
+    size: Point,
+    pointer_world: Point,
     handle: ResizeHandle,
     shift: bool,
     alt: bool,
-) -> Option<(Point, (f64, f64))> {
+) -> Option<(Point, Point)> {
     let (bx, by) = (pos.x, pos.y);
-    let (bw, bh) = size;
+    let (bw, bh) = (size.x, size.y);
     let (free_x, free_y) = handle.free_axes();
 
     let mut nx = bx;
@@ -247,48 +230,48 @@ pub fn resize_bbox(
         let cx = bx + bw / 2.0;
         let cy = by + bh / 2.0;
         if free_x {
-            let half_w = (pointer_world.0 - cx).abs().max(MIN_ELEMENT_SIZE / 2.0);
+            let half_w = (pointer_world.x - cx).abs().max(MIN_ELEMENT_SIZE / 2.0);
             nw = 2.0 * half_w;
         }
         if free_y {
-            let half_h = (pointer_world.1 - cy).abs().max(MIN_ELEMENT_SIZE / 2.0);
+            let half_h = (pointer_world.y - cy).abs().max(MIN_ELEMENT_SIZE / 2.0);
             nh = 2.0 * half_h;
         }
     } else {
         match handle {
             ResizeHandle::Nw => {
-                nx = pointer_world.0;
-                ny = pointer_world.1;
-                nw = (bx + bw) - pointer_world.0;
-                nh = (by + bh) - pointer_world.1;
+                nx = pointer_world.x;
+                ny = pointer_world.y;
+                nw = (bx + bw) - pointer_world.x;
+                nh = (by + bh) - pointer_world.y;
             }
             ResizeHandle::N => {
-                ny = pointer_world.1;
-                nh = (by + bh) - pointer_world.1;
+                ny = pointer_world.y;
+                nh = (by + bh) - pointer_world.y;
             }
             ResizeHandle::Ne => {
-                ny = pointer_world.1;
-                nw = pointer_world.0 - bx;
-                nh = (by + bh) - pointer_world.1;
+                ny = pointer_world.y;
+                nw = pointer_world.x - bx;
+                nh = (by + bh) - pointer_world.y;
             }
             ResizeHandle::W => {
-                nx = pointer_world.0;
-                nw = (bx + bw) - pointer_world.0;
+                nx = pointer_world.x;
+                nw = (bx + bw) - pointer_world.x;
             }
             ResizeHandle::E => {
-                nw = pointer_world.0 - bx;
+                nw = pointer_world.x - bx;
             }
             ResizeHandle::Sw => {
-                nx = pointer_world.0;
-                nw = (bx + bw) - pointer_world.0;
-                nh = pointer_world.1 - by;
+                nx = pointer_world.x;
+                nw = (bx + bw) - pointer_world.x;
+                nh = pointer_world.y - by;
             }
             ResizeHandle::S => {
-                nh = pointer_world.1 - by;
+                nh = pointer_world.y - by;
             }
             ResizeHandle::Se => {
-                nw = pointer_world.0 - bx;
-                nh = pointer_world.1 - by;
+                nw = pointer_world.x - bx;
+                nh = pointer_world.y - by;
             }
         }
 
@@ -336,17 +319,9 @@ pub fn resize_bbox(
         return None;
     }
 
-    Some((Point { x: nx, y: ny }, (nw, nh)))
+    Some((Point::new(nx, ny), Point::new(nw, nh)))
 }
 
-/// Scale an element's position and size proportionally to a new bounding-box.
-///
-/// `pos` is the new top-left corner of the bounds, `(nw, nh)` the new size.
-/// `(bx, by, bw, bh)` is the original bounds box. The scaling is derived from
-/// the ratio of `(nw, nh)` to the clamped bounds size.
-///
-/// When `set_height` is `false` (used by `Text`), the element's height is kept
-/// unchanged — the caller manages it separately via `resize_text`.
 #[allow(clippy::too_many_arguments)]
 pub fn resize_scale_element(
     data: &mut ElementData,
@@ -401,28 +376,42 @@ mod tests {
 
     #[test]
     fn rotate_point_around_identity() {
-        let p = rotate_point_around((10.0, 20.0), (5.0, 5.0), 0.0);
-        assert_eq!(p, (10.0, 20.0));
+        let p = rotate_point_around(Point::new(10.0, 20.0), Point::new(5.0, 5.0), 0.0);
+        assert_eq!(p, Point::new(10.0, 20.0));
     }
 
     #[test]
     fn rotate_point_around_180() {
-        let p = rotate_point_around((10.0, 0.0), (0.0, 0.0), std::f64::consts::PI);
-        assert!((p.0 + 10.0).abs() < 1e-10);
-        assert!((p.1 - 0.0).abs() < 1e-10);
+        let p = rotate_point_around(
+            Point::new(10.0, 0.0),
+            Point::new(0.0, 0.0),
+            std::f64::consts::PI,
+        );
+        assert!((p.x + 10.0).abs() < 1e-10);
+        assert!((p.y - 0.0).abs() < 1e-10);
     }
 
     #[test]
     fn rotate_point_around_90() {
-        let p = rotate_point_around((10.0, 0.0), (0.0, 0.0), std::f64::consts::FRAC_PI_2);
-        assert!((p.0 - 0.0).abs() < 1e-10);
-        assert!((p.1 - 10.0).abs() < 1e-10);
+        let p = rotate_point_around(
+            Point::new(10.0, 0.0),
+            Point::new(0.0, 0.0),
+            std::f64::consts::FRAC_PI_2,
+        );
+        assert!((p.x - 0.0).abs() < 1e-10);
+        assert!((p.y - 10.0).abs() < 1e-10);
     }
 
     #[test]
     fn resizing_unrotated_rectangle_from_se_anchors_nw() {
         let original = default_data();
-        let result = resize_from_handle(&original, ResizeHandle::Se, (150.0, 120.0), false, false);
+        let result = resize_from_handle(
+            &original,
+            ResizeHandle::Se,
+            Point::new(150.0, 120.0),
+            false,
+            false,
+        );
         assert!((result.world_point.x - 0.0).abs() < 0.01);
         assert!((result.world_point.y - 0.0).abs() < 0.01);
         assert!((result.width - 150.0).abs() < 0.01);
@@ -437,12 +426,12 @@ mod tests {
             rotation: std::f64::consts::FRAC_PI_4,
             ..default_data()
         };
-        let center = (
+        let center = Point::new(
             original.world_point.x + original.width / 2.0,
             original.world_point.y + original.height / 2.0,
         );
         // drag a point that, in LOCAL space, is a pure diagonal extension
-        let local_target = (150.0, 150.0);
+        let local_target = Point::new(150.0, 150.0);
         let world_target = rotate_point_around(local_target, center, original.rotation);
         let result = resize_from_handle(&original, ResizeHandle::Se, world_target, false, false);
         // width and height should scale evenly, not skew into an irregular shape
@@ -451,9 +440,13 @@ mod tests {
 
     #[test]
     fn rotate_point_around_works() {
-        let p = rotate_point_around((1.0, 0.0), (0.0, 0.0), std::f64::consts::FRAC_PI_2);
-        assert!((p.0 - 0.0).abs() < 1e-10);
-        assert!((p.1 - 1.0).abs() < 1e-10);
+        let p = rotate_point_around(
+            Point::new(1.0, 0.0),
+            Point::new(0.0, 0.0),
+            std::f64::consts::FRAC_PI_2,
+        );
+        assert!((p.x - 0.0).abs() < 1e-10);
+        assert!((p.y - 1.0).abs() < 1e-10);
     }
 
     #[test]
@@ -480,18 +473,24 @@ mod tests {
     #[test]
     fn common_bounds_single_element() {
         let el = default_data();
-        let (x, y, w, h) = common_bounds(&[&el]);
-        assert!((x - 0.0).abs() < 0.01);
-        assert!((y - 0.0).abs() < 0.01);
-        assert!((w - 100.0).abs() < 0.01);
-        assert!((h - 100.0).abs() < 0.01);
+        let rect = common_bounds(&[&el]);
+        assert!((rect.x - 0.0).abs() < 0.01);
+        assert!((rect.y - 0.0).abs() < 0.01);
+        assert!((rect.w - 100.0).abs() < 0.01);
+        assert!((rect.h - 100.0).abs() < 0.01);
     }
 
     #[test]
     fn resize_north_handle_only_changes_height() {
         let original = default_data();
         // Drag N handle to y=80 (20px above bottom at y=100) → height = 20, top at y=80
-        let result = resize_from_handle(&original, ResizeHandle::N, (50.0, 80.0), false, false);
+        let result = resize_from_handle(
+            &original,
+            ResizeHandle::N,
+            Point::new(50.0, 80.0),
+            false,
+            false,
+        );
         assert!((result.width - 100.0).abs() < 0.01);
         assert!((result.height - 20.0).abs() < 0.01);
         assert!((result.world_point.y - 80.0).abs() < 0.01);
@@ -501,7 +500,13 @@ mod tests {
     #[test]
     fn resize_east_handle_only_changes_width() {
         let original = default_data();
-        let result = resize_from_handle(&original, ResizeHandle::E, (150.0, 50.0), false, false);
+        let result = resize_from_handle(
+            &original,
+            ResizeHandle::E,
+            Point::new(150.0, 50.0),
+            false,
+            false,
+        );
         assert!((result.height - 100.0).abs() < 0.01);
         assert!((result.width - 150.0).abs() < 0.01);
         assert!((result.world_point.x - 0.0).abs() < 0.01);
@@ -511,7 +516,13 @@ mod tests {
     fn resize_shift_locks_aspect_ratio() {
         let original = default_data();
         // Drag SE to (200, 150) — wider than tall
-        let result = resize_from_handle(&original, ResizeHandle::Se, (200.0, 150.0), true, false);
+        let result = resize_from_handle(
+            &original,
+            ResizeHandle::Se,
+            Point::new(200.0, 150.0),
+            true,
+            false,
+        );
         // Aspect ratio should be 1:1 (100/100)
         assert!((result.width - result.height).abs() < 0.01);
     }
@@ -519,7 +530,13 @@ mod tests {
     #[test]
     fn resize_around_center_works() {
         let original = default_data();
-        let result = resize_from_handle(&original, ResizeHandle::Se, (150.0, 120.0), false, true);
+        let result = resize_from_handle(
+            &original,
+            ResizeHandle::Se,
+            Point::new(150.0, 120.0),
+            false,
+            true,
+        );
         // Center should stay at (50, 50)
         let cx = result.world_point.x + result.width / 2.0;
         let cy = result.world_point.y + result.height / 2.0;

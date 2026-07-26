@@ -1,6 +1,6 @@
 use super::viewport::Viewport;
 use crate::model::elements::text::CHAR_WIDTH_RATIO;
-use crate::model::{Element, ElementId, Scene};
+use crate::model::{Element, ElementId, Point, Scene};
 use leptos::*;
 use std::rc::Rc;
 
@@ -43,7 +43,7 @@ pub fn text_edit_overlay(
     textarea_ref: NodeRef<leptos::html::Textarea>,
     scene: RwSignal<Scene>,
     viewport: RwSignal<Viewport>,
-    screen_size: RwSignal<(f64, f64)>,
+    screen_size: RwSignal<Point>,
     commit: Rc<dyn Fn()>,
 ) -> impl Fn() -> Option<View> {
     move || {
@@ -59,11 +59,12 @@ pub fn text_edit_overlay(
         })?;
         let zoom = viewport.get().zoom;
         let font_size = text_elem.data.style.font_size.max(12.0);
-        let (sw, sh) = screen_size.get();
-        let (sx, sy) = viewport.get().world_to_screen(
-            (text_elem.data.world_point.x, text_elem.data.world_point.y),
-            (sw, sh),
+        let ss = screen_size.get();
+        let screen_pos = viewport.get().world_to_screen(
+            Point::new(text_elem.data.world_point.x, text_elem.data.world_point.y),
+            ss,
         );
+        let (sx, sy) = (screen_pos.x, screen_pos.y);
         let fill = text_elem
             .data
             .style

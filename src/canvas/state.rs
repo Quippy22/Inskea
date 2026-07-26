@@ -104,13 +104,13 @@ pub struct DrawingState {
 /// All interior mutable state owned by the canvas component.
 #[derive(Clone, Copy)]
 pub struct CanvasState {
-    pub screen_size: RwSignal<(f64, f64)>,
+    pub screen_size: RwSignal<Point>,
     pub svg_ref: NodeRef<leptos::svg::Svg>,
     pub drawing: RwSignal<Option<DrawingState>>,
     pub shift_pressed: RwSignal<bool>,
     pub alt_pressed: RwSignal<bool>,
     pub pan_anchor: RwSignal<Option<(f64, f64)>>,
-    pub select_anchor: RwSignal<Option<(f64, f64)>>,
+    pub select_anchor: RwSignal<Option<Point>>,
     pub erasing: RwSignal<bool>,
     pub selected_ids: RwSignal<Vec<ElementId>>,
     pub cursor_style: RwSignal<String>,
@@ -121,7 +121,7 @@ pub struct CanvasState {
 impl CanvasState {
     pub fn new() -> Self {
         Self {
-            screen_size: create_rw_signal((0.0, 0.0)),
+            screen_size: create_rw_signal(Point::new(0.0, 0.0)),
             svg_ref: create_node_ref(),
             drawing: create_rw_signal(None),
             shift_pressed: create_rw_signal(false),
@@ -141,7 +141,7 @@ impl CanvasState {
 #[derive(Clone)]
 pub struct CanvasInputs {
     pub cursor_screen: RwSignal<(f64, f64)>,
-    pub cursor_world: RwSignal<(f64, f64)>,
+    pub cursor_world: RwSignal<Point>,
     pub viewport: RwSignal<super::viewport::Viewport>,
     pub selected_tool: RwSignal<Tool>,
     pub selected_color: RwSignal<Color>,
@@ -158,21 +158,12 @@ pub struct CanvasInputs {
 
 // ── Helper functions used by pointer event handlers ──────────────────────
 
-/// Erase the topmost element at a world-space point.
-pub fn hit_and_erase(point: (f64, f64), scene: RwSignal<Scene>) {
+pub fn hit_and_erase(point: Point, scene: RwSignal<Scene>) {
     let id = scene.with(|s| {
         s.elements()
             .iter()
             .rev()
-            .find(|el| {
-                el.hit_test(
-                    Point {
-                        x: point.0,
-                        y: point.1,
-                    },
-                    HIT_MARGIN,
-                )
-            })
+            .find(|el| el.hit_test(point, HIT_MARGIN))
             .map(|el| el.id())
     });
     if let Some(id) = id {
@@ -198,30 +189,20 @@ pub fn combined_bounds(ids: &[ElementId], elements: &[Element]) -> Option<Rect> 
     out
 }
 
-/// Find the topmost element under a point and return its ID.
-pub fn hit_test_topmost(point: (f64, f64), elements: &[Element]) -> Option<ElementId> {
+pub fn hit_test_topmost(point: Point, elements: &[Element]) -> Option<ElementId> {
     elements
         .iter()
         .rev()
-        .find(|el| {
-            el.hit_test(
-                Point {
-                    x: point.0,
-                    y: point.1,
-                },
-                HIT_MARGIN,
-            )
-        })
+        .find(|el| el.hit_test(point, HIT_MARGIN))
         .map(|el| el.id())
 }
 
-pub fn point_inside_any_element(point: (f64, f64), elements: &[Element]) -> bool {
+pub fn point_inside_any_element(point: Point, elements: &[Element]) -> bool {
     elements.iter().any(|el| {
         let b = el.bounds();
-        let (px, py) = point;
-        px >= b.x - CLICK_MARGIN
-            && px <= b.x + b.w + CLICK_MARGIN
-            && py >= b.y - CLICK_MARGIN
-            && py <= b.y + b.h + CLICK_MARGIN
+        point.x >= b.x - CLICK_MARGIN
+            && point.x <= b.x + b.w + CLICK_MARGIN
+            && point.y >= b.y - CLICK_MARGIN
+            && point.y <= b.y + b.h + CLICK_MARGIN
     })
 }

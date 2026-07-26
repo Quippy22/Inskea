@@ -77,7 +77,7 @@ pub(crate) const DASH_PREVIEW: &str = "4 2";
 #[component]
 pub fn Canvas(
     cursor_screen: RwSignal<(f64, f64)>,
-    cursor_world: RwSignal<(f64, f64)>,
+    cursor_world: RwSignal<Point>,
     viewport: RwSignal<Viewport>,
     selected_tool: RwSignal<Tool>,
     selected_color: RwSignal<Color>,
@@ -273,9 +273,9 @@ pub fn Canvas(
     //
     // All three pointer handlers call this as their first step so that
     // `cursor_screen` / `cursor_world` always reflect the most recent event.
-    let update_world = move |ev: &ev::PointerEvent| -> (f64, f64) {
-        let screen = (ev.offset_x() as f64, ev.offset_y() as f64);
-        props.cursor_screen.set(screen);
+    let update_world = move |ev: &ev::PointerEvent| -> Point {
+        let screen = Point::new(ev.offset_x() as f64, ev.offset_y() as f64);
+        props.cursor_screen.set((screen.x, screen.y));
         let world = props
             .viewport
             .get()
@@ -373,7 +373,7 @@ pub fn Canvas(
             }
 
             if props.export_crop_active.get() {
-                st.drag.last_world.set(Some(world.into()));
+                st.drag.last_world.set(Some(world));
                 return;
             }
 
@@ -399,7 +399,7 @@ pub fn Canvas(
                             props.scene.update(|s| {
                                 if let Some(el) = s.elements_mut().last_mut() {
                                     el.update_drag(
-                                        Point::from(world),
+                                        world,
                                         Point::from(state.anchor),
                                         ev.shift_key(),
                                     );
@@ -443,14 +443,14 @@ pub fn Canvas(
 
             if props.export_crop_active.get() {
                 if let Some(anchor) = st.select_anchor.get() {
-                    let current = st.drag.last_world.get().unwrap_or(anchor.into());
-                    let dx = current.x - anchor.0;
-                    let dy = current.y - anchor.1;
+                    let current = st.drag.last_world.get().unwrap_or(anchor);
+                    let dx = current.x - anchor.x;
+                    let dy = current.y - anchor.y;
                     if dx.hypot(dy) >= MIN_DRAG_DIST {
-                        let x = anchor.0.min(current.x);
-                        let y = anchor.1.min(current.y);
-                        let w = (current.x - anchor.0).abs().max(1.0);
-                        let h = (current.y - anchor.1).abs().max(1.0);
+                        let x = anchor.x.min(current.x);
+                        let y = anchor.y.min(current.y);
+                        let w = (current.x - anchor.x).abs().max(1.0);
+                        let h = (current.y - anchor.y).abs().max(1.0);
                         if let Some(cb) = props.on_crop_export.get() {
                             cb(Rect::new(x, y, w, h));
                             props.on_crop_export.set(None);
@@ -493,17 +493,17 @@ pub fn Canvas(
         move |ev: ev::WheelEvent| {
             ev.prevent_default();
             let screen = props.cursor_screen.get();
-            let (sw, sh) = st.screen_size.get();
+            let ss = st.screen_size.get();
             let factor = if ev.delta_y() < 0.0 {
                 ZOOM_FACTOR
             } else {
                 1.0 / ZOOM_FACTOR
             };
             props.viewport.update(|vp| {
-                let world = vp.screen_to_world(screen, (sw, sh));
+                let world = vp.screen_to_world(Point::new(screen.0, screen.1), ss);
                 vp.zoom = (vp.zoom * factor).clamp(ZOOM_MIN, ZOOM_MAX);
-                vp.offset_x = world.0 - (screen.0 - sw / 2.0) / vp.zoom;
-                vp.offset_y = world.1 - (screen.1 - sh / 2.0) / vp.zoom;
+                vp.offset_x = world.x - (screen.0 - ss.x / 2.0) / vp.zoom;
+                vp.offset_y = world.y - (screen.1 - ss.y / 2.0) / vp.zoom;
             });
         }
     };
@@ -514,8 +514,8 @@ pub fn Canvas(
         let st = st;
         let props = props.clone();
         move || {
-            let (w, h) = st.screen_size.get();
-            props.viewport.get().to_view_box(w, h)
+            let ss = st.screen_size.get();
+            props.viewport.get().to_view_box(ss.x, ss.y)
         }
     };
 
@@ -540,14 +540,14 @@ pub fn Canvas(
                 return None;
             }
             let world = props.cursor_world.get();
-            let dx = world.0 - state.anchor.0;
-            let dy = world.1 - state.anchor.1;
+            let dx = world.x - state.anchor.0;
+            let dy = world.y - state.anchor.1;
             if dx.hypot(dy) < MIN_DRAG_DIST {
                 return None;
             }
             let shift = st.shift_pressed.get();
             let anchor = Point::from(state.anchor);
-            let world_pt = Point::from(world);
+            let world_pt = world;
             let mut el: Element = match state.tool {
                 Tool::Rectangle => {
                     Rectangle::from_drag(anchor, world_pt, state.color, shift).into()

@@ -34,6 +34,7 @@ impl Rect {
         }
     }
 
+    #[allow(dead_code)]
     pub fn corners(self) -> [Point; 4] {
         [
             Point::new(self.x, self.y),
@@ -43,6 +44,7 @@ impl Rect {
         ]
     }
 
+    #[allow(dead_code)]
     pub fn contains_point(self, point: Point) -> bool {
         point.x >= self.x
             && point.x <= self.right()

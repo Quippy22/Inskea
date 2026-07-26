@@ -2,20 +2,20 @@ use super::utils::{selection_bounds, ROTATE_HANDLE_OFFSET, SELECT_PADDING};
 use super::DASH_PREVIEW;
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{Bounds, PathPoints};
-use crate::model::{Color, Element, ElementId, Rect, Scene};
+use crate::model::{Color, Element, ElementId, Point, Rect, Scene};
 use leptos::*;
 
 pub fn selection_preview_overlay(
-    select_anchor: RwSignal<Option<(f64, f64)>>,
-    cursor_world: RwSignal<(f64, f64)>,
+    select_anchor: RwSignal<Option<Point>>,
+    cursor_world: RwSignal<Point>,
 ) -> impl Fn() -> Option<View> {
     move || {
         let anchor = select_anchor.get()?;
         let world = cursor_world.get();
-        let x = anchor.0.min(world.0);
-        let y = anchor.1.min(world.1);
-        let w = (world.0 - anchor.0).abs();
-        let h = (world.1 - anchor.1).abs();
+        let x = anchor.x.min(world.x);
+        let y = anchor.y.min(world.y);
+        let w = (world.x - anchor.x).abs();
+        let h = (world.y - anchor.y).abs();
         if w < 1.0 || h < 1.0 {
             return None;
         }

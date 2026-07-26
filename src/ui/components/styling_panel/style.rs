@@ -5,6 +5,7 @@ use crate::ui::styles;
 use leptos::*;
 use std::rc::Rc;
 
+#[allow(clippy::too_many_arguments)]
 pub fn style_section(
     local_style: RwSignal<ElementStyle>,
     local_line_style: RwSignal<LineStyle>,

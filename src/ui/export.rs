@@ -1,6 +1,6 @@
 use crate::canvas::combined_bounds;
 use crate::canvas::Viewport;
-use crate::model::{Element, ElementId, Rect, Scene};
+use crate::model::{Element, ElementId, Point, Rect, Scene};
 use crate::skea;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -32,7 +32,7 @@ pub fn download_string(content: &str, filename: &str) {
 pub fn scene_to_svg(
     scene: &Scene,
     viewport: &Viewport,
-    screen: (f64, f64),
+    screen: Point,
     selected: Option<&[ElementId]>,
 ) -> String {
     let (vb, elements): (String, &[Element]) = match selected {
@@ -54,7 +54,7 @@ pub fn scene_to_svg(
                 return String::new();
             }
         }
-        _ => (viewport.to_view_box(screen.0, screen.1), scene.elements()),
+        _ => (viewport.to_view_box(screen.x, screen.y), scene.elements()),
     };
     let element_body = svg_body(elements, selected);
     format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">{element_body}</svg>"#)

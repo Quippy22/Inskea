@@ -18,7 +18,7 @@ use leptos::{ev, SignalGet, SignalSet, SignalUpdate, *};
 #[inline]
 fn handle_text_double_click(
     ev: &ev::PointerEvent,
-    world: (f64, f64),
+    world: Point,
     st: &mut CanvasState,
     props: &CanvasInputs,
 ) -> bool {
@@ -42,7 +42,7 @@ fn handle_text_double_click(
 /// On hit, snapshot + set drag action to `PathPoint(i)` / `PathMidpoint(i)`.
 #[inline]
 fn handle_path_point_hit(
-    world: (f64, f64),
+    world: Point,
     st: &mut CanvasState,
     props: &CanvasInputs,
     el: &Element,
@@ -51,12 +51,12 @@ fn handle_path_point_hit(
         return false;
     };
     for (i, p) in points.iter().enumerate() {
-        let d = ((world.0 - p.x).powi(2) + (world.1 - p.y).powi(2)).sqrt();
+        let d = ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt();
         if d <= HANDLE_RESIZE_RADIUS {
             (props.push_snapshot)();
             st.drag.drag_action.set(Some(Handle::PathPoint(i)));
-            st.drag.moving_anchor.set(Some(world.into()));
-            st.drag.last_world.set(Some(world.into()));
+            st.drag.moving_anchor.set(Some(world));
+            st.drag.last_world.set(Some(world));
             return true;
         }
     }
@@ -65,11 +65,11 @@ fn handle_path_point_hit(
         let Some((mx, my)) = segment_midpoint(points, cm, i) else {
             continue;
         };
-        let d = ((world.0 - mx).powi(2) + (world.1 - my).powi(2)).sqrt();
+        let d = ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt();
         if d <= HANDLE_RESIZE_RADIUS {
             st.drag.drag_action.set(Some(Handle::PathMidpoint(i)));
-            st.drag.moving_anchor.set(Some(world.into()));
-            st.drag.last_world.set(Some(world.into()));
+            st.drag.moving_anchor.set(Some(world));
+            st.drag.last_world.set(Some(world));
             return true;
         }
     }
@@ -79,7 +79,7 @@ fn handle_path_point_hit(
 /// Check if pointer is on the move cross icon above a path-element.
 #[inline]
 fn handle_path_move_icon(
-    world: (f64, f64),
+    world: Point,
     st: &mut CanvasState,
     props: &CanvasInputs,
     el: &Element,
@@ -90,12 +90,12 @@ fn handle_path_move_icon(
     let b = el.bounds();
     let mx = b.x + b.w / 2.0;
     let my = b.y - 25.0;
-    if ((world.0 - mx).powi(2) + (world.1 - my).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+    if ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
         (props.push_snapshot)();
         st.drag.drag_action.set(Some(Handle::Move));
-        st.drag.moving_anchor.set(Some(world.into()));
+        st.drag.moving_anchor.set(Some(world));
         st.drag.drag_bounds.set(Some(el.bounds()));
-        st.drag.last_world.set(Some(world.into()));
+        st.drag.last_world.set(Some(world));
         return true;
     }
     false
@@ -104,16 +104,15 @@ fn handle_path_move_icon(
 /// Hit-test the 8 resize corner/midpoint handles against the padded bounds.
 #[inline]
 fn hit_resize_handle(
-    test_x: f64,
-    test_y: f64,
-    bounds: (f64, f64, f64, f64),
+    test: Point,
+    bounds: Rect,
     st: &mut CanvasState,
     props: &CanvasInputs,
-    world: (f64, f64),
+    world: Point,
     ids: &[ElementId],
     els: &[Element],
 ) -> bool {
-    let (mut bx, mut by, mut bw, mut bh) = bounds;
+    let (mut bx, mut by, mut bw, mut bh) = (bounds.x, bounds.y, bounds.w, bounds.h);
     bx -= SELECT_PADDING;
     by -= SELECT_PADDING;
     bw += SELECT_PADDING * 2.0;
@@ -121,14 +120,14 @@ fn hit_resize_handle(
     let hpos = handle_positions(bx, by, bw, bh);
 
     for (i, &p) in hpos[..8].iter().enumerate() {
-        if ((test_x - p.x).powi(2) + (test_y - p.y).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
+        if ((test.x - p.x).powi(2) + (test.y - p.y).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
             (props.push_snapshot)();
             st.drag
                 .drag_action
                 .set(Some(Handle::Resize(ResizeHandle::from(i))));
-            st.drag.moving_anchor.set(Some(world.into()));
-            st.drag.drag_bounds.set(Some(bounds.into()));
-            st.drag.last_world.set(Some(world.into()));
+            st.drag.moving_anchor.set(Some(world));
+            st.drag.drag_bounds.set(Some(bounds));
+            st.drag.last_world.set(Some(world));
             st.drag.drag_originals.set(
                 els.iter()
                     .filter(|el| ids.contains(&el.id()))
@@ -144,14 +143,13 @@ fn hit_resize_handle(
 /// Hit-test the centre move handle.
 #[inline]
 fn hit_move_handle(
-    test_x: f64,
-    test_y: f64,
-    bounds: (f64, f64, f64, f64),
+    test: Point,
+    bounds: Rect,
     st: &mut CanvasState,
     props: &CanvasInputs,
-    world: (f64, f64),
+    world: Point,
 ) -> bool {
-    let (mut bx, mut by, mut bw, mut bh) = bounds;
+    let (mut bx, mut by, mut bw, mut bh) = (bounds.x, bounds.y, bounds.w, bounds.h);
     bx -= SELECT_PADDING;
     by -= SELECT_PADDING;
     bw += SELECT_PADDING * 2.0;
@@ -159,12 +157,12 @@ fn hit_move_handle(
     let hpos = handle_positions(bx, by, bw, bh);
     let hp = hpos[8];
 
-    if ((test_x - hp.x).powi(2) + (test_y - hp.y).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+    if ((test.x - hp.x).powi(2) + (test.y - hp.y).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
         (props.push_snapshot)();
         st.drag.drag_action.set(Some(Handle::Move));
-        st.drag.moving_anchor.set(Some(world.into()));
-        st.drag.drag_bounds.set(Some(bounds.into()));
-        st.drag.last_world.set(Some(world.into()));
+        st.drag.moving_anchor.set(Some(world));
+        st.drag.drag_bounds.set(Some(bounds));
+        st.drag.last_world.set(Some(world));
         return true;
     }
     false
@@ -173,16 +171,15 @@ fn hit_move_handle(
 /// Hit-test the rotate handle above the bbox and initialise rotation drag state.
 #[inline]
 fn hit_rotate_handle(
-    test_x: f64,
-    test_y: f64,
-    bounds: (f64, f64, f64, f64),
+    test: Point,
+    bounds: Rect,
     st: &mut CanvasState,
     props: &CanvasInputs,
-    world: (f64, f64),
+    world: Point,
     ids: &[ElementId],
     els: &[Element],
 ) -> bool {
-    let (mut bx, mut by, mut bw, mut bh) = bounds;
+    let (mut bx, mut by, mut bw, mut bh) = (bounds.x, bounds.y, bounds.w, bounds.h);
     bx -= SELECT_PADDING;
     by -= SELECT_PADDING;
     bw += SELECT_PADDING * 2.0;
@@ -190,17 +187,17 @@ fn hit_rotate_handle(
     let hpos = handle_positions(bx, by, bw, bh);
     let hp = hpos[9];
 
-    if ((test_x - hp.x).powi(2) + (test_y - hp.y).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
+    if ((test.x - hp.x).powi(2) + (test.y - hp.y).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
         (props.push_snapshot)();
         let cx = bx + bw / 2.0;
         let cy = by + bh / 2.0;
         st.drag.drag_action.set(Some(Handle::Rotate));
         st.drag.drag_angle.set(Some(
-            (world.1 - cy).atan2(world.0 - cx) + std::f64::consts::FRAC_PI_2,
+            (world.y - cy).atan2(world.x - cx) + std::f64::consts::FRAC_PI_2,
         ));
-        st.drag.moving_anchor.set(Some(world.into()));
-        st.drag.drag_bounds.set(Some(bounds.into()));
-        st.drag.overlay_freeze.set(Some(bounds.into()));
+        st.drag.moving_anchor.set(Some(world));
+        st.drag.drag_bounds.set(Some(bounds));
+        st.drag.overlay_freeze.set(Some(bounds));
         st.drag.drag_originals.set(
             els.iter()
                 .filter(|el| ids.contains(&el.id()))
@@ -213,7 +210,7 @@ fn hit_rotate_handle(
 }
 
 fn handle_selection_handles(
-    world: (f64, f64),
+    world: Point,
     st: &mut CanvasState,
     props: &CanvasInputs,
     ids: &[ElementId],
@@ -222,25 +219,23 @@ fn handle_selection_handles(
     let test = if ids.len() == 1 {
         els.iter()
             .find(|e| e.id() == ids[0])
-            .map(|el| unrotate_for_element(world.into(), el))
-            .unwrap_or(world.into())
+            .map(|el| unrotate_for_element(world, el))
+            .unwrap_or(world)
     } else {
-        world.into()
+        world
     };
-    let (test_x, test_y) = (test.x, test.y);
 
     let Some(b) = selection_bounds(ids, els) else {
         return false;
     };
-    let bounds = (b.x, b.y, b.w, b.h);
 
-    if hit_resize_handle(test_x, test_y, bounds, st, props, world, ids, els) {
+    if hit_resize_handle(test, b, st, props, world, ids, els) {
         return true;
     }
-    if hit_move_handle(test_x, test_y, bounds, st, props, world) {
+    if hit_move_handle(test, b, st, props, world) {
         return true;
     }
-    if hit_rotate_handle(test_x, test_y, bounds, st, props, world, ids, els) {
+    if hit_rotate_handle(test, b, st, props, world, ids, els) {
         return true;
     }
 
@@ -251,7 +246,7 @@ fn handle_selection_handles(
 /// Without Shift, also starts an immediate move drag on the newly selected element.
 #[inline]
 fn handle_element_selection(
-    world: (f64, f64),
+    world: Point,
     st: &mut CanvasState,
     props: &CanvasInputs,
     els: &[Element],
@@ -273,9 +268,9 @@ fn handle_element_selection(
         if let Some(bounds) = combined_bounds(&[id], els) {
             (props.push_snapshot)();
             st.drag.drag_action.set(Some(Handle::Move));
-            st.drag.moving_anchor.set(Some(world.into()));
+            st.drag.moving_anchor.set(Some(world));
             st.drag.drag_bounds.set(Some(bounds));
-            st.drag.last_world.set(Some(world.into()));
+            st.drag.last_world.set(Some(world));
         }
     }
     true
@@ -284,11 +279,7 @@ fn handle_element_selection(
 /// Figure out which handle (if any) the cursor is hovering over.
 /// Used to set the `hovered_handle` signal for cursor style feedback.
 #[inline]
-fn detect_hovered_handle(
-    world: (f64, f64),
-    st: &CanvasState,
-    props: &CanvasInputs,
-) -> Option<Handle> {
+fn detect_hovered_handle(world: Point, st: &CanvasState, props: &CanvasInputs) -> Option<Handle> {
     let ids = st.selected_ids.get();
     if ids.is_empty() {
         return None;
@@ -299,7 +290,7 @@ fn detect_hovered_handle(
         if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
             if let Some(points) = el.path_points() {
                 for (i, p) in points.iter().enumerate() {
-                    if ((world.0 - p.x).powi(2) + (world.1 - p.y).powi(2)).sqrt()
+                    if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt()
                         <= HANDLE_RESIZE_RADIUS
                     {
                         return Some(Handle::PathPoint(i));
@@ -308,7 +299,7 @@ fn detect_hovered_handle(
                 let b = el.bounds();
                 let mx = b.x + b.w / 2.0;
                 let my = b.y - 25.0;
-                if ((world.0 - mx).powi(2) + (world.1 - my).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+                if ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
                     return Some(Handle::Move);
                 }
             }
@@ -320,18 +311,18 @@ fn detect_hovered_handle(
         let hpos = handle_positions(b.x, b.y, b.w, b.h);
 
         for (i, &p) in hpos[..8].iter().enumerate() {
-            if ((world.0 - p.x).powi(2) + (world.1 - p.y).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
+            if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
                 return Some(Handle::Resize(ResizeHandle::from(i)));
             }
         }
 
         let p = hpos[8];
-        if ((world.0 - p.x).powi(2) + (world.1 - p.y).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+        if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
             return Some(Handle::Move);
         }
 
         let p = hpos[9];
-        if ((world.0 - p.x).powi(2) + (world.1 - p.y).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
+        if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
             return Some(Handle::Rotate);
         }
     }
@@ -341,9 +332,9 @@ fn detect_hovered_handle(
 
 /// Apply a resize drag to all selected elements, restoring from originals each frame.
 #[inline]
-fn do_resize(world: (f64, f64), st: &mut CanvasState, props: &mut CanvasInputs) {
+fn do_resize(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
     if let Some(b) = st.drag.drag_bounds.get() {
-        st.drag.last_world.set(Some(world.into()));
+        st.drag.last_world.set(Some(world));
         let ids = st.selected_ids.get();
         let multi = ids.len() > 1;
         let originals = st.drag.drag_originals.get();
@@ -380,12 +371,12 @@ fn do_resize(world: (f64, f64), st: &mut CanvasState, props: &mut CanvasInputs) 
 /// Apply a rotation drag: compute normalised delta from initial angle,
 /// snap if Shift held, restore originals and re-apply total delta.
 #[inline]
-fn do_rotate(world: (f64, f64), st: &mut CanvasState, props: &mut CanvasInputs) {
+fn do_rotate(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
     if let Some(b) = st.drag.drag_bounds.get() {
         let cx = b.x + b.w / 2.0;
         let cy = b.y + b.h / 2.0;
         if let Some(initial_angle) = st.drag.drag_angle.get() {
-            let current_angle = (world.1 - cy).atan2(world.0 - cx) + std::f64::consts::FRAC_PI_2;
+            let current_angle = (world.y - cy).atan2(world.x - cx) + std::f64::consts::FRAC_PI_2;
             let mut delta = current_angle - initial_angle;
             if delta > std::f64::consts::PI {
                 delta -= std::f64::consts::TAU;
@@ -415,35 +406,25 @@ fn do_rotate(world: (f64, f64), st: &mut CanvasState, props: &mut CanvasInputs) 
 
 /// Drag a single path point to the current world position.
 #[inline]
-fn do_path_point_drag(
-    world: (f64, f64),
-    st: &mut CanvasState,
-    props: &mut CanvasInputs,
-    idx: usize,
-) {
+fn do_path_point_drag(world: Point, st: &mut CanvasState, props: &mut CanvasInputs, idx: usize) {
     let ids = st.selected_ids.get();
     props.scene.update(|s| {
         if let Some(el) = s.element_by_id_mut(ids[0]) {
             if let Some(pts) = el.path_points_mut() {
                 if idx < pts.len() {
-                    pts[idx].set(world.0, world.1);
+                    pts[idx] = world;
                 }
             }
         }
     });
-    st.drag.moving_anchor.set(Some(world.into()));
+    st.drag.moving_anchor.set(Some(world));
 }
 
 /// Drag a segment midpoint beyond `MIN_DRAG_DIST` to insert a new path point.
 #[inline]
-fn do_path_midpoint_drag(
-    world: (f64, f64),
-    st: &mut CanvasState,
-    props: &mut CanvasInputs,
-    i: usize,
-) {
+fn do_path_midpoint_drag(world: Point, st: &mut CanvasState, props: &mut CanvasInputs, i: usize) {
     if let Some(click) = st.drag.moving_anchor.get() {
-        let dist = (world.0 - click.x).hypot(world.1 - click.y);
+        let dist = (world.x - click.x).hypot(world.y - click.y);
         if dist >= MIN_DRAG_DIST {
             let ids = st.selected_ids.get();
             let new_idx = i + 1;
@@ -454,29 +435,29 @@ fn do_path_midpoint_drag(
                         let cm = el.curve_mode();
                         segment_midpoint(pts, cm, i)
                     })
-                    .unwrap_or((world.0, world.1))
+                    .unwrap_or((world.x, world.y))
             });
             (props.push_snapshot)();
             props.scene.update(|s| {
                 if let Some(target) = s.element_by_id_mut(ids[0]) {
                     if let Some(pts) = target.path_points_mut() {
                         pts.insert(new_idx, Point { x: mx, y: my });
-                        pts[new_idx].set(world.0, world.1);
+                        pts[new_idx] = world;
                     }
                 }
             });
             st.drag.drag_action.set(Some(Handle::PathPoint(new_idx)));
-            st.drag.moving_anchor.set(Some(world.into()));
-            st.drag.last_world.set(Some(world.into()));
+            st.drag.moving_anchor.set(Some(world));
+            st.drag.last_world.set(Some(world));
         }
     }
 }
 
 /// Offset all selected elements by the delta since the drag anchor.
 #[inline]
-fn do_move(world: (f64, f64), anchor: (f64, f64), st: &mut CanvasState, props: &mut CanvasInputs) {
-    let dx = world.0 - anchor.0;
-    let dy = world.1 - anchor.1;
+fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
+    let dx = world.x - anchor.x;
+    let dy = world.y - anchor.y;
     let ids = st.selected_ids.get();
     props.scene.update(|s| {
         for el in s.elements_mut().iter_mut() {
@@ -485,7 +466,7 @@ fn do_move(world: (f64, f64), anchor: (f64, f64), st: &mut CanvasState, props: &
             }
         }
     });
-    st.drag.moving_anchor.set(Some(world.into()));
+    st.drag.moving_anchor.set(Some(world));
 }
 
 /// On pointer-up, collapse a path point if it sits too close to its chord.
@@ -571,15 +552,15 @@ fn clear_drag_state(st: &mut CanvasState) {
 
 /// Finish a marquee drag-select: select all elements fully inside the dragged rect.
 #[inline]
-fn complete_marquee_selection(world: (f64, f64), st: &mut CanvasState, props: &mut CanvasInputs) {
+fn complete_marquee_selection(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
     if let Some(anchor) = st.select_anchor.get() {
-        let dx = world.0 - anchor.0;
-        let dy = world.1 - anchor.1;
+        let dx = world.x - anchor.x;
+        let dy = world.y - anchor.y;
         if dx.hypot(dy) >= MIN_DRAG_DIST {
-            let rx = anchor.0.min(world.0);
-            let ry = anchor.1.min(world.1);
-            let rw = (world.0 - anchor.0).abs();
-            let rh = (world.1 - anchor.1).abs();
+            let rx = anchor.x.min(world.x);
+            let ry = anchor.y.min(world.y);
+            let rw = (world.x - anchor.x).abs();
+            let rh = (world.y - anchor.y).abs();
             let els = props.scene.get().elements().to_vec();
             let contained: Vec<ElementId> = els
                 .iter()
@@ -594,7 +575,7 @@ fn complete_marquee_selection(world: (f64, f64), st: &mut CanvasState, props: &m
 
 pub fn select_pointer_down(
     _ev: &ev::PointerEvent,
-    world: (f64, f64),
+    world: Point,
     st: &mut CanvasState,
     props: &mut CanvasInputs,
 ) {
@@ -638,7 +619,7 @@ pub fn select_pointer_down(
 }
 
 pub fn select_pointer_move(
-    world: (f64, f64),
+    world: Point,
     _ev: &ev::PointerEvent,
     st: &mut CanvasState,
     props: &mut CanvasInputs,
@@ -654,14 +635,14 @@ pub fn select_pointer_move(
             Some(Handle::Rotate) => do_rotate(world, st, props),
             Some(Handle::PathPoint(idx)) => do_path_point_drag(world, st, props, idx),
             Some(Handle::PathMidpoint(i)) => do_path_midpoint_drag(world, st, props, i),
-            _ => do_move(world, (anchor.x, anchor.y), st, props),
+            _ => do_move(world, anchor, st, props),
         }
     }
 }
 
 pub fn select_pointer_up(
     _ev: &ev::PointerEvent,
-    world: (f64, f64),
+    world: Point,
     st: &mut CanvasState,
     props: &mut CanvasInputs,
 ) {

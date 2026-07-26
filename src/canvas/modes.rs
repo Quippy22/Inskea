@@ -27,7 +27,7 @@ use leptos::{ev, SignalGet, SignalSet, SignalUpdate, SignalWith};
 ///   click (below MIN_DRAG_DIST) never pollutes the undo stack.
 pub fn draw_pointer_down(
     _ev: &ev::PointerEvent,
-    world: (f64, f64),
+    world: Point,
     st: &mut CanvasState,
     props: &mut CanvasInputs,
 ) {
@@ -37,7 +37,7 @@ pub fn draw_pointer_down(
     if tool == Tool::Text {
         (props.push_snapshot)();
         let mut data = ElementData::new(0);
-        data.world_point.set(world.0, world.1);
+        data.world_point = world;
         data.width = 0.0;
         data.height = 0.0;
         data.style = props.default_style.get();
@@ -62,25 +62,19 @@ pub fn draw_pointer_down(
             data.style = props.default_style.get();
             s.add_element(Element::Freehand(Freehand {
                 data,
-                points: vec![Point {
-                    x: world.0,
-                    y: world.1,
-                }],
+                points: vec![world],
             }));
         });
         st.drawing.set(Some(DrawingState {
-            anchor: world,
+            anchor: (world.x, world.y),
             tool,
             color,
         }));
         return;
     }
 
-    // No snapshot here — it fires once in draw_pointer_up, immediately
-    // before the element is added to the scene, so degenerate clicks
-    // below MIN_DRAG_DIST don't pollute the undo stack.
     st.drawing.set(Some(DrawingState {
-        anchor: world,
+        anchor: (world.x, world.y),
         tool,
         color,
     }));
@@ -102,7 +96,7 @@ pub fn draw_pointer_down(
 ///   is cleared.
 pub fn draw_pointer_up(
     _ev: &ev::PointerEvent,
-    world: (f64, f64),
+    world: Point,
     st: &mut CanvasState,
     props: &mut CanvasInputs,
 ) {
@@ -117,14 +111,14 @@ pub fn draw_pointer_up(
             return;
         }
 
-        let dx = world.0 - state.anchor.0;
-        let dy = world.1 - state.anchor.1;
+        let dx = world.x - state.anchor.0;
+        let dy = world.y - state.anchor.1;
         if dx.hypot(dy) < MIN_DRAG_DIST {
             st.drawing.set(None);
             return;
         }
         let anchor = Point::from(state.anchor);
-        let world_pt = Point::from(world);
+        let world_pt = world;
         let mut el: Element = match state.tool {
             Tool::Rectangle => {
                 Rectangle::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into()
