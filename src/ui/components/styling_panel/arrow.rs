@@ -1,6 +1,6 @@
 use crate::model::LineStyle;
-use crate::ui::styles;
 use crate::ui::components::styling_panel::utils::arrowhead_icon;
+use crate::ui::styles;
 use leptos::*;
 use std::rc::Rc;
 

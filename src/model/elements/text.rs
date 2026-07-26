@@ -235,8 +235,8 @@ impl HitTest for Text {
 }
 
 impl Bounds for Text {
-    fn bounds(&self) -> (f64, f64, f64, f64) {
-        (
+    fn bounds(&self) -> Rect {
+        Rect::new(
             self.data.world_point.x,
             self.data.world_point.y,
             self.data.width,

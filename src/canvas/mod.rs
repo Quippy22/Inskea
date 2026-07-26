@@ -373,7 +373,7 @@ pub fn Canvas(
             }
 
             if props.export_crop_active.get() {
-                st.drag.last_world.set(Some(world));
+                st.drag.last_world.set(Some(world.into()));
                 return;
             }
 
@@ -443,16 +443,16 @@ pub fn Canvas(
 
             if props.export_crop_active.get() {
                 if let Some(anchor) = st.select_anchor.get() {
-                    let current = st.drag.last_world.get().unwrap_or(anchor);
-                    let dx = current.0 - anchor.0;
-                    let dy = current.1 - anchor.1;
+                    let current = st.drag.last_world.get().unwrap_or(anchor.into());
+                    let dx = current.x - anchor.0;
+                    let dy = current.y - anchor.1;
                     if dx.hypot(dy) >= MIN_DRAG_DIST {
-                        let x = anchor.0.min(current.0);
-                        let y = anchor.1.min(current.1);
-                        let w = (current.0 - anchor.0).abs().max(1.0);
-                        let h = (current.1 - anchor.1).abs().max(1.0);
+                        let x = anchor.0.min(current.x);
+                        let y = anchor.1.min(current.y);
+                        let w = (current.x - anchor.0).abs().max(1.0);
+                        let h = (current.y - anchor.1).abs().max(1.0);
                         if let Some(cb) = props.on_crop_export.get() {
-                            cb((x, y, w, h));
+                            cb(Rect::new(x, y, w, h));
                             props.on_crop_export.set(None);
                         }
                     }

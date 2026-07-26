@@ -1,5 +1,5 @@
 use crate::model::resize::{resize_bbox, ResizeContext};
-use crate::model::Point;
+use crate::model::{Point, Rect};
 
 /// How a set of path points should be interpreted when rendering.
 ///
@@ -174,15 +174,9 @@ pub fn segment_midpoint(points: &[Point], mode: CurveMode, i: usize) -> Option<(
     }
 }
 
-/// Compute the axis-aligned bounding box of a list of points.
-///
-/// Returns `(min_x, min_y, width, height)`. Returns `(0, 0, 0, 0)` for an
-/// empty slice. Width and height are clamped to a minimum of 1.0 so that
-/// selection handles and bounding boxes remain visible even for perfectly
-/// horizontal or vertical lines.
-pub fn bounds_of_points(points: &[Point]) -> (f64, f64, f64, f64) {
+pub fn bounds_of_points(points: &[Point]) -> Rect {
     if points.is_empty() {
-        return (0.0, 0.0, 0.0, 0.0);
+        return Rect::new(0.0, 0.0, 0.0, 0.0);
     }
     let min_x = points.iter().map(|p| p.x).reduce(f64::min).unwrap();
     let min_y = points.iter().map(|p| p.y).reduce(f64::min).unwrap();
@@ -190,7 +184,7 @@ pub fn bounds_of_points(points: &[Point]) -> (f64, f64, f64, f64) {
     let max_y = points.iter().map(|p| p.y).reduce(f64::max).unwrap();
     let w = (max_x - min_x).max(1.0);
     let h = (max_y - min_y).max(1.0);
-    (min_x, min_y, w, h)
+    Rect::new(min_x, min_y, w, h)
 }
 
 /// Scale all points using the same affine bounding-box transform as the

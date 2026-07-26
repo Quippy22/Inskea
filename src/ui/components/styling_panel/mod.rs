@@ -7,10 +7,6 @@ mod sliders;
 mod style;
 mod utils;
 
-use crate::model::{
-    Color, CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle, Scene, StrokeStyle,
-    StylingKind,
-};
 use self::arrow::arrow_section;
 use self::color::{color_section, ColorSlot};
 use self::fill::fill_section;
@@ -19,6 +15,10 @@ use self::layers::layers_section;
 use self::sliders::sliders_section;
 use self::style::style_section;
 use self::utils::{read_panel_state, single_selected_element};
+use crate::model::{
+    Color, CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle, Scene, StrokeStyle,
+    StylingKind,
+};
 use crate::ui::dock::Tool;
 use leptos::*;
 use leptos_color::Color as LpcColor;

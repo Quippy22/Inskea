@@ -1,6 +1,6 @@
 use crate::canvas::combined_bounds;
 use crate::canvas::Viewport;
-use crate::model::{Element, ElementId, Scene};
+use crate::model::{Element, ElementId, Rect, Scene};
 use crate::skea;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -38,15 +38,15 @@ pub fn scene_to_svg(
     let (vb, elements): (String, &[Element]) = match selected {
         Some(ids) if !ids.is_empty() => {
             let bounds = combined_bounds(ids, scene.elements());
-            if let Some((bx, by, bw, bh)) = bounds {
+            if let Some(b) = bounds {
                 let pad = 10.0;
                 (
                     format!(
                         "{} {} {} {}",
-                        bx - pad,
-                        by - pad,
-                        bw + pad * 2.0,
-                        bh + pad * 2.0
+                        b.x - pad,
+                        b.y - pad,
+                        b.w + pad * 2.0,
+                        b.h + pad * 2.0
                     ),
                     scene.elements(),
                 )
@@ -60,10 +60,8 @@ pub fn scene_to_svg(
     format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">{element_body}</svg>"#)
 }
 
-/// Generate SVG with a custom crop viewBox, including all elements.
-pub fn scene_to_svg_crop(scene: &Scene, crop: (f64, f64, f64, f64)) -> String {
-    let (cx, cy, cw, ch) = crop;
-    let vb = format!("{} {} {} {}", cx, cy, cw, ch);
+pub fn scene_to_svg_crop(scene: &Scene, crop: Rect) -> String {
+    let vb = format!("{} {} {} {}", crop.x, crop.y, crop.w, crop.h);
     let element_body = svg_body(scene.elements(), None);
     format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">{element_body}</svg>"#)
 }

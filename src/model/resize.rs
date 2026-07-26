@@ -1,6 +1,5 @@
 use super::elements::Element;
-use super::ElementData;
-use super::Point;
+use super::{ElementData, Point, Rect};
 
 pub const MIN_ELEMENT_SIZE: f64 = 5.0;
 
@@ -88,9 +87,7 @@ pub fn rotate_point_around(p: (f64, f64), center: (f64, f64), angle: f64) -> (f6
     )
 }
 
-/// Axis-aligned bounding box that encloses all given elements,
-/// accounting for their individual rotations.
-pub fn common_bounds(elements: &[&ElementData]) -> (f64, f64, f64, f64) {
+pub fn common_bounds(elements: &[&ElementData]) -> Rect {
     let mut min_x = f64::MAX;
     let mut min_y = f64::MAX;
     let mut max_x = f64::MIN;
@@ -106,7 +103,7 @@ pub fn common_bounds(elements: &[&ElementData]) -> (f64, f64, f64, f64) {
             max_y = max_y.max(c.y);
         }
     }
-    (min_x, min_y, max_x - min_x, max_y - min_y)
+    Rect::new(min_x, min_y, max_x - min_x, max_y - min_y)
 }
 
 /// Resize an element using the local-frame approach.

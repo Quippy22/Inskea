@@ -1,7 +1,9 @@
 use crate::canvas::settings::CanvasSettings;
 use crate::model::resize::ResizeHandle;
 use crate::model::Color;
-use crate::model::{Bounds, Element, ElementId, ElementStyle, HitTest, LineStyle, Point, Scene};
+use crate::model::{
+    Bounds, Element, ElementId, ElementStyle, HitTest, LineStyle, Point, Rect, Scene,
+};
 use crate::ui::dock::Tool;
 use leptos::*;
 use std::rc::Rc;
@@ -41,13 +43,13 @@ pub enum Handle {
 /// Drag-related state (resize, move, rotate, path-point drag).
 #[derive(Clone, Copy)]
 pub struct DragState {
-    pub moving_anchor: RwSignal<Option<(f64, f64)>>,
+    pub moving_anchor: RwSignal<Option<Point>>,
     pub drag_action: RwSignal<Option<Handle>>,
-    pub drag_bounds: RwSignal<Option<(f64, f64, f64, f64)>>,
+    pub drag_bounds: RwSignal<Option<Rect>>,
     pub drag_angle: RwSignal<Option<f64>>,
-    pub last_world: RwSignal<Option<(f64, f64)>>,
+    pub last_world: RwSignal<Option<Point>>,
     pub drag_originals: RwSignal<Vec<Element>>,
-    pub overlay_freeze: RwSignal<Option<(f64, f64, f64, f64)>>,
+    pub overlay_freeze: RwSignal<Option<Rect>>,
     pub rotation_delta: RwSignal<f64>,
     pub hovered_handle: RwSignal<Option<Handle>>,
 }
@@ -86,7 +88,7 @@ impl TextEditState {
     }
 }
 
-pub type CropExportCallback = Rc<dyn Fn((f64, f64, f64, f64))>;
+pub type CropExportCallback = Rc<dyn Fn(Rect)>;
 
 /// Tracks an in-progress draw operation.
 #[derive(Clone)]
@@ -178,28 +180,22 @@ pub fn hit_and_erase(point: (f64, f64), scene: RwSignal<Scene>) {
     }
 }
 
-/// Check whether a rectangle fully contains an element's bounding box.
-pub fn rect_fully_contains_element(rx: f64, ry: f64, rw: f64, rh: f64, el: &Element) -> bool {
-    let (ex, ey, ew, eh) = el.bounds();
-    ex >= rx && ey >= ry && (ex + ew) <= (rx + rw) && (ey + eh) <= (ry + rh)
+pub fn rect_fully_contains_element(rect: Rect, el: &Element) -> bool {
+    rect.contains_rect(&el.bounds())
 }
 
-/// Compute the combined axis-aligned bounding box of a set of element IDs.
-pub fn combined_bounds(ids: &[ElementId], elements: &[Element]) -> Option<(f64, f64, f64, f64)> {
-    let mut out: Option<(f64, f64, f64, f64)> = None;
+pub fn combined_bounds(ids: &[ElementId], elements: &[Element]) -> Option<Rect> {
+    let mut out: Option<Rect> = None;
     for el in elements {
         if ids.contains(&el.id()) {
-            let (ex, ey, ew, eh) = el.bounds();
-            let (x1, y1, x2, y2) = (ex, ey, ex + ew, ey + eh);
+            let b = el.bounds();
             match out {
-                None => out = Some((x1, y1, x2, y2)),
-                Some((min_x, min_y, max_x, max_y)) => {
-                    out = Some((min_x.min(x1), min_y.min(y1), max_x.max(x2), max_y.max(y2)));
-                }
+                None => out = Some(b),
+                Some(prev) => out = Some(prev.union(&b)),
             }
         }
     }
-    out.map(|(x1, y1, x2, y2)| (x1, y1, x2 - x1, y2 - y1))
+    out
 }
 
 /// Find the topmost element under a point and return its ID.
@@ -219,14 +215,13 @@ pub fn hit_test_topmost(point: (f64, f64), elements: &[Element]) -> Option<Eleme
         .map(|el| el.id())
 }
 
-/// Returns true if the point is inside any element's bounding box (with margin).
 pub fn point_inside_any_element(point: (f64, f64), elements: &[Element]) -> bool {
     elements.iter().any(|el| {
-        let (ex, ey, ew, eh) = el.bounds();
+        let b = el.bounds();
         let (px, py) = point;
-        px >= ex - CLICK_MARGIN
-            && px <= ex + ew + CLICK_MARGIN
-            && py >= ey - CLICK_MARGIN
-            && py <= ey + eh + CLICK_MARGIN
+        px >= b.x - CLICK_MARGIN
+            && px <= b.x + b.w + CLICK_MARGIN
+            && py >= b.y - CLICK_MARGIN
+            && py <= b.y + b.h + CLICK_MARGIN
     })
 }

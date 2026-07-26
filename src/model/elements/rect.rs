@@ -142,8 +142,8 @@ impl HitTest for Rectangle {
 }
 
 impl Bounds for Rectangle {
-    fn bounds(&self) -> (f64, f64, f64, f64) {
-        (
+    fn bounds(&self) -> Rect {
+        Rect::new(
             self.data.world_point.x,
             self.data.world_point.y,
             self.data.width,

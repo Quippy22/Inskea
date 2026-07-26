@@ -1,8 +1,8 @@
 use super::utils::{selection_bounds, ROTATE_HANDLE_OFFSET, SELECT_PADDING};
 use super::DASH_PREVIEW;
 use crate::model::elements::path::segment_midpoint;
-use crate::model::{Color, Element, ElementId, Scene};
 use crate::model::elements::{Bounds, PathPoints};
+use crate::model::{Color, Element, ElementId, Rect, Scene};
 use leptos::*;
 
 pub fn selection_preview_overlay(
@@ -46,9 +46,9 @@ pub fn selection_preview_overlay(
 fn render_path_element_overlay(el: &Element, hex: &'static str) -> Option<View> {
     let points = el.path_points()?;
     let n = points.len();
-    let (bx, by, bw, _bh) = el.bounds();
-    let mx = bx + bw / 2.0;
-    let my = by - 25.0;
+    let b = el.bounds();
+    let mx = b.x + b.w / 2.0;
+    let my = b.y - 25.0;
 
     let path_handles: Vec<_> = points
         .iter()
@@ -125,29 +125,22 @@ fn render_path_element_overlay(el: &Element, hex: &'static str) -> Option<View> 
 fn compute_padded_bounds(
     ids: &[ElementId],
     els: &[Element],
-    overlay_freeze: RwSignal<Option<(f64, f64, f64, f64)>>,
-) -> (f64, f64, f64, f64) {
-    let (mut bx, mut by, mut bw, mut bh) = if let Some(fb) = overlay_freeze.get() {
+    overlay_freeze: RwSignal<Option<Rect>>,
+) -> Rect {
+    let mut b = if let Some(fb) = overlay_freeze.get() {
         fb
     } else {
-        selection_bounds(ids, els).unwrap_or((0.0, 0.0, 0.0, 0.0))
+        selection_bounds(ids, els).unwrap_or(Rect::new(0.0, 0.0, 0.0, 0.0))
     };
-    bx -= SELECT_PADDING;
-    by -= SELECT_PADDING;
-    bw += SELECT_PADDING * 2.0;
-    bh += SELECT_PADDING * 2.0;
-    (bx, by, bw, bh)
+    b = b.padded(SELECT_PADDING);
+    b
 }
 
 /// Determine the rotation angle to apply to the selection handle assembly.
 /// Single-select uses the element's own rotation (plus drag delta during rotate);
 /// multi-select only uses the drag delta.
 #[inline]
-fn compute_rotation(
-    ids: &[ElementId],
-    els: &[Element],
-    rotation_delta: RwSignal<f64>,
-) -> f64 {
+fn compute_rotation(ids: &[ElementId], els: &[Element], rotation_delta: RwSignal<f64>) -> f64 {
     if ids.len() == 1 {
         let el_rot = els
             .iter()
@@ -169,11 +162,7 @@ fn compute_rotation(
 /// Excludes path-based elements (Line, Arrow, Freehand).
 /// Each box is individually rotated to match its element's orientation.
 #[inline]
-fn render_multi_select_boxes(
-    ids: &[ElementId],
-    els: &[Element],
-    hex: &'static str,
-) -> Vec<View> {
+fn render_multi_select_boxes(ids: &[ElementId], els: &[Element], hex: &'static str) -> Vec<View> {
     if ids.len() <= 1 {
         return vec![];
     }
@@ -203,13 +192,13 @@ fn render_multi_select_boxes(
                 }
                 .into_view()
             } else {
-                let (ex, ey, ew, eh) = el.bounds();
+                let b = el.bounds();
                 view! {
                     <rect
-                        x=ex - SELECT_PADDING
-                        y=ey - SELECT_PADDING
-                        width=ew + SELECT_PADDING * 2.0
-                        height=eh + SELECT_PADDING * 2.0
+                        x=b.x - SELECT_PADDING
+                        y=b.y - SELECT_PADDING
+                        width=b.w + SELECT_PADDING * 2.0
+                        height=b.h + SELECT_PADDING * 2.0
                         fill="none"
                         stroke=hex
                         stroke-width="0.5"
@@ -225,11 +214,7 @@ fn render_multi_select_boxes(
 
 /// Solid bounding-box rectangle with 8 hollow resize handle circles.
 #[inline]
-fn render_bbox_overlay(
-    bx: f64, by: f64, bw: f64, bh: f64,
-    hr: f64,
-    hex: &'static str,
-) -> View {
+fn render_bbox_overlay(bx: f64, by: f64, bw: f64, bh: f64, hr: f64, hex: &'static str) -> View {
     let corners = [
         (bx, by),
         (bx + bw / 2.0, by),
@@ -275,7 +260,7 @@ fn render_bbox_overlay(
 pub fn selection_handle_overlay(
     selected_ids: RwSignal<Vec<ElementId>>,
     scene: RwSignal<Scene>,
-    overlay_freeze: RwSignal<Option<(f64, f64, f64, f64)>>,
+    overlay_freeze: RwSignal<Option<Rect>>,
     rotation_delta: RwSignal<f64>,
 ) -> impl Fn() -> Option<View> {
     move || {
@@ -294,16 +279,16 @@ pub fn selection_handle_overlay(
             }
         }
 
-        let (bx, by, bw, bh) = compute_padded_bounds(&ids, &els, overlay_freeze);
+        let b = compute_padded_bounds(&ids, &els, overlay_freeze);
         let hr = 3.5;
-        let cx = bx + bw / 2.0;
-        let cy = by + bh / 2.0;
+        let cx = b.center().x;
+        let cy = b.center().y;
         let rx = cx;
-        let ry = by - ROTATE_HANDLE_OFFSET;
+        let ry = b.y - ROTATE_HANDLE_OFFSET;
 
         let rot = compute_rotation(&ids, &els, rotation_delta);
         let individual_boxes = render_multi_select_boxes(&ids, &els, hex);
-        let inner = render_bbox_overlay(bx, by, bw, bh, hr, hex);
+        let inner = render_bbox_overlay(b.x, b.y, b.w, b.h, hr, hex);
         let icons = render_move_rotate_icons(hex, cx, cy, rx, ry);
 
         let content = if rot != 0.0 {
@@ -312,7 +297,7 @@ pub fn selection_handle_overlay(
                 {individual_boxes}
                 <g transform=format!("rotate({} {} {})", deg, cx, cy)>{inner}{icons}</g>
             }
-                .into_view()
+            .into_view()
         } else {
             view! {
                 {individual_boxes}
