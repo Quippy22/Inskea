@@ -94,11 +94,7 @@ fn render_path_element_overlay(el: &Element, hex: &'static str) -> Option<View> 
             stroke=hex
             stroke-width="1.5"
             fill="none"
-            transform=format!(
-                "translate({} {}) scale(0.9375)",
-                mx - 11.25,
-                my - 11.25,
-            )
+            transform=format!("translate({} {}) scale(0.9375)", mx - 11.25, my - 11.25)
             pointer-events="none"
         >
             <path d="M12 3 L12 21 M3 12 L21 12" />

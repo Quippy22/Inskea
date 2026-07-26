@@ -337,26 +337,9 @@ pub fn StylingPanel(
                 is_line,
                 is_rect,
                 is_rounded,
-            )}
-            {color_section(
-                local_style,
-                set_color,
-                active_slot,
-                color_swatches,
-            )}
-            {fill_section(
-                local_style,
-                set_fill,
-                active_slot,
-                base_kind,
-                color_swatches,
-            )}
-            {arrow_section(
-                is_arrow,
-                local_line_style,
-                set_start_arrowhead,
-                set_end_arrowhead,
-            )}
+            )} {color_section(local_style, set_color, active_slot, color_swatches)}
+            {fill_section(local_style, set_fill, active_slot, base_kind, color_swatches)}
+            {arrow_section(is_arrow, local_line_style, set_start_arrowhead, set_end_arrowhead)}
             {layers_section(scene, selected_ids)}
         </div>
         {float_picker(active_slot, picker_color, picker_on_change, picker_ref)}

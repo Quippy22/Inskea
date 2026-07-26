@@ -28,10 +28,7 @@ pub fn arrow_section(
                         on:click=move |_| set_start_arrowhead()
                         title="Arrowhead at start"
                     >
-                        {move || arrowhead_icon(
-                            local_line_style.get().has_start_arrowhead,
-                            false,
-                        )}
+                        {move || arrowhead_icon(local_line_style.get().has_start_arrowhead, false)}
                     </button>
                     <button
                         class=move || {

@@ -56,7 +56,12 @@ pub fn arrowhead_icon(on: bool, is_end: bool) -> impl IntoView {
                     leptos::view! {
                         <polyline points=format!(
                             "{:.0},{:.0} {:.0},{:.0} {:.0},{:.0}",
-                            lx, ly, tx, ty, rx, ry,
+                            lx,
+                            ly,
+                            tx,
+                            ty,
+                            rx,
+                            ry,
                         ) />
                     }
                         .into_view(),
@@ -121,11 +126,7 @@ pub fn swatch_row(
             view! {
                 <button
                     class=move || {
-                        if is_active(&cc) {
-                            styles::BTN_SWATCH_SEL
-                        } else {
-                            styles::BTN_SWATCH_OFF
-                        }
+                        if is_active(&cc) { styles::BTN_SWATCH_SEL } else { styles::BTN_SWATCH_OFF }
                     }
                     style:background-color=hex
                     on:click=move |_| on_click(c.clone())
