@@ -1,6 +1,6 @@
 #![allow(clippy::redundant_locals)]
 use crate::canvas::{CanvasMode, CropExportCallback, Viewport};
-use crate::model::{ElementId, Scene};
+use crate::model::{ElementId, Rect, Scene};
 use crate::skea;
 use crate::tauri_bridge;
 use crate::ui::components::{Dropdown, DropdownItem, IconButton};
@@ -207,7 +207,7 @@ where
                 let on_crop_export = _on_crop_export;
                 let export_crop_active = _export_crop_active;
                 let close_menu = _close_menu;
-                on_crop_export.set(Some(Rc::new(move |rect: (f64, f64, f64, f64)| {
+                on_crop_export.set(Some(Rc::new(move |rect: Rect| {
                     close_menu();
                     let s = scene.get();
                     let svg = export::scene_to_svg_crop(&s, rect);

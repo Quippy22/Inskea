@@ -327,3 +327,81 @@ pub fn menu() -> impl IntoView {
         </svg>
     }
 }
+
+/// Send to back: arrow pointing down with a horizontal line under it.
+pub fn send_to_back() -> impl IntoView {
+    view! {
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="w-5 h-5"
+        >
+            <line x1="4" y1="20" x2="20" y2="20" />
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <polyline points="5 12 12 19 19 12" />
+        </svg>
+    }
+}
+
+/// Send backward (one layer): arrow pointing down, no line.
+pub fn send_backward() -> impl IntoView {
+    view! {
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="w-5 h-5"
+        >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <polyline points="5 12 12 19 19 12" />
+        </svg>
+    }
+}
+
+/// Bring forward (one layer): arrow pointing up, no line.
+pub fn bring_forward() -> impl IntoView {
+    view! {
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="w-5 h-5"
+        >
+            <line x1="12" y1="19" x2="12" y2="5" />
+            <polyline points="5 12 12 5 19 12" />
+        </svg>
+    }
+}
+
+/// Bring to front: arrow pointing up with a horizontal line above it.
+pub fn bring_to_front() -> impl IntoView {
+    view! {
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="w-5 h-5"
+        >
+            <line x1="4" y1="4" x2="20" y2="4" />
+            <line x1="12" y1="19" x2="12" y2="5" />
+            <polyline points="5 12 12 5 19 12" />
+        </svg>
+    }
+}

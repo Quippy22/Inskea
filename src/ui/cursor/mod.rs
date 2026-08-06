@@ -4,7 +4,7 @@ use crate::canvas::{CanvasMode, Handle};
 use crate::ui::dock::Tool;
 
 fn to_cursor(svg: &str, x: u32, y: u32, fallback: &str) -> String {
-    let svg = svg.replace('\n', "").replace('\r', "");
+    let svg = svg.replace(['\n', '\r'], "");
     format!(
         r#"url("data:image/svg+xml,{}") {} {}, {}"#,
         svg, x, y, fallback
@@ -18,6 +18,7 @@ pub fn cursor_style(
     eraser_active: bool,
     pan_dragging: bool,
     crop_active: bool,
+    hovered_handle: Option<Handle>,
 ) -> String {
     if crop_active {
         return to_cursor(svgs::CROSSHAIR, 16, 16, "crosshair");
@@ -28,6 +29,15 @@ pub fn cursor_style(
     }
 
     if let Some(handle) = drag_action {
+        return match handle {
+            Handle::Resize(rh) => rh.css_cursor().to_string(),
+            Handle::Move => "move".to_string(),
+            Handle::Rotate => "grabbing".to_string(),
+            Handle::PathPoint(_) | Handle::PathMidpoint(_) => "pointer".to_string(),
+        };
+    }
+
+    if let Some(handle) = hovered_handle {
         return match handle {
             Handle::Resize(rh) => rh.css_cursor().to_string(),
             Handle::Move => "move".to_string(),

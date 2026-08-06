@@ -141,7 +141,7 @@ impl HitTest for Line {
 }
 
 impl Bounds for Line {
-    fn bounds(&self) -> (f64, f64, f64, f64) {
+    fn bounds(&self) -> Rect {
         bounds_of_points(&self.points)
     }
 }

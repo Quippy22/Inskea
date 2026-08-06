@@ -1,4 +1,6 @@
-pub fn window_size() -> (f64, f64) {
+use crate::model::Point;
+
+pub fn window_size() -> Point {
     let window = web_sys::window().expect("no global `window` exists");
     let w = window
         .inner_width()
@@ -10,5 +12,5 @@ pub fn window_size() -> (f64, f64) {
         .ok()
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
-    (w, h)
+    Point::new(w, h)
 }

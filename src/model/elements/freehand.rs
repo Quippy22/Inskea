@@ -201,7 +201,7 @@ impl HitTest for Freehand {
 }
 
 impl Bounds for Freehand {
-    fn bounds(&self) -> (f64, f64, f64, f64) {
+    fn bounds(&self) -> Rect {
         crate::model::elements::path::bounds_of_points(&self.points)
     }
 }

@@ -1,5 +1,5 @@
 use crate::model::resize::{resize_bbox, ResizeContext};
-use crate::model::Point;
+use crate::model::{Point, Rect};
 
 /// How a set of path points should be interpreted when rendering.
 ///
@@ -174,21 +174,17 @@ pub fn segment_midpoint(points: &[Point], mode: CurveMode, i: usize) -> Option<(
     }
 }
 
-/// Compute the axis-aligned bounding box of a list of points.
-///
-/// Returns `(min_x, min_y, width, height)`. Returns `(0, 0, 0, 0)` for an
-/// empty slice.
-pub fn bounds_of_points(points: &[Point]) -> (f64, f64, f64, f64) {
+pub fn bounds_of_points(points: &[Point]) -> Rect {
     if points.is_empty() {
-        return (0.0, 0.0, 0.0, 0.0);
+        return Rect::new(0.0, 0.0, 0.0, 0.0);
     }
     let min_x = points.iter().map(|p| p.x).reduce(f64::min).unwrap();
     let min_y = points.iter().map(|p| p.y).reduce(f64::min).unwrap();
     let max_x = points.iter().map(|p| p.x).reduce(f64::max).unwrap();
-    // Since the path is open and has no "far side", add the
-    // stroke width to the bounding box for selection purposes.
     let max_y = points.iter().map(|p| p.y).reduce(f64::max).unwrap();
-    (min_x, min_y, max_x - min_x, max_y - min_y)
+    let w = (max_x - min_x).max(1.0);
+    let h = (max_y - min_y).max(1.0);
+    Rect::new(min_x, min_y, w, h)
 }
 
 /// Scale all points using the same affine bounding-box transform as the
@@ -199,12 +195,9 @@ pub fn bounds_of_points(points: &[Point]) -> (f64, f64, f64, f64) {
 pub fn scale_points(points: &mut [Point], ctx: &ResizeContext, orig: &[Point]) {
     use crate::model::resize::MIN_ELEMENT_SIZE;
     let rctx = ctx;
-    let (pos, (nw, nh)) = match resize_bbox(
-        Point {
-            x: rctx.bx,
-            y: rctx.by,
-        },
-        (rctx.bw, rctx.bh),
+    let (pos, size) = match resize_bbox(
+        Point::new(rctx.bx, rctx.by),
+        Point::new(rctx.bw, rctx.bh),
         rctx.pointer_world,
         rctx.handle,
         rctx.shift,
@@ -215,8 +208,8 @@ pub fn scale_points(points: &mut [Point], ctx: &ResizeContext, orig: &[Point]) {
     };
     let obw = rctx.bw.max(MIN_ELEMENT_SIZE);
     let obh = rctx.bh.max(MIN_ELEMENT_SIZE);
-    let sx = nw / obw;
-    let sy = nh / obh;
+    let sx = size.x / obw;
+    let sy = size.y / obh;
     for (p, op) in points.iter_mut().zip(orig.iter()) {
         p.set((op.x - rctx.bx) * sx + pos.x, (op.y - rctx.by) * sy + pos.y);
     }
@@ -309,16 +302,16 @@ mod tests {
             Point { x: 30.0, y: 40.0 },
             Point { x: 5.0, y: 5.0 },
         ];
-        let (x, y, w, h) = bounds_of_points(&pts);
-        assert_eq!(x, -10.0);
-        assert_eq!(y, -20.0);
-        assert_eq!(w, 40.0);
-        assert_eq!(h, 60.0);
+        let rect = bounds_of_points(&pts);
+        assert_eq!(rect.x, -10.0);
+        assert_eq!(rect.y, -20.0);
+        assert_eq!(rect.w, 40.0);
+        assert_eq!(rect.h, 60.0);
     }
 
     #[test]
     fn bounds_of_points_empty() {
-        assert_eq!(bounds_of_points(&[]), (0.0, 0.0, 0.0, 0.0));
+        assert_eq!(bounds_of_points(&[]), Rect::new(0.0, 0.0, 0.0, 0.0));
     }
 
     #[test]

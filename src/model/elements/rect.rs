@@ -142,8 +142,8 @@ impl HitTest for Rectangle {
 }
 
 impl Bounds for Rectangle {
-    fn bounds(&self) -> (f64, f64, f64, f64) {
-        (
+    fn bounds(&self) -> Rect {
+        Rect::new(
             self.data.world_point.x,
             self.data.world_point.y,
             self.data.width,
@@ -178,12 +178,9 @@ impl Rotate for Rectangle {
 impl Resize for Rectangle {
     fn resize(&mut self, ctx: &ResizeContext) {
         if ctx.multi {
-            let (pos, (nw, nh)) = match resize_bbox(
-                Point {
-                    x: ctx.bx,
-                    y: ctx.by,
-                },
-                (ctx.bw, ctx.bh),
+            let (pos, size) = match resize_bbox(
+                Point::new(ctx.bx, ctx.by),
+                Point::new(ctx.bw, ctx.bh),
                 ctx.pointer_world,
                 ctx.handle,
                 ctx.shift,
@@ -196,8 +193,8 @@ impl Resize for Rectangle {
                 &mut self.data,
                 ctx.orig.data(),
                 pos,
-                nw,
-                nh,
+                size.x,
+                size.y,
                 ctx.bx,
                 ctx.by,
                 ctx.bw,

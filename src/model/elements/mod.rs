@@ -13,7 +13,7 @@ pub use line::{Line, LineStyle};
 pub use rect::Rectangle;
 pub use text::Text;
 
-use crate::model::{Color, Point};
+use crate::model::{Color, Point, Rect};
 pub use path::CurveMode;
 
 /// Stroke dash style.
@@ -236,8 +236,7 @@ pub trait HitTest {
 
 /// Bounding box computation in world-space: (x, y, width, height).
 pub trait Bounds {
-    /// Returns (x, y, width, height) of the axis-aligned bounding box.
-    fn bounds(&self) -> (f64, f64, f64, f64);
+    fn bounds(&self) -> Rect;
 }
 
 /// Offset (translate) the element by a delta.
@@ -392,7 +391,7 @@ macro_rules! dispatch_element {
 
 dispatch_element!(Render, render(&self, zoom: f64) -> leptos::View);
 dispatch_element!(HitTest, hit_test(&self, point: Point, margin: f64) -> bool);
-dispatch_element!(Bounds, bounds(&self) -> (f64, f64, f64, f64));
+dispatch_element!(Bounds, bounds(&self) -> Rect);
 dispatch_element!(Offset, offset(&mut self, dx: f64, dy: f64));
 dispatch_element!(SnapToGrid, snap_to_grid(&mut self, grid: f64));
 dispatch_element!(Rotate, rotate_around(&mut self, point: Point, delta: f64));

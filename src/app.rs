@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
 use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
 use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
-use crate::model::{Color, Element, ElementId, ElementStyle, LineStyle, Scene};
+use crate::model::{Color, Element, ElementId, ElementStyle, LineStyle, Point, Scene};
 use crate::tauri_bridge;
 use crate::ui::components::StylingPanel;
 use crate::ui::dock::{Dock, Tool};
@@ -16,7 +16,7 @@ use wasm_bindgen_futures::spawn_local;
 #[component]
 pub fn App() -> impl IntoView {
     let cursor_screen = create_rw_signal((0.0_f64, 0.0_f64));
-    let cursor_world = create_rw_signal((0.0_f64, 0.0_f64));
+    let cursor_world = create_rw_signal(Point::new(0.0, 0.0));
     let viewport = create_rw_signal(Viewport::default());
 
     let selected_tool = create_rw_signal(Tool::Rectangle);
