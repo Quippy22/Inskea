@@ -36,7 +36,7 @@ pub fn group_section(
             </div>
             <div class="flex items-center gap-1">
                 <button
-                    class=styles::BTN_LAYER
+                    class=styles::BTN_TEXT
                     class:opacity-40=move || !can_group.get()
                     class:cursor-not-allowed=move || !can_group.get()
                     on:click=move |_| {
@@ -47,7 +47,7 @@ pub fn group_section(
                     "Group"
                 </button>
                 <button
-                    class=styles::BTN_LAYER
+                    class=styles::BTN_TEXT
                     class:opacity-40=move || !is_group.get()
                     class:cursor-not-allowed=move || !is_group.get()
                     on:click=move |_| {
