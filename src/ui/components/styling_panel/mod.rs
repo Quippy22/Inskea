@@ -3,6 +3,7 @@ mod color;
 mod edit;
 mod fill;
 mod float_picker;
+mod group;
 mod layers;
 mod sliders;
 mod style;
@@ -13,6 +14,7 @@ use self::color::{color_section, ColorSlot};
 use self::edit::edit_section;
 use self::fill::fill_section;
 use self::float_picker::float_picker;
+use self::group::group_section;
 use self::layers::layers_section;
 use self::sliders::sliders_section;
 use self::style::style_section;
@@ -351,10 +353,11 @@ pub fn StylingPanel(
                 scene,
                 selected_ids,
                 clipboard,
-                push_snapshot,
+                push_snapshot.clone(),
                 canvas_mode,
                 cursor_world,
             )}
+            {group_section(scene, selected_ids, canvas_mode, push_snapshot.clone())}
             {layers_section(scene, selected_ids)}
         </div>
         {float_picker(active_slot, picker_color, picker_on_change, picker_ref)}
