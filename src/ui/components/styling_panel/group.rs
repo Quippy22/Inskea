@@ -36,7 +36,17 @@ pub fn group_section(
             </div>
             <div class="flex items-center gap-1">
                 <button
-                    class=styles::BTN_TEXT
+                    class=move || {
+                        let base = if is_group.get() {
+                            format!(
+                                "{} border-accent text-accent bg-accent/10",
+                                styles::BTN_TEXT
+                            )
+                        } else {
+                            styles::BTN_TEXT.to_string()
+                        };
+                        base
+                    }
                     class:opacity-40=move || !can_group.get()
                     class:cursor-not-allowed=move || !can_group.get()
                     on:click=move |_| {
