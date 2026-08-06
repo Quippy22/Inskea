@@ -11,8 +11,8 @@ pub fn read_panel_state(
     default_line_style: &LineStyle,
     _tool: Tool,
 ) -> (ElementStyle, LineStyle) {
-    if ids.len() == 1 {
-        if let Some(el) = scene.elements().iter().find(|e| e.id() == ids[0]) {
+    if let Some(id) = ids.first() {
+        if let Some(el) = scene.elements().iter().find(|e| &e.id() == id) {
             let d = el.data();
             let ls = if let Element::Line(l) = el {
                 l.line_style.clone()
@@ -26,11 +26,8 @@ pub fn read_panel_state(
 }
 
 pub fn single_selected_element(scene: Scene, ids: Vec<ElementId>) -> Option<Element> {
-    if ids.len() != 1 {
-        return None;
-    }
-    let id = ids[0];
-    scene.elements().iter().find(|e| e.id() == id).cloned()
+    let id = ids.first()?;
+    scene.elements().iter().find(|e| &e.id() == id).cloned()
 }
 
 pub fn arrowhead_icon(on: bool, is_end: bool) -> impl IntoView {

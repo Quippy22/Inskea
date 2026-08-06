@@ -44,11 +44,9 @@ pub fn StylingPanel(
 ) -> impl IntoView {
     let styling_kind = Signal::derive(move || {
         let ids = selected_ids.get();
-        if ids.len() == 1 {
-            let el = leptos::untrack(|| single_selected_element(scene.get_untracked(), ids));
-            if let Some(el) = el {
-                return el.styling_kind();
-            }
+        let el = leptos::untrack(|| single_selected_element(scene.get_untracked(), ids));
+        if let Some(el) = el {
+            return el.styling_kind();
         }
         selected_tool.get().styling_kind()
     });
@@ -126,10 +124,12 @@ pub fn StylingPanel(
         let default_style = default_style;
         move |f: &dyn Fn(&mut ElementStyle)| {
             let ids = selected_ids.get_untracked();
-            if ids.len() == 1 {
+            if !ids.is_empty() {
                 scene.update(|s| {
-                    if let Some(el) = s.element_by_id_mut(ids[0]) {
-                        f(&mut el.data_mut().style);
+                    for id in &ids {
+                        if let Some(el) = s.element_by_id_mut(*id) {
+                            f(&mut el.data_mut().style);
+                        }
                     }
                 });
             } else {
@@ -144,10 +144,12 @@ pub fn StylingPanel(
         let default_line_style = default_line_style;
         move |f: &dyn Fn(&mut LineStyle)| {
             let ids = selected_ids.get_untracked();
-            if ids.len() == 1 {
+            if !ids.is_empty() {
                 scene.update(|s| {
-                    if let Some(Element::Line(l)) = s.element_by_id_mut(ids[0]) {
-                        f(&mut l.line_style);
+                    for id in &ids {
+                        if let Some(Element::Line(l)) = s.element_by_id_mut(*id) {
+                            f(&mut l.line_style);
+                        }
                     }
                 });
             } else {
@@ -257,10 +259,12 @@ pub fn StylingPanel(
         let default_style = default_style;
         move |val| {
             let ids = selected_ids.get_untracked();
-            if ids.len() == 1 {
+            if !ids.is_empty() {
                 scene.update(|s| {
-                    if let Some(el) = s.element_by_id_mut(ids[0]) {
-                        el.data_mut().style.stroke_width = val;
+                    for id in &ids {
+                        if let Some(el) = s.element_by_id_mut(*id) {
+                            el.data_mut().style.stroke_width = val;
+                        }
                     }
                 });
             } else {
@@ -275,10 +279,12 @@ pub fn StylingPanel(
         let default_style = default_style;
         move |val| {
             let ids = selected_ids.get_untracked();
-            if ids.len() == 1 {
+            if !ids.is_empty() {
                 scene.update(|s| {
-                    if let Some(el) = s.element_by_id_mut(ids[0]) {
-                        el.data_mut().style.font_size = val;
+                    for id in &ids {
+                        if let Some(el) = s.element_by_id_mut(*id) {
+                            el.data_mut().style.font_size = val;
+                        }
                     }
                 });
             } else {
@@ -303,10 +309,12 @@ pub fn StylingPanel(
         move |val| {
             let v = (val / 100.0).clamp(0.0, 1.0);
             let ids = selected_ids.get_untracked();
-            if ids.len() == 1 {
+            if !ids.is_empty() {
                 scene.update(|s| {
-                    if let Some(el) = s.element_by_id_mut(ids[0]) {
-                        el.data_mut().style.opacity = v;
+                    for id in &ids {
+                        if let Some(el) = s.element_by_id_mut(*id) {
+                            el.data_mut().style.opacity = v;
+                        }
                     }
                 });
             } else {
