@@ -32,6 +32,8 @@ pub(crate) const FILE_SHORTCUTS: &[(&str, &str)] = &[
     ("Ctrl+C", "Copy"),
     ("Ctrl+V", "Paste"),
     ("Ctrl+D", "Duplicate"),
+    ("Ctrl+G", "Group"),
+    ("Ctrl+Shift+G", "Ungroup"),
     ("Ctrl+S", "Save"),
     ("Ctrl+Shift+S", "Save As"),
     ("Ctrl+O", "Open"),
@@ -81,6 +83,13 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
         (false, "a") => ctx.canvas_mode.set(CanvasMode::Pan),
         (true, "d") | (true, "D") => {
             edit_ops::duplicate_selection(ctx.scene, ctx.selected_ids, &ctx.push_snapshot)
+        }
+        (true, "g") | (true, "G") => {
+            if shift {
+                edit_ops::ungroup_selection(ctx.scene, ctx.selected_ids, &ctx.push_snapshot);
+            } else {
+                edit_ops::group_selection(ctx.scene, ctx.selected_ids, &ctx.push_snapshot);
+            }
         }
         (true, "n") | (true, "N") => {
             file_ops::file_new(ctx.scene, ctx.saved_path, ctx.selected_ids)

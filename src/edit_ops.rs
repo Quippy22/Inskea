@@ -47,6 +47,36 @@ pub fn duplicate_selection(
     selected_ids.set(new_ids);
 }
 
+/// Group the selected elements into one persistent group.
+pub fn group_selection(
+    scene: RwSignal<Scene>,
+    selected_ids: RwSignal<Vec<ElementId>>,
+    push_snapshot: &Rc<dyn Fn()>,
+) {
+    let ids = selected_ids.get();
+    if ids.len() < 2 {
+        return;
+    }
+    (push_snapshot)();
+    scene.update(|s| s.create_group(&ids));
+}
+
+/// Dissolve every group touching the selection; the members stay in the scene.
+pub fn ungroup_selection(
+    scene: RwSignal<Scene>,
+    selected_ids: RwSignal<Vec<ElementId>>,
+    push_snapshot: &Rc<dyn Fn()>,
+) {
+    let ids = selected_ids.get();
+    if ids.is_empty() {
+        return;
+    }
+    (push_snapshot)();
+    scene.update(|s| {
+        s.remove_groups_containing(&ids);
+    });
+}
+
 /// Insert all clipboard elements centred on the cursor and select the new elements.
 pub fn paste_clipboard(
     scene: RwSignal<Scene>,
