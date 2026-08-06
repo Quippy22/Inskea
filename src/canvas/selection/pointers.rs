@@ -255,17 +255,20 @@ fn handle_element_selection(
         Some(id) => id,
         None => return false,
     };
+    let expanded = props.scene.with(|s| s.expand_to_groups(&[id]));
     let mut ids = st.selected_ids.get();
     if st.shift_pressed.get() {
-        if let Some(pos) = ids.iter().position(|&x| x == id) {
-            ids.remove(pos);
-        } else {
-            ids.push(id);
+        for x in expanded {
+            if let Some(pos) = ids.iter().position(|&y| y == x) {
+                ids.remove(pos);
+            } else {
+                ids.push(x);
+            }
         }
         st.selected_ids.set(ids);
     } else {
-        st.selected_ids.set(vec![id]);
-        if let Some(bounds) = combined_bounds(&[id], els) {
+        st.selected_ids.set(expanded.clone());
+        if let Some(bounds) = combined_bounds(&expanded, els) {
             (props.push_snapshot)();
             st.drag.drag_action.set(Some(Handle::Move));
             st.drag.moving_anchor.set(Some(world));
@@ -567,7 +570,8 @@ fn complete_marquee_selection(world: Point, st: &mut CanvasState, props: &mut Ca
                 .filter(|el| rect_fully_contains_element(Rect::new(rx, ry, rw, rh), el))
                 .map(|el| el.id())
                 .collect();
-            st.selected_ids.set(contained);
+            let expanded = props.scene.with(|s| s.expand_to_groups(&contained));
+            st.selected_ids.set(expanded);
         }
         st.select_anchor.set(None);
     }
