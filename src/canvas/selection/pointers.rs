@@ -242,6 +242,29 @@ fn handle_selection_handles(
     false
 }
 
+/// Select an individual group member on double-click, keeping it in the group.
+#[inline]
+fn handle_group_member_double_click(
+    ev: &ev::PointerEvent,
+    world: Point,
+    st: &mut CanvasState,
+    props: &CanvasInputs,
+) -> bool {
+    if ev.detail() < 2 {
+        return false;
+    }
+    let els = props.scene.get().elements().to_vec();
+    let id = match hit_test_topmost(world, &els) {
+        Some(id) => id,
+        None => return false,
+    };
+    if props.scene.with(|s| s.group_containing(id).is_some()) {
+        st.selected_ids.set(vec![id]);
+        return true;
+    }
+    false
+}
+
 /// Select or Shift-toggle the topmost element under the pointer.
 /// Without Shift, also starts an immediate move drag on the newly selected element.
 #[inline]
@@ -587,6 +610,10 @@ pub fn select_pointer_down(
     st.drag.rotation_delta.set(0.0);
 
     if handle_text_double_click(_ev, world, st, props) {
+        return;
+    }
+
+    if handle_group_member_double_click(_ev, world, st, props) {
         return;
     }
 
