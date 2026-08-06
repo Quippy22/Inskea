@@ -66,5 +66,30 @@ pub fn unrotate_for_element(point: Point, el: &Element) -> Point {
     let b = el.bounds();
     let cx = b.x + b.w / 2.0;
     let cy = b.y + b.h / 2.0;
-    Point::unrotate(point, cx, cy, -rot)
+    Point::unrotate(point, cx, cy, rot)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::elements::rect::Rectangle;
+    use crate::model::ElementData;
+
+    #[test]
+    fn unrotate_handle_hit_lands_in_element_frame() {
+        let el = Element::Rectangle(Rectangle {
+            data: ElementData {
+                world_point: Point::new(100.0, 100.0),
+                width: 100.0,
+                height: 100.0,
+                rotation: std::f64::consts::FRAC_PI_2,
+                ..ElementData::new(0)
+            },
+        });
+        let local = Point::new(150.0, 50.0);
+        let world = Point::new(250.0, 150.0);
+        let un = unrotate_for_element(world, &el);
+        assert!((un.x - local.x).abs() < 1e-9);
+        assert!((un.y - local.y).abs() < 1e-9);
+    }
 }
