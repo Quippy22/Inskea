@@ -1,5 +1,6 @@
 use crate::canvas::CanvasMode;
-use crate::model::{Element, ElementId, Offset, Scene};
+use crate::edit_ops;
+use crate::model::{Element, ElementId, Point, Scene};
 use crate::ui::dock::Tool;
 use crate::ui::file_ops;
 use leptos::ev;
@@ -43,6 +44,7 @@ pub struct HotkeysContext {
     pub scene: RwSignal<Scene>,
     pub selected_ids: RwSignal<Vec<ElementId>>,
     pub clipboard: RwSignal<Vec<Element>>,
+    pub cursor_world: RwSignal<Point>,
     pub saved_path: RwSignal<Option<String>>,
     pub shortcuts_open: RwSignal<bool>,
     pub push_snapshot: Rc<dyn Fn()>,
@@ -77,25 +79,8 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
         }
         (false, "s") => ctx.canvas_mode.set(CanvasMode::Select),
         (false, "a") => ctx.canvas_mode.set(CanvasMode::Pan),
-        (true, "d") => {
-            let ids = ctx.selected_ids.get();
-            if !ids.is_empty() {
-                (ctx.push_snapshot)();
-                let mut new_ids = Vec::new();
-                ctx.scene.update(|s| {
-                    let elements = s.elements().to_vec();
-                    for id in &ids {
-                        if let Some(el) = elements.iter().find(|e| e.id() == *id) {
-                            let mut clone = el.clone();
-                            clone.offset(20.0, 20.0);
-                            clone.data_mut().id = 0;
-                            s.add_element(clone);
-                            new_ids.push(s.next_id - 1);
-                        }
-                    }
-                });
-                ctx.selected_ids.set(new_ids);
-            }
+        (true, "d") | (true, "D") => {
+            edit_ops::duplicate_selection(ctx.scene, ctx.selected_ids, &ctx.push_snapshot)
         }
         (true, "n") | (true, "N") => {
             file_ops::file_new(ctx.scene, ctx.saved_path, ctx.selected_ids)
@@ -138,33 +123,18 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
         }
         (false, "d") => ctx.canvas_mode.set(CanvasMode::Draw),
         (false, "Escape") => {}
-        (true, "c") => {
-            let ids = ctx.selected_ids.get();
-            let els = ctx.scene.with(|s| {
-                s.elements()
-                    .iter()
-                    .filter(|e| ids.contains(&e.id()))
-                    .cloned()
-                    .collect::<Vec<_>>()
-            });
-            ctx.clipboard.set(els);
+        (true, "c") | (true, "C") => {
+            edit_ops::copy_selection(ctx.scene, ctx.selected_ids, ctx.clipboard);
             web_sys::console::log_1(&"Copied".into());
         }
-        (true, "v") => {
-            let els = ctx.clipboard.get();
-            if !els.is_empty() {
-                (ctx.push_snapshot)();
-                let mut new_ids = Vec::new();
-                ctx.scene.update(|s| {
-                    for el in els {
-                        let mut el = el;
-                        el.data_mut().id = 0;
-                        s.add_element(el);
-                        new_ids.push(s.next_id - 1);
-                    }
-                });
-                ctx.selected_ids.set(new_ids);
-            }
+        (true, "v") | (true, "V") => {
+            edit_ops::paste_clipboard(
+                ctx.scene,
+                ctx.clipboard,
+                ctx.selected_ids,
+                &ctx.push_snapshot,
+                ctx.cursor_world,
+            )
         }
         (false, "Delete") | (false, "Backspace") => {
             let ids = ctx.selected_ids.get();

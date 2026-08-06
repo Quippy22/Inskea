@@ -1,5 +1,6 @@
 mod arrow;
 mod color;
+mod edit;
 mod fill;
 mod float_picker;
 mod layers;
@@ -9,6 +10,7 @@ mod utils;
 
 use self::arrow::arrow_section;
 use self::color::{color_section, ColorSlot};
+use self::edit::edit_section;
 use self::fill::fill_section;
 use self::float_picker::float_picker;
 use self::layers::layers_section;
@@ -16,10 +18,11 @@ use self::sliders::sliders_section;
 use self::style::style_section;
 use self::utils::{read_panel_state, single_selected_element};
 use crate::model::{
-    Color, CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle, Scene, StrokeStyle,
-    StylingKind,
+    Color, CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle, Point, Scene,
+    StrokeStyle, StylingKind,
 };
 use crate::ui::dock::Tool;
+use crate::canvas::CanvasMode;
 use leptos::*;
 use leptos_color::Color as LpcColor;
 use std::rc::Rc;
@@ -32,6 +35,10 @@ pub fn StylingPanel(
     selected_tool: RwSignal<Tool>,
     default_style: RwSignal<ElementStyle>,
     default_line_style: RwSignal<LineStyle>,
+    clipboard: RwSignal<Vec<Element>>,
+    push_snapshot: Rc<dyn Fn()>,
+    canvas_mode: RwSignal<CanvasMode>,
+    cursor_world: RwSignal<Point>,
 ) -> impl IntoView {
     let styling_kind = Signal::derive(move || {
         let ids = selected_ids.get();
@@ -340,6 +347,14 @@ pub fn StylingPanel(
             )} {color_section(local_style, set_color, active_slot, color_swatches)}
             {fill_section(local_style, set_fill, active_slot, base_kind, color_swatches)}
             {arrow_section(is_arrow, local_line_style, set_start_arrowhead, set_end_arrowhead)}
+            {edit_section(
+                scene,
+                selected_ids,
+                clipboard,
+                push_snapshot,
+                canvas_mode,
+                cursor_world,
+            )}
             {layers_section(scene, selected_ids)}
         </div>
         {float_picker(active_slot, picker_color, picker_on_change, picker_ref)}

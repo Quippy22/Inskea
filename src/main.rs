@@ -1,6 +1,7 @@
 #![allow(clippy::redundant_locals)]
 mod app;
 mod canvas;
+mod edit_ops;
 mod hotkeys;
 mod model;
 mod skea;

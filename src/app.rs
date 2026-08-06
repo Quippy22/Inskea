@@ -95,6 +95,7 @@ pub fn App() -> impl IntoView {
         scene,
         selected_ids,
         clipboard,
+        cursor_world,
         saved_path,
         shortcuts_open,
         push_snapshot: push_snapshot.clone(),
@@ -158,7 +159,7 @@ pub fn App() -> impl IntoView {
     // ── Panel visibility ───────────────────────────────────────────────────
     let show_panel = Signal::derive(move || {
         let mode = canvas_mode.get();
-        if mode == CanvasMode::Select && selected_ids.get().len() == 1 {
+        if mode == CanvasMode::Select && !selected_ids.get().is_empty() {
             return true;
         }
         if mode == CanvasMode::Draw && !eraser_active.get() {
@@ -182,7 +183,7 @@ pub fn App() -> impl IntoView {
                 scene=scene
                 eraser_active=eraser_active
                 settings=settings
-                push_snapshot=push_snapshot
+                push_snapshot=push_snapshot.clone()
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
                 selected_ids=selected_ids
@@ -218,6 +219,10 @@ pub fn App() -> impl IntoView {
                             selected_tool=selected_tool
                             default_style=default_style
                             default_line_style=default_line_style
+                            clipboard=clipboard
+                            push_snapshot=push_snapshot.clone()
+                            canvas_mode=canvas_mode
+                            cursor_world=cursor_world
                         />
                     </div>
                 </div>
