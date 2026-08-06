@@ -34,6 +34,7 @@ pub fn duplicate_selection(
     let mut new_ids = Vec::new();
     scene.update(|s| {
         let elements = s.elements().to_vec();
+        let was_group = s.selection_is_group(&ids);
         for id in &ids {
             if let Some(el) = elements.iter().find(|e| e.id() == *id) {
                 let mut clone = el.clone();
@@ -42,6 +43,9 @@ pub fn duplicate_selection(
                 s.add_element(clone);
                 new_ids.push(s.next_id - 1);
             }
+        }
+        if was_group {
+            s.create_group(&new_ids);
         }
     });
     selected_ids.set(new_ids);
