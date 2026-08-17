@@ -19,12 +19,13 @@ use self::layers::layers_section;
 use self::sliders::sliders_section;
 use self::style::style_section;
 use self::utils::{read_panel_state, single_selected_element};
+use crate::canvas::CanvasMode;
+use crate::edit_ops::Clipboard;
 use crate::model::{
     Color, CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle, Point, Scene,
     StrokeStyle, StylingKind,
 };
 use crate::ui::dock::Tool;
-use crate::canvas::CanvasMode;
 use leptos::*;
 use leptos_color::Color as LpcColor;
 use std::rc::Rc;
@@ -37,7 +38,7 @@ pub fn StylingPanel(
     selected_tool: RwSignal<Tool>,
     default_style: RwSignal<ElementStyle>,
     default_line_style: RwSignal<LineStyle>,
-    clipboard: RwSignal<Vec<Element>>,
+    clipboard: RwSignal<Clipboard>,
     push_snapshot: Rc<dyn Fn()>,
     canvas_mode: RwSignal<CanvasMode>,
     cursor_world: RwSignal<Point>,

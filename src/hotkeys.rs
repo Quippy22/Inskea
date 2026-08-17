@@ -1,6 +1,6 @@
 use crate::canvas::CanvasMode;
-use crate::edit_ops;
-use crate::model::{Element, ElementId, Point, Scene};
+use crate::edit_ops::{self, Clipboard};
+use crate::model::{ElementId, Point, Scene};
 use crate::ui::dock::Tool;
 use crate::ui::file_ops;
 use leptos::ev;
@@ -45,7 +45,7 @@ pub struct HotkeysContext {
     pub selected_tool: RwSignal<Tool>,
     pub scene: RwSignal<Scene>,
     pub selected_ids: RwSignal<Vec<ElementId>>,
-    pub clipboard: RwSignal<Vec<Element>>,
+    pub clipboard: RwSignal<Clipboard>,
     pub cursor_world: RwSignal<Point>,
     pub saved_path: RwSignal<Option<String>>,
     pub shortcuts_open: RwSignal<bool>,
@@ -136,15 +136,13 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
             edit_ops::copy_selection(ctx.scene, ctx.selected_ids, ctx.clipboard);
             web_sys::console::log_1(&"Copied".into());
         }
-        (true, "v") | (true, "V") => {
-            edit_ops::paste_clipboard(
-                ctx.scene,
-                ctx.clipboard,
-                ctx.selected_ids,
-                &ctx.push_snapshot,
-                ctx.cursor_world,
-            )
-        }
+        (true, "v") | (true, "V") => edit_ops::paste_clipboard(
+            ctx.scene,
+            ctx.clipboard,
+            ctx.selected_ids,
+            &ctx.push_snapshot,
+            ctx.cursor_world,
+        ),
         (false, "Delete") | (false, "Backspace") => {
             let ids = ctx.selected_ids.get();
             if !ids.is_empty() {

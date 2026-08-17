@@ -1,6 +1,6 @@
 use crate::canvas::CanvasMode;
-use crate::edit_ops;
-use crate::model::{Element, ElementId, Point, Scene};
+use crate::edit_ops::{self, Clipboard};
+use crate::model::{ElementId, Point, Scene};
 use crate::ui::{icon, styles};
 use leptos::*;
 use std::rc::Rc;
@@ -8,7 +8,7 @@ use std::rc::Rc;
 pub fn edit_section(
     scene: RwSignal<Scene>,
     selected_ids: RwSignal<Vec<ElementId>>,
-    clipboard: RwSignal<Vec<Element>>,
+    clipboard: RwSignal<Clipboard>,
     push_snapshot: Rc<dyn Fn()>,
     canvas_mode: RwSignal<CanvasMode>,
     cursor_world: RwSignal<Point>,

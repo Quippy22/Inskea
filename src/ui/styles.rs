@@ -47,6 +47,9 @@ pub const BTN_LAYER: &str = "flex items-center justify-center w-7 h-7 rounded-md
 /// Compact text button inside panels.
 pub const BTN_TEXT: &str = "flex items-center justify-center h-8 px-3 text-xs rounded-md border border-border text-fg hover:bg-surface/50 transition-colors";
 
+/// Compact text button inside panels — active (accent border + fill).
+pub const BTN_TEXT_ACTIVE: &str = "flex items-center justify-center h-8 px-3 text-xs rounded-md border border-accent text-accent bg-accent/10 hover:bg-surface/50 transition-colors";
+
 /// Menu dropdown container (frosted panel anchored below the menu button).
 pub const MENU_DROPDOWN: &str = "absolute top-full right-0 mt-1 z-50 min-w-[160px] rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1 pointer-events-auto";
 

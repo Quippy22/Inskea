@@ -1,26 +1,120 @@
 use crate::model::elements::{Bounds, Offset};
-use crate::model::{Element, ElementId, Point, Rect, Scene};
+use crate::model::{Element, ElementId, Group, Point, Rect, Scene};
 use leptos::{RwSignal, SignalGet, SignalSet, SignalUpdate, SignalWith};
 use std::rc::Rc;
 
-/// Store copies of the currently selected elements in the clipboard.
+/// Copied elements plus the group structure they carried.
+#[derive(Clone, Debug, Default)]
+pub struct Clipboard {
+    pub elements: Vec<Element>,
+    /// Groups referencing the original element ids of `elements`.
+    pub groups: Vec<Group>,
+}
+
+/// Store copies of the currently selected elements in the clipboard,
+/// keeping the group structure so paste can regroup the copies.
 pub fn copy_selection(
     scene: RwSignal<Scene>,
     selected_ids: RwSignal<Vec<ElementId>>,
-    clipboard: RwSignal<Vec<Element>>,
+    clipboard: RwSignal<Clipboard>,
 ) {
     let ids = selected_ids.get();
-    let els = scene.with(|s| {
-        s.elements()
+    let (els, groups) = scene.with(|s| {
+        let els = s
+            .elements()
             .iter()
             .filter(|e| ids.contains(&e.id()))
             .cloned()
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+        let groups = s
+            .groups
+            .iter()
+            .filter_map(|g| {
+                let members = g
+                    .members
+                    .iter()
+                    .filter(|m| ids.contains(m))
+                    .copied()
+                    .collect::<Vec<_>>();
+                (members.len() >= 2).then_some(Group { members })
+            })
+            .collect();
+        (els, groups)
     });
-    clipboard.set(els);
+    clipboard.set(Clipboard {
+        elements: els,
+        groups,
+    });
+}
+
+/// Remap a copied/seeded group's original member ids to their new clones.
+fn regroup_clones(scene: &mut Scene, groups: &[Group], id_map: &[(ElementId, ElementId)]) {
+    for g in groups {
+        let members = g
+            .members
+            .iter()
+            .filter_map(|m| id_map.iter().find(|(old, _)| old == m).map(|&(_, new)| new))
+            .collect::<Vec<_>>();
+        if members.len() >= 2 {
+            scene.create_group(&members);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::elements::rect::Rectangle;
+    use crate::model::ElementData;
+
+    fn scene_with_three() -> Scene {
+        let mut s = Scene::new();
+        for _ in 0..3 {
+            s.add_element(Element::Rectangle(Rectangle {
+                data: ElementData::new(0),
+            }));
+        }
+        s
+    }
+
+    #[test]
+    fn regroup_remaps_full_group() {
+        let mut s = scene_with_three();
+        let groups = vec![Group {
+            members: vec![1, 2],
+        }];
+        let id_map = vec![(1, 4), (2, 5)];
+        regroup_clones(&mut s, &groups, &id_map);
+        assert_eq!(s.groups.len(), 1);
+        assert_eq!(s.groups[0].members, vec![4, 5]);
+    }
+
+    #[test]
+    fn regroup_skips_unmapped_members() {
+        let mut s = scene_with_three();
+        let groups = vec![Group {
+            members: vec![2, 3],
+        }];
+        let id_map = vec![(2, 4)];
+        regroup_clones(&mut s, &groups, &id_map);
+        assert!(s.groups.is_empty());
+    }
+
+    #[test]
+    fn regroup_partial_group_keeps_paste_pair() {
+        let mut s = scene_with_three();
+        s.create_group(&[1, 2, 3]);
+        let groups = s.groups.clone();
+        let id_map = vec![(1, 4), (2, 5)];
+        regroup_clones(&mut s, &groups, &id_map);
+        assert_eq!(s.groups.len(), 2);
+        let new_group = s.groups.iter().find(|g| !g.members.contains(&1)).unwrap();
+        assert_eq!(new_group.members, vec![4, 5]);
+    }
 }
 
 /// Clone every selected element, offset by 20px, and select the clones.
+/// Duplicates keep the group structure of the original selection.
 pub fn duplicate_selection(
     scene: RwSignal<Scene>,
     selected_ids: RwSignal<Vec<ElementId>>,
@@ -32,9 +126,10 @@ pub fn duplicate_selection(
     }
     (push_snapshot)();
     let mut new_ids = Vec::new();
+    let mut id_map = Vec::new();
     scene.update(|s| {
         let elements = s.elements().to_vec();
-        let was_group = s.selection_is_group(&ids);
+        let groups = s.groups.clone();
         for id in &ids {
             if let Some(el) = elements.iter().find(|e| e.id() == *id) {
                 let mut clone = el.clone();
@@ -42,11 +137,10 @@ pub fn duplicate_selection(
                 clone.data_mut().id = 0;
                 s.add_element(clone);
                 new_ids.push(s.next_id - 1);
+                id_map.push((*id, s.next_id - 1));
             }
         }
-        if was_group {
-            s.create_group(&new_ids);
-        }
+        regroup_clones(s, &groups, &id_map);
     });
     selected_ids.set(new_ids);
 }
@@ -81,15 +175,19 @@ pub fn ungroup_selection(
     });
 }
 
-/// Insert all clipboard elements centred on the cursor and select the new elements.
+/// Insert all clipboard elements centred on the cursor and select the new
+/// elements. Pasting a copied group restores its grouping.
 pub fn paste_clipboard(
     scene: RwSignal<Scene>,
-    clipboard: RwSignal<Vec<Element>>,
+    clipboard: RwSignal<Clipboard>,
     selected_ids: RwSignal<Vec<ElementId>>,
     push_snapshot: &Rc<dyn Fn()>,
     cursor_world: RwSignal<Point>,
 ) {
-    let els = clipboard.get();
+    let Clipboard {
+        elements: els,
+        groups,
+    } = clipboard.get();
     if els.is_empty() {
         return;
     }
@@ -106,13 +204,17 @@ pub fn paste_clipboard(
     let dy = target.y - center.y;
     (push_snapshot)();
     let mut new_ids = Vec::new();
+    let mut id_map = Vec::new();
     scene.update(|s| {
         for mut el in els {
+            let old_id = el.id();
             el.offset(dx, dy);
             el.data_mut().id = 0;
             s.add_element(el);
             new_ids.push(s.next_id - 1);
+            id_map.push((old_id, s.next_id - 1));
         }
+        regroup_clones(s, &groups, &id_map);
     });
     selected_ids.set(new_ids);
 }
