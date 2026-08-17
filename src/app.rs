@@ -110,6 +110,7 @@ pub fn App() -> impl IntoView {
     let is_tauri = tauri_bridge::is_tauri();
 
     if is_tauri {
+        crate::fonts::ensure_fonts_installed();
         spawn_local(async move {
             if let Ok(content) = tauri_bridge::load_settings().await {
                 if let Some((cs, gs, gz, auto, bg)) = from_toml(&content) {

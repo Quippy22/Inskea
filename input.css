@@ -1,20 +1,6 @@
 @import "tailwindcss";
 @source "./src/**/*.rs";
 
-@font-face {
-  font-family: "Cabin";
-  src: url("fonts/Cabin-Variable.ttf") format("truetype");
-  font-weight: 100 900;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Cabin";
-  src: url("fonts/Cabin-Italic-Variable.ttf") format("truetype");
-  font-weight: 100 900;
-  font-style: italic;
-}
-
 @theme {
   /* Tokyo Night */
   --color-bg: #1a1b26;

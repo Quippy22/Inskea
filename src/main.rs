@@ -2,6 +2,7 @@
 mod app;
 mod canvas;
 mod edit_ops;
+mod fonts;
 mod hotkeys;
 mod model;
 mod skea;
