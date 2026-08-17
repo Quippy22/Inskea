@@ -43,18 +43,19 @@ pub fn make_commit_edit(
                     s.remove_by_id(id);
                 } else if let Some(Element::Text(text_elem)) = s.element_by_id_mut(id) {
                     let zoom = viewport.get().zoom;
-                    let (w, h) = textarea_ref
+                    let measured_w = textarea_ref
                         .get()
-                        .map(|ta| {
-                            (
-                                ta.client_width() as f64 / zoom,
-                                ta.scroll_height() as f64 / zoom,
-                            )
-                        })
-                        .unwrap_or((text_elem.data.width, text_elem.data.height));
+                        .map(|ta| ta.client_width() as f64 / zoom)
+                        .unwrap_or(0.0);
+                    // Keep the wrap width of an already-sized box and only
+                    // adopt the measured width for freshly placed text. For a
+                    // fresh box `set_content` wraps at width 0 (no wrap), so
+                    // the lines stay exactly as typed; a sized box wraps at
+                    // its existing width inside `set_content`.
+                    let wrap_w = text_elem.data.width;
+                    let new_w = if wrap_w > 0.0 { wrap_w } else { measured_w };
                     text_elem.set_content(&text);
-                    text_elem.data.width = w;
-                    text_elem.data.height = h;
+                    text_elem.data.width = new_w;
                 }
             });
             editing_id.set(None);
@@ -115,6 +116,11 @@ pub fn text_edit_overlay(
         let ce_blur = commit.clone();
         let ce_esc = commit.clone();
         let blur_id = id;
+        // Sized (~resized) boxes keep their wrap width while editing and
+        // soft-wrap words at it. Fresh text grows with its content and
+        // must not wrap until it has a width — that only happens on commit.
+        let keep_width = text_elem.data.width > 0.0;
+        let white_space = if keep_width { "pre-wrap" } else { "pre" };
 
         Some(
             view! {
@@ -141,7 +147,7 @@ pub fn text_edit_overlay(
                          border:none;\
                          outline:none;resize:none;\
                          overflow:hidden;\
-                         white-space:pre;overflow-wrap:normal;\
+                         white-space:{};overflow-wrap:normal;\
                          padding:0;margin:0;z-index:100;\
                          line-height:1.2;",
                         sx,
@@ -151,14 +157,18 @@ pub fn text_edit_overlay(
                         font_size * zoom,
                         FONT_FAMILY,
                         fill,
+                        white_space,
                     )
                     prop:value=move || edit_text.get()
                     on:input=move |ev| {
                         edit_text.set(event_target_value(&ev));
                         let ta = event_target::<web_sys::HtmlTextAreaElement>(&ev);
-                        let _ = ta
-                            .style()
-                            .set_property("width", &format!("{}px", ta.scroll_width().max(1)));
+                        if !keep_width {
+                            let _ = ta.style().set_property(
+                                "width",
+                                &format!("{}px", ta.scroll_width().max(1)),
+                            );
+                        }
                         // With `overflow:hidden` a fixed height clips new lines:
                         // reset to `auto` so `scroll_height` measures all lines,
                         // then grow (or shrink) the box to fit them.
