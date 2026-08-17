@@ -160,6 +160,29 @@ impl Text {
         self.wrapped.set_raw(raw);
         self.recalc();
     }
+
+    /// Recompute the box after the font size changed externally (style panel).
+    /// A box that was soft-wrapped keeps its wrap width and re-wraps against
+    /// it; a box at its natural width grows with the new font so it never
+    /// accidentally truncates.
+    pub(crate) fn font_changed(&mut self) {
+        let fs = self.data.style.font_size.max(MIN_FONT_SIZE);
+        let ff = FONT_FAMILY;
+        let hard_lines = self.wrapped.raw.split('\n').count();
+        let wrapped = self.wrapped.lines.len() > hard_lines;
+        if !wrapped {
+            let natural = self
+                .wrapped
+                .raw
+                .split('\n')
+                .map(|l| measure_text_width(l, fs, ff))
+                .fold(0.0, f64::max);
+            if self.data.width < natural {
+                self.data.width = natural;
+            }
+        }
+        self.recalc();
+    }
 }
 
 impl FromDrag for Text {
@@ -551,5 +574,32 @@ mod tests {
         // At 20 width every word is its own line.
         assert_eq!(t.wrapped.lines, vec!["one", "two", "three", "four"]);
         assert!((t.data.height - 24.0 * 4.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn font_change_grows_natural_box() {
+        // Natural width of "aa bb cc" at 20px = 88 world units.
+        let mut t = text_elem("aa bb cc", 88.0, 20.0);
+        t.recalc();
+        assert_eq!(t.wrapped.lines, vec!["aa bb cc"]);
+        t.data.style.font_size = 40.0;
+        t.font_changed();
+        // Natural width grows with the font (176 world units at 40px).
+        assert!((t.data.width - 176.0).abs() < 0.001);
+        assert_eq!(t.wrapped.lines, vec!["aa bb cc"]);
+        assert!((t.data.height - 48.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn font_change_rewraps_wrapped_box() {
+        let mut t = text_elem("aa bb cc", 56.0, 20.0);
+        t.recalc();
+        assert_eq!(t.wrapped.lines, vec!["aa bb", "cc"]);
+        t.data.style.font_size = 40.0;
+        t.font_changed();
+        // Wrap width is kept, so the larger font breaks every word.
+        assert!((t.data.width - 56.0).abs() < 0.001);
+        assert_eq!(t.wrapped.lines, vec!["aa", "bb", "cc"]);
+        assert!((t.data.height - 48.0 * 3.0).abs() < 0.001);
     }
 }

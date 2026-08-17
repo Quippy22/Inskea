@@ -285,6 +285,9 @@ pub fn StylingPanel(
                     for id in &ids {
                         if let Some(el) = s.element_by_id_mut(*id) {
                             el.data_mut().style.font_size = val;
+                            if let Element::Text(t) = el {
+                                t.font_changed();
+                            }
                         }
                     }
                 });
