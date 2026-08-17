@@ -159,6 +159,14 @@ pub fn text_edit_overlay(
                         let _ = ta
                             .style()
                             .set_property("width", &format!("{}px", ta.scroll_width().max(1)));
+                        // With `overflow:hidden` a fixed height clips new lines:
+                        // reset to `auto` so `scroll_height` measures all lines,
+                        // then grow (or shrink) the box to fit them.
+                        let _ = ta.style().set_property("height", "auto");
+                        let _ = ta.style().set_property(
+                            "height",
+                            &format!("{}px", ta.scroll_height().max(1)),
+                        );
                     }
                     on:blur=move |_| {
                         // Only commit if this textarea still owns the active
