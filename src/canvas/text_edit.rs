@@ -4,6 +4,29 @@ use crate::model::{Element, ElementId, Point, Scene};
 use leptos::*;
 use std::rc::Rc;
 
+/// Focus the textarea and place the caret at the end of its content, once it
+/// exists in the DOM. The textarea is inserted reactively after an edit opens,
+/// so the first attempt happens on the next animation frame; if the element is
+/// not mounted yet, it retries on subsequent frames.
+pub fn focus_textarea(textarea_ref: NodeRef<leptos::html::Textarea>) {
+    fn try_focus(textarea_ref: NodeRef<leptos::html::Textarea>, mut attempts: u32) {
+        if let Some(ta) = textarea_ref.get() {
+            let _ = ta.focus();
+            let len = ta.value().len() as u32;
+            let _ = ta.set_selection_start(Some(len));
+            let _ = ta.set_selection_end(Some(len));
+        } else if attempts < 10 {
+            attempts += 1;
+            leptos::leptos_dom::helpers::request_animation_frame(move || {
+                try_focus(textarea_ref, attempts)
+            });
+        }
+    }
+    leptos::leptos_dom::helpers::request_animation_frame(move || {
+        try_focus(textarea_ref, 0)
+    });
+}
+
 /// Create the commit function that saves textarea content back to the element.
 pub fn make_commit_edit(
     editing_id: RwSignal<Option<ElementId>>,
@@ -91,11 +114,11 @@ pub fn text_edit_overlay(
 
         let ce_blur = commit.clone();
         let ce_esc = commit.clone();
+        let blur_id = id;
 
         Some(
             view! {
                 <textarea
-                    autofocus="true"
                     _ref=textarea_ref
                     on:focus=move |ev| {
                         let ta = event_target::<web_sys::HtmlTextAreaElement>(&ev);
@@ -137,7 +160,16 @@ pub fn text_edit_overlay(
                             .style()
                             .set_property("width", &format!("{}px", ta.scroll_width().max(1)));
                     }
-                    on:blur=move |_| ce_blur()
+                    on:blur=move |_| {
+                        // Only commit if this textarea still owns the active
+                        // edit. When a click places a new text while editing,
+                        // the blur fired by the mousedown default action may
+                        // occur after the new (empty) edit is already open —
+                        // committing it here would delete the fresh text.
+                        if editing_id.get() == Some(blur_id) {
+                            ce_blur();
+                        }
+                    }
                     on:keydown=move |ev: ev::KeyboardEvent| {
                         if ev.key() == "Escape" {
                             ce_esc();

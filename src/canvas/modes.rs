@@ -26,7 +26,6 @@ use leptos::{ev, SignalGet, SignalSet, SignalUpdate, SignalWith};
 ///   `draw_pointer_up` right before the element is added, so a degenerate
 ///   click (below MIN_DRAG_DIST) never pollutes the undo stack.
 pub fn draw_pointer_down(
-    _ev: &ev::PointerEvent,
     world: Point,
     st: &mut CanvasState,
     props: &mut CanvasInputs,

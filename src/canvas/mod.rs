@@ -42,6 +42,43 @@ pub(crate) const DASH_PREVIEW: &str = "4 2";
 
 // ────────────────────────────────────────────────────────────────────────────
 
+/// Dispatch a pointer-down event to the handler for the active canvas mode.
+/// Extracted so pointer-down logic (including the `Text` editing path, which
+/// commits the active edit before dispatching) shares a single dispatch.
+fn route_pointer_down(
+    detail: u32,
+    client: (f64, f64),
+    mode: CanvasMode,
+    world: Point,
+    st: &mut CanvasState,
+    props: &mut CanvasInputs,
+) {
+    if props.eraser_active.get() || props.canvas_mode.get() == CanvasMode::Erase {
+        (props.push_snapshot)();
+        st.erasing.set(true);
+        hit_and_erase(world, props.scene);
+        return;
+    }
+
+    if props.export_crop_active.get() {
+        st.select_anchor.set(Some(world));
+        return;
+    }
+
+    match mode {
+        CanvasMode::Pan => {
+            st.pan_anchor.set(Some(client));
+        }
+        CanvasMode::Select => {
+            select_pointer_down(detail, world, st, props);
+        }
+        CanvasMode::Draw => {
+            draw_pointer_down(world, st, props);
+        }
+        CanvasMode::Erase => {}
+    }
+}
+
 /// Root SVG canvas component.
 ///
 /// Owns the full `<svg>` element and handles all pointer / keyboard interaction.
@@ -184,6 +221,22 @@ pub fn Canvas(
         props.viewport,
     );
 
+    // Whenever a text edit opens, focus the editing textarea so the caret is
+    // visible for typing. The textarea is inserted reactively (in a later
+    // flush) after `editing_id` is set, so the focus is scheduled for an
+    // animation frame and retried until the node actually exists. Runs on
+    // the first click that opens a text, and again when a click while
+    // editing commits the old text and opens a fresh one.
+    {
+        let editing_id = st.text_edit.editing_id;
+        let textarea_ref = st.text_edit.textarea_ref;
+        create_effect(move |_| {
+            if editing_id.get().is_some() {
+                text_edit::focus_textarea(textarea_ref);
+            }
+        });
+    }
+
     // Switching mode (Select/Hand/Draw) or active tool used to leave whatever
     // was in progress untouched: an active selection stayed highlighted after
     // switching to a draw tool, and a just-opened, still-empty text box stayed
@@ -288,55 +341,44 @@ pub fn Canvas(
     // Primary entry-point for all pointer-down events on the `<svg>` element.
     //
     // Routing:
-    // 1. If a text edit is active (`editing_id` is set), the event is ignored
-    //    (the textarea overlay handles its own input).
+    // 1. If a text edit is active (`editing_id` is set), it is committed
+    //    first. The textarea's `blur` (fired by the mousedown default action)
+    //    is scoped to its own edit in `text_edit_overlay`, so it cannot commit
+    //    a freshly-created new text.
     // 2. Updates world coordinates via `update_world`.
-    // 3. If the eraser toggle is on, snapshots the scene and erases the
-    //    topmost element under the cursor.
-    // 4. Otherwise, dispatches by `CanvasMode`:
+    // 3. Dispatches by `CanvasMode` through `route_pointer_down`.
     //    - `Pan` → stores the initial client position for panning.
     //    - `Select` → `modes::select_pointer_down` – handles double-click text
     //      editing, handle grab (resize/move/rotate), element selection,
     //      and marquee anchor.
     //    - `Draw` → `modes::draw_pointer_down` – creates a new element
     //      (snapshot taken before creation) and enters the drawing state.
-    //    - `Erase` → the guard above catches this, so this match arm is unreachable.
+    //    - `Erase` → handled inside `route_pointer_down`, this match arm is unreachable.
     let on_pointer_down = {
         let mut st = st;
         let mut props = props.clone();
         let update_world = update_world;
+        let commit_edit = commit_edit.clone();
         move |ev: ev::PointerEvent| {
-            if st.text_edit.editing_id.get().is_some() {
-                return;
-            }
+            let editing = st.text_edit.editing_id.get().is_some();
             let mode = props.canvas_mode.get();
             let world = update_world(&ev);
+            let detail = ev.detail() as u32;
+            let client = (ev.client_x() as f64, ev.client_y() as f64);
 
-            if props.eraser_active.get() || props.canvas_mode.get() == CanvasMode::Erase {
-                (props.push_snapshot)();
-                st.erasing.set(true);
-                hit_and_erase(world, props.scene);
-                return;
+            if editing {
+                // A text edit is in progress: commit it, then handle this
+                // click synchronously. The textarea's blur is scoped to its
+                // own edit (see `text_edit_overlay`), so the blur fired by
+                // the click's `mousedown` default action — by which point a
+                // new edit may be open — is a no-op and cannot remove the
+                // newly created empty text. The deferred-focus effect in
+                // this file focuses the new textarea after the click has
+                // fully dispatched, so the caret appears after the new
+                // empty text is placed.
+                commit_edit();
             }
-
-            if props.export_crop_active.get() {
-                st.select_anchor.set(Some(world));
-                return;
-            }
-
-            match mode {
-                CanvasMode::Pan => {
-                    st.pan_anchor
-                        .set(Some((ev.client_x() as f64, ev.client_y() as f64)));
-                }
-                CanvasMode::Select => {
-                    select_pointer_down(&ev, world, &mut st, &mut props);
-                }
-                CanvasMode::Draw => {
-                    draw_pointer_down(&ev, world, &mut st, &mut props);
-                }
-                CanvasMode::Erase => {}
-            }
+            route_pointer_down(detail, client, mode, world, &mut st, &mut props);
         }
     };
 
