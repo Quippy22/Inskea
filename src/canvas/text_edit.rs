@@ -97,6 +97,18 @@ pub fn text_edit_overlay(
                 <textarea
                     autofocus="true"
                     _ref=textarea_ref
+                    on:focus=move |ev| {
+                        let ta = event_target::<web_sys::HtmlTextAreaElement>(&ev);
+                        let ta2 = ta.clone();
+                        leptos::leptos_dom::helpers::set_timeout(
+                            move || {
+                                let len = ta2.value().len() as u32;
+                                let _ = ta2.set_selection_start(Some(len));
+                                let _ = ta2.set_selection_end(Some(len));
+                            },
+                            std::time::Duration::ZERO,
+                        );
+                    }
                     style=format!(
                         "position:fixed;left:{}px;top:{}px;\
                          width:{}px;height:{}px;\

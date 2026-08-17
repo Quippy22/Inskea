@@ -596,12 +596,15 @@ pub fn Canvas(
             // is a model restructuring, not a one-line change.
             {
                 let props = props.clone();
+                let editing_id = st.text_edit.editing_id;
                 move || {
+                    let editing = editing_id.get();
                     props
                         .scene
                         .get()
                         .elements()
                         .iter()
+                        .filter(|el| Some(el.id()) != editing)
                         .map(|el| {
                             let zoom = props.viewport.get().zoom;
                             view! { <g pointer-events="none">{el.render(zoom)}</g> }.into_view()
