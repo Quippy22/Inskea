@@ -2,8 +2,9 @@ use std::rc::Rc;
 
 use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
 use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
+use crate::edit_ops::Clipboard;
 use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
-use crate::model::{Color, Element, ElementId, ElementStyle, LineStyle, Point, Scene};
+use crate::model::{Color, ElementId, ElementStyle, LineStyle, Point, Scene};
 use crate::tauri_bridge;
 use crate::ui::components::StylingPanel;
 use crate::ui::dock::{Dock, Tool};
@@ -39,7 +40,7 @@ pub fn App() -> impl IntoView {
         canvas_bg: CanvasBg::Dark,
     });
 
-    let clipboard = create_rw_signal(Vec::<Element>::new());
+    let clipboard = create_rw_signal(Clipboard::default());
 
     let undo_stack = create_rw_signal(Vec::<Scene>::new());
     let redo_stack = create_rw_signal(Vec::<Scene>::new());

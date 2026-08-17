@@ -9,11 +9,20 @@ pub use elements::*;
 pub use point::Point;
 pub use rect::Rect;
 
+/// A persistent group: a set of element ids that stay selected, move, and act together.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Group {
+    /// Member element ids, in the order they were grouped.
+    pub members: Vec<ElementId>,
+}
+
 /// The single source of truth for everything on the canvas.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Scene {
     pub(crate) elements: Vec<Element>,
     pub(crate) next_id: u64,
+    #[serde(default)]
+    pub(crate) groups: Vec<Group>,
 }
 
 impl Scene {
@@ -22,6 +31,7 @@ impl Scene {
         Self {
             elements: Vec::new(),
             next_id: 1,
+            groups: Vec::new(),
         }
     }
 
@@ -43,6 +53,67 @@ impl Scene {
 
     pub fn remove_by_id(&mut self, id: ElementId) {
         self.elements.retain(|e| e.id() != id);
+        for group in &mut self.groups {
+            group.members.retain(|m| *m != id);
+        }
+        self.groups.retain(|g| g.members.len() >= 2);
+    }
+
+    /// The group that contains `id`, if any.
+    pub fn group_containing(&self, id: ElementId) -> Option<&Group> {
+        self.groups.iter().find(|g| g.members.contains(&id))
+    }
+
+    /// Expand `ids` to full groups: every id belonging to a group brings all its members.
+    pub fn expand_to_groups(&self, ids: &[ElementId]) -> Vec<ElementId> {
+        let mut out: Vec<ElementId> = Vec::new();
+        for id in ids {
+            if let Some(g) = self.group_containing(*id) {
+                for m in &g.members {
+                    if !out.contains(m) {
+                        out.push(*m);
+                    }
+                }
+            } else if !out.contains(id) {
+                out.push(*id);
+            }
+        }
+        out
+    }
+
+    /// True if the selection is exactly the members of one group.
+    pub fn selection_is_group(&self, ids: &[ElementId]) -> bool {
+        if ids.is_empty() {
+            return false;
+        }
+        match self.group_containing(ids[0]) {
+            Some(g) => ids.iter().all(|id| g.members.contains(id)),
+            None => false,
+        }
+    }
+
+    /// Group `ids` into one group, dissolving any existing groups that overlap the members.
+    pub fn create_group(&mut self, ids: &[ElementId]) {
+        let members = self.expand_to_groups(ids);
+        if members.len() < 2 {
+            return;
+        }
+        self.groups
+            .retain(|g| !g.members.iter().any(|m| members.contains(m)));
+        self.groups.push(Group { members });
+    }
+
+    /// Remove every group containing any of `ids`, returning the affected member ids.
+    pub fn remove_groups_containing(&mut self, ids: &[ElementId]) -> Vec<ElementId> {
+        let mut removed = Vec::new();
+        self.groups.retain(|g| {
+            let hit = ids.iter().any(|id| g.members.contains(id));
+            if hit {
+                removed.extend(g.members.iter().copied());
+            }
+            !hit
+        });
+        removed
     }
 
     /// Adds an element to the scene, assigning it a unique ID.
@@ -90,5 +161,74 @@ impl Scene {
                 self.elements.swap(idx, idx - 1);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::elements::rect::Rectangle;
+
+    fn scene_with_three() -> Scene {
+        let mut s = Scene::new();
+        for _ in 0..3 {
+            s.add_element(Element::Rectangle(Rectangle {
+                data: ElementData::new(0),
+            }));
+        }
+        s
+    }
+
+    #[test]
+    fn expand_to_groups_expands_members() {
+        let mut s = scene_with_three();
+        s.create_group(&[1, 2]);
+        assert_eq!(s.expand_to_groups(&[2]), vec![1, 2]);
+        assert_eq!(s.expand_to_groups(&[1, 3]), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn create_group_needs_two_members() {
+        let mut s = scene_with_three();
+        s.create_group(&[1]);
+        assert!(s.groups.is_empty());
+        assert!(!s.selection_is_group(&[1]));
+    }
+
+    #[test]
+    fn create_group_dissolves_overlapping_groups() {
+        let mut s = scene_with_three();
+        s.create_group(&[1, 2]);
+        s.create_group(&[2, 3]);
+        assert_eq!(s.groups.len(), 1);
+        assert_eq!(s.groups[0].members, vec![1, 2, 3]);
+        assert!(s.selection_is_group(&[1, 2, 3]));
+    }
+
+    #[test]
+    fn ungroup_removes_membership_only() {
+        let mut s = scene_with_three();
+        s.create_group(&[1, 2]);
+        let removed = s.remove_groups_containing(&[2]);
+        assert_eq!(removed, vec![1, 2]);
+        assert!(s.groups.is_empty());
+        assert_eq!(s.elements().len(), 3);
+    }
+
+    #[test]
+    fn removing_member_drops_undersized_group() {
+        let mut s = scene_with_three();
+        s.create_group(&[1, 2]);
+        s.remove_by_id(1);
+        assert!(s.groups.is_empty());
+        s.remove_by_id(2);
+        assert_eq!(s.elements().len(), 1);
+    }
+
+    #[test]
+    fn old_scenes_default_to_no_groups() {
+        let legacy = r#"{"elements":[],"next_id":1}"#;
+        let s: Scene = serde_json::from_str(legacy).unwrap();
+        assert!(s.groups.is_empty());
     }
 }
