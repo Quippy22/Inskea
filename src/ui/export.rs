@@ -186,10 +186,11 @@ fn el_svg(el: &Element) -> String {
         }
         Element::Text(t) => {
             let mut out = format!(
-                r#"<text x="{}" y="{}" font-size="{}" fill="{}" opacity="{}">"#,
+                r#"<text x="{}" y="{}" font-size="{}" font-family="{}" fill="{}" opacity="{}">"#,
                 t.data.world_point.x,
                 t.data.world_point.y + t.data.style.font_size,
                 t.data.style.font_size,
+                crate::model::elements::text::FONT_FAMILY,
                 t.data.style.stroke_color.to_hex(),
                 t.data.style.opacity,
             );

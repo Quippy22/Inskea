@@ -5,106 +5,58 @@ use leptos::IntoView;
 
 pub(crate) const MIN_FONT_SIZE: f64 = 12.0;
 pub(crate) const TEXT_ASCENT_RATIO: f64 = 0.85;
+/// Font family used for all text rendering and editing.
+pub(crate) const FONT_FAMILY: &str = "Cabin";
 
-/// Estimated ratio of average character width to font size for sans-serif text.
-/// Used to derive `max_chars` from world-space width and font size.
-pub(crate) const CHAR_WIDTH_RATIO: f64 = 0.5;
-
-/// A hand-built word-wrapping helper that gives the app full control over line breaks.
-///
-/// # Design
-///
-/// - `raw` holds the user-entered text with only **hard** `\n` (from Enter key presses).
-/// - `lines` is derived from `raw` by inserting soft breaks every `max_chars` characters
-///   within each hard-break segment. Hard `\n` are always preserved.
-/// - Soft breaks are recalculated whenever the wrap width changes.
+/// Raw text split into lines on hard `\n` breaks only. No soft wrapping is
+/// applied: a line is exactly what the user typed between two Enter presses.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct WrappedText {
-    /// Raw text with only hard line breaks (from user Enter presses).
+    /// Raw text with hard line breaks (from user Enter presses).
     pub raw: String,
-    /// Wrapped lines, one per rendered `<tspan>`.
+    /// Lines split on hard `\n` breaks, one per rendered `<tspan>`.
     pub lines: Vec<String>,
-    /// Maximum number of characters per line at the current wrap width.
-    /// 0 means wrapping is disabled (lines has a single entry).
-    pub max_chars: usize,
 }
 
 impl WrappedText {
-    /// Build a new `WrappedText` from raw content, computing soft breaks.
-    pub fn new(raw: &str, width: f64, font_size: f64) -> Self {
-        let max_chars = Self::compute_max_chars(width, font_size);
-        let lines = Self::wrap(raw, max_chars);
+    /// Build a new `WrappedText` from raw content.
+    pub fn new(raw: &str) -> Self {
         WrappedText {
             raw: raw.to_string(),
-            lines,
-            max_chars,
+            lines: Self::split_lines(raw),
         }
     }
 
-    /// Replace the raw content and recompute wrapping.
-    pub fn set_raw(&mut self, raw: &str, width: f64, font_size: f64) {
-        self.max_chars = Self::compute_max_chars(width, font_size);
+    /// Replace the raw content and re-split the lines.
+    pub fn set_raw(&mut self, raw: &str) {
         self.raw = raw.to_string();
-        self.lines = Self::wrap(raw, self.max_chars);
+        self.lines = Self::split_lines(raw);
     }
 
-    /// Recompute wrapping for a new width (e.g. after resize).
-    pub fn rewrap(&mut self, width: f64, font_size: f64) {
-        self.max_chars = Self::compute_max_chars(width, font_size);
-        self.lines = Self::wrap(&self.raw, self.max_chars);
-    }
-
-    fn compute_max_chars(width: f64, font_size: f64) -> usize {
-        if width <= 0.0 || font_size <= 0.0 {
-            return 0;
-        }
-        let char_width = font_size * CHAR_WIDTH_RATIO;
-        (width / char_width).max(1.0) as usize
-    }
-
-    /// Wrap raw text into lines: split on hard `\n`, then split each segment
-    /// into chunks of `max_chars` characters.
-    fn wrap(raw: &str, max_chars: usize) -> Vec<String> {
-        if max_chars == 0 {
-            return vec![raw.to_string()];
-        }
-        let mut out = Vec::new();
-        for segment in raw.split('\n') {
-            let chars: Vec<char> = segment.chars().collect();
-            if chars.len() <= max_chars {
-                out.push(segment.to_string());
-            } else {
-                for chunk in chars.chunks(max_chars) {
-                    out.push(chunk.iter().collect());
-                }
-            }
-        }
-        out
+    fn split_lines(raw: &str) -> Vec<String> {
+        raw.split('\n').map(|s| s.to_string()).collect()
     }
 }
 
 // ── Text element ───────────────────────────────────────────────────────
 
-/// A piece of text rendered as SVG, with automatic wrapping.
+/// A piece of text rendered as SVG.
 ///
-/// Wrapping is character-count based (see [`WrappedText`]).
-/// The element is **self-sizing**: `data.width` and `data.height` are
-/// recomputed from the actual wrapped content whenever the text changes.
+/// No soft wrapping: lines come from the user's hard `\n` breaks only.
+/// `data.width`/`data.height` are set from the editing overlay's measured
+/// size on commit.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Text {
     /// Position, font size, and fill colour.
     pub data: ElementData,
-    /// Wrapped text with full control over hard and soft line breaks.
+    /// Text content split on hard line breaks.
     pub wrapped: WrappedText,
 }
 
 impl Text {
-    /// Replace the raw content, recompute wrapping at `wrap_width`,
-    /// and update `data.width`/`data.height` to match the wrapped result.
-    ///
-    /// `wrap_width` determines `max_chars` for soft-break insertion and
-    /// becomes `data.width` so the hitbox aligns with the wrap boundary.
-    /// Height is auto-sized to fit all wrapped lines.
+    /// Replace the raw content and update `data.height` to match the lines.
+    /// Width is left untouched; without wrapping the text's width is not
+    /// derived from the content at model level.
     fn recalc_height(&mut self) {
         let fs = self.data.style.font_size.max(MIN_FONT_SIZE);
         let line_h = fs * 1.2;
@@ -112,20 +64,8 @@ impl Text {
         self.data.height = num_lines as f64 * line_h;
     }
 
-    pub fn set_content(&mut self, raw: &str, wrap_width: f64) {
-        self.wrapped
-            .set_raw(raw, wrap_width, self.data.style.font_size);
-        self.data.width = wrap_width;
-        self.recalc_height();
-    }
-
-    /// Resize the element to a new world-space width, re-wrap the text,
-    /// and auto-adjust `data.height` to fit all lines.
-    ///
-    /// `data.width` stays at `new_width`; only the height is recomputed.
-    pub fn resize_text(&mut self, new_width: f64) {
-        self.data.width = new_width;
-        self.wrapped.rewrap(new_width, self.data.style.font_size);
+    pub fn set_content(&mut self, raw: &str) {
+        self.wrapped.set_raw(raw);
         self.recalc_height();
     }
 }
@@ -137,11 +77,9 @@ impl FromDrag for Text {
         data.width = 0.0;
         data.height = 0.0;
         data.style.stroke_color = color;
-        let w = data.width;
-        let fs = data.style.font_size;
         Self {
             data,
-            wrapped: WrappedText::new("", w, fs),
+            wrapped: WrappedText::new(""),
         }
     }
 }
@@ -155,6 +93,7 @@ impl UpdateDrag for Text {
 impl Render for Text {
     fn render(&self, _zoom: f64) -> leptos::View {
         let font_size = self.data.style.font_size.max(MIN_FONT_SIZE);
+        let font_family = FONT_FAMILY;
         let lines = &self.wrapped.lines;
         let x = self.data.world_point.x;
         let baseline = self.data.world_point.y + font_size * TEXT_ASCENT_RATIO;
@@ -174,7 +113,7 @@ impl Render for Text {
                     y=baseline.to_string()
                     fill=fill
                     font-size=font_size.to_string()
-                    font-family="sans-serif"
+                    font-family=font_family
                     pointer-events="none"
                     style="user-select: none; -webkit-user-select: none;"
                     opacity=opacity
@@ -190,7 +129,7 @@ impl Render for Text {
                     y=baseline.to_string()
                     fill=fill
                     font-size=font_size.to_string()
-                    font-family="sans-serif"
+                    font-family=font_family
                     pointer-events="none"
                     style="user-select: none; -webkit-user-select: none;"
                     opacity=opacity
@@ -306,6 +245,6 @@ impl Resize for Text {
             self.data.width = result.width;
             self.data.height = result.height;
         }
-        self.resize_text(self.data.width);
+        self.recalc_height();
     }
 }

@@ -261,7 +261,7 @@ mod tests {
         td.style.fill_color = Some(Color::new(Color::WHITE));
         s.add_element(Element::Text(Text {
             data: td,
-            wrapped: WrappedText::new("hello world", 0.0, 24.0),
+            wrapped: WrappedText::new("hello world"),
         }));
 
         let mut fd = ElementData::new(0);
@@ -295,7 +295,7 @@ mod tests {
         td.style.fill_color = Some(Color::new(Color::WHITE));
         s.add_element(Element::Text(Text {
             data: td,
-            wrapped: WrappedText::new("line one\nline two\nline three", 200.0, 24.0),
+            wrapped: WrappedText::new("line one\nline two\nline three"),
         }));
         let saved = save_to_string(&s);
         let loaded = load_from_str(&saved).unwrap();
@@ -319,7 +319,7 @@ mod tests {
         td.style.font_size = 36.0;
         s.add_element(Element::Text(Text {
             data: td,
-            wrapped: WrappedText::new("big text", 200.0, 36.0),
+            wrapped: WrappedText::new("big text"),
         }));
 
         let saved = save_to_string(&s);

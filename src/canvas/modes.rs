@@ -43,11 +43,9 @@ pub fn draw_pointer_down(
         data.style = props.default_style.get();
         let id = props.scene.with(|s| s.next_id);
         props.scene.update(|s| {
-            let w = data.width;
-            let fs = data.style.font_size;
             s.add_element(Element::Text(Text {
                 data,
-                wrapped: WrappedText::new("", w, fs),
+                wrapped: WrappedText::new(""),
             }));
         });
         st.text_edit.editing_id.set(Some(id));

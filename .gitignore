@@ -14,6 +14,9 @@ src-tauri/target/
 node_modules/
 /output.css
 
+# Bundled font files (downloaded separately, not committed)
+/fonts/
+
 # Editor / OS
 .DS_Store
 *.swp

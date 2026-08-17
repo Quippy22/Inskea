@@ -1,5 +1,5 @@
 use super::viewport::Viewport;
-use crate::model::elements::text::CHAR_WIDTH_RATIO;
+use crate::model::elements::text::FONT_FAMILY;
 use crate::model::{Element, ElementId, Point, Scene};
 use leptos::*;
 use std::rc::Rc;
@@ -19,15 +19,19 @@ pub fn make_commit_edit(
                 if text.is_empty() {
                     s.remove_by_id(id);
                 } else if let Some(Element::Text(text_elem)) = s.element_by_id_mut(id) {
-                    let wrap_width = if text_elem.data.width > 0.0 {
-                        text_elem.data.width
-                    } else {
-                        textarea_ref
-                            .get()
-                            .map(|ta| ta.client_width() as f64 / viewport.get().zoom)
-                            .unwrap_or(200.0)
-                    };
-                    text_elem.set_content(&text, wrap_width);
+                    let zoom = viewport.get().zoom;
+                    let (w, h) = textarea_ref
+                        .get()
+                        .map(|ta| {
+                            (
+                                ta.client_width() as f64 / zoom,
+                                ta.scroll_height() as f64 / zoom,
+                            )
+                        })
+                        .unwrap_or((text_elem.data.width, text_elem.data.height));
+                    text_elem.set_content(&text);
+                    text_elem.data.width = w;
+                    text_elem.data.height = h;
                 }
             });
             editing_id.set(None);
@@ -36,7 +40,8 @@ pub fn make_commit_edit(
     })
 }
 
-/// Returns a closure that renders the text-editing textarea overlay.
+/// Returns a closure that renders the invisible text-editing textarea overlay.
+/// No border or background — only the caret and the typed text are visible.
 pub fn text_edit_overlay(
     editing_id: RwSignal<Option<ElementId>>,
     edit_text: RwSignal<String>,
@@ -73,16 +78,15 @@ pub fn text_edit_overlay(
             .map(|c| c.to_hex())
             .unwrap_or_else(|| text_elem.data.style.stroke_color.to_hex());
 
-        let default_ta_w = (20.0_f64 * font_size * CHAR_WIDTH_RATIO).max(120.0);
         let ta_w = if text_elem.data.width > 0.0 {
-            (text_elem.data.width * zoom).max(default_ta_w)
+            text_elem.data.width * zoom
         } else {
-            default_ta_w
+            font_size * zoom
         };
         let ta_h = if text_elem.data.height > 0.0 {
-            (text_elem.data.height * zoom).max(font_size * zoom * 1.2)
+            text_elem.data.height * zoom
         } else {
-            (font_size * 1.2).max(50.0)
+            font_size * zoom * 1.2
         };
 
         let ce_blur = commit.clone();
@@ -96,13 +100,13 @@ pub fn text_edit_overlay(
                     style=format!(
                         "position:fixed;left:{}px;top:{}px;\
                          width:{}px;height:{}px;\
-                         font-size:{}px;font-family:sans-serif;\
+                         font-size:{}px;font-family:{};\
                          color:{};\
-                         background:rgba(122,162,247,0.05);\
-                         border:1px dashed {};\
+                         background:transparent;\
+                         border:none;\
                          outline:none;resize:none;\
                          overflow:hidden;\
-                         white-space:pre-wrap;overflow-wrap:break-word;\
+                         white-space:pre;overflow-wrap:normal;\
                          padding:0;margin:0;z-index:100;\
                          line-height:1.2;",
                         sx,
@@ -110,17 +114,16 @@ pub fn text_edit_overlay(
                         ta_w,
                         ta_h,
                         font_size * zoom,
-                        fill,
+                        FONT_FAMILY,
                         fill,
                     )
                     prop:value=move || edit_text.get()
                     on:input=move |ev| {
                         edit_text.set(event_target_value(&ev));
                         let ta = event_target::<web_sys::HtmlTextAreaElement>(&ev);
-                        ta.style().set_property("height", "auto").ok();
                         let _ = ta
                             .style()
-                            .set_property("height", &format!("{}px", ta.scroll_height()));
+                            .set_property("width", &format!("{}px", ta.scroll_width().max(1)));
                     }
                     on:blur=move |_| ce_blur()
                     on:keydown=move |ev: ev::KeyboardEvent| {

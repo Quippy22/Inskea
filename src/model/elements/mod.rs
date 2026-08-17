@@ -78,7 +78,7 @@ impl Default for ElementStyle {
             stroke_color: Color::default(),
             fill_color: None,
             stroke_width: 2.0,
-            font_size: 24.0,
+            font_size: 18.0,
             stroke_style: StrokeStyle::default(),
             edge_style: EdgeStyle::default(),
             roundness: 6.0,
