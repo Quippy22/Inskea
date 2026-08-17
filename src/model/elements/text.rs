@@ -152,6 +152,15 @@ impl Text {
         let fs = self.data.style.font_size.max(MIN_FONT_SIZE);
         let ff = FONT_FAMILY;
         self.wrapped.rebuild(self.data.width, fs, ff);
+        self.recalc_height();
+    }
+
+    /// Derive `data.height` from the existing display lines. Used by the
+    /// uniform-scale path, where width and font scale together so the line
+    /// breaks must not be recomputed (re-measuring words each frame on the
+    /// wrap threshold is what makes the text flicker).
+    fn recalc_height(&mut self) {
+        let fs = self.data.style.font_size.max(MIN_FONT_SIZE);
         let num_lines = self.wrapped.lines.len().max(1);
         self.data.height = num_lines as f64 * fs * 1.2;
     }
@@ -435,9 +444,10 @@ impl Text {
         let c = rotate_point_around(new_center, center, rotation);
         self.data.world_point = Point::new(c.x - new_w / 2.0, c.y - new_h / 2.0);
         self.data.width = new_w;
-        self.data.height = new_h;
         self.data.style.font_size = new_fs.max(MIN_FONT_SIZE);
-        self.recalc();
+        // Keep the existing line breaks: width and font scaled by the same
+        // factor, so the same words still fit each line.
+        self.recalc_height();
     }
 
     /// Multi-select resize: scale the box and the font together.
@@ -465,7 +475,8 @@ impl Text {
                 false,
             );
             self.data.style.font_size = (orig.style.font_size * sx).max(MIN_FONT_SIZE);
-            self.recalc();
+            // Same line breaks, scaled: group scaling keeps the text's shape.
+            self.recalc_height();
         }
     }
 }
