@@ -8,6 +8,9 @@ use std::rc::Rc;
 /// editing. The textarea is panned to stay inside this band and soft-wraps
 /// ("artificial next line") once even the band is too small.
 const EDIT_PAD: f64 = 64.0;
+/// Fraction of the remaining pan distance moved per animation frame, so the
+/// view follows the caret smoothly instead of snapping.
+const PAN_SMOOTHING: f64 = 0.3;
 
 /// Focus the textarea and place the caret at the end of its content, once it
 /// exists in the DOM. The textarea is inserted reactively after an edit opens,
@@ -127,9 +130,14 @@ pub fn guide_textarea(
     let _ = sty.set_property("height", &format!("{}px", raw.scroll_height().max(1)));
 }
 
-/// Pan `viewport.offset_x` so the text origin lands at screen `target`, then
-/// immediately re-position the textarea to the new world-to-screen spot —
-/// within the same frame, so nothing lags behind the SVG.
+/// Pan `viewport.offset_x` so the text origin eases toward screen `target`,
+/// then immediately re-position the textarea to the new world-to-screen spot.
+///
+/// Only a fraction of the remaining distance moves each call. `guide_textarea`
+/// re-runs on the next animation frame whenever the viewport is still moving,
+/// so this interpolates over several frames until it settles — no snap. When
+/// it has settled it stops panning, the viewport stops changing, and the
+/// re-run loop ends by itself.
 fn pan_and_reposition(
     sx: f64,
     target_sx: f64,
@@ -139,10 +147,12 @@ fn pan_and_reposition(
     viewport: &RwSignal<Viewport>,
     sty: &web_sys::CssStyleDeclaration,
 ) {
-    if (sx - target_sx).abs() < 0.5 {
+    let dx = sx - target_sx;
+    if dx.abs() < 0.5 {
         return;
     }
-    viewport.update(|vp| vp.offset_x += (sx - target_sx) / vp.zoom);
+    let step = dx * PAN_SMOOTHING;
+    viewport.update(|vp| vp.offset_x += step / vp.zoom);
     let new_sx = (vp_world.x - viewport.get().offset_x) * zoom + screen_w / 2.0;
     let _ = sty.set_property("left", &format!("{new_sx}px"));
 }

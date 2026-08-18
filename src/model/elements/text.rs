@@ -339,13 +339,23 @@ impl Text {
     /// hug the text instead.
     pub fn visual_bounds(&self) -> Rect {
         let fs = self.data.style.font_size.max(MIN_FONT_SIZE);
+        let ff = FONT_FAMILY;
         // Baseline sits at `y + 0.85·fs`; glyphs span one ascender above it
         // and one descender below, so the tight box is nearly the font size.
         let top = self.data.world_point.y + fs * (TEXT_ASCENT_RATIO - GLYPH_ASCENT);
         let line_h = fs * (GLYPH_ASCENT + GLYPH_DESCENT);
         let lines = self.wrapped.lines.len().max(1);
         let height = line_h + (lines - 1) as f64 * fs * 1.2;
-        Rect::new(self.data.world_point.x, top, self.data.width, height)
+        // The right edge hugs the widest rendered line. Using the wrap width
+        // (`data.width`) leaves a gap on every wrapped line shorter than the
+        // column.
+        let width = self
+            .wrapped
+            .lines
+            .iter()
+            .map(|l| measure_text_width(l, fs, ff))
+            .fold(0.0, f64::max);
+        Rect::new(self.data.world_point.x, top, width, height)
     }
 }
 
