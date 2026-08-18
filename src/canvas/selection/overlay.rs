@@ -165,19 +165,23 @@ fn render_multi_select_boxes(ids: &[ElementId], els: &[Element], hex: &'static s
     els.iter()
         .filter(|el| ids.contains(&el.id()) && el.path_points().is_none())
         .map(|el| {
-            let d = el.data();
-            let rot = d.rotation;
+            let b = if let Element::Text(t) = el {
+                t.visual_bounds()
+            } else {
+                el.bounds()
+            };
+            let rot = el.data().rotation;
             if rot != 0.0 {
-                let cx = d.world_point.x + d.width / 2.0;
-                let cy = d.world_point.y + d.height / 2.0;
+                let cx = b.x + b.w / 2.0;
+                let cy = b.y + b.h / 2.0;
                 let deg = rot.to_degrees();
                 view! {
                     <g transform=format!("rotate({} {} {})", deg, cx, cy)>
                         <rect
-                            x=d.world_point.x - SELECT_PADDING
-                            y=d.world_point.y - SELECT_PADDING
-                            width=d.width + SELECT_PADDING * 2.0
-                            height=d.height + SELECT_PADDING * 2.0
+                            x=b.x - SELECT_PADDING
+                            y=b.y - SELECT_PADDING
+                            width=b.w + SELECT_PADDING * 2.0
+                            height=b.h + SELECT_PADDING * 2.0
                             fill="none"
                             stroke=hex
                             stroke-width="0.5"
@@ -188,7 +192,6 @@ fn render_multi_select_boxes(ids: &[ElementId], els: &[Element], hex: &'static s
                 }
                 .into_view()
             } else {
-                let b = el.bounds();
                 view! {
                     <rect
                         x=b.x - SELECT_PADDING

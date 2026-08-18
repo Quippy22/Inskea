@@ -10,6 +10,10 @@ pub(crate) const MIN_FONT_SIZE: f64 = 12.0;
 pub(crate) const TEXT_ASCENT_RATIO: f64 = 0.85;
 /// Font family used for all text rendering and editing.
 pub(crate) const FONT_FAMILY: &str = "Cabin";
+/// Glyph ascender height and descender depth, as fractions of the font size
+/// measured from the baseline. Used to derive a tight visual box for text.
+const GLYPH_ASCENT: f64 = 0.80;
+const GLYPH_DESCENT: f64 = 0.22;
 
 /// Text content plus the lines it is displayed as.
 ///
@@ -63,6 +67,14 @@ impl WrappedText {
 pub fn longest_word_width(raw: &str, font_size: f64, font_family: &str) -> f64 {
     raw.split_whitespace()
         .map(|w| measure_text_width(w, font_size, font_family))
+        .fold(0.0, f64::max)
+}
+
+/// Width (world units) of the widest hard line in `raw` at `font_size`,
+/// i.e. the natural (unwrapped) width of the text.
+pub(crate) fn natural_line_width(raw: &str, font_size: f64, font_family: &str) -> f64 {
+    raw.split('\n')
+        .map(|l| measure_text_width(l, font_size, font_family))
         .fold(0.0, f64::max)
 }
 
@@ -180,12 +192,7 @@ impl Text {
         let hard_lines = self.wrapped.raw.split('\n').count();
         let wrapped = self.wrapped.lines.len() > hard_lines;
         if !wrapped {
-            let natural = self
-                .wrapped
-                .raw
-                .split('\n')
-                .map(|l| measure_text_width(l, fs, ff))
-                .fold(0.0, f64::max);
+            let natural = natural_line_width(&self.wrapped.raw, fs, ff);
             if self.data.width < natural {
                 self.data.width = natural;
             }
@@ -322,6 +329,23 @@ impl SnapToGrid for Text {
             self.data.height,
             grid,
         );
+    }
+}
+
+impl Text {
+    /// Tight glyph box for the selection outline. The layout box
+    /// (`data.width` × `data.height`) is a 1.2em line-height box, so it sits
+    /// a lot taller and emptier than the visible glyphs; the outline should
+    /// hug the text instead.
+    pub fn visual_bounds(&self) -> Rect {
+        let fs = self.data.style.font_size.max(MIN_FONT_SIZE);
+        // Baseline sits at `y + 0.85·fs`; glyphs span one ascender above it
+        // and one descender below, so the tight box is nearly the font size.
+        let top = self.data.world_point.y + fs * (TEXT_ASCENT_RATIO - GLYPH_ASCENT);
+        let line_h = fs * (GLYPH_ASCENT + GLYPH_DESCENT);
+        let lines = self.wrapped.lines.len().max(1);
+        let height = line_h + (lines - 1) as f64 * fs * 1.2;
+        Rect::new(self.data.world_point.x, top, self.data.width, height)
     }
 }
 

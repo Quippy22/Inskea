@@ -217,8 +217,6 @@ pub fn Canvas(
         st.text_edit.editing_id,
         st.text_edit.edit_text,
         props.scene,
-        st.text_edit.textarea_ref,
-        props.viewport,
     );
 
     // Whenever a text edit opens, focus the editing textarea so the caret is
@@ -233,6 +231,43 @@ pub fn Canvas(
         create_effect(move |_| {
             if editing_id.get().is_some() {
                 text_edit::focus_textarea(textarea_ref);
+            }
+        });
+    }
+
+    // Keep the editing textarea positioned and wrapped around the typed text,
+    // and pan the canvas so the caret stays on screen. Runs on the next
+    // animation frame (after the render has patched), so it cannot be
+    // overwritten by a reactive re-render. Re-runs whenever the edit text,
+    // the canvas pan, the screen size, or the scene changes while editing.
+    {
+        let editing_id = st.text_edit.editing_id;
+        let edit_text = st.text_edit.edit_text;
+        let textarea_ref = st.text_edit.textarea_ref;
+        let scene = props.scene;
+        let viewport = props.viewport;
+        let screen_size = st.screen_size;
+        create_effect(move |_| {
+            if editing_id.get().is_some() {
+                // Track everything the guide reads so typing/pans re-run it.
+                let _ = edit_text.get();
+                let _ = viewport.get();
+                let _ = screen_size.get();
+                scene.with(|_| ());
+                let editing_id = editing_id;
+                let textarea_ref = textarea_ref;
+                let scene = scene;
+                let viewport = viewport;
+                let screen_size = screen_size;
+                leptos::leptos_dom::helpers::request_animation_frame(move || {
+                    text_edit::guide_textarea(
+                        editing_id,
+                        textarea_ref,
+                        scene,
+                        viewport,
+                        screen_size,
+                    );
+                });
             }
         });
     }
@@ -647,10 +682,12 @@ pub fn Canvas(
                         .elements()
                         .iter()
                         .filter(|el| Some(el.id()) != editing)
-                        .map(|el| {
-                            let zoom = props.viewport.get().zoom;
-                            view! { <g pointer-events="none">{el.render(zoom)}</g> }.into_view()
-                        })
+                        // Elements render in world coordinates: the SVG
+                        // `viewBox` applies the pan/zoom, so `render` ignores
+                        // the zoom argument. Reading the viewport here would
+                        // rebuild the whole scene on every pan (e.g. while the
+                        // text follow-pan is typing), so stay untracked.
+                        .map(|el| view! { <g pointer-events="none">{el.render(1.0)}</g> }.into_view())
                         .collect_view()
                 }
             }

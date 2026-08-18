@@ -1,8 +1,13 @@
 use super::viewport::Viewport;
-use crate::model::elements::text::FONT_FAMILY;
+use crate::model::elements::text::{natural_line_width, FONT_FAMILY};
 use crate::model::{Element, ElementId, Point, Scene};
 use leptos::*;
 use std::rc::Rc;
+
+/// Screen padding (CSS px) kept between the caret and the window edge while
+/// editing. The textarea is panned to stay inside this band and soft-wraps
+/// ("artificial next line") once even the band is too small.
+const EDIT_PAD: f64 = 64.0;
 
 /// Focus the textarea and place the caret at the end of its content, once it
 /// exists in the DOM. The textarea is inserted reactively after an edit opens,
@@ -27,13 +32,126 @@ pub fn focus_textarea(textarea_ref: NodeRef<leptos::html::Textarea>) {
     });
 }
 
+/// Reflow the editing textarea around the typed content.
+///
+/// * A typed-out box ("fresh" text, width not yet set) keeps the caret within
+///   an `EDIT_PAD` band on screen — the canvas pans so the text stays visible —
+///   and soft-wraps ("artificial new line") once the band between both edges
+///   is too small. On commit it still becomes full-size, unwrapped text.
+/// * An already-sized box keeps its wrap width and soft-wraps at it.
+///
+/// Runs on the next animation frame: after the reactive render has patched,
+/// so per-input changes are never overwritten by a re-render. The pan is
+/// applied by drifting `viewport.offset_x`, so the whole SVG follows the
+/// caret instead of the textarea alone.
+pub fn guide_textarea(
+    editing_id: RwSignal<Option<ElementId>>,
+    textarea_ref: NodeRef<leptos::html::Textarea>,
+    scene: RwSignal<Scene>,
+    viewport: RwSignal<Viewport>,
+    screen_size: RwSignal<Point>,
+) {
+    let Some(id) = editing_id.get() else { return };
+    let Some(ta) = textarea_ref.get() else { return };
+    let raw: &web_sys::HtmlTextAreaElement = &ta;
+    let Some(text) = scene.with(|s| s.element_by_id(id).cloned()) else {
+        return;
+    };
+    let Element::Text(text_elem) = text else { return };
+
+    let ss = screen_size.get();
+    let band_left = EDIT_PAD;
+    let band_right = (ss.x - EDIT_PAD).max(band_left);
+    let column = (band_right - band_left).max(1.0);
+    let vp_world = text_elem.data.world_point;
+    let zoom = viewport.get().zoom;
+    let sx = (vp_world.x - viewport.get().offset_x) * zoom + ss.x / 2.0;
+    let sy = (vp_world.y - viewport.get().offset_y) * zoom + ss.y / 2.0;
+    let font_size = text_elem.data.style.font_size.max(12.0);
+    let fill = text_elem
+        .data
+        .style
+        .fill_color
+        .as_ref()
+        .map(|c| c.to_hex())
+        .unwrap_or_else(|| text_elem.data.style.stroke_color.to_hex());
+
+    let sty = raw.style();
+    let _ = sty.set_property("left", &format!("{sx}px"));
+    let _ = sty.set_property("top", &format!("{sy}px"));
+    let _ = sty.set_property("font-size", &format!("{}px", font_size * zoom));
+    let _ = sty.set_property("color", &fill);
+
+    let sized = text_elem.data.width > 0.0;
+    if sized {
+        // Resized box: wrap at its chosen width, no panning.
+        let _ = sty.set_property("white-space", "pre-wrap");
+        let _ = sty.set_property("width", &format!("{}px", text_elem.data.width * zoom));
+    } else {
+        // Measure the real rendered width of the current line (as the browser
+        // lays it out), so the follow/wrap thresholds match the pixels the
+        // user actually sees. Pin the box to 1px, force a reflow by reading
+        // scrollWidth, then grow it back.
+        let _ = sty.set_property("white-space", "pre");
+        let _ = sty.set_property("width", "1px");
+        let natural = raw.scroll_width().max(1) as f64;
+
+        if sx + natural <= band_right {
+            // Fits in the band: one flowing line.
+            let _ = sty.set_property("width", &format!("{natural}px"));
+        } else if natural <= column {
+            // Overflows the band but fits a pan: drift the view right so the
+            // (end of the) caret stays at the right padding; the text origin
+            // slides left towards the left padding.
+            let target = (band_right - natural).max(band_left);
+            pan_and_reposition(
+                sx,
+                target,
+                vp_world,
+                zoom,
+                ss.x,
+                &viewport,
+                &sty,
+            );
+            let _ = sty.set_property("width", &format!("{natural}px"));
+        } else {
+            // Too wide for the band even when snapped to the left padding:
+            // artificial new line — wrap inside the band.
+            pan_and_reposition(sx, band_left, vp_world, zoom, ss.x, &viewport, &sty);
+            let _ = sty.set_property("white-space", "pre-wrap");
+            let _ = sty.set_property("width", &format!("{column}px"));
+        }
+    }
+
+    let _ = sty.set_property("height", "auto");
+    let _ = sty.set_property("height", &format!("{}px", raw.scroll_height().max(1)));
+}
+
+/// Pan `viewport.offset_x` so the text origin lands at screen `target`, then
+/// immediately re-position the textarea to the new world-to-screen spot —
+/// within the same frame, so nothing lags behind the SVG.
+fn pan_and_reposition(
+    sx: f64,
+    target_sx: f64,
+    vp_world: Point,
+    zoom: f64,
+    screen_w: f64,
+    viewport: &RwSignal<Viewport>,
+    sty: &web_sys::CssStyleDeclaration,
+) {
+    if (sx - target_sx).abs() < 0.5 {
+        return;
+    }
+    viewport.update(|vp| vp.offset_x += (sx - target_sx) / vp.zoom);
+    let new_sx = (vp_world.x - viewport.get().offset_x) * zoom + screen_w / 2.0;
+    let _ = sty.set_property("left", &format!("{new_sx}px"));
+}
+
 /// Create the commit function that saves textarea content back to the element.
 pub fn make_commit_edit(
     editing_id: RwSignal<Option<ElementId>>,
     edit_text: RwSignal<String>,
     scene: RwSignal<Scene>,
-    textarea_ref: NodeRef<leptos::html::Textarea>,
-    viewport: RwSignal<Viewport>,
 ) -> Rc<dyn Fn()> {
     Rc::new(move || {
         if let Some(id) = editing_id.get() {
@@ -42,18 +160,17 @@ pub fn make_commit_edit(
                 if text.is_empty() {
                     s.remove_by_id(id);
                 } else if let Some(Element::Text(text_elem)) = s.element_by_id_mut(id) {
-                    let zoom = viewport.get().zoom;
-                    let measured_w = textarea_ref
-                        .get()
-                        .map(|ta| ta.client_width() as f64 / zoom)
-                        .unwrap_or(0.0);
-                    // Keep the wrap width of an already-sized box and only
-                    // adopt the measured width for freshly placed text. For a
-                    // fresh box `set_content` wraps at width 0 (no wrap), so
-                    // the lines stay exactly as typed; a sized box wraps at
-                    // its existing width inside `set_content`.
+                    // Keep the wrap width of an already-sized box. A fresh box
+                    // is committed at its natural, unwrapped width — measured
+                    // from the model, not the clipped textarea — so the SVG
+                    // shows it full-size as a single flowing line.
+                    let fs = text_elem.data.style.font_size.max(12.0);
                     let wrap_w = text_elem.data.width;
-                    let new_w = if wrap_w > 0.0 { wrap_w } else { measured_w };
+                    let new_w = if wrap_w > 0.0 {
+                        wrap_w
+                    } else {
+                        natural_line_width(&text, fs, FONT_FAMILY)
+                    };
                     text_elem.set_content(&text);
                     text_elem.data.width = new_w;
                 }
@@ -76,8 +193,14 @@ pub fn text_edit_overlay(
     commit: Rc<dyn Fn()>,
 ) -> impl Fn() -> Option<View> {
     move || {
+        // The textarea must NOT re-render while an edit is in progress: the
+        // overlay is a `DynChild`, whose reactive re-run destroys and recreates
+        // the `<textarea>` node — that drops focus, firing `blur` and
+        // committing the edit out from under the user. So only `editing_id`
+        // (show/hide) is tracked here; every sizing/positioning/style read is
+        // untracked and re-applied imperatively by `guide_textarea` each frame.
         let id = editing_id.get()?;
-        let text_elem = scene.with(|s| {
+        let text_elem = scene.with_untracked(|s| {
             s.element_by_id(id).and_then(|e| {
                 if let Element::Text(t) = e {
                     Some(t.clone())
@@ -86,10 +209,10 @@ pub fn text_edit_overlay(
                 }
             })
         })?;
-        let zoom = viewport.get().zoom;
+        let vp = viewport.get_untracked();
         let font_size = text_elem.data.style.font_size.max(12.0);
-        let ss = screen_size.get();
-        let screen_pos = viewport.get().world_to_screen(
+        let ss = screen_size.get_untracked();
+        let screen_pos = vp.world_to_screen(
             Point::new(text_elem.data.world_point.x, text_elem.data.world_point.y),
             ss,
         );
@@ -103,14 +226,14 @@ pub fn text_edit_overlay(
             .unwrap_or_else(|| text_elem.data.style.stroke_color.to_hex());
 
         let ta_w = if text_elem.data.width > 0.0 {
-            text_elem.data.width * zoom
+            text_elem.data.width * vp.zoom
         } else {
-            font_size * zoom
+            font_size * vp.zoom
         };
         let ta_h = if text_elem.data.height > 0.0 {
-            text_elem.data.height * zoom
+            text_elem.data.height * vp.zoom
         } else {
-            font_size * zoom * 1.2
+            font_size * vp.zoom * 1.2
         };
 
         let ce_blur = commit.clone();
@@ -154,29 +277,16 @@ pub fn text_edit_overlay(
                         sy,
                         ta_w,
                         ta_h,
-                        font_size * zoom,
+                        font_size * vp.zoom,
                         FONT_FAMILY,
                         fill,
                         white_space,
                     )
                     prop:value=move || edit_text.get()
                     on:input=move |ev| {
+                        // The typing geometry (width/height/wrap/panning) is
+                        // applied by `guide_textarea` after each render.
                         edit_text.set(event_target_value(&ev));
-                        let ta = event_target::<web_sys::HtmlTextAreaElement>(&ev);
-                        if !keep_width {
-                            let _ = ta.style().set_property(
-                                "width",
-                                &format!("{}px", ta.scroll_width().max(1)),
-                            );
-                        }
-                        // With `overflow:hidden` a fixed height clips new lines:
-                        // reset to `auto` so `scroll_height` measures all lines,
-                        // then grow (or shrink) the box to fit them.
-                        let _ = ta.style().set_property("height", "auto");
-                        let _ = ta.style().set_property(
-                            "height",
-                            &format!("{}px", ta.scroll_height().max(1)),
-                        );
                     }
                     on:blur=move |_| {
                         // Only commit if this textarea still owns the active
