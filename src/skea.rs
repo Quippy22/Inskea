@@ -212,6 +212,7 @@ mod tests {
     use crate::model::elements::text::WrappedText;
     use crate::model::{
         Color, Element, ElementData, Ellipse, Freehand, Line, LineStyle, Point, Rectangle, Text,
+        TextAlign,
     };
 
     fn make_scene() -> Scene {
@@ -262,6 +263,7 @@ mod tests {
         s.add_element(Element::Text(Text {
             data: td,
             wrapped: WrappedText::new("hello world"),
+            align: crate::model::TextAlign::Left,
         }));
 
         let mut fd = ElementData::new(0);
@@ -296,6 +298,7 @@ mod tests {
         s.add_element(Element::Text(Text {
             data: td,
             wrapped: WrappedText::new("line one\nline two\nline three"),
+            align: crate::model::TextAlign::Left,
         }));
         let saved = save_to_string(&s);
         let loaded = load_from_str(&saved).unwrap();
@@ -320,11 +323,48 @@ mod tests {
         s.add_element(Element::Text(Text {
             data: td,
             wrapped: WrappedText::new("big text"),
+            align: crate::model::TextAlign::Left,
         }));
 
         let saved = save_to_string(&s);
         let loaded = load_from_str(&saved).unwrap();
         assert_eq!(s, loaded);
+    }
+
+    #[test]
+    fn round_trip_text_alignment_and_old_scenes_default_to_left() {
+        let mut center_scene = Scene::new();
+        let mut td = ElementData::new(0);
+        td.world_point.set(10.0, 10.0);
+        td.style.fill_color = Some(Color::new(Color::WHITE));
+        center_scene.add_element(Element::Text(Text {
+            data: td,
+            wrapped: WrappedText::new("aligned"),
+            align: TextAlign::Center,
+        }));
+        let saved = save_to_string(&center_scene);
+        let loaded = load_from_str(&saved).unwrap();
+        assert_eq!(center_scene, loaded);
+        assert_eq!(save_to_string(&loaded), saved);
+
+        // A scene saved before alignment existed has no `align` field and
+        // loads with the Left default; re-saving restores the field.
+        let mut left_scene = Scene::new();
+        let mut ld = ElementData::new(0);
+        left_scene.add_element(Element::Text(Text {
+            data: ld,
+            wrapped: WrappedText::new("aligned"),
+            align: TextAlign::Left,
+        }));
+        let with_field = save_to_string(&left_scene);
+        let legacy = with_field.replace(r#","align":"left""#, "");
+        let loaded = load_from_str(&legacy).unwrap();
+        assert_eq!(left_scene, loaded);
+        assert_eq!(save_to_string(&loaded), with_field);
+        let Element::Text(t) = &loaded.elements()[0] else {
+            panic!("expected text element");
+        };
+        assert_eq!(t.align, TextAlign::Left);
     }
 
     #[test]

@@ -18,18 +18,27 @@ use self::group::group_section;
 use self::layers::layers_section;
 use self::sliders::sliders_section;
 use self::style::style_section;
-use self::utils::{read_panel_state, single_selected_element};
+use self::utils::{
+    read_panel_state, selected_text_align, single_selected_element, uniform_seg,
+};
 use crate::canvas::CanvasMode;
 use crate::edit_ops::Clipboard;
 use crate::model::{
     Color, CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle, Point, Scene,
-    StrokeStyle, StylingKind,
+    StrokeStyle, StylingKind, TextAlign,
 };
 use crate::ui::dock::Tool;
+use crate::ui::styles;
 use leptos::*;
 use leptos_color::Color as LpcColor;
 use std::rc::Rc;
 use wasm_bindgen::JsCast;
+
+const ALIGN_OPTS: &[(TextAlign, &str)] = &[
+    (TextAlign::Left, "Left"),
+    (TextAlign::Center, "Center"),
+    (TextAlign::Right, "Right"),
+];
 
 #[component]
 pub fn StylingPanel(
@@ -74,6 +83,10 @@ pub fn StylingPanel(
 
     let stroke_size = create_rw_signal(local_style.get_untracked().stroke_width);
     let text_size = create_rw_signal(local_style.get_untracked().font_size);
+    let text_align = create_rw_signal(selected_text_align(
+        &scene.get_untracked(),
+        &selected_ids.get_untracked(),
+    ));
     let roundness = create_rw_signal(local_style.get_untracked().roundness);
     let opacity = create_rw_signal(local_style.get_untracked().opacity * 100.0);
     let is_rounded = Signal::derive(move || local_style.get().edge_style == EdgeStyle::Rounded);
@@ -113,6 +126,10 @@ pub fn StylingPanel(
         });
         stroke_size.set(new_style.stroke_width);
         text_size.set(new_style.font_size);
+        text_align.set(selected_text_align(
+            &scene.get_untracked(),
+            &selected_ids.get_untracked(),
+        ));
         roundness.set(new_style.roundness);
         opacity.set(new_style.opacity * 100.0);
         local_style.set(new_style);
@@ -297,6 +314,24 @@ pub fn StylingPanel(
         }
     });
 
+    let set_text_align: Rc<dyn Fn(TextAlign)> = Rc::new({
+        let scene = scene;
+        let selected_ids = selected_ids;
+        move |val| {
+            let ids = selected_ids.get_untracked();
+            if ids.is_empty() {
+                return;
+            }
+            scene.update(|s| {
+                for id in &ids {
+                    if let Some(Element::Text(t)) = s.element_by_id_mut(*id) {
+                        t.align = val;
+                    }
+                }
+            });
+        }
+    });
+
     let roundness_cb: Rc<dyn Fn(f64)> = Rc::new({
         let local_style = local_style;
         let update_style = update_style;
@@ -346,6 +381,14 @@ pub fn StylingPanel(
                 text_size_cb,
                 is_text,
             )}
+            <div class="flex flex-col gap-1.5 mt-1" class:hidden=move || !is_text.get()>
+                <div class=styles::SETTINGS_LABEL class:mb-1=move || true>Alignment</div>
+                {uniform_seg(
+                    ALIGN_OPTS,
+                    Signal::derive(move || text_align.get()),
+                    set_text_align,
+                )}
+            </div>
             {style_section(
                 local_style,
                 local_line_style,

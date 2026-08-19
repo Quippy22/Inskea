@@ -11,6 +11,38 @@ pub(crate) const TEXT_ASCENT_RATIO: f64 = 0.85;
 /// Font family used for all text rendering and editing.
 pub(crate) const FONT_FAMILY: &str = "Cabin";
 
+/// Horizontal alignment of the text within its box. Left is the default;
+/// Center and Right only show a difference once the box is wider than a line
+/// (i.e. after a side-resize wraps written text into a column).
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TextAlign {
+    #[default]
+    Left,
+    Center,
+    Right,
+}
+
+impl TextAlign {
+    /// SVG `text-anchor` value for this alignment.
+    pub fn anchor(&self) -> &'static str {
+        match self {
+            TextAlign::Left => "start",
+            TextAlign::Center => "middle",
+            TextAlign::Right => "end",
+        }
+    }
+
+    /// CSS `text-align` value for this alignment.
+    pub fn css(&self) -> &'static str {
+        match self {
+            TextAlign::Left => "left",
+            TextAlign::Center => "center",
+            TextAlign::Right => "right",
+        }
+    }
+}
+
 /// Text content plus the lines it is displayed as.
 ///
 /// `raw` holds the actual content (including any hard `\n` breaks the user
@@ -178,6 +210,18 @@ pub struct Text {
     pub data: ElementData,
     /// Text content split on hard line breaks.
     pub wrapped: WrappedText,
+    /// Horizontal alignment of the lines within the box.
+    #[serde(default)]
+    pub align: TextAlign,
+}
+
+impl Text {
+    /// The wrap column the text sits in: `data.width`, or the text's own
+    /// width when it is a fresh, unwrapped (yet unsized) box. Alignment
+    /// positions each line inside this column.
+    pub fn column_width(&self) -> f64 {
+        self.data.width.max(0.0)
+    }
 }
 
 impl Text {
@@ -234,6 +278,7 @@ impl FromDrag for Text {
         Self {
             data,
             wrapped: WrappedText::new(""),
+            align: TextAlign::Left,
         }
     }
 }
@@ -260,14 +305,24 @@ impl Render for Text {
             .map(|c| c.to_hex())
             .unwrap_or_else(|| self.data.style.stroke_color.to_hex());
 
+        // Alignment anchors each line inside the box column: lines of
+        // different widths drift against `anchor_x` per `text-anchor`.
+        let anchor = self.align.anchor();
+        let anchor_x = match self.align {
+            TextAlign::Left => x,
+            TextAlign::Center => x + self.column_width() / 2.0,
+            TextAlign::Right => x + self.column_width(),
+        };
+
         let inner = if lines.len() <= 1 {
             leptos::view! {
                 <text
-                    x=x.to_string()
+                    x=anchor_x.to_string()
                     y=baseline.to_string()
                     fill=fill
                     font-size=font_size.to_string()
                     font-family=font_family
+                    text-anchor=anchor
                     pointer-events="none"
                     style="user-select: none; -webkit-user-select: none;"
                     opacity=opacity
@@ -279,11 +334,12 @@ impl Render for Text {
         } else {
             leptos::view! {
                 <text
-                    x=x.to_string()
+                    x=anchor_x.to_string()
                     y=baseline.to_string()
                     fill=fill
                     font-size=font_size.to_string()
                     font-family=font_family
+                    text-anchor=anchor
                     pointer-events="none"
                     style="user-select: none; -webkit-user-select: none;"
                     opacity=opacity
@@ -294,7 +350,7 @@ impl Render for Text {
                         .map(|(i, line)| {
                             let dy = if i == 0 { "0" } else { "1.2em" };
                             leptos::view! {
-                                <tspan x=x.to_string() dy=dy>
+                                <tspan x=anchor_x.to_string() dy=dy>
                                     {line.to_string()}
                                 </tspan>
                             }
@@ -381,7 +437,16 @@ impl Text {
         let descent = metrics.iter().map(|m| m.2).fold(0.0, f64::max);
         let num_lines = metrics.len().max(1);
         let height = ascent + descent + (num_lines - 1) as f64 * fs * 1.2;
-        Rect::new(self.data.world_point.x, baseline - ascent, width, height)
+        // Alignment slides the widest line around inside the box column, so
+        // the outline follows where the glyphs actually sit.
+        let column = self.column_width();
+        let overflow = column - width;
+        let x = match self.align {
+            TextAlign::Left => self.data.world_point.x,
+            TextAlign::Center => self.data.world_point.x + (overflow / 2.0).max(0.0),
+            TextAlign::Right => self.data.world_point.x + overflow.max(0.0),
+        };
+        Rect::new(x, baseline - ascent, width, height)
     }
 }
 
@@ -557,6 +622,7 @@ mod tests {
         Text {
             data,
             wrapped: WrappedText::new(raw),
+            align: TextAlign::Left,
         }
     }
 
@@ -672,5 +738,36 @@ mod tests {
         assert!((t.data.width - 56.0).abs() < 0.001);
         assert_eq!(t.wrapped.lines, vec!["aa", "bb", "cc"]);
         assert!((t.data.height - 48.0 * 3.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn alignment_shifts_visual_box_inside_column() {
+        // "aa bb cc" at 20px: "aa bb" = 55 wide, "aa bb cc" = 88 wide. A 70-wide
+        // box wraps as ["aa bb", "cc"], so the widest line is 55 inside a
+        // column wider than it — where alignment can move the outline.
+        let mut t = text_elem("aa bb cc", 70.0, 20.0);
+        t.recalc();
+        assert_eq!(t.wrapped.lines, vec!["aa bb", "cc"]);
+        let width = t.visual_bounds().w;
+        assert!((width - 55.0).abs() < 0.001);
+
+        let base = t.visual_bounds().x;
+        t.align = TextAlign::Center;
+        assert!((t.visual_bounds().x - (base + (70.0 - 55.0) / 2.0)).abs() < 0.001);
+        t.align = TextAlign::Right;
+        assert!((t.visual_bounds().x - (base + 70.0 - 55.0)).abs() < 0.001);
+        t.align = TextAlign::Left;
+        assert!((t.visual_bounds().x - base).abs() < 0.001);
+    }
+
+    #[test]
+    fn alignment_does_notmove_unsized_fresh_text() {
+        // Fresh text sits at its natural width, so the column equals the line:
+        // every alignment collapses to the same outline.
+        let mut t = text_elem("hello", 55.0, 20.0);
+        t.recalc();
+        let left = t.visual_bounds().x;
+        t.align = TextAlign::Center;
+        assert!((t.visual_bounds().x - left).abs() < 0.001);
     }
 }

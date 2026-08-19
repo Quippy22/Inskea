@@ -295,7 +295,7 @@ pub fn text_edit_overlay(
                          overflow:hidden;\
                          white-space:{};overflow-wrap:normal;\
                          padding:0;margin:0;z-index:100;\
-                         line-height:1.2;",
+                         line-height:1.2;text-align:{};",
                         sx,
                         sy - shift_up,
                         ta_w,
@@ -304,6 +304,7 @@ pub fn text_edit_overlay(
                         FONT_FAMILY,
                         fill,
                         white_space,
+                        text_elem.align.css(),
                     )
                     prop:value=move || edit_text.get()
                     on:input=move |ev| {

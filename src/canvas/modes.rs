@@ -2,7 +2,7 @@ use super::state::{CanvasInputs, CanvasState, DrawingState};
 use super::MIN_DRAG_DIST;
 use crate::model::elements::text::WrappedText;
 use crate::model::{
-    Element, ElementData, Ellipse, Freehand, FromDrag, Line, Point, Rectangle, Text,
+    Element, ElementData, Ellipse, Freehand, FromDrag, Line, Point, Rectangle, Text, TextAlign,
 };
 use crate::ui::dock::Tool;
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, SignalWith};
@@ -45,6 +45,7 @@ pub fn draw_pointer_down(
             s.add_element(Element::Text(Text {
                 data,
                 wrapped: WrappedText::new(""),
+                align: TextAlign::Left,
             }));
         });
         st.text_edit.editing_id.set(Some(id));

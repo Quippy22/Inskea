@@ -11,7 +11,7 @@ pub use freehand::Freehand;
 #[allow(unused_imports)]
 pub use line::{Line, LineStyle};
 pub use rect::Rectangle;
-pub use text::Text;
+pub use text::{Text, TextAlign};
 
 use crate::model::{Color, Point, Rect};
 pub use path::CurveMode;
