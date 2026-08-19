@@ -326,6 +326,13 @@ pub fn text_edit_overlay(
                         if ev.key() == "Escape" {
                             ce_esc();
                         }
+                        if ev.key() == "Enter" && ev.shift_key() {
+                            // Finish typing without inserting a newline:
+                            // Shift+Enter is the "done" gesture, plain Enter
+                            // still moves to the next line.
+                            ev.prevent_default();
+                            ce_esc();
+                        }
                         if ev.key() == "Tab" {
                             ev.prevent_default();
                             let target = event_target::<web_sys::HtmlTextAreaElement>(&ev);
