@@ -10,10 +10,6 @@ pub(crate) const MIN_FONT_SIZE: f64 = 12.0;
 pub(crate) const TEXT_ASCENT_RATIO: f64 = 0.85;
 /// Font family used for all text rendering and editing.
 pub(crate) const FONT_FAMILY: &str = "Cabin";
-/// Glyph ascender height and descender depth, as fractions of the font size
-/// measured from the baseline. Used to derive a tight visual box for text.
-const GLYPH_ASCENT: f64 = 0.80;
-const GLYPH_DESCENT: f64 = 0.22;
 
 /// Text content plus the lines it is displayed as.
 ///
@@ -126,6 +122,33 @@ fn measure_text_width(text: &str, font_size: f64, font_family: &str) -> f64 {
     }
     let _ = font_family;
     text.chars().count() as f64 * font_size * 0.55
+}
+
+/// Tight glyph metrics (world units) of `text` at `font_size`: rendered width,
+/// glyph ascent above the baseline, and glyph descent below it.
+///
+/// Under wasm the actual bounding box reported by `canvas 2d` matches the SVG
+/// rendering exactly, so the selection box hugs the true glyphs instead of a
+/// hard-coded fraction of the font size (which drifts off for fonts whose
+/// ascender/descender differ from the guess). Natively a heuristic is used.
+fn measure_text_extent(text: &str, font_size: f64, font_family: &str) -> (f64, f64, f64) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        if let Some(ctx) = canvas_context() {
+            let _ = ctx.set_font(&format!("{font_size}px {font_family}, sans-serif"));
+            if let Ok(metrics) = ctx.measure_text(text) {
+                let asc = metrics.actual_bounding_box_ascent();
+                let desc = metrics.actual_bounding_box_descent();
+                return (metrics.width(), asc, desc);
+            }
+        }
+    }
+    let _ = font_family;
+    (
+        text.chars().count() as f64 * font_size * 0.55,
+        font_size * 0.85,
+        font_size * 0.25,
+    )
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -340,22 +363,25 @@ impl Text {
     pub fn visual_bounds(&self) -> Rect {
         let fs = self.data.style.font_size.max(MIN_FONT_SIZE);
         let ff = FONT_FAMILY;
-        // Baseline sits at `y + 0.85·fs`; glyphs span one ascender above it
-        // and one descender below, so the tight box is nearly the font size.
-        let top = self.data.world_point.y + fs * (TEXT_ASCENT_RATIO - GLYPH_ASCENT);
-        let line_h = fs * (GLYPH_ASCENT + GLYPH_DESCENT);
-        let lines = self.wrapped.lines.len().max(1);
-        let height = line_h + (lines - 1) as f64 * fs * 1.2;
-        // The right edge hugs the widest rendered line. Using the wrap width
-        // (`data.width`) leaves a gap on every wrapped line shorter than the
-        // column.
-        let width = self
+        // The box hugs the actual glyphs, measured from the same canvas the
+        // lines render against: the right edge matches the widest rendered
+        // line (the wrap width `data.width` would leave a gap on every line
+        // shorter than the column), and the vertical extent uses the glyphs'
+        // own ascent/descent above and below the baseline instead of a fixed
+        // fraction of the font size.
+        let metrics: Vec<_> = self
             .wrapped
             .lines
             .iter()
-            .map(|l| measure_text_width(l, fs, ff))
-            .fold(0.0, f64::max);
-        Rect::new(self.data.world_point.x, top, width, height)
+            .map(|l| measure_text_extent(l, fs, ff))
+            .collect();
+        let baseline = self.data.world_point.y + fs * TEXT_ASCENT_RATIO;
+        let width = metrics.iter().map(|m| m.0).fold(0.0, f64::max);
+        let ascent = metrics.iter().map(|m| m.1).fold(0.0, f64::max);
+        let descent = metrics.iter().map(|m| m.2).fold(0.0, f64::max);
+        let num_lines = metrics.len().max(1);
+        let height = ascent + descent + (num_lines - 1) as f64 * fs * 1.2;
+        Rect::new(self.data.world_point.x, baseline - ascent, width, height)
     }
 }
 
