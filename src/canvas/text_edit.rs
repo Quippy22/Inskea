@@ -11,6 +11,15 @@ const EDIT_PAD: f64 = 64.0;
 /// Fraction of the remaining pan distance moved per animation frame, so the
 /// view follows the caret smoothly instead of snapping.
 const PAN_SMOOTHING: f64 = 0.3;
+/// First-line vertical gap between the SVG text and the editing textarea.
+///
+/// The SVG renders its baseline explicitly at `world_point.y + 0.85·fs`, but
+/// a textarea's first line baseline is derived from the font's own CSS ascent
+/// plus half the line-height slack. For Cabin at `line-height: 1.2` in
+/// WebKitGTK that lands ~0.06em lower, so opening an edit would visibly drop
+/// the text. The textarea is shifted up by this fraction so glyphs land
+/// exactly where they were before the edit started (seamless transition).
+const EDIT_BASELINE_SHIFT: f64 = 0.06;
 
 /// Focus the textarea and place the caret at the end of its content, once it
 /// exists in the DOM. The textarea is inserted reactively after an edit opens,
@@ -81,7 +90,10 @@ pub fn guide_textarea(
 
     let sty = raw.style();
     let _ = sty.set_property("left", &format!("{sx}px"));
-    let _ = sty.set_property("top", &format!("{sy}px"));
+    let _ = sty.set_property(
+        "top",
+        &format!("{}px", sy - EDIT_BASELINE_SHIFT * font_size * zoom),
+    );
     let _ = sty.set_property("font-size", &format!("{}px", font_size * zoom));
     let _ = sty.set_property("color", &fill);
 
@@ -227,6 +239,7 @@ pub fn text_edit_overlay(
             ss,
         );
         let (sx, sy) = (screen_pos.x, screen_pos.y);
+        let shift_up = EDIT_BASELINE_SHIFT * font_size * vp.zoom;
         let fill = text_elem
             .data
             .style
@@ -284,7 +297,7 @@ pub fn text_edit_overlay(
                          padding:0;margin:0;z-index:100;\
                          line-height:1.2;",
                         sx,
-                        sy,
+                        sy - shift_up,
                         ta_w,
                         ta_h,
                         font_size * vp.zoom,
