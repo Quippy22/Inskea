@@ -2,7 +2,7 @@ use super::state::{CanvasInputs, CanvasState, DrawingState};
 use super::MIN_DRAG_DIST;
 use crate::model::elements::text::WrappedText;
 use crate::model::{
-    Element, ElementData, Ellipse, Freehand, FromDrag, Line, Point, Rectangle, Text,
+    Element, ElementData, Ellipse, Freehand, FromDrag, Line, Point, Rectangle, Text, TextAlign,
 };
 use crate::ui::dock::Tool;
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, SignalWith};
@@ -26,7 +26,6 @@ use leptos::{ev, SignalGet, SignalSet, SignalUpdate, SignalWith};
 ///   `draw_pointer_up` right before the element is added, so a degenerate
 ///   click (below MIN_DRAG_DIST) never pollutes the undo stack.
 pub fn draw_pointer_down(
-    _ev: &ev::PointerEvent,
     world: Point,
     st: &mut CanvasState,
     props: &mut CanvasInputs,
@@ -43,11 +42,10 @@ pub fn draw_pointer_down(
         data.style = props.default_style.get();
         let id = props.scene.with(|s| s.next_id);
         props.scene.update(|s| {
-            let w = data.width;
-            let fs = data.style.font_size;
             s.add_element(Element::Text(Text {
                 data,
-                wrapped: WrappedText::new("", w, fs),
+                wrapped: WrappedText::new(""),
+                align: TextAlign::Left,
             }));
         });
         st.text_edit.editing_id.set(Some(id));

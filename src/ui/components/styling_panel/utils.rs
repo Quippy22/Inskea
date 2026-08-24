@@ -1,4 +1,6 @@
-use crate::model::{Color, Element, ElementId, ElementStyle, LineStyle, Scene};
+use crate::model::{
+    Color, Element, ElementId, ElementStyle, LineStyle, Scene, TextAlign,
+};
 use crate::ui::dock::Tool;
 use crate::ui::styles;
 use leptos::*;
@@ -28,6 +30,17 @@ pub fn read_panel_state(
 pub fn single_selected_element(scene: Scene, ids: Vec<ElementId>) -> Option<Element> {
     let id = ids.first()?;
     scene.elements().iter().find(|e| &e.id() == id).cloned()
+}
+
+/// Alignment of the first selected text element, defaulting to `Left` when
+/// nothing is selected or the selection is not text.
+pub fn selected_text_align(scene: &Scene, ids: &[ElementId]) -> TextAlign {
+    if let Some(id) = ids.first() {
+        if let Some(Element::Text(t)) = scene.elements().iter().find(|e| &e.id() == id) {
+            return t.align;
+        }
+    }
+    TextAlign::Left
 }
 
 pub fn arrowhead_icon(on: bool, is_end: bool) -> impl IntoView {

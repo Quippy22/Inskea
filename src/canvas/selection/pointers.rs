@@ -17,12 +17,12 @@ use leptos::{ev, SignalGet, SignalSet, SignalUpdate, *};
 /// Enter text-edit mode on double-click of a Text element.
 #[inline]
 fn handle_text_double_click(
-    ev: &ev::PointerEvent,
+    detail: u32,
     world: Point,
     st: &mut CanvasState,
     props: &CanvasInputs,
 ) -> bool {
-    if ev.detail() < 2 {
+    if detail < 2 {
         return false;
     }
     let els = props.scene.get().elements().to_vec();
@@ -245,12 +245,12 @@ fn handle_selection_handles(
 /// Select an individual group member on double-click, keeping it in the group.
 #[inline]
 fn handle_group_member_double_click(
-    ev: &ev::PointerEvent,
+    detail: u32,
     world: Point,
     st: &mut CanvasState,
     props: &CanvasInputs,
 ) -> bool {
-    if ev.detail() < 2 {
+    if detail < 2 {
         return false;
     }
     let els = props.scene.get().elements().to_vec();
@@ -601,7 +601,7 @@ fn complete_marquee_selection(world: Point, st: &mut CanvasState, props: &mut Ca
 }
 
 pub fn select_pointer_down(
-    _ev: &ev::PointerEvent,
+    detail: u32,
     world: Point,
     st: &mut CanvasState,
     props: &mut CanvasInputs,
@@ -609,11 +609,11 @@ pub fn select_pointer_down(
     st.drag.overlay_freeze.set(None);
     st.drag.rotation_delta.set(0.0);
 
-    if handle_text_double_click(_ev, world, st, props) {
+    if handle_text_double_click(detail, world, st, props) {
         return;
     }
 
-    if handle_group_member_double_click(_ev, world, st, props) {
+    if handle_group_member_double_click(detail, world, st, props) {
         return;
     }
 

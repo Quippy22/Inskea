@@ -5,6 +5,9 @@ extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], catch)]
     pub async fn invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
 
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
+    pub fn convert_file_src(path: &str) -> String;
+
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "dialog"])]
     pub async fn save(options: JsValue) -> JsValue;
 
@@ -152,4 +155,20 @@ pub async fn load_skea(path: &str) -> Result<String, String> {
     result
         .as_string()
         .ok_or_else(|| "failed to load file".into())
+}
+
+/// Get the paths of the installed font files (regular + italic).
+/// The fonts are downloaded into the app-data dir on first launch.
+pub async fn get_font_paths() -> Result<Vec<String>, String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({}))
+        .map_err(|e| format!("serialization error: {e}"))?;
+    let result = invoke("get_font_paths", args).await.map_err(invoke_error)?;
+    let v: Vec<String> =
+        serde_wasm_bindgen::from_value(result).map_err(|e| format!("parse error: {e}"))?;
+    Ok(v)
+}
+
+/// Turn an absolute file path into an `asset://` URL the webview can load.
+pub fn asset_url(path: &str) -> String {
+    convert_file_src(path)
 }

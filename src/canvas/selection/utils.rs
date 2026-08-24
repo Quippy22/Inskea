@@ -14,24 +14,30 @@ pub fn selection_bounds(ids: &[ElementId], els: &[Element]) -> Option<Rect> {
     if ids.len() == 1 {
         els.iter()
             .find(|e| e.id() == ids[0])
-            .map(|el| el.bounds())
+            .map(|el| {
+                if let Element::Text(t) = el {
+                    t.visual_bounds()
+                } else {
+                    el.bounds()
+                }
+            })
             .or_else(|| combined_bounds(ids, els))
     } else {
         let data_refs: Vec<ElementData> = els
             .iter()
             .filter(|el| ids.contains(&el.id()))
             .map(|el| {
-                if matches!(el, Element::Line(_) | Element::Freehand(_)) {
-                    let b = el.bounds();
-                    let mut d = el.data().clone();
-                    d.world_point = Point::new(b.x, b.y);
-                    d.width = b.w;
-                    d.height = b.h;
-                    d.rotation = 0.0;
-                    d
-                } else {
-                    el.data().clone()
-                }
+                let b = match el {
+                    Element::Text(t) => t.visual_bounds(),
+                    Element::Line(_) | Element::Freehand(_) => el.bounds(),
+                    _ => return el.data().clone(),
+                };
+                let mut d = el.data().clone();
+                d.world_point = Point::new(b.x, b.y);
+                d.width = b.w;
+                d.height = b.h;
+                d.rotation = 0.0;
+                d
             })
             .collect();
         if data_refs.is_empty() {
