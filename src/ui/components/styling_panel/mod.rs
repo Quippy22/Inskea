@@ -317,15 +317,25 @@ pub fn StylingPanel(
     let set_text_align: Rc<dyn Fn(TextAlign)> = Rc::new({
         let scene = scene;
         let selected_ids = selected_ids;
+        let push_snapshot = push_snapshot.clone();
         move |val| {
             let ids = selected_ids.get_untracked();
             if ids.is_empty() {
                 return;
             }
+            let changed = scene.with_untracked(|s| {
+                ids.iter().any(
+                    |id| matches!(s.element_by_id(*id), Some(Element::Text(t)) if t.align != val),
+                )
+            });
+            if !changed {
+                return;
+            }
+            push_snapshot();
             scene.update(|s| {
                 for id in &ids {
                     if let Some(Element::Text(t)) = s.element_by_id_mut(*id) {
-                        t.align = val;
+                        t.set_alignment(val);
                     }
                 }
             });

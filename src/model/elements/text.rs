@@ -249,6 +249,28 @@ impl Text {
         self.recalc();
     }
 
+    /// Change horizontal alignment without moving the visible text block.
+    ///
+    /// Alignment changes the position of shorter wrapped lines inside the
+    /// column, but the text element itself should remain anchored where the
+    /// user placed it. Since `visual_bounds` is intentionally tight around
+    /// the glyphs, changing alignment would otherwise move its left edge and
+    /// make the selected element jump.
+    pub fn set_alignment(&mut self, align: TextAlign) {
+        if self.align == align {
+            return;
+        }
+
+        let before_x = self.visual_bounds().x;
+        self.align = align;
+        let after_x = self.visual_bounds().x;
+        let local_dx = before_x - after_x;
+
+        // Keep the element's horizontal anchor stable without changing its
+        // existing rotation transform.
+        self.data.world_point.offset(local_dx, 0.0);
+    }
+
     /// Recompute the box after the font size changed externally (style panel).
     /// A box that was soft-wrapped keeps its wrap width and re-wraps against
     /// it; a box at its natural width grows with the new font so it never
@@ -741,7 +763,7 @@ mod tests {
     }
 
     #[test]
-    fn alignment_shifts_visual_box_inside_column() {
+    fn alignment_preserves_visual_box_position() {
         // "aa bb cc" at 20px: "aa bb" = 55 wide, "aa bb cc" = 88 wide. A 70-wide
         // box wraps as ["aa bb", "cc"], so the widest line is 55 inside a
         // column wider than it — where alignment can move the outline.
@@ -752,11 +774,11 @@ mod tests {
         assert!((width - 55.0).abs() < 0.001);
 
         let base = t.visual_bounds().x;
-        t.align = TextAlign::Center;
-        assert!((t.visual_bounds().x - (base + (70.0 - 55.0) / 2.0)).abs() < 0.001);
-        t.align = TextAlign::Right;
-        assert!((t.visual_bounds().x - (base + 70.0 - 55.0)).abs() < 0.001);
-        t.align = TextAlign::Left;
+        t.set_alignment(TextAlign::Center);
+        assert!((t.visual_bounds().x - base).abs() < 0.001);
+        t.set_alignment(TextAlign::Right);
+        assert!((t.visual_bounds().x - base).abs() < 0.001);
+        t.set_alignment(TextAlign::Left);
         assert!((t.visual_bounds().x - base).abs() < 0.001);
     }
 
@@ -767,7 +789,7 @@ mod tests {
         let mut t = text_elem("hello", 55.0, 20.0);
         t.recalc();
         let left = t.visual_bounds().x;
-        t.align = TextAlign::Center;
+        t.set_alignment(TextAlign::Center);
         assert!((t.visual_bounds().x - left).abs() < 0.001);
     }
 }

@@ -185,10 +185,18 @@ fn el_svg(el: &Element) -> String {
             out
         }
         Element::Text(t) => {
+            let anchor = t.align.anchor();
+            let anchor_x = match t.align {
+                crate::model::TextAlign::Left => t.data.world_point.x,
+                crate::model::TextAlign::Center => t.data.world_point.x + t.data.width / 2.0,
+                crate::model::TextAlign::Right => t.data.world_point.x + t.data.width,
+            };
             let mut out = format!(
-                r#"<text x="{}" y="{}" font-size="{}" font-family="{}" fill="{}" opacity="{}">"#,
-                t.data.world_point.x,
-                t.data.world_point.y + t.data.style.font_size,
+                r#"<text x="{}" y="{}" text-anchor="{}" font-size="{}" font-family="{}" fill="{}" opacity="{}">"#,
+                anchor_x,
+                t.data.world_point.y
+                    + t.data.style.font_size * crate::model::elements::text::TEXT_ASCENT_RATIO,
+                anchor,
                 t.data.style.font_size,
                 crate::model::elements::text::FONT_FAMILY,
                 t.data.style.stroke_color.to_hex(),
@@ -200,14 +208,14 @@ fn el_svg(el: &Element) -> String {
                     .replace('<', "&lt;")
                     .replace('>', "&gt;");
                 let dy = if i == 0 {
-                    "0"
+                    0.0
                 } else {
-                    &format!("{}", t.data.style.font_size)
+                    t.data.style.font_size * 1.2
                 };
                 let _ = write!(
                     out,
                     r#"<tspan x="{}" dy="{}">{}</tspan>"#,
-                    t.data.world_point.x, dy, esc
+                    anchor_x, dy, esc
                 );
             }
             out.push_str("</text>");
