@@ -3,12 +3,13 @@ use super::utils::{
     HANDLE_RESIZE_RADIUS, HANDLE_ROTATE_RADIUS, PATH_MERGE_DIST, SELECT_PADDING,
 };
 use super::MIN_DRAG_DIST;
-use crate::canvas::state::{
-    combined_bounds, hit_test_topmost, point_inside_any_element, rect_fully_contains_element,
-    CanvasInputs, CanvasState, Handle,
-};
+use crate::canvas::state::{CanvasInputs, CanvasState, Handle};
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{Bounds, Offset, PathPoints, Resize, Rotate, SnapToGrid};
+use crate::model::interaction::{
+    combined_bounds, hit_test_topmost, point_inside_any_element, rect_fully_contains_element,
+    CLICK_MARGIN, HIT_MARGIN,
+};
 use crate::model::resize::ResizeContext;
 use crate::model::resize::ResizeHandle;
 use crate::model::{Element, ElementId, Point, Rect};
@@ -26,7 +27,7 @@ fn handle_text_double_click(
         return false;
     }
     let els = props.scene.get().elements().to_vec();
-    let id = match hit_test_topmost(world, &els) {
+    let id = match hit_test_topmost(world, &els, HIT_MARGIN) {
         Some(id) => id,
         None => return false,
     };
@@ -254,7 +255,7 @@ fn handle_group_member_double_click(
         return false;
     }
     let els = props.scene.get().elements().to_vec();
-    let id = match hit_test_topmost(world, &els) {
+    let id = match hit_test_topmost(world, &els, HIT_MARGIN) {
         Some(id) => id,
         None => return false,
     };
@@ -274,7 +275,7 @@ fn handle_element_selection(
     props: &CanvasInputs,
     els: &[Element],
 ) -> bool {
-    let id = match hit_test_topmost(world, els) {
+    let id = match hit_test_topmost(world, els, HIT_MARGIN) {
         Some(id) => id,
         None => return false,
     };
@@ -638,7 +639,7 @@ pub fn select_pointer_down(
         return;
     }
 
-    if point_inside_any_element(world, &els) {
+    if point_inside_any_element(world, &els, CLICK_MARGIN) {
         if !st.shift_pressed.get() {
             st.selected_ids.set(Vec::new());
         }

@@ -11,7 +11,7 @@ mod text_edit;
 
 use modes::{draw_pointer_down, draw_pointer_up};
 use selection::{select_pointer_down, select_pointer_move, select_pointer_up};
-pub use state::combined_bounds;
+pub use crate::model::interaction::combined_bounds;
 pub use state::CanvasMode;
 pub use state::CropExportCallback;
 pub use state::Handle;
