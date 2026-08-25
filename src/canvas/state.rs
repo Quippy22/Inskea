@@ -203,6 +203,68 @@ pub fn point_inside_any_element(point: Point, elements: &[Element]) -> bool {
         point.x >= b.x - CLICK_MARGIN
             && point.x <= b.x + b.w + CLICK_MARGIN
             && point.y >= b.y - CLICK_MARGIN
-            && point.y <= b.y + b.h + CLICK_MARGIN
+        && point.y <= b.y + b.h + CLICK_MARGIN
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::elements::rect::Rectangle;
+    use crate::model::ElementData;
+
+    fn rectangle(id: ElementId, x: f64, y: f64, w: f64, h: f64) -> Element {
+        let mut data = ElementData {
+            id,
+            world_point: Point::new(x, y),
+            width: w,
+            height: h,
+            ..ElementData::new(id)
+        };
+        data.style.fill_color = Some(crate::model::Color::new(crate::model::Color::WHITE));
+        Element::Rectangle(Rectangle {
+            data,
+        })
+    }
+
+    #[test]
+    fn combined_bounds_only_includes_selected_elements() {
+        let elements = vec![
+            rectangle(1, 10.0, 20.0, 30.0, 40.0),
+            rectangle(2, 100.0, 200.0, 10.0, 15.0),
+        ];
+
+        assert_eq!(
+            combined_bounds(&[1], &elements),
+            Some(Rect::new(10.0, 20.0, 30.0, 40.0))
+        );
+        assert_eq!(
+            combined_bounds(&[1, 2], &elements),
+            Some(Rect::new(10.0, 20.0, 100.0, 195.0))
+        );
+    }
+
+    #[test]
+    fn hit_testing_prefers_the_frontmost_element() {
+        let elements = vec![
+            rectangle(1, 0.0, 0.0, 100.0, 100.0),
+            rectangle(2, 20.0, 20.0, 100.0, 100.0),
+        ];
+
+        assert_eq!(hit_test_topmost(Point::new(50.0, 50.0), &elements), Some(2));
+        assert_eq!(hit_test_topmost(Point::new(5.0, 5.0), &elements), Some(1));
+    }
+
+    #[test]
+    fn marquee_containment_uses_the_whole_element_bounds() {
+        let element = rectangle(1, 10.0, 20.0, 30.0, 40.0);
+        assert!(rect_fully_contains_element(
+            Rect::new(0.0, 0.0, 100.0, 100.0),
+            &element
+        ));
+        assert!(!rect_fully_contains_element(
+            Rect::new(10.0, 20.0, 29.0, 40.0),
+            &element
+        ));
+    }
 }
