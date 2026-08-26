@@ -12,6 +12,7 @@ use crate::model::interaction::{
 };
 use crate::model::resize::ResizeContext;
 use crate::model::resize::ResizeHandle;
+use crate::model::selection::{expand_ids, normalize_ids, toggle_ids};
 use crate::model::{Element, ElementId, Point, Rect};
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, *};
 
@@ -279,17 +280,10 @@ fn handle_element_selection(
         Some(id) => id,
         None => return false,
     };
-    let expanded = props.scene.with(|s| s.expand_to_groups(&[id]));
-    let mut ids = st.selected_ids.get();
+    let expanded = props.scene.with(|s| expand_ids(s, &[id]));
+    let ids = normalize_ids(&props.scene.get_untracked(), &st.selected_ids.get());
     if st.shift_pressed.get() {
-        for x in expanded {
-            if let Some(pos) = ids.iter().position(|&y| y == x) {
-                ids.remove(pos);
-            } else {
-                ids.push(x);
-            }
-        }
-        st.selected_ids.set(ids);
+        st.selected_ids.set(toggle_ids(&ids, &expanded));
     } else {
         st.selected_ids.set(expanded.clone());
         if let Some(bounds) = combined_bounds(&expanded, els) {
@@ -594,8 +588,9 @@ fn complete_marquee_selection(world: Point, st: &mut CanvasState, props: &mut Ca
                 .filter(|el| rect_fully_contains_element(Rect::new(rx, ry, rw, rh), el))
                 .map(|el| el.id())
                 .collect();
-            let expanded = props.scene.with(|s| s.expand_to_groups(&contained));
-            st.selected_ids.set(expanded);
+            let expanded = props.scene.with(|s| expand_ids(s, &contained));
+            st.selected_ids
+                .set(normalize_ids(&props.scene.get_untracked(), &expanded));
         }
         st.select_anchor.set(None);
     }
