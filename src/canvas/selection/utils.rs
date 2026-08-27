@@ -1,6 +1,7 @@
 use crate::canvas::combined_bounds;
 use crate::model::resize::common_bounds;
-use crate::model::{Bounds, Element, ElementData, ElementId, Point, Rect};
+use crate::model::interaction::{layout_bounds, visual_bounds};
+use crate::model::{Element, ElementData, ElementId, Point, Rect};
 
 pub const GRID_SIZE: f64 = 40.0;
 pub const HANDLE_RESIZE_RADIUS: f64 = 5.0;
@@ -14,24 +15,14 @@ pub fn selection_bounds(ids: &[ElementId], els: &[Element]) -> Option<Rect> {
     if ids.len() == 1 {
         els.iter()
             .find(|e| e.id() == ids[0])
-            .map(|el| {
-                if let Element::Text(t) = el {
-                    t.visual_bounds()
-                } else {
-                    el.bounds()
-                }
-            })
+            .map(visual_bounds)
             .or_else(|| combined_bounds(ids, els))
     } else {
         let data_refs: Vec<ElementData> = els
             .iter()
             .filter(|el| ids.contains(&el.id()))
             .map(|el| {
-                let b = match el {
-                    Element::Text(t) => t.visual_bounds(),
-                    Element::Line(_) | Element::Freehand(_) => el.bounds(),
-                    _ => return el.data().clone(),
-                };
+                let b = visual_bounds(el);
                 let mut d = el.data().clone();
                 d.world_point = Point::new(b.x, b.y);
                 d.width = b.w;
@@ -69,7 +60,7 @@ pub fn unrotate_for_element(point: Point, el: &Element) -> Point {
     if rot == 0.0 {
         return point;
     }
-    let b = el.bounds();
+    let b = layout_bounds(el);
     let cx = b.x + b.w / 2.0;
     let cy = b.y + b.h / 2.0;
     Point::unrotate(point, cx, cy, rot)

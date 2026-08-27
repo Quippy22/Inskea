@@ -3,12 +3,25 @@ use super::{Bounds, Element, ElementId, HitTest, Point, Rect};
 pub const HIT_MARGIN: f64 = 6.0;
 pub const CLICK_MARGIN: f64 = 12.0;
 
+/// The element's persisted layout box, used for scene geometry and export.
+pub fn layout_bounds(element: &Element) -> Rect {
+    element.bounds()
+}
+
+/// The visible content box, used for selection visuals and tight overlays.
+pub fn visual_bounds(element: &Element) -> Rect {
+    match element {
+        Element::Text(text) => text.visual_bounds(),
+        _ => layout_bounds(element),
+    }
+}
+
 /// Return the axis-aligned bounds of the selected elements.
 pub fn combined_bounds(ids: &[ElementId], elements: &[Element]) -> Option<Rect> {
     elements
         .iter()
         .filter(|el| ids.contains(&el.id()))
-        .map(|el| el.bounds())
+        .map(layout_bounds)
         .reduce(|left, right| left.union(&right))
 }
 
@@ -34,5 +47,5 @@ pub fn point_inside_any_element(point: Point, elements: &[Element], margin: f64)
 
 /// Return whether the rectangle fully contains an element's bounds.
 pub fn rect_fully_contains_element(rect: Rect, element: &Element) -> bool {
-    rect.contains_rect(&element.bounds())
+    rect.contains_rect(&layout_bounds(element))
 }
