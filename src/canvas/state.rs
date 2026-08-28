@@ -20,9 +20,9 @@ pub enum CanvasMode {
     Erase,
 }
 
-/// Which handle a drag operation is acting on.
+/// Which canvas operation is currently being dragged.
 #[derive(Clone, Copy, PartialEq)]
-pub enum Handle {
+pub enum DragOperation {
     /// Resize corner or edge handle on the bounding box.
     Resize(ResizeHandle),
     /// Move via the centre crosshair.
@@ -40,14 +40,14 @@ pub enum Handle {
 #[derive(Clone, Copy)]
 pub struct DragState {
     pub moving_anchor: RwSignal<Option<Point>>,
-    pub drag_action: RwSignal<Option<Handle>>,
+    pub drag_action: RwSignal<Option<DragOperation>>,
     pub drag_bounds: RwSignal<Option<Rect>>,
     pub drag_angle: RwSignal<Option<f64>>,
     pub last_world: RwSignal<Option<Point>>,
     pub drag_originals: RwSignal<Vec<Element>>,
     pub overlay_freeze: RwSignal<Option<Rect>>,
     pub rotation_delta: RwSignal<f64>,
-    pub hovered_handle: RwSignal<Option<Handle>>,
+    pub hovered_handle: RwSignal<Option<DragOperation>>,
 }
 
 impl DragState {

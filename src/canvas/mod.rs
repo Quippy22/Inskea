@@ -14,7 +14,7 @@ use selection::{select_pointer_down, select_pointer_move, select_pointer_up};
 pub use crate::model::interaction::combined_bounds;
 pub use state::CanvasMode;
 pub use state::CropExportCallback;
-pub use state::Handle;
+pub use state::DragOperation;
 use state::{hit_and_erase, CanvasInputs, CanvasState};
 
 use crate::model::*;
