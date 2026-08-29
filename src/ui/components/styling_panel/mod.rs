@@ -22,6 +22,7 @@ use self::utils::{
     read_panel_state, selected_text_align, single_selected_element, uniform_seg,
 };
 use crate::canvas::CanvasMode;
+use crate::edit_ops;
 use crate::edit_ops::Clipboard;
 use crate::model::{
     Color, CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle, Point, Scene,
@@ -136,14 +137,15 @@ pub fn StylingPanel(
         local_line_style.set(new_line_style);
     });
 
-    let update_style = {
+    let update_style: Rc<dyn Fn(&dyn Fn(&mut ElementStyle))> = Rc::new({
         let scene = scene;
         let selected_ids = selected_ids;
         let default_style = default_style;
+        let push_snapshot = push_snapshot.clone();
         move |f: &dyn Fn(&mut ElementStyle)| {
             let ids = selected_ids.get_untracked();
             if !ids.is_empty() {
-                scene.update(|s| {
+                edit_ops::mutate_scene(scene, &push_snapshot, |s| {
                     for id in &ids {
                         if let Some(el) = s.element_by_id_mut(*id) {
                             f(&mut el.data_mut().style);
@@ -154,16 +156,17 @@ pub fn StylingPanel(
                 default_style.update(|s| f(s));
             }
         }
-    };
+    });
 
-    let update_line_style = {
+    let update_line_style: Rc<dyn Fn(&dyn Fn(&mut LineStyle))> = Rc::new({
         let scene = scene;
         let selected_ids = selected_ids;
         let default_line_style = default_line_style;
+        let push_snapshot = push_snapshot.clone();
         move |f: &dyn Fn(&mut LineStyle)| {
             let ids = selected_ids.get_untracked();
             if !ids.is_empty() {
-                scene.update(|s| {
+                edit_ops::mutate_scene(scene, &push_snapshot, |s| {
                     for id in &ids {
                         if let Some(Element::Line(l)) = s.element_by_id_mut(*id) {
                             f(&mut l.line_style);
@@ -174,11 +177,11 @@ pub fn StylingPanel(
                 default_line_style.update(|ls| f(ls));
             }
         }
-    };
+    });
 
     let set_color: Rc<dyn Fn(Color)> = Rc::new({
         let local_style = local_style;
-        let update_style = update_style;
+        let update_style = update_style.clone();
         move |c| {
             local_style.update(|s| s.stroke_color = c.clone());
             update_style(&|s| s.stroke_color = c.clone());
@@ -187,7 +190,7 @@ pub fn StylingPanel(
 
     let set_fill: Rc<dyn Fn(Option<Color>)> = Rc::new({
         let local_style = local_style;
-        let update_style = update_style;
+        let update_style = update_style.clone();
         move |c| {
             local_style.update(|s| s.fill_color = c.clone());
             update_style(&|s| s.fill_color = c.clone());
@@ -226,7 +229,7 @@ pub fn StylingPanel(
 
     let set_stroke_style: Rc<dyn Fn(StrokeStyle)> = Rc::new({
         let local_style = local_style;
-        let update_style = update_style;
+        let update_style = update_style.clone();
         move |v| {
             local_style.update(|s| s.stroke_style = v);
             update_style(&|s| s.stroke_style = v);
@@ -235,7 +238,7 @@ pub fn StylingPanel(
 
     let set_edge_style: Rc<dyn Fn(EdgeStyle)> = Rc::new({
         let local_style = local_style;
-        let update_style = update_style;
+        let update_style = update_style.clone();
         move |v| {
             local_style.update(|s| s.edge_style = v);
             update_style(&|s| s.edge_style = v);
@@ -244,7 +247,7 @@ pub fn StylingPanel(
 
     let set_curve_mode: Rc<dyn Fn(CurveMode)> = Rc::new({
         let local_line_style = local_line_style;
-        let update_line_style = update_line_style;
+        let update_line_style = update_line_style.clone();
         move |v| {
             local_line_style.update(|ls| ls.curve_mode = v);
             update_line_style(&|ls| ls.curve_mode = v);
@@ -253,7 +256,7 @@ pub fn StylingPanel(
 
     let set_start_arrowhead: Rc<dyn Fn()> = Rc::new({
         let local_line_style = local_line_style;
-        let update_line_style = update_line_style;
+        let update_line_style = update_line_style.clone();
         move || {
             let new = !local_line_style.get_untracked().has_start_arrowhead;
             local_line_style.update(|ls| ls.has_start_arrowhead = new);
@@ -263,7 +266,7 @@ pub fn StylingPanel(
 
     let set_end_arrowhead: Rc<dyn Fn()> = Rc::new({
         let local_line_style = local_line_style;
-        let update_line_style = update_line_style;
+        let update_line_style = update_line_style.clone();
         move || {
             let new = !local_line_style.get_untracked().has_end_arrowhead;
             local_line_style.update(|ls| ls.has_end_arrowhead = new);
@@ -275,10 +278,11 @@ pub fn StylingPanel(
         let scene = scene;
         let selected_ids = selected_ids;
         let default_style = default_style;
+        let push_snapshot = push_snapshot.clone();
         move |val| {
             let ids = selected_ids.get_untracked();
             if !ids.is_empty() {
-                scene.update(|s| {
+                edit_ops::mutate_scene(scene, &push_snapshot, |s| {
                     for id in &ids {
                         if let Some(el) = s.element_by_id_mut(*id) {
                             el.data_mut().style.stroke_width = val;
@@ -295,10 +299,11 @@ pub fn StylingPanel(
         let scene = scene;
         let selected_ids = selected_ids;
         let default_style = default_style;
+        let push_snapshot = push_snapshot.clone();
         move |val| {
             let ids = selected_ids.get_untracked();
             if !ids.is_empty() {
-                scene.update(|s| {
+                edit_ops::mutate_scene(scene, &push_snapshot, |s| {
                     for id in &ids {
                         if let Some(el) = s.element_by_id_mut(*id) {
                             el.data_mut().style.font_size = val;
@@ -331,8 +336,7 @@ pub fn StylingPanel(
             if !changed {
                 return;
             }
-            push_snapshot();
-            scene.update(|s| {
+            edit_ops::mutate_scene(scene, &push_snapshot, |s| {
                 for id in &ids {
                     if let Some(Element::Text(t)) = s.element_by_id_mut(*id) {
                         t.set_alignment(val);
@@ -344,7 +348,7 @@ pub fn StylingPanel(
 
     let roundness_cb: Rc<dyn Fn(f64)> = Rc::new({
         let local_style = local_style;
-        let update_style = update_style;
+        let update_style = update_style.clone();
         move |val| {
             local_style.update(|s| s.roundness = val);
             update_style(&|s| s.roundness = val);
@@ -423,7 +427,7 @@ pub fn StylingPanel(
                 cursor_world,
             )}
             {group_section(scene, selected_ids, canvas_mode, push_snapshot.clone())}
-            {layers_section(scene, selected_ids)}
+            {layers_section(scene, selected_ids, push_snapshot.clone())}
         </div>
         {float_picker(active_slot, picker_color, picker_on_change, picker_ref)}
     }
