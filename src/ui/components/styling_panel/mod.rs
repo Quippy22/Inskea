@@ -359,11 +359,12 @@ pub fn StylingPanel(
         let scene = scene;
         let selected_ids = selected_ids;
         let default_style = default_style;
+        let push_snapshot = push_snapshot.clone();
         move |val| {
             let v = (val / 100.0).clamp(0.0, 1.0);
             let ids = selected_ids.get_untracked();
             if !ids.is_empty() {
-                scene.update(|s| {
+                edit_ops::mutate_scene(scene, &push_snapshot, |s| {
                     for id in &ids {
                         if let Some(el) = s.element_by_id_mut(*id) {
                             el.data_mut().style.opacity = v;
