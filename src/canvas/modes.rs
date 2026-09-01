@@ -25,11 +25,7 @@ use leptos::{ev, SignalGet, SignalSet, SignalUpdate, SignalWith};
 ///   No snapshot is taken here — the snapshot fires once in
 ///   `draw_pointer_up` right before the element is added, so a degenerate
 ///   click (below MIN_DRAG_DIST) never pollutes the undo stack.
-pub fn draw_pointer_down(
-    world: Point,
-    st: &mut CanvasState,
-    props: &mut CanvasInputs,
-) {
+pub fn draw_pointer_down(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
     let tool = props.selected_tool.get();
     let color = props.selected_color.get();
 

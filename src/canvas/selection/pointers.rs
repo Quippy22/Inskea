@@ -320,7 +320,7 @@ fn detect_hovered_handle(
                     if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt()
                         <= HANDLE_RESIZE_RADIUS
                     {
-                return Some(DragOperation::PathPoint(i));
+                        return Some(DragOperation::PathPoint(i));
                     }
                 }
                 let b = el.bounds();
@@ -669,9 +669,7 @@ pub fn select_pointer_move(
             Some(DragOperation::Resize(_)) => do_resize(world, st, props),
             Some(DragOperation::Rotate) => do_rotate(world, st, props),
             Some(DragOperation::PathPoint(idx)) => do_path_point_drag(world, st, props, idx),
-            Some(DragOperation::PathMidpoint(i)) => {
-                do_path_midpoint_drag(world, st, props, i)
-            }
+            Some(DragOperation::PathMidpoint(i)) => do_path_midpoint_drag(world, st, props, i),
             _ => do_move(world, anchor, st, props),
         }
     }

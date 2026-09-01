@@ -1,8 +1,8 @@
 use crate::canvas::settings::CanvasSettings;
+use crate::model::interaction::hit_test_topmost;
 use crate::model::resize::ResizeHandle;
 use crate::model::Color;
 use crate::model::{Element, ElementId, ElementStyle, LineStyle, Point, Rect, Scene};
-use crate::model::interaction::hit_test_topmost;
 use crate::ui::dock::Tool;
 use leptos::*;
 use std::rc::Rc;
@@ -155,9 +155,8 @@ pub struct CanvasInputs {
 // ── Helper functions used by pointer event handlers ──────────────────────
 
 pub fn hit_and_erase(point: Point, scene: RwSignal<Scene>) {
-    let id = scene.with(|s| {
-        hit_test_topmost(point, s.elements(), crate::model::interaction::HIT_MARGIN)
-    });
+    let id = scene
+        .with(|s| hit_test_topmost(point, s.elements(), crate::model::interaction::HIT_MARGIN));
     if let Some(id) = id {
         scene.update(|s| s.remove_by_id(id));
     }
@@ -166,8 +165,8 @@ pub fn hit_and_erase(point: Point, scene: RwSignal<Scene>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::elements::Bounds;
     use crate::model::elements::rect::Rectangle;
+    use crate::model::elements::Bounds;
     use crate::model::interaction::combined_bounds;
     use crate::model::ElementData;
 
@@ -180,9 +179,7 @@ mod tests {
             ..ElementData::new(id)
         };
         data.style.fill_color = Some(crate::model::Color::new(crate::model::Color::WHITE));
-        Element::Rectangle(Rectangle {
-            data,
-        })
+        Element::Rectangle(Rectangle { data })
     }
 
     #[test]

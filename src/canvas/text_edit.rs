@@ -39,9 +39,7 @@ pub fn focus_textarea(textarea_ref: NodeRef<leptos::html::Textarea>) {
             });
         }
     }
-    leptos::leptos_dom::helpers::request_animation_frame(move || {
-        try_focus(textarea_ref, 0)
-    });
+    leptos::leptos_dom::helpers::request_animation_frame(move || try_focus(textarea_ref, 0));
 }
 
 /// Reflow the editing textarea around the typed content.
@@ -69,7 +67,9 @@ pub fn guide_textarea(
     let Some(text) = scene.with(|s| s.element_by_id(id).cloned()) else {
         return;
     };
-    let Element::Text(text_elem) = text else { return };
+    let Element::Text(text_elem) = text else {
+        return;
+    };
 
     let ss = screen_size.get();
     let band_left = EDIT_PAD;
@@ -119,15 +119,7 @@ pub fn guide_textarea(
             // (end of the) caret stays at the right padding; the text origin
             // slides left towards the left padding.
             let target = (band_right - natural).max(band_left);
-            pan_and_reposition(
-                sx,
-                target,
-                vp_world,
-                zoom,
-                ss.x,
-                &viewport,
-                &sty,
-            );
+            pan_and_reposition(sx, target, vp_world, zoom, ss.x, &viewport, &sty);
             let _ = sty.set_property("width", &format!("{natural}px"));
         } else {
             // Too wide for the band even when snapped to the left padding:
@@ -308,16 +300,9 @@ pub fn text_edit_overlay(
                     )
                     prop:value=move || edit_text.get()
                     on:input=move |ev| {
-                        // The typing geometry (width/height/wrap/panning) is
-                        // applied by `guide_textarea` after each render.
                         edit_text.set(event_target_value(&ev));
                     }
                     on:blur=move |_| {
-                        // Only commit if this textarea still owns the active
-                        // edit. When a click places a new text while editing,
-                        // the blur fired by the mousedown default action may
-                        // occur after the new (empty) edit is already open —
-                        // committing it here would delete the fresh text.
                         if editing_id.get() == Some(blur_id) {
                             ce_blur();
                         }
@@ -327,9 +312,6 @@ pub fn text_edit_overlay(
                             ce_esc();
                         }
                         if ev.key() == "Enter" && ev.shift_key() {
-                            // Finish typing without inserting a newline:
-                            // Shift+Enter is the "done" gesture, plain Enter
-                            // still moves to the next line.
                             ev.prevent_default();
                             ce_esc();
                         }

@@ -1,6 +1,6 @@
 use crate::canvas::combined_bounds;
-use crate::model::resize::common_bounds;
 use crate::model::interaction::{layout_bounds, visual_bounds};
+use crate::model::resize::common_bounds;
 use crate::model::{Element, ElementData, ElementId, Point, Rect};
 
 pub const GRID_SIZE: f64 = 40.0;

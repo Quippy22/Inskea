@@ -37,7 +37,11 @@ pub fn layers_section(
                     on:click=move |_| {
                         let ids = selected_ids.get_untracked();
                         if ids.len() == 1 {
-                            edit_ops::mutate_scene(scene, &push_backward, |s| s.send_backward(ids[0]));
+                            edit_ops::mutate_scene(
+                                scene,
+                                &push_backward,
+                                |s| s.send_backward(ids[0]),
+                            );
                         }
                     }
                     title="Send backward"
@@ -49,7 +53,11 @@ pub fn layers_section(
                     on:click=move |_| {
                         let ids = selected_ids.get_untracked();
                         if ids.len() == 1 {
-                            edit_ops::mutate_scene(scene, &push_forward, |s| s.bring_forward(ids[0]));
+                            edit_ops::mutate_scene(
+                                scene,
+                                &push_forward,
+                                |s| s.bring_forward(ids[0]),
+                            );
                         }
                     }
                     title="Bring forward"
@@ -61,7 +69,11 @@ pub fn layers_section(
                     on:click=move |_| {
                         let ids = selected_ids.get_untracked();
                         if ids.len() == 1 {
-                            edit_ops::mutate_scene(scene, &push_front, |s| s.bring_to_front(ids[0]));
+                            edit_ops::mutate_scene(
+                                scene,
+                                &push_front,
+                                |s| s.bring_to_front(ids[0]),
+                            );
                         }
                     }
                     title="Bring to front"

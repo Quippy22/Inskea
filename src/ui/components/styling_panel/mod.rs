@@ -18,9 +18,7 @@ use self::group::group_section;
 use self::layers::layers_section;
 use self::sliders::sliders_section;
 use self::style::style_section;
-use self::utils::{
-    read_panel_state, selected_text_align, single_selected_element, uniform_seg,
-};
+use self::utils::{read_panel_state, selected_text_align, single_selected_element, uniform_seg};
 use crate::canvas::CanvasMode;
 use crate::edit_ops;
 use crate::edit_ops::Clipboard;
@@ -395,14 +393,11 @@ pub fn StylingPanel(
                 text_size,
                 text_size_cb,
                 is_text,
-            )}
-            <div class="flex flex-col gap-1.5 mt-1" class:hidden=move || !is_text.get()>
-                <div class=styles::SETTINGS_LABEL class:mb-1=move || true>Alignment</div>
-                {uniform_seg(
-                    ALIGN_OPTS,
-                    Signal::derive(move || text_align.get()),
-                    set_text_align,
-                )}
+            )} <div class="flex flex-col gap-1.5 mt-1" class:hidden=move || !is_text.get()>
+                <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
+                    Alignment
+                </div>
+                {uniform_seg(ALIGN_OPTS, Signal::derive(move || text_align.get()), set_text_align)}
             </div>
             {style_section(
                 local_style,
@@ -426,8 +421,7 @@ pub fn StylingPanel(
                 push_snapshot.clone(),
                 canvas_mode,
                 cursor_world,
-            )}
-            {group_section(scene, selected_ids, canvas_mode, push_snapshot.clone())}
+            )} {group_section(scene, selected_ids, canvas_mode, push_snapshot.clone())}
             {layers_section(scene, selected_ids, push_snapshot.clone())}
         </div>
         {float_picker(active_slot, picker_color, picker_on_change, picker_ref)}

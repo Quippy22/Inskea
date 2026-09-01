@@ -9,9 +9,9 @@ pub mod settings;
 mod state;
 mod text_edit;
 
+pub use crate::model::interaction::combined_bounds;
 use modes::{draw_pointer_down, draw_pointer_up};
 use selection::{select_pointer_down, select_pointer_move, select_pointer_up};
-pub use crate::model::interaction::combined_bounds;
 pub use state::CanvasMode;
 pub use state::CropExportCallback;
 pub use state::DragOperation;
@@ -213,11 +213,8 @@ pub fn Canvas(
         });
     }
 
-    let commit_edit = text_edit::make_commit_edit(
-        st.text_edit.editing_id,
-        st.text_edit.edit_text,
-        props.scene,
-    );
+    let commit_edit =
+        text_edit::make_commit_edit(st.text_edit.editing_id, st.text_edit.edit_text, props.scene);
 
     // Whenever a text edit opens, focus the editing textarea so the caret is
     // visible for typing. The textarea is inserted reactively (in a later
@@ -682,12 +679,15 @@ pub fn Canvas(
                         .elements()
                         .iter()
                         .filter(|el| Some(el.id()) != editing)
-                        // Elements render in world coordinates: the SVG
-                        // `viewBox` applies the pan/zoom, so `render` ignores
-                        // the zoom argument. Reading the viewport here would
-                        // rebuild the whole scene on every pan (e.g. while the
-                        // text follow-pan is typing), so stay untracked.
-                        .map(|el| view! { <g pointer-events="none">{el.render(1.0)}</g> }.into_view())
+                        .map(|el| {
+                            // Elements render in world coordinates: the SVG
+                            // `viewBox` applies the pan/zoom, so `render` ignores
+                            // the zoom argument. Reading the viewport here would
+                            // rebuild the whole scene on every pan (e.g. while the
+                            // text follow-pan is typing), so stay untracked.
+                            view! { <g pointer-events="none">{el.render(1.0)}</g> }
+                                .into_view()
+                        })
                         .collect_view()
                 }
             }

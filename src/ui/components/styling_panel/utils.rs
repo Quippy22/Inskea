@@ -1,6 +1,4 @@
-use crate::model::{
-    Color, Element, ElementId, ElementStyle, LineStyle, Scene, TextAlign,
-};
+use crate::model::{Color, Element, ElementId, ElementStyle, LineStyle, Scene, TextAlign};
 use crate::ui::dock::Tool;
 use crate::ui::styles;
 use leptos::*;
