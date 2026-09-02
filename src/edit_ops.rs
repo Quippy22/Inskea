@@ -46,7 +46,7 @@ pub fn copy_selection(
                     .filter(|m| ids.contains(m))
                     .copied()
                     .collect::<Vec<_>>();
-                (members.len() >= 2).then_some(Group { members })
+                (members.len() >= 2).then_some(Group { id: g.id, members })
             })
             .collect();
         (els, groups)
@@ -91,6 +91,7 @@ mod tests {
     fn regroup_remaps_full_group() {
         let mut s = scene_with_three();
         let groups = vec![Group {
+            id: 1,
             members: vec![1, 2],
         }];
         let id_map = vec![(1, 4), (2, 5)];
@@ -103,6 +104,7 @@ mod tests {
     fn regroup_skips_unmapped_members() {
         let mut s = scene_with_three();
         let groups = vec![Group {
+            id: 1,
             members: vec![2, 3],
         }];
         let id_map = vec![(2, 4)];

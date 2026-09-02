@@ -12,10 +12,19 @@ pub use point::Point;
 pub use rect::Rect;
 
 /// A persistent group: a set of element ids that stay selected, move, and act together.
+pub type GroupId = u64;
+
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Group {
+    /// Stable identity for this group, independent of its member elements.
+    #[serde(default)]
+    pub id: GroupId,
     /// Member element ids, in the order they were grouped.
     pub members: Vec<ElementId>,
+}
+
+fn default_next_group_id() -> GroupId {
+    1
 }
 
 /// The single source of truth for everything on the canvas.
@@ -25,6 +34,8 @@ pub struct Scene {
     pub(crate) next_id: u64,
     #[serde(default)]
     pub(crate) groups: Vec<Group>,
+    #[serde(default = "default_next_group_id")]
+    pub(crate) next_group_id: GroupId,
 }
 
 impl Scene {
@@ -34,6 +45,7 @@ impl Scene {
             elements: Vec::new(),
             next_id: 1,
             groups: Vec::new(),
+            next_group_id: 1,
         }
     }
 
@@ -59,6 +71,21 @@ impl Scene {
             group.members.retain(|m| *m != id);
         }
         self.groups.retain(|g| g.members.len() >= 2);
+    }
+
+    /// Assign IDs to legacy or duplicated groups loaded from older files.
+    pub fn ensure_group_ids(&mut self) {
+        let mut next = self.next_group_id.max(1);
+        let mut used = Vec::new();
+        for group in &mut self.groups {
+            if group.id == 0 || used.contains(&group.id) {
+                group.id = next;
+                next += 1;
+            }
+            used.push(group.id);
+            next = next.max(group.id.saturating_add(1));
+        }
+        self.next_group_id = next;
     }
 
     /// The group that contains `id`, if any.
@@ -89,20 +116,23 @@ impl Scene {
             return false;
         }
         match self.group_containing(ids[0]) {
-            Some(g) => ids.iter().all(|id| g.members.contains(id)),
+            Some(g) => ids.len() == g.members.len() && ids.iter().all(|id| g.members.contains(id)),
             None => false,
         }
     }
 
     /// Group `ids` into one group, dissolving any existing groups that overlap the members.
     pub fn create_group(&mut self, ids: &[ElementId]) {
+        self.ensure_group_ids();
         let members = self.expand_to_groups(ids);
         if members.len() < 2 {
             return;
         }
         self.groups
             .retain(|g| !g.members.iter().any(|m| members.contains(m)));
-        self.groups.push(Group { members });
+        let id = self.next_group_id;
+        self.next_group_id += 1;
+        self.groups.push(Group { id, members });
     }
 
     /// Remove every group containing any of `ids`, returning the affected member ids.
@@ -204,7 +234,49 @@ mod tests {
         s.create_group(&[2, 3]);
         assert_eq!(s.groups.len(), 1);
         assert_eq!(s.groups[0].members, vec![1, 2, 3]);
+        assert_eq!(s.groups[0].id, 2);
         assert!(s.selection_is_group(&[1, 2, 3]));
+    }
+
+    #[test]
+    fn selection_is_group_requires_the_complete_group() {
+        let mut s = scene_with_three();
+        s.create_group(&[1, 2]);
+
+        assert!(!s.selection_is_group(&[1]));
+        assert!(s.selection_is_group(&[1, 2]));
+        assert!(s.selection_is_group(&[2, 1]));
+    }
+
+    #[test]
+    fn group_ids_are_allocated_monotonically() {
+        let mut s = scene_with_three();
+        s.create_group(&[1, 2]);
+        s.remove_groups_containing(&[1]);
+        s.create_group(&[2, 3]);
+
+        assert_eq!(s.groups.iter().map(|g| g.id).collect::<Vec<_>>(), vec![2]);
+    }
+
+    #[test]
+    fn ensure_group_ids_repairs_legacy_and_duplicate_ids() {
+        let mut s = scene_with_three();
+        s.groups = vec![
+            Group {
+                id: 0,
+                members: vec![1, 2],
+            },
+            Group {
+                id: 1,
+                members: vec![2, 3],
+            },
+        ];
+
+        s.ensure_group_ids();
+
+        assert_eq!(s.groups[0].id, 1);
+        assert_eq!(s.groups[1].id, 2);
+        assert_eq!(s.next_group_id, 3);
     }
 
     #[test]
