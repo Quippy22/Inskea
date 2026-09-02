@@ -1,6 +1,6 @@
 mod svgs;
 
-use crate::canvas::{CanvasMode, Handle};
+use crate::canvas::{CanvasMode, DragOperation};
 use crate::ui::dock::Tool;
 
 fn to_cursor(svg: &str, x: u32, y: u32, fallback: &str) -> String {
@@ -14,11 +14,11 @@ fn to_cursor(svg: &str, x: u32, y: u32, fallback: &str) -> String {
 pub fn cursor_style(
     mode: CanvasMode,
     tool: Tool,
-    drag_action: Option<Handle>,
+    drag_action: Option<DragOperation>,
     eraser_active: bool,
     pan_dragging: bool,
     crop_active: bool,
-    hovered_handle: Option<Handle>,
+    hovered_handle: Option<DragOperation>,
 ) -> String {
     if crop_active {
         return to_cursor(svgs::CROSSHAIR, 16, 16, "crosshair");
@@ -30,19 +30,19 @@ pub fn cursor_style(
 
     if let Some(handle) = drag_action {
         return match handle {
-            Handle::Resize(rh) => rh.css_cursor().to_string(),
-            Handle::Move => "move".to_string(),
-            Handle::Rotate => "grabbing".to_string(),
-            Handle::PathPoint(_) | Handle::PathMidpoint(_) => "pointer".to_string(),
+            DragOperation::Resize(rh) => rh.css_cursor().to_string(),
+            DragOperation::Move => "move".to_string(),
+            DragOperation::Rotate => "grabbing".to_string(),
+            DragOperation::PathPoint(_) | DragOperation::PathMidpoint(_) => "pointer".to_string(),
         };
     }
 
     if let Some(handle) = hovered_handle {
         return match handle {
-            Handle::Resize(rh) => rh.css_cursor().to_string(),
-            Handle::Move => "move".to_string(),
-            Handle::Rotate => "grab".to_string(),
-            Handle::PathPoint(_) | Handle::PathMidpoint(_) => "pointer".to_string(),
+            DragOperation::Resize(rh) => rh.css_cursor().to_string(),
+            DragOperation::Move => "move".to_string(),
+            DragOperation::Rotate => "grab".to_string(),
+            DragOperation::PathPoint(_) | DragOperation::PathMidpoint(_) => "pointer".to_string(),
         };
     }
 

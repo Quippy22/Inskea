@@ -1,12 +1,19 @@
+use crate::edit_ops;
 use crate::model::{ElementId, Scene};
 use crate::ui::icon;
 use crate::ui::styles;
 use leptos::*;
+use std::rc::Rc;
 
 pub fn layers_section(
     scene: RwSignal<Scene>,
     selected_ids: RwSignal<Vec<ElementId>>,
+    push_snapshot: Rc<dyn Fn()>,
 ) -> impl IntoView {
+    let push_back = push_snapshot.clone();
+    let push_backward = push_snapshot.clone();
+    let push_forward = push_snapshot.clone();
+    let push_front = push_snapshot;
     view! {
         <div>
             <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
@@ -18,7 +25,7 @@ pub fn layers_section(
                     on:click=move |_| {
                         let ids = selected_ids.get_untracked();
                         if ids.len() == 1 {
-                            scene.update(|s| s.send_to_back(ids[0]));
+                            edit_ops::mutate_scene(scene, &push_back, |s| s.send_to_back(ids[0]));
                         }
                     }
                     title="Send to back"
@@ -30,7 +37,11 @@ pub fn layers_section(
                     on:click=move |_| {
                         let ids = selected_ids.get_untracked();
                         if ids.len() == 1 {
-                            scene.update(|s| s.send_backward(ids[0]));
+                            edit_ops::mutate_scene(
+                                scene,
+                                &push_backward,
+                                |s| s.send_backward(ids[0]),
+                            );
                         }
                     }
                     title="Send backward"
@@ -42,7 +53,11 @@ pub fn layers_section(
                     on:click=move |_| {
                         let ids = selected_ids.get_untracked();
                         if ids.len() == 1 {
-                            scene.update(|s| s.bring_forward(ids[0]));
+                            edit_ops::mutate_scene(
+                                scene,
+                                &push_forward,
+                                |s| s.bring_forward(ids[0]),
+                            );
                         }
                     }
                     title="Bring forward"
@@ -54,7 +69,11 @@ pub fn layers_section(
                     on:click=move |_| {
                         let ids = selected_ids.get_untracked();
                         if ids.len() == 1 {
-                            scene.update(|s| s.bring_to_front(ids[0]));
+                            edit_ops::mutate_scene(
+                                scene,
+                                &push_front,
+                                |s| s.bring_to_front(ids[0]),
+                            );
                         }
                     }
                     title="Bring to front"

@@ -1,8 +1,10 @@
 mod color;
 pub mod elements;
+pub mod interaction;
 pub mod point;
 pub mod rect;
 pub mod resize;
+pub mod selection;
 
 pub use color::Color;
 pub use elements::*;

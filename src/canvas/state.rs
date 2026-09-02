@@ -1,15 +1,11 @@
 use crate::canvas::settings::CanvasSettings;
+use crate::model::interaction::hit_test_topmost;
 use crate::model::resize::ResizeHandle;
 use crate::model::Color;
-use crate::model::{
-    Bounds, Element, ElementId, ElementStyle, HitTest, LineStyle, Point, Rect, Scene,
-};
+use crate::model::{Element, ElementId, ElementStyle, LineStyle, Point, Rect, Scene};
 use crate::ui::dock::Tool;
 use leptos::*;
 use std::rc::Rc;
-
-const HIT_MARGIN: f64 = 6.0;
-const CLICK_MARGIN: f64 = 12.0;
 
 /// Interaction mode of the canvas.
 #[derive(Clone, Copy, PartialEq)]
@@ -24,9 +20,9 @@ pub enum CanvasMode {
     Erase,
 }
 
-/// Which handle a drag operation is acting on.
+/// Which canvas operation is currently being dragged.
 #[derive(Clone, Copy, PartialEq)]
-pub enum Handle {
+pub enum DragOperation {
     /// Resize corner or edge handle on the bounding box.
     Resize(ResizeHandle),
     /// Move via the centre crosshair.
@@ -44,14 +40,14 @@ pub enum Handle {
 #[derive(Clone, Copy)]
 pub struct DragState {
     pub moving_anchor: RwSignal<Option<Point>>,
-    pub drag_action: RwSignal<Option<Handle>>,
+    pub drag_action: RwSignal<Option<DragOperation>>,
     pub drag_bounds: RwSignal<Option<Rect>>,
     pub drag_angle: RwSignal<Option<f64>>,
     pub last_world: RwSignal<Option<Point>>,
     pub drag_originals: RwSignal<Vec<Element>>,
     pub overlay_freeze: RwSignal<Option<Rect>>,
     pub rotation_delta: RwSignal<f64>,
-    pub hovered_handle: RwSignal<Option<Handle>>,
+    pub hovered_handle: RwSignal<Option<DragOperation>>,
 }
 
 impl DragState {
@@ -159,50 +155,79 @@ pub struct CanvasInputs {
 // ── Helper functions used by pointer event handlers ──────────────────────
 
 pub fn hit_and_erase(point: Point, scene: RwSignal<Scene>) {
-    let id = scene.with(|s| {
-        s.elements()
-            .iter()
-            .rev()
-            .find(|el| el.hit_test(point, HIT_MARGIN))
-            .map(|el| el.id())
-    });
+    let id = scene
+        .with(|s| hit_test_topmost(point, s.elements(), crate::model::interaction::HIT_MARGIN));
     if let Some(id) = id {
         scene.update(|s| s.remove_by_id(id));
     }
 }
 
-pub fn rect_fully_contains_element(rect: Rect, el: &Element) -> bool {
-    rect.contains_rect(&el.bounds())
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::elements::rect::Rectangle;
+    use crate::model::elements::Bounds;
+    use crate::model::interaction::combined_bounds;
+    use crate::model::ElementData;
 
-pub fn combined_bounds(ids: &[ElementId], elements: &[Element]) -> Option<Rect> {
-    let mut out: Option<Rect> = None;
-    for el in elements {
-        if ids.contains(&el.id()) {
-            let b = el.bounds();
-            match out {
-                None => out = Some(b),
-                Some(prev) => out = Some(prev.union(&b)),
-            }
-        }
+    fn rectangle(id: ElementId, x: f64, y: f64, w: f64, h: f64) -> Element {
+        let mut data = ElementData {
+            id,
+            world_point: Point::new(x, y),
+            width: w,
+            height: h,
+            ..ElementData::new(id)
+        };
+        data.style.fill_color = Some(crate::model::Color::new(crate::model::Color::WHITE));
+        Element::Rectangle(Rectangle { data })
     }
-    out
-}
 
-pub fn hit_test_topmost(point: Point, elements: &[Element]) -> Option<ElementId> {
-    elements
-        .iter()
-        .rev()
-        .find(|el| el.hit_test(point, HIT_MARGIN))
-        .map(|el| el.id())
-}
+    #[test]
+    fn combined_bounds_only_includes_selected_elements() {
+        let elements = vec![
+            rectangle(1, 10.0, 20.0, 30.0, 40.0),
+            rectangle(2, 100.0, 200.0, 10.0, 15.0),
+        ];
 
-pub fn point_inside_any_element(point: Point, elements: &[Element]) -> bool {
-    elements.iter().any(|el| {
-        let b = el.bounds();
-        point.x >= b.x - CLICK_MARGIN
-            && point.x <= b.x + b.w + CLICK_MARGIN
-            && point.y >= b.y - CLICK_MARGIN
-            && point.y <= b.y + b.h + CLICK_MARGIN
-    })
+        assert_eq!(
+            combined_bounds(&[1], &elements),
+            Some(Rect::new(10.0, 20.0, 30.0, 40.0))
+        );
+        assert_eq!(
+            combined_bounds(&[1, 2], &elements),
+            Some(Rect::new(10.0, 20.0, 100.0, 195.0))
+        );
+    }
+
+    #[test]
+    fn hit_testing_prefers_the_frontmost_element() {
+        let elements = vec![
+            rectangle(1, 0.0, 0.0, 100.0, 100.0),
+            rectangle(2, 20.0, 20.0, 100.0, 100.0),
+        ];
+
+        assert_eq!(
+            hit_test_topmost(
+                Point::new(50.0, 50.0),
+                &elements,
+                crate::model::interaction::HIT_MARGIN,
+            ),
+            Some(2)
+        );
+        assert_eq!(
+            hit_test_topmost(
+                Point::new(5.0, 5.0),
+                &elements,
+                crate::model::interaction::HIT_MARGIN,
+            ),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn marquee_containment_uses_the_whole_element_bounds() {
+        let element = rectangle(1, 10.0, 20.0, 30.0, 40.0);
+        assert!(Rect::new(0.0, 0.0, 100.0, 100.0).contains_rect(&element.bounds()));
+        assert!(!Rect::new(10.0, 20.0, 29.0, 40.0).contains_rect(&element.bounds()));
+    }
 }

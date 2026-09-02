@@ -219,7 +219,14 @@ fn el_svg(el: &Element) -> String {
                 );
             }
             out.push_str("</text>");
-            out
+            if t.data.rotation == 0.0 {
+                out
+            } else {
+                let cx = t.data.world_point.x + t.data.width / 2.0;
+                let cy = t.data.world_point.y + t.data.height / 2.0;
+                let deg = t.data.rotation.to_degrees();
+                format!(r#"<g transform="rotate({deg} {cx} {cy})">{out}</g>"#)
+            }
         }
         Element::Freehand(f) => {
             let mut d = String::new();

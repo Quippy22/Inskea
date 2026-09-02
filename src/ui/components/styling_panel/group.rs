@@ -37,11 +37,7 @@ pub fn group_section(
             <div class="flex items-center gap-1">
                 <button
                     class=move || {
-                        if is_group.get() {
-                            styles::BTN_TEXT_ACTIVE
-                        } else {
-                            styles::BTN_TEXT
-                        }
+                        if is_group.get() { styles::BTN_TEXT_ACTIVE } else { styles::BTN_TEXT }
                     }
                     class:opacity-40=move || !can_group.get()
                     class:cursor-not-allowed=move || !can_group.get()
@@ -70,8 +66,7 @@ pub fn group_section(
                     } else {
                         String::new()
                     }
-                }>
-                </span>
+                }></span>
             </div>
         </div>
     }

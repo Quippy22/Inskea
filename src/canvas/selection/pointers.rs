@@ -3,14 +3,16 @@ use super::utils::{
     HANDLE_RESIZE_RADIUS, HANDLE_ROTATE_RADIUS, PATH_MERGE_DIST, SELECT_PADDING,
 };
 use super::MIN_DRAG_DIST;
-use crate::canvas::state::{
-    combined_bounds, hit_test_topmost, point_inside_any_element, rect_fully_contains_element,
-    CanvasInputs, CanvasState, Handle,
-};
+use crate::canvas::state::{CanvasInputs, CanvasState, DragOperation};
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{Bounds, Offset, PathPoints, Resize, Rotate, SnapToGrid};
+use crate::model::interaction::{
+    combined_bounds, hit_test_topmost, point_inside_any_element, rect_fully_contains_element,
+    CLICK_MARGIN, HIT_MARGIN,
+};
 use crate::model::resize::ResizeContext;
 use crate::model::resize::ResizeHandle;
+use crate::model::selection::{expand_ids, normalize_ids, toggle_ids};
 use crate::model::{Element, ElementId, Point, Rect};
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, *};
 
@@ -26,7 +28,7 @@ fn handle_text_double_click(
         return false;
     }
     let els = props.scene.get().elements().to_vec();
-    let id = match hit_test_topmost(world, &els) {
+    let id = match hit_test_topmost(world, &els, HIT_MARGIN) {
         Some(id) => id,
         None => return false,
     };
@@ -54,7 +56,7 @@ fn handle_path_point_hit(
         let d = ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt();
         if d <= HANDLE_RESIZE_RADIUS {
             (props.push_snapshot)();
-            st.drag.drag_action.set(Some(Handle::PathPoint(i)));
+            st.drag.drag_action.set(Some(DragOperation::PathPoint(i)));
             st.drag.moving_anchor.set(Some(world));
             st.drag.last_world.set(Some(world));
             return true;
@@ -67,7 +69,9 @@ fn handle_path_point_hit(
         };
         let d = ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt();
         if d <= HANDLE_RESIZE_RADIUS {
-            st.drag.drag_action.set(Some(Handle::PathMidpoint(i)));
+            st.drag
+                .drag_action
+                .set(Some(DragOperation::PathMidpoint(i)));
             st.drag.moving_anchor.set(Some(world));
             st.drag.last_world.set(Some(world));
             return true;
@@ -92,7 +96,7 @@ fn handle_path_move_icon(
     let my = b.y - 25.0;
     if ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
         (props.push_snapshot)();
-        st.drag.drag_action.set(Some(Handle::Move));
+        st.drag.drag_action.set(Some(DragOperation::Move));
         st.drag.moving_anchor.set(Some(world));
         st.drag.drag_bounds.set(Some(el.bounds()));
         st.drag.last_world.set(Some(world));
@@ -124,7 +128,7 @@ fn hit_resize_handle(
             (props.push_snapshot)();
             st.drag
                 .drag_action
-                .set(Some(Handle::Resize(ResizeHandle::from(i))));
+                .set(Some(DragOperation::Resize(ResizeHandle::from(i))));
             st.drag.moving_anchor.set(Some(world));
             st.drag.drag_bounds.set(Some(bounds));
             st.drag.last_world.set(Some(world));
@@ -159,7 +163,7 @@ fn hit_move_handle(
 
     if ((test.x - hp.x).powi(2) + (test.y - hp.y).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
         (props.push_snapshot)();
-        st.drag.drag_action.set(Some(Handle::Move));
+        st.drag.drag_action.set(Some(DragOperation::Move));
         st.drag.moving_anchor.set(Some(world));
         st.drag.drag_bounds.set(Some(bounds));
         st.drag.last_world.set(Some(world));
@@ -191,7 +195,7 @@ fn hit_rotate_handle(
         (props.push_snapshot)();
         let cx = bx + bw / 2.0;
         let cy = by + bh / 2.0;
-        st.drag.drag_action.set(Some(Handle::Rotate));
+        st.drag.drag_action.set(Some(DragOperation::Rotate));
         st.drag.drag_angle.set(Some(
             (world.y - cy).atan2(world.x - cx) + std::f64::consts::FRAC_PI_2,
         ));
@@ -254,7 +258,7 @@ fn handle_group_member_double_click(
         return false;
     }
     let els = props.scene.get().elements().to_vec();
-    let id = match hit_test_topmost(world, &els) {
+    let id = match hit_test_topmost(world, &els, HIT_MARGIN) {
         Some(id) => id,
         None => return false,
     };
@@ -274,26 +278,19 @@ fn handle_element_selection(
     props: &CanvasInputs,
     els: &[Element],
 ) -> bool {
-    let id = match hit_test_topmost(world, els) {
+    let id = match hit_test_topmost(world, els, HIT_MARGIN) {
         Some(id) => id,
         None => return false,
     };
-    let expanded = props.scene.with(|s| s.expand_to_groups(&[id]));
-    let mut ids = st.selected_ids.get();
+    let expanded = props.scene.with(|s| expand_ids(s, &[id]));
+    let ids = normalize_ids(&props.scene.get_untracked(), &st.selected_ids.get());
     if st.shift_pressed.get() {
-        for x in expanded {
-            if let Some(pos) = ids.iter().position(|&y| y == x) {
-                ids.remove(pos);
-            } else {
-                ids.push(x);
-            }
-        }
-        st.selected_ids.set(ids);
+        st.selected_ids.set(toggle_ids(&ids, &expanded));
     } else {
         st.selected_ids.set(expanded.clone());
         if let Some(bounds) = combined_bounds(&expanded, els) {
             (props.push_snapshot)();
-            st.drag.drag_action.set(Some(Handle::Move));
+            st.drag.drag_action.set(Some(DragOperation::Move));
             st.drag.moving_anchor.set(Some(world));
             st.drag.drag_bounds.set(Some(bounds));
             st.drag.last_world.set(Some(world));
@@ -305,7 +302,11 @@ fn handle_element_selection(
 /// Figure out which handle (if any) the cursor is hovering over.
 /// Used to set the `hovered_handle` signal for cursor style feedback.
 #[inline]
-fn detect_hovered_handle(world: Point, st: &CanvasState, props: &CanvasInputs) -> Option<Handle> {
+fn detect_hovered_handle(
+    world: Point,
+    st: &CanvasState,
+    props: &CanvasInputs,
+) -> Option<DragOperation> {
     let ids = st.selected_ids.get();
     if ids.is_empty() {
         return None;
@@ -319,14 +320,14 @@ fn detect_hovered_handle(world: Point, st: &CanvasState, props: &CanvasInputs) -
                     if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt()
                         <= HANDLE_RESIZE_RADIUS
                     {
-                        return Some(Handle::PathPoint(i));
+                        return Some(DragOperation::PathPoint(i));
                     }
                 }
                 let b = el.bounds();
                 let mx = b.x + b.w / 2.0;
                 let my = b.y - 25.0;
                 if ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
-                    return Some(Handle::Move);
+                    return Some(DragOperation::Move);
                 }
             }
         }
@@ -338,18 +339,18 @@ fn detect_hovered_handle(world: Point, st: &CanvasState, props: &CanvasInputs) -
 
         for (i, &p) in hpos[..8].iter().enumerate() {
             if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
-                return Some(Handle::Resize(ResizeHandle::from(i)));
+                return Some(DragOperation::Resize(ResizeHandle::from(i)));
             }
         }
 
         let p = hpos[8];
         if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
-            return Some(Handle::Move);
+            return Some(DragOperation::Move);
         }
 
         let p = hpos[9];
         if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
-            return Some(Handle::Rotate);
+            return Some(DragOperation::Rotate);
         }
     }
 
@@ -367,7 +368,7 @@ fn do_resize(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
         let alt = st.alt_pressed.get();
         let shift = st.shift_pressed.get();
         let handle = match st.drag.drag_action.get() {
-            Some(Handle::Resize(h)) => h,
+            Some(DragOperation::Resize(h)) => h,
             _ => return,
         };
         props.scene.update(|s| {
@@ -472,7 +473,9 @@ fn do_path_midpoint_drag(world: Point, st: &mut CanvasState, props: &mut CanvasI
                     }
                 }
             });
-            st.drag.drag_action.set(Some(Handle::PathPoint(new_idx)));
+            st.drag
+                .drag_action
+                .set(Some(DragOperation::PathPoint(new_idx)));
             st.drag.moving_anchor.set(Some(world));
             st.drag.last_world.set(Some(world));
         }
@@ -593,8 +596,9 @@ fn complete_marquee_selection(world: Point, st: &mut CanvasState, props: &mut Ca
                 .filter(|el| rect_fully_contains_element(Rect::new(rx, ry, rw, rh), el))
                 .map(|el| el.id())
                 .collect();
-            let expanded = props.scene.with(|s| s.expand_to_groups(&contained));
-            st.selected_ids.set(expanded);
+            let expanded = props.scene.with(|s| expand_ids(s, &contained));
+            st.selected_ids
+                .set(normalize_ids(&props.scene.get_untracked(), &expanded));
         }
         st.select_anchor.set(None);
     }
@@ -638,7 +642,7 @@ pub fn select_pointer_down(
         return;
     }
 
-    if point_inside_any_element(world, &els) {
+    if point_inside_any_element(world, &els, CLICK_MARGIN) {
         if !st.shift_pressed.get() {
             st.selected_ids.set(Vec::new());
         }
@@ -662,10 +666,10 @@ pub fn select_pointer_move(
 
     if let Some(anchor) = st.drag.moving_anchor.get() {
         match st.drag.drag_action.get() {
-            Some(Handle::Resize(_)) => do_resize(world, st, props),
-            Some(Handle::Rotate) => do_rotate(world, st, props),
-            Some(Handle::PathPoint(idx)) => do_path_point_drag(world, st, props, idx),
-            Some(Handle::PathMidpoint(i)) => do_path_midpoint_drag(world, st, props, i),
+            Some(DragOperation::Resize(_)) => do_resize(world, st, props),
+            Some(DragOperation::Rotate) => do_rotate(world, st, props),
+            Some(DragOperation::PathPoint(idx)) => do_path_point_drag(world, st, props, idx),
+            Some(DragOperation::PathMidpoint(i)) => do_path_midpoint_drag(world, st, props, i),
             _ => do_move(world, anchor, st, props),
         }
     }
@@ -680,12 +684,12 @@ pub fn select_pointer_up(
     if st.drag.moving_anchor.get().is_some() {
         let drag_action = st.drag.drag_action.get();
 
-        if let Some(Handle::PathPoint(idx)) = drag_action {
+        if let Some(DragOperation::PathPoint(idx)) = drag_action {
             finish_path_point_drag(st, props, idx);
         }
 
         if st.shift_pressed.get() {
-            if let Some(Handle::PathPoint(idx)) = drag_action {
+            if let Some(DragOperation::PathPoint(idx)) = drag_action {
                 snap_path_point_to_grid(st, props, idx);
             } else {
                 snap_elements_to_grid(st, props);

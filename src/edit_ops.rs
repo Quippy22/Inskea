@@ -11,6 +11,16 @@ pub struct Clipboard {
     pub groups: Vec<Group>,
 }
 
+/// Apply one scene mutation at the standard undo boundary.
+pub fn mutate_scene(
+    scene: RwSignal<Scene>,
+    push_snapshot: &Rc<dyn Fn()>,
+    mutation: impl FnOnce(&mut Scene),
+) {
+    (push_snapshot)();
+    scene.update(mutation);
+}
+
 /// Store copies of the currently selected elements in the clipboard,
 /// keeping the group structure so paste can regroup the copies.
 pub fn copy_selection(
@@ -124,10 +134,9 @@ pub fn duplicate_selection(
     if ids.is_empty() {
         return;
     }
-    (push_snapshot)();
     let mut new_ids = Vec::new();
     let mut id_map = Vec::new();
-    scene.update(|s| {
+    mutate_scene(scene, push_snapshot, |s| {
         let elements = s.elements().to_vec();
         let groups = s.groups.clone();
         for id in &ids {
@@ -155,8 +164,7 @@ pub fn group_selection(
     if ids.len() < 2 {
         return;
     }
-    (push_snapshot)();
-    scene.update(|s| s.create_group(&ids));
+    mutate_scene(scene, push_snapshot, |s| s.create_group(&ids));
 }
 
 /// Dissolve every group touching the selection; the members stay in the scene.
@@ -169,8 +177,7 @@ pub fn ungroup_selection(
     if ids.is_empty() {
         return;
     }
-    (push_snapshot)();
-    scene.update(|s| {
+    mutate_scene(scene, push_snapshot, |s| {
         s.remove_groups_containing(&ids);
     });
 }
@@ -202,10 +209,9 @@ pub fn paste_clipboard(
     let center = bounds.center();
     let dx = target.x - center.x;
     let dy = target.y - center.y;
-    (push_snapshot)();
     let mut new_ids = Vec::new();
     let mut id_map = Vec::new();
-    scene.update(|s| {
+    mutate_scene(scene, push_snapshot, |s| {
         for mut el in els {
             let old_id = el.id();
             el.offset(dx, dy);

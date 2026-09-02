@@ -350,7 +350,7 @@ mod tests {
         // A scene saved before alignment existed has no `align` field and
         // loads with the Left default; re-saving restores the field.
         let mut left_scene = Scene::new();
-        let mut ld = ElementData::new(0);
+        let ld = ElementData::new(0);
         left_scene.add_element(Element::Text(Text {
             data: ld,
             wrapped: WrappedText::new("aligned"),
