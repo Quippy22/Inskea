@@ -70,7 +70,7 @@ impl Scene {
         for group in &mut self.groups {
             group.members.retain(|m| *m != id);
         }
-        self.groups.retain(|g| g.members.len() >= 2);
+        self.normalize_groups();
     }
 
     /// Assign IDs to legacy or duplicated groups loaded from older files.
@@ -86,6 +86,37 @@ impl Scene {
             next = next.max(group.id.saturating_add(1));
         }
         self.next_group_id = next;
+    }
+
+    /// Repair group membership after loading or a scene mutation.
+    ///
+    /// Groups are flat, so the first group in scene order owns a member when
+    /// malformed data contains overlaps. Member order follows canvas order
+    /// after normalization, making serialized scenes deterministic.
+    pub fn normalize_groups(&mut self) {
+        self.ensure_group_ids();
+        let element_ids: Vec<_> = self.elements.iter().map(Element::id).collect();
+        let mut claimed = Vec::new();
+        let mut groups = Vec::with_capacity(self.groups.len());
+
+        for mut group in std::mem::take(&mut self.groups) {
+            group
+                .members
+                .retain(|id| element_ids.contains(id) && !claimed.contains(id));
+            group.members.sort_by_key(|id| {
+                element_ids
+                    .iter()
+                    .position(|element_id| element_id == id)
+                    .unwrap_or(usize::MAX)
+            });
+            group.members.dedup();
+            if group.members.len() >= 2 {
+                claimed.extend(group.members.iter().copied());
+                groups.push(group);
+            }
+        }
+
+        self.groups = groups;
     }
 
     /// The group that contains `id`, if any.
@@ -123,7 +154,7 @@ impl Scene {
 
     /// Group `ids` into one group, dissolving any existing groups that overlap the members.
     pub fn create_group(&mut self, ids: &[ElementId]) {
-        self.ensure_group_ids();
+        self.normalize_groups();
         let members = self.expand_to_groups(ids);
         if members.len() < 2 {
             return;
@@ -145,6 +176,7 @@ impl Scene {
             }
             !hit
         });
+        self.normalize_groups();
         removed
     }
 
@@ -277,6 +309,26 @@ mod tests {
         assert_eq!(s.groups[0].id, 1);
         assert_eq!(s.groups[1].id, 2);
         assert_eq!(s.next_group_id, 3);
+    }
+
+    #[test]
+    fn normalize_groups_removes_invalid_members_and_overlaps() {
+        let mut s = scene_with_three();
+        s.groups = vec![
+            Group {
+                id: 1,
+                members: vec![3, 1, 1, 99],
+            },
+            Group {
+                id: 2,
+                members: vec![2, 3],
+            },
+        ];
+
+        s.normalize_groups();
+
+        assert_eq!(s.groups.len(), 1);
+        assert_eq!(s.groups[0].members, vec![1, 3]);
     }
 
     #[test]

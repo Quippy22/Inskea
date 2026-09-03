@@ -203,7 +203,7 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
     let file: SkeaFile = serde_json::from_value(raw)
         .map_err(|e| format!("failed to parse .skea file after migration: {e}"))?;
     let mut scene = file.scene;
-    scene.ensure_group_ids();
+    scene.normalize_groups();
     Ok(scene)
 }
 
