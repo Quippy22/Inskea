@@ -246,7 +246,7 @@ fn handle_selection_handles(
     false
 }
 
-/// Select an individual group member on double-click, keeping it in the group.
+/// Enter group-edit mode on double-click, selecting only the clicked member.
 #[inline]
 fn handle_group_member_double_click(
     detail: u32,
@@ -262,7 +262,11 @@ fn handle_group_member_double_click(
         Some(id) => id,
         None => return false,
     };
-    if props.scene.with(|s| s.group_containing(id).is_some()) {
+    if let Some(group_id) = props
+        .scene
+        .with(|s| s.group_containing(id).map(|group| group.id))
+    {
+        st.group_editing.set(Some(group_id));
         st.selected_ids.set(vec![id]);
         return true;
     }
@@ -282,6 +286,37 @@ fn handle_element_selection(
         Some(id) => id,
         None => return false,
     };
+
+    let editing_group = st.group_editing.get();
+    if let Some(group_id) = editing_group {
+        let is_member = props.scene.with(|s| {
+            s.group_containing(id)
+                .is_some_and(|group| group.id == group_id)
+        });
+        if !is_member {
+            st.group_editing.set(None);
+        }
+    }
+
+    if st.group_editing.get().is_some() {
+        if st.shift_pressed.get() {
+            let ids = normalize_ids(&props.scene.get_untracked(), &st.selected_ids.get());
+            st.selected_ids.set(toggle_ids(&ids, &[id]));
+        } else {
+            st.selected_ids.set(vec![id]);
+            if let Some(element) = els.iter().find(|element| element.id() == id) {
+                if let Some(bounds) = combined_bounds(&[id], std::slice::from_ref(element)) {
+                    (props.push_snapshot)();
+                    st.drag.drag_action.set(Some(DragOperation::Move));
+                    st.drag.moving_anchor.set(Some(world));
+                    st.drag.drag_bounds.set(Some(bounds));
+                    st.drag.last_world.set(Some(world));
+                }
+            }
+        }
+        return true;
+    }
+
     let expanded = props.scene.with(|s| expand_ids(s, &[id]));
     let ids = normalize_ids(&props.scene.get_untracked(), &st.selected_ids.get());
     if st.shift_pressed.get() {
@@ -643,12 +678,14 @@ pub fn select_pointer_down(
     }
 
     if point_inside_any_element(world, &els, CLICK_MARGIN) {
+        st.group_editing.set(None);
         if !st.shift_pressed.get() {
             st.selected_ids.set(Vec::new());
         }
         return;
     }
 
+    st.group_editing.set(None);
     st.selected_ids.set(Vec::new());
     st.select_anchor.set(Some(world));
 }

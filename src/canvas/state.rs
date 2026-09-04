@@ -2,7 +2,7 @@ use crate::canvas::settings::CanvasSettings;
 use crate::model::interaction::hit_test_topmost;
 use crate::model::resize::ResizeHandle;
 use crate::model::Color;
-use crate::model::{Element, ElementId, ElementStyle, LineStyle, Point, Rect, Scene};
+use crate::model::{Element, ElementId, ElementStyle, GroupId, LineStyle, Point, Rect, Scene};
 use crate::ui::dock::Tool;
 use leptos::*;
 use std::rc::Rc;
@@ -109,6 +109,8 @@ pub struct CanvasState {
     pub select_anchor: RwSignal<Option<Point>>,
     pub erasing: RwSignal<bool>,
     pub selected_ids: RwSignal<Vec<ElementId>>,
+    /// The group currently being edited member-by-member, if any.
+    pub group_editing: RwSignal<Option<GroupId>>,
     pub cursor_style: RwSignal<String>,
     pub drag: DragState,
     pub text_edit: TextEditState,
@@ -126,6 +128,7 @@ impl CanvasState {
             select_anchor: create_rw_signal(None),
             erasing: create_rw_signal(false),
             selected_ids: create_rw_signal(Vec::new()),
+            group_editing: create_rw_signal(None),
             cursor_style: create_rw_signal("default".to_string()),
             drag: DragState::new(),
             text_edit: TextEditState::new(),
