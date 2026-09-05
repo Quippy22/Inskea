@@ -1,5 +1,5 @@
 use crate::model::elements::{Bounds, Offset};
-use crate::model::{Element, ElementId, Group, Point, Rect, Scene};
+use crate::model::{Element, ElementId, Group, LayerOrder, Point, Rect, Scene};
 use leptos::{RwSignal, SignalGet, SignalSet, SignalUpdate, SignalWith};
 use std::rc::Rc;
 
@@ -225,4 +225,20 @@ pub fn paste_clipboard(
         regroup_clones(s, &groups, &id_map);
     });
     selected_ids.set(new_ids);
+}
+
+/// Reorder the selection as one z-order block, including complete groups.
+pub fn reorder_selection(
+    scene: RwSignal<Scene>,
+    selected_ids: RwSignal<Vec<ElementId>>,
+    direction: LayerOrder,
+    push_snapshot: &Rc<dyn Fn()>,
+) {
+    let ids = selected_ids.get();
+    if ids.is_empty() {
+        return;
+    }
+    mutate_scene(scene, push_snapshot, |s| {
+        s.reorder_selection(&ids, direction);
+    });
 }

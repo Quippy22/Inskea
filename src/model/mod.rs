@@ -189,43 +189,56 @@ impl Scene {
         self.elements.push(element);
     }
 
-    /// Move element to the front of the z-order (top of canvas).
-    pub fn bring_to_front(&mut self, id: ElementId) {
-        if let Some(idx) = self.elements.iter().position(|e| e.id() == id) {
-            let el = self.elements.remove(idx);
-            self.elements.push(el);
-        }
-    }
-
-    /// Move element to the back of the z-order (bottom of canvas).
-    pub fn send_to_back(&mut self, id: ElementId) {
-        if let Some(idx) = self.elements.iter().position(|e| e.id() == id) {
-            let el = self.elements.remove(idx);
-            self.elements.insert(0, el);
-        }
-    }
-
-    /// Move element one step toward the front.
-    pub fn bring_forward(&mut self, id: ElementId) {
-        let len = self.elements.len();
-        if len < 2 {
+    /// Move a selection as one z-order block while preserving internal order.
+    pub fn reorder_selection(&mut self, ids: &[ElementId], direction: LayerOrder) {
+        let selected_ids = self.expand_to_groups(ids);
+        if selected_ids.is_empty() {
             return;
         }
-        if let Some(idx) = self.elements.iter().position(|e| e.id() == id) {
-            if idx < len - 1 {
-                self.elements.swap(idx, idx + 1);
-            }
-        }
-    }
 
-    /// Move element one step toward the back.
-    pub fn send_backward(&mut self, id: ElementId) {
-        if let Some(idx) = self.elements.iter().position(|e| e.id() == id) {
-            if idx > 0 {
-                self.elements.swap(idx, idx - 1);
-            }
+        let selected: Vec<_> = self
+            .elements
+            .iter()
+            .filter(|element| selected_ids.contains(&element.id()))
+            .cloned()
+            .collect();
+        if selected.is_empty() {
+            return;
         }
+
+        let first_selected_index = self
+            .elements
+            .iter()
+            .position(|element| selected_ids.contains(&element.id()))
+            .unwrap_or(0);
+        let elements_before = self.elements[..first_selected_index]
+            .iter()
+            .filter(|element| !selected_ids.contains(&element.id()))
+            .count();
+        let mut remaining: Vec<_> = self
+            .elements
+            .iter()
+            .filter(|element| !selected_ids.contains(&element.id()))
+            .cloned()
+            .collect();
+
+        let insert_at = match direction {
+            LayerOrder::Back => 0,
+            LayerOrder::Backward => elements_before.saturating_sub(1),
+            LayerOrder::Forward => (elements_before + 1).min(remaining.len()),
+            LayerOrder::Front => remaining.len(),
+        };
+        remaining.splice(insert_at..insert_at, selected);
+        self.elements = remaining;
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LayerOrder {
+    Back,
+    Backward,
+    Forward,
+    Front,
 }
 
 #[cfg(test)]
@@ -329,6 +342,24 @@ mod tests {
 
         assert_eq!(s.groups.len(), 1);
         assert_eq!(s.groups[0].members, vec![1, 3]);
+    }
+
+    #[test]
+    fn reorder_selection_moves_groups_as_atomic_blocks() {
+        let mut s = scene_with_three();
+        s.create_group(&[1, 2]);
+
+        s.reorder_selection(&[1, 2], LayerOrder::Front);
+        assert_eq!(
+            s.elements().iter().map(Element::id).collect::<Vec<_>>(),
+            vec![3, 1, 2]
+        );
+
+        s.reorder_selection(&[1], LayerOrder::Back);
+        assert_eq!(
+            s.elements().iter().map(Element::id).collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
     }
 
     #[test]
