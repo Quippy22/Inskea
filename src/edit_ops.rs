@@ -1,5 +1,7 @@
 use crate::model::elements::{Bounds, Offset};
-use crate::model::{Element, ElementId, Group, LayerOrder, Point, Rect, Scene};
+use crate::model::{
+    Alignment, Distribution, Element, ElementId, Group, LayerOrder, Point, Rect, Scene,
+};
 use leptos::{RwSignal, SignalGet, SignalSet, SignalUpdate, SignalWith};
 use std::rc::Rc;
 
@@ -240,5 +242,37 @@ pub fn reorder_selection(
     }
     mutate_scene(scene, push_snapshot, |s| {
         s.reorder_selection(&ids, direction);
+    });
+}
+
+/// Align selected elements or complete groups against the outer selection bounds.
+pub fn align_selection(
+    scene: RwSignal<Scene>,
+    selected_ids: RwSignal<Vec<ElementId>>,
+    alignment: Alignment,
+    push_snapshot: &Rc<dyn Fn()>,
+) {
+    let ids = selected_ids.get();
+    if ids.len() < 2 {
+        return;
+    }
+    mutate_scene(scene, push_snapshot, |s| {
+        crate::model::align_selection(s, &ids, alignment);
+    });
+}
+
+/// Distribute selected elements or complete groups with equal gaps.
+pub fn distribute_selection(
+    scene: RwSignal<Scene>,
+    selected_ids: RwSignal<Vec<ElementId>>,
+    distribution: Distribution,
+    push_snapshot: &Rc<dyn Fn()>,
+) {
+    let ids = selected_ids.get();
+    if ids.len() < 3 {
+        return;
+    }
+    mutate_scene(scene, push_snapshot, |s| {
+        crate::model::distribute_selection(s, &ids, distribution);
     });
 }
