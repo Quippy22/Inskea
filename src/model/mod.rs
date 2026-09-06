@@ -1,3 +1,4 @@
+pub mod alignment;
 mod color;
 pub mod elements;
 pub mod interaction;
@@ -6,6 +7,7 @@ pub mod rect;
 pub mod resize;
 pub mod selection;
 
+pub use alignment::{align_selection, distribute_selection, Alignment, Distribution};
 pub use color::Color;
 pub use elements::*;
 pub use point::Point;
