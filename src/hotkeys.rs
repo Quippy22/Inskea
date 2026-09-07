@@ -1,6 +1,6 @@
 use crate::canvas::CanvasMode;
 use crate::edit_ops::{self, Clipboard};
-use crate::model::{ElementId, Point, Scene};
+use crate::model::{Alignment, Distribution, ElementId, Point, Scene};
 use crate::ui::dock::Tool;
 use crate::ui::file_ops;
 use leptos::ev;
@@ -38,6 +38,8 @@ pub(crate) const FILE_SHORTCUTS: &[(&str, &str)] = &[
     ("Ctrl+Shift+S", "Save As"),
     ("Ctrl+O", "Open"),
     ("Ctrl+N", "New document"),
+    ("Ctrl+Alt+←/→/↑/↓", "Align selection"),
+    ("Ctrl+Alt+Shift+←/↑", "Distribute selection"),
 ];
 
 pub struct HotkeysContext {
@@ -71,7 +73,7 @@ fn is_text_input(target: &web_sys::EventTarget) -> bool {
 }
 
 pub fn register_hotkeys(ctx: HotkeysContext) {
-    let handle_shortcut = move |key: &str, ctrl: bool, shift: bool| match (ctrl, key) {
+    let handle_shortcut = move |key: &str, ctrl: bool, shift: bool, alt: bool| match (ctrl, key) {
         (true, "z") | (true, "Z") => {
             if shift {
                 (ctx.do_redo)();
@@ -91,6 +93,42 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
                 edit_ops::group_selection(ctx.scene, ctx.selected_ids, &ctx.push_snapshot);
             }
         }
+        (true, "ArrowLeft") if alt && shift => edit_ops::distribute_selection(
+            ctx.scene,
+            ctx.selected_ids,
+            Distribution::Horizontal,
+            &ctx.push_snapshot,
+        ),
+        (true, "ArrowUp") if alt && shift => edit_ops::distribute_selection(
+            ctx.scene,
+            ctx.selected_ids,
+            Distribution::Vertical,
+            &ctx.push_snapshot,
+        ),
+        (true, "ArrowLeft") if alt => edit_ops::align_selection(
+            ctx.scene,
+            ctx.selected_ids,
+            Alignment::Left,
+            &ctx.push_snapshot,
+        ),
+        (true, "ArrowRight") if alt => edit_ops::align_selection(
+            ctx.scene,
+            ctx.selected_ids,
+            Alignment::Right,
+            &ctx.push_snapshot,
+        ),
+        (true, "ArrowUp") if alt => edit_ops::align_selection(
+            ctx.scene,
+            ctx.selected_ids,
+            Alignment::Top,
+            &ctx.push_snapshot,
+        ),
+        (true, "ArrowDown") if alt => edit_ops::align_selection(
+            ctx.scene,
+            ctx.selected_ids,
+            Alignment::Bottom,
+            &ctx.push_snapshot,
+        ),
         (true, "n") | (true, "N") => {
             file_ops::file_new(ctx.scene, ctx.saved_path, ctx.selected_ids)
         }
@@ -167,7 +205,7 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
         let key = ev.key();
         let ctrl = ev.ctrl_key();
         let shift = ev.shift_key();
-        handle_shortcut(&key, ctrl, shift);
+        handle_shortcut(&key, ctrl, shift, ev.alt_key());
     });
 }
 
