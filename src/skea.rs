@@ -370,6 +370,31 @@ mod tests {
     }
 
     #[test]
+    fn legacy_groups_receive_ids_when_loaded() {
+        let mut scene = Scene::new();
+        for _ in 0..2 {
+            scene.add_element(Element::Rectangle(Rectangle {
+                data: ElementData::new(0),
+            }));
+        }
+        scene.create_group(&[1, 2]);
+
+        let mut raw: serde_json::Value = serde_json::from_str(&save_to_string(&scene)).unwrap();
+        raw.pointer_mut("/scene/groups/0")
+            .and_then(serde_json::Value::as_object_mut)
+            .unwrap()
+            .remove("id");
+        raw.pointer_mut("/scene")
+            .and_then(serde_json::Value::as_object_mut)
+            .unwrap()
+            .remove("next_group_id");
+
+        let loaded = load_from_str(&serde_json::to_string(&raw).unwrap()).unwrap();
+        assert_eq!(loaded.groups[0].id, 1);
+        assert_eq!(loaded.next_group_id, 2);
+    }
+
+    #[test]
     fn malformed_input_returns_err() {
         let err = load_from_str("this is not json").unwrap_err();
         assert!(err.contains("failed to parse"));

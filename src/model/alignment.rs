@@ -214,6 +214,20 @@ mod tests {
     }
 
     #[test]
+    fn distribute_horizontal_moves_middle_item_to_equalize_gaps() {
+        let mut scene = Scene::new();
+        scene.add_element(rectangle(0, 10.0, 0.0, 20.0, 10.0));
+        scene.add_element(rectangle(0, 50.0, 0.0, 10.0, 10.0));
+        scene.add_element(rectangle(0, 180.0, 0.0, 30.0, 10.0));
+
+        distribute_selection(&mut scene, &[1, 2, 3], Distribution::Horizontal);
+
+        assert_eq!(scene.element_by_id(1).unwrap().bounds().x, 10.0);
+        assert_eq!(scene.element_by_id(2).unwrap().bounds().x, 100.0);
+        assert_eq!(scene.element_by_id(3).unwrap().bounds().x, 180.0);
+    }
+
+    #[test]
     fn alignment_treats_a_complete_group_as_one_item() {
         let mut scene = scene();
         scene.create_group(&[1, 2]);
