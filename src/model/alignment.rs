@@ -85,6 +85,10 @@ fn union_bounds(items: &[SelectionItem]) -> Option<Rect> {
         .reduce(|left, right| left.union(&right))
 }
 
+pub fn selection_item_count(scene: &Scene, ids: &[ElementId]) -> usize {
+    selection_items(scene, ids).len()
+}
+
 pub fn align_selection(scene: &mut Scene, ids: &[ElementId], alignment: Alignment) {
     let items = selection_items(scene, ids);
     let Some(all_bounds) = union_bounds(&items) else {

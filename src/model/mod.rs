@@ -7,7 +7,9 @@ pub mod rect;
 pub mod resize;
 pub mod selection;
 
-pub use alignment::{align_selection, distribute_selection, Alignment, Distribution};
+pub use alignment::{
+    align_selection, distribute_selection, selection_item_count, Alignment, Distribution,
+};
 pub use color::Color;
 pub use elements::*;
 pub use point::Point;

@@ -1,6 +1,6 @@
 use crate::canvas::CanvasMode;
 use crate::edit_ops;
-use crate::model::{Alignment, Distribution, ElementId, Scene};
+use crate::model::{selection_item_count, Alignment, Distribution, ElementId, Scene};
 use crate::ui::styles;
 use leptos::*;
 use std::rc::Rc;
@@ -12,8 +12,12 @@ pub fn alignment_section(
     push_snapshot: Rc<dyn Fn()>,
 ) -> impl IntoView {
     let in_select = move || canvas_mode.get() == CanvasMode::Select;
-    let can_align = Signal::derive(move || in_select() && selected_ids.get().len() >= 2);
-    let can_distribute = Signal::derive(move || in_select() && selected_ids.get().len() >= 3);
+    let can_align = Signal::derive(move || {
+        in_select() && scene.with(|s| selection_item_count(s, &selected_ids.get()) >= 2)
+    });
+    let can_distribute = Signal::derive(move || {
+        in_select() && scene.with(|s| selection_item_count(s, &selected_ids.get()) >= 3)
+    });
 
     let align_left = {
         let push_snapshot = push_snapshot.clone();

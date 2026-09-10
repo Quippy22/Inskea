@@ -2,7 +2,7 @@ use crate::model::elements::{Bounds, Offset};
 use crate::model::{
     Alignment, Distribution, Element, ElementId, Group, LayerOrder, Point, Rect, Scene,
 };
-use leptos::{RwSignal, SignalGet, SignalSet, SignalUpdate, SignalWith};
+use leptos::{RwSignal, SignalGet, SignalSet, SignalUpdate, SignalWith, SignalWithUntracked};
 use std::rc::Rc;
 
 /// Copied elements plus the group structure they carried.
@@ -165,7 +165,7 @@ pub fn group_selection(
     push_snapshot: &Rc<dyn Fn()>,
 ) {
     let ids = selected_ids.get();
-    if ids.len() < 2 {
+    if scene.with_untracked(|s| crate::model::selection_item_count(s, &ids)) < 2 {
         return;
     }
     mutate_scene(scene, push_snapshot, |s| s.create_group(&ids));
@@ -269,7 +269,7 @@ pub fn distribute_selection(
     push_snapshot: &Rc<dyn Fn()>,
 ) {
     let ids = selected_ids.get();
-    if ids.len() < 3 {
+    if scene.with_untracked(|s| crate::model::selection_item_count(s, &ids)) < 3 {
         return;
     }
     mutate_scene(scene, push_snapshot, |s| {
