@@ -23,7 +23,12 @@ pub fn layers_section(
                 <button
                     class=styles::BTN_LAYER
                     on:click=move |_| {
-                        edit_ops::reorder_selection(scene, selected_ids, LayerOrder::Back, &push_back);
+                        edit_ops::reorder_selection(
+                            scene,
+                            selected_ids,
+                            LayerOrder::Back,
+                            &push_back,
+                        );
                     }
                     title="Send to back"
                 >
@@ -60,7 +65,12 @@ pub fn layers_section(
                 <button
                     class=styles::BTN_LAYER
                     on:click=move |_| {
-                        edit_ops::reorder_selection(scene, selected_ids, LayerOrder::Front, &push_front);
+                        edit_ops::reorder_selection(
+                            scene,
+                            selected_ids,
+                            LayerOrder::Front,
+                            &push_front,
+                        );
                     }
                     title="Bring to front"
                 >

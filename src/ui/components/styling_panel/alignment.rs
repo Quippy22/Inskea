@@ -78,16 +78,80 @@ pub fn alignment_section(
                 "Element alignment"
             </div>
             <div class="grid grid-cols-3 gap-1">
-                <button class=styles::BTN_TEXT class:opacity-40=move || !can_align.get() class:cursor-not-allowed=move || !can_align.get() on:click=move |_| align_left() title="Align left edges">"Left"</button>
-                <button class=styles::BTN_TEXT class:opacity-40=move || !can_align.get() class:cursor-not-allowed=move || !can_align.get() on:click=move |_| align_center() title="Align horizontal centers">"Center"</button>
-                <button class=styles::BTN_TEXT class:opacity-40=move || !can_align.get() class:cursor-not-allowed=move || !can_align.get() on:click=move |_| align_right() title="Align right edges">"Right"</button>
-                <button class=styles::BTN_TEXT class:opacity-40=move || !can_align.get() class:cursor-not-allowed=move || !can_align.get() on:click=move |_| align_top() title="Align top edges">"Top"</button>
-                <button class=styles::BTN_TEXT class:opacity-40=move || !can_align.get() class:cursor-not-allowed=move || !can_align.get() on:click=move |_| align_middle() title="Align vertical centers">"Middle"</button>
-                <button class=styles::BTN_TEXT class:opacity-40=move || !can_align.get() class:cursor-not-allowed=move || !can_align.get() on:click=move |_| align_bottom() title="Align bottom edges">"Bottom"</button>
+                <button
+                    class=styles::BTN_TEXT
+                    class:opacity-40=move || !can_align.get()
+                    class:cursor-not-allowed=move || !can_align.get()
+                    on:click=move |_| align_left()
+                    title="Align left edges"
+                >
+                    "Left"
+                </button>
+                <button
+                    class=styles::BTN_TEXT
+                    class:opacity-40=move || !can_align.get()
+                    class:cursor-not-allowed=move || !can_align.get()
+                    on:click=move |_| align_center()
+                    title="Align horizontal centers"
+                >
+                    "Center"
+                </button>
+                <button
+                    class=styles::BTN_TEXT
+                    class:opacity-40=move || !can_align.get()
+                    class:cursor-not-allowed=move || !can_align.get()
+                    on:click=move |_| align_right()
+                    title="Align right edges"
+                >
+                    "Right"
+                </button>
+                <button
+                    class=styles::BTN_TEXT
+                    class:opacity-40=move || !can_align.get()
+                    class:cursor-not-allowed=move || !can_align.get()
+                    on:click=move |_| align_top()
+                    title="Align top edges"
+                >
+                    "Top"
+                </button>
+                <button
+                    class=styles::BTN_TEXT
+                    class:opacity-40=move || !can_align.get()
+                    class:cursor-not-allowed=move || !can_align.get()
+                    on:click=move |_| align_middle()
+                    title="Align vertical centers"
+                >
+                    "Middle"
+                </button>
+                <button
+                    class=styles::BTN_TEXT
+                    class:opacity-40=move || !can_align.get()
+                    class:cursor-not-allowed=move || !can_align.get()
+                    on:click=move |_| align_bottom()
+                    title="Align bottom edges"
+                >
+                    "Bottom"
+                </button>
             </div>
             <div class="flex gap-1 mt-1">
-                <button class=styles::BTN_TEXT class:opacity-40=move || !can_distribute.get() class:cursor-not-allowed=move || !can_distribute.get() on:click=move |_| distribute_horizontal() title="Distribute horizontally">"Distribute H"</button>
-                <button class=styles::BTN_TEXT class:opacity-40=move || !can_distribute.get() class:cursor-not-allowed=move || !can_distribute.get() on:click=move |_| distribute_vertical() title="Distribute vertically">"Distribute V"</button>
+                <button
+                    class=styles::BTN_TEXT
+                    class:opacity-40=move || !can_distribute.get()
+                    class:cursor-not-allowed=move || !can_distribute.get()
+                    on:click=move |_| distribute_horizontal()
+                    title="Distribute horizontally"
+                >
+                    "Distribute H"
+                </button>
+                <button
+                    class=styles::BTN_TEXT
+                    class:opacity-40=move || !can_distribute.get()
+                    class:cursor-not-allowed=move || !can_distribute.get()
+                    on:click=move |_| distribute_vertical()
+                    title="Distribute vertically"
+                >
+                    "Distribute V"
+                </button>
             </div>
         </div>
     }
