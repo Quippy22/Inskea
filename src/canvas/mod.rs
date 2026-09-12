@@ -206,7 +206,22 @@ pub fn Canvas(
                 }
                 return;
             }
-            // (c) Clear the current selection.
+            // (c) Exit group-edit mode before clearing the selection.
+            if let Some(group_id) = _st.group_editing.get_untracked() {
+                let group_members = _props.scene.with_untracked(|scene| {
+                    scene
+                        .groups
+                        .iter()
+                        .find(|group| group.id == group_id)
+                        .map(|group| group.members.clone())
+                });
+                _st.group_editing.set(None);
+                if let Some(group_members) = group_members {
+                    _st.selected_ids.set(group_members);
+                }
+                return;
+            }
+            // (d) Clear the current selection.
             if !_st.selected_ids.get_untracked().is_empty() {
                 _st.selected_ids.set(Vec::new());
             }
@@ -302,6 +317,7 @@ pub fn Canvas(
             if let Some(prev) = prev {
                 if prev != (mode, tool) && !_st.selected_ids.get_untracked().is_empty() {
                     _st.selected_ids.set(Vec::new());
+                    _st.group_editing.set(None);
                 }
             }
             (mode, tool)

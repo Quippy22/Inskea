@@ -1,5 +1,5 @@
 use crate::edit_ops;
-use crate::model::{ElementId, Scene};
+use crate::model::{ElementId, LayerOrder, Scene};
 use crate::ui::icon;
 use crate::ui::styles;
 use leptos::*;
@@ -23,10 +23,12 @@ pub fn layers_section(
                 <button
                     class=styles::BTN_LAYER
                     on:click=move |_| {
-                        let ids = selected_ids.get_untracked();
-                        if ids.len() == 1 {
-                            edit_ops::mutate_scene(scene, &push_back, |s| s.send_to_back(ids[0]));
-                        }
+                        edit_ops::reorder_selection(
+                            scene,
+                            selected_ids,
+                            LayerOrder::Back,
+                            &push_back,
+                        );
                     }
                     title="Send to back"
                 >
@@ -35,14 +37,12 @@ pub fn layers_section(
                 <button
                     class=styles::BTN_LAYER
                     on:click=move |_| {
-                        let ids = selected_ids.get_untracked();
-                        if ids.len() == 1 {
-                            edit_ops::mutate_scene(
-                                scene,
-                                &push_backward,
-                                |s| s.send_backward(ids[0]),
-                            );
-                        }
+                        edit_ops::reorder_selection(
+                            scene,
+                            selected_ids,
+                            LayerOrder::Backward,
+                            &push_backward,
+                        );
                     }
                     title="Send backward"
                 >
@@ -51,14 +51,12 @@ pub fn layers_section(
                 <button
                     class=styles::BTN_LAYER
                     on:click=move |_| {
-                        let ids = selected_ids.get_untracked();
-                        if ids.len() == 1 {
-                            edit_ops::mutate_scene(
-                                scene,
-                                &push_forward,
-                                |s| s.bring_forward(ids[0]),
-                            );
-                        }
+                        edit_ops::reorder_selection(
+                            scene,
+                            selected_ids,
+                            LayerOrder::Forward,
+                            &push_forward,
+                        );
                     }
                     title="Bring forward"
                 >
@@ -67,14 +65,12 @@ pub fn layers_section(
                 <button
                     class=styles::BTN_LAYER
                     on:click=move |_| {
-                        let ids = selected_ids.get_untracked();
-                        if ids.len() == 1 {
-                            edit_ops::mutate_scene(
-                                scene,
-                                &push_front,
-                                |s| s.bring_to_front(ids[0]),
-                            );
-                        }
+                        edit_ops::reorder_selection(
+                            scene,
+                            selected_ids,
+                            LayerOrder::Front,
+                            &push_front,
+                        );
                     }
                     title="Bring to front"
                 >

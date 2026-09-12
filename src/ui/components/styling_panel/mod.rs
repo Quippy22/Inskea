@@ -1,3 +1,4 @@
+mod alignment;
 mod arrow;
 mod color;
 mod edit;
@@ -9,6 +10,7 @@ mod sliders;
 mod style;
 mod utils;
 
+use self::alignment::alignment_section;
 use self::arrow::arrow_section;
 use self::color::{color_section, ColorSlot};
 use self::edit::edit_section;
@@ -422,6 +424,7 @@ pub fn StylingPanel(
                 canvas_mode,
                 cursor_world,
             )} {group_section(scene, selected_ids, canvas_mode, push_snapshot.clone())}
+            {alignment_section(scene, selected_ids, canvas_mode, push_snapshot.clone())}
             {layers_section(scene, selected_ids, push_snapshot.clone())}
         </div>
         {float_picker(active_slot, picker_color, picker_on_change, picker_ref)}

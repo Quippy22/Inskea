@@ -1,15 +1,38 @@
 use std::fs;
+use std::path::{Component, PathBuf};
 
 mod setup;
 
+fn validate_file_path(path: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(path);
+    if path.as_os_str().is_empty() {
+        return Err("file path cannot be empty".into());
+    }
+    if !path.is_absolute() {
+        return Err("file path must be absolute".into());
+    }
+    if path.file_name().is_none() {
+        return Err("file path must name a file".into());
+    }
+    if path
+        .components()
+        .any(|component| component == Component::ParentDir)
+    {
+        return Err("file path cannot contain parent-directory components".into());
+    }
+    Ok(path)
+}
+
 #[tauri::command]
 fn save_file(path: String, content: String) -> Result<(), String> {
-    fs::write(&path, &content).map_err(|e| format!("failed to write file: {e}"))
+    let path = validate_file_path(&path)?;
+    fs::write(path, &content).map_err(|e| format!("failed to write file: {e}"))
 }
 
 #[tauri::command]
 fn save_file_binary(path: String, data: Vec<u8>) -> Result<(), String> {
-    fs::write(&path, &data).map_err(|e| format!("failed to write file: {e}"))
+    let path = validate_file_path(&path)?;
+    fs::write(path, &data).map_err(|e| format!("failed to write file: {e}"))
 }
 
 #[tauri::command]
@@ -19,7 +42,21 @@ fn save_skea(path: String, content: String) -> Result<(), String> {
 
 #[tauri::command]
 fn load_skea(path: String) -> Result<String, String> {
-    fs::read_to_string(&path).map_err(|e| format!("failed to read file: {e}"))
+    let path = validate_file_path(&path)?;
+    fs::read_to_string(path).map_err(|e| format!("failed to read file: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_file_path;
+
+    #[test]
+    fn file_paths_must_be_absolute_files() {
+        assert!(validate_file_path("drawing.skea").is_err());
+        assert!(validate_file_path("/tmp/../drawing.skea").is_err());
+        assert!(validate_file_path("/").is_err());
+        assert!(validate_file_path("/tmp/drawing.skea").is_ok());
+    }
 }
 
 #[tauri::command]

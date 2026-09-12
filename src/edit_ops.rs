@@ -1,6 +1,8 @@
 use crate::model::elements::{Bounds, Offset};
-use crate::model::{Element, ElementId, Group, Point, Rect, Scene};
-use leptos::{RwSignal, SignalGet, SignalSet, SignalUpdate, SignalWith};
+use crate::model::{
+    Alignment, Distribution, Element, ElementId, Group, LayerOrder, Point, Rect, Scene,
+};
+use leptos::{RwSignal, SignalGet, SignalSet, SignalUpdate, SignalWith, SignalWithUntracked};
 use std::rc::Rc;
 
 /// Copied elements plus the group structure they carried.
@@ -46,7 +48,7 @@ pub fn copy_selection(
                     .filter(|m| ids.contains(m))
                     .copied()
                     .collect::<Vec<_>>();
-                (members.len() >= 2).then_some(Group { members })
+                (members.len() >= 2).then_some(Group { id: g.id, members })
             })
             .collect();
         (els, groups)
@@ -91,6 +93,7 @@ mod tests {
     fn regroup_remaps_full_group() {
         let mut s = scene_with_three();
         let groups = vec![Group {
+            id: 1,
             members: vec![1, 2],
         }];
         let id_map = vec![(1, 4), (2, 5)];
@@ -103,6 +106,7 @@ mod tests {
     fn regroup_skips_unmapped_members() {
         let mut s = scene_with_three();
         let groups = vec![Group {
+            id: 1,
             members: vec![2, 3],
         }];
         let id_map = vec![(2, 4)];
@@ -161,7 +165,7 @@ pub fn group_selection(
     push_snapshot: &Rc<dyn Fn()>,
 ) {
     let ids = selected_ids.get();
-    if ids.len() < 2 {
+    if scene.with_untracked(|s| crate::model::selection_item_count(s, &ids)) < 2 {
         return;
     }
     mutate_scene(scene, push_snapshot, |s| s.create_group(&ids));
@@ -223,4 +227,52 @@ pub fn paste_clipboard(
         regroup_clones(s, &groups, &id_map);
     });
     selected_ids.set(new_ids);
+}
+
+/// Reorder the selection as one z-order block, including complete groups.
+pub fn reorder_selection(
+    scene: RwSignal<Scene>,
+    selected_ids: RwSignal<Vec<ElementId>>,
+    direction: LayerOrder,
+    push_snapshot: &Rc<dyn Fn()>,
+) {
+    let ids = selected_ids.get();
+    if ids.is_empty() {
+        return;
+    }
+    mutate_scene(scene, push_snapshot, |s| {
+        s.reorder_selection(&ids, direction);
+    });
+}
+
+/// Align selected elements or complete groups against the outer selection bounds.
+pub fn align_selection(
+    scene: RwSignal<Scene>,
+    selected_ids: RwSignal<Vec<ElementId>>,
+    alignment: Alignment,
+    push_snapshot: &Rc<dyn Fn()>,
+) {
+    let ids = selected_ids.get();
+    if ids.len() < 2 {
+        return;
+    }
+    mutate_scene(scene, push_snapshot, |s| {
+        crate::model::align_selection(s, &ids, alignment);
+    });
+}
+
+/// Distribute selected elements or complete groups with equal gaps.
+pub fn distribute_selection(
+    scene: RwSignal<Scene>,
+    selected_ids: RwSignal<Vec<ElementId>>,
+    distribution: Distribution,
+    push_snapshot: &Rc<dyn Fn()>,
+) {
+    let ids = selected_ids.get();
+    if scene.with_untracked(|s| crate::model::selection_item_count(s, &ids)) < 3 {
+        return;
+    }
+    mutate_scene(scene, push_snapshot, |s| {
+        crate::model::distribute_selection(s, &ids, distribution);
+    });
 }

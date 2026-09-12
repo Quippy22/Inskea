@@ -12,7 +12,6 @@ pub fn group_section(
     push_snapshot: Rc<dyn Fn()>,
 ) -> impl IntoView {
     let in_select = move || canvas_mode.get() == CanvasMode::Select;
-    let can_group = Signal::derive(move || in_select() && selected_ids.get().len() >= 2);
     let is_group = Signal::derive(move || {
         if !in_select() {
             return false;
@@ -20,6 +19,8 @@ pub fn group_section(
         let ids = selected_ids.get();
         scene.with(|s| s.selection_is_group(&ids))
     });
+    let can_group =
+        Signal::derive(move || in_select() && selected_ids.get().len() >= 2 && !is_group.get());
     let member_count = Signal::derive(move || {
         let ids = selected_ids.get();
         scene.with(|s| {

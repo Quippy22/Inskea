@@ -202,7 +202,9 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
 
     let file: SkeaFile = serde_json::from_value(raw)
         .map_err(|e| format!("failed to parse .skea file after migration: {e}"))?;
-    Ok(file.scene)
+    let mut scene = file.scene;
+    scene.normalize_groups();
+    Ok(scene)
 }
 
 #[cfg(test)]
@@ -365,6 +367,31 @@ mod tests {
             panic!("expected text element");
         };
         assert_eq!(t.align, TextAlign::Left);
+    }
+
+    #[test]
+    fn legacy_groups_receive_ids_when_loaded() {
+        let mut scene = Scene::new();
+        for _ in 0..2 {
+            scene.add_element(Element::Rectangle(Rectangle {
+                data: ElementData::new(0),
+            }));
+        }
+        scene.create_group(&[1, 2]);
+
+        let mut raw: serde_json::Value = serde_json::from_str(&save_to_string(&scene)).unwrap();
+        raw.pointer_mut("/scene/groups/0")
+            .and_then(serde_json::Value::as_object_mut)
+            .unwrap()
+            .remove("id");
+        raw.pointer_mut("/scene")
+            .and_then(serde_json::Value::as_object_mut)
+            .unwrap()
+            .remove("next_group_id");
+
+        let loaded = load_from_str(&serde_json::to_string(&raw).unwrap()).unwrap();
+        assert_eq!(loaded.groups[0].id, 1);
+        assert_eq!(loaded.next_group_id, 2);
     }
 
     #[test]
