@@ -93,6 +93,7 @@ pub fn App() -> impl IntoView {
     let ctx = HotkeysContext {
         canvas_mode,
         selected_tool,
+        eraser_active,
         scene,
         selected_ids,
         clipboard,

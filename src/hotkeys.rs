@@ -26,25 +26,29 @@ pub(crate) const TOOL_SHORTCUTS: &[(&str, &str)] = &[
     ("f", "Freehand"),
 ];
 
-pub(crate) const FILE_SHORTCUTS: &[(&str, &str)] = &[
-    ("Ctrl+Z", "Undo"),
-    ("Ctrl+Shift+Z", "Redo"),
+pub(crate) const EDIT_SHORTCUTS: &[(&str, &str)] = &[
     ("Ctrl+C", "Copy"),
     ("Ctrl+V", "Paste"),
     ("Ctrl+D", "Duplicate"),
     ("Ctrl+G", "Group"),
     ("Ctrl+Shift+G", "Ungroup"),
+    ("Ctrl+Alt+←/→/↑/↓", "Align selection"),
+    ("Ctrl+Alt+Shift+←/↑", "Distribute selection"),
+];
+
+pub(crate) const FILE_SHORTCUTS: &[(&str, &str)] = &[
+    ("Ctrl+Z", "Undo"),
+    ("Ctrl+Shift+Z", "Redo"),
     ("Ctrl+S", "Save"),
     ("Ctrl+Shift+S", "Save As"),
     ("Ctrl+O", "Open"),
     ("Ctrl+N", "New document"),
-    ("Ctrl+Alt+←/→/↑/↓", "Align selection"),
-    ("Ctrl+Alt+Shift+←/↑", "Distribute selection"),
 ];
 
 pub struct HotkeysContext {
     pub canvas_mode: RwSignal<CanvasMode>,
     pub selected_tool: RwSignal<Tool>,
+    pub eraser_active: RwSignal<bool>,
     pub scene: RwSignal<Scene>,
     pub selected_ids: RwSignal<Vec<ElementId>>,
     pub clipboard: RwSignal<Clipboard>,
@@ -54,6 +58,19 @@ pub struct HotkeysContext {
     pub push_snapshot: Rc<dyn Fn()>,
     pub do_undo: Rc<dyn Fn()>,
     pub do_redo: Rc<dyn Fn()>,
+}
+
+const TAB_TOOLS: [Tool; 5] = [
+    Tool::Rectangle,
+    Tool::Ellipse,
+    Tool::Line,
+    Tool::Arrow,
+    Tool::Text,
+];
+
+fn next_tab_tool(current: Tool) -> Option<Tool> {
+    let index = TAB_TOOLS.iter().position(|tool| *tool == current)?;
+    Some(TAB_TOOLS[(index + 1) % TAB_TOOLS.len()])
 }
 
 fn is_text_input(target: &web_sys::EventTarget) -> bool {
@@ -197,6 +214,20 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
     };
 
     let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
+        if ev.key() == "Tab" {
+            ev.prevent_default();
+            if let Some(target) = ev.target() {
+                if is_text_input(&target) {
+                    return;
+                }
+            }
+            if ctx.canvas_mode.get() == CanvasMode::Draw && !ctx.eraser_active.get() {
+                if let Some(tool) = next_tab_tool(ctx.selected_tool.get()) {
+                    ctx.selected_tool.set(tool);
+                }
+            }
+            return;
+        }
         if let Some(target) = ev.target() {
             if is_text_input(&target) {
                 return;
@@ -207,6 +238,21 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
         let shift = ev.shift_key();
         handle_shortcut(&key, ctrl, shift, ev.alt_key());
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{next_tab_tool, Tool};
+
+    #[test]
+    fn tab_cycles_only_through_standard_drawing_tools() {
+        assert!(matches!(
+            next_tab_tool(Tool::Rectangle),
+            Some(Tool::Ellipse)
+        ));
+        assert!(matches!(next_tab_tool(Tool::Text), Some(Tool::Rectangle)));
+        assert!(next_tab_tool(Tool::Freehand).is_none());
+    }
 }
 
 #[component]
@@ -220,7 +266,7 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                         on:click=move |_| shortcuts_open.set(false)
                     ></div>
                     <div class="fixed inset-0 z-50 grid place-items-center pointer-events-none">
-                        <div class="pointer-events-auto rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-5 px-7 max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto">
+                        <div class="pointer-events-auto rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-5 px-7 max-w-4xl w-full mx-4 max-h-[85vh] overflow-y-auto">
                             <button
                                 class="absolute top-3 right-3 text-subtle hover:text-fg transition-colors"
                                 on:click=move |_| shortcuts_open.set(false)
@@ -241,22 +287,22 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                                 </svg>
                             </button>
                             <h2 class="text-lg font-semibold mb-4">"Keyboard Shortcuts"</h2>
-                            <div class="flex gap-10">
-                                <div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-6">
+                                <div class="min-w-0">
                                     <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">
                                         "Shapes"
                                     </h3>
-                                    <table class="text-sm">
+                                    <table class="text-sm w-full table-fixed">
                                         <tbody>
                                             {TOOL_SHORTCUTS
                                                 .iter()
                                                 .map(|(key, desc)| {
                                                     view! {
                                                         <tr>
-                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-nowrap">
+                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-normal break-words align-top">
                                                                 {*key}
                                                             </td>
-                                                            <td class="py-1 text-fg whitespace-nowrap">{*desc}</td>
+                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">{*desc}</td>
                                                         </tr>
                                                     }
                                                 })
@@ -264,21 +310,21 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                                         </tbody>
                                     </table>
                                 </div>
-                                <div>
+                                <div class="min-w-0">
                                     <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">
                                         "Modes"
                                     </h3>
-                                    <table class="text-sm">
+                                    <table class="text-sm w-full table-fixed">
                                         <tbody>
                                             {MODE_SHORTCUTS
                                                 .iter()
                                                 .map(|(key, desc)| {
                                                     view! {
                                                         <tr>
-                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-nowrap">
+                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-normal break-words align-top">
                                                                 {*key}
                                                             </td>
-                                                            <td class="py-1 text-fg whitespace-nowrap">{*desc}</td>
+                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">{*desc}</td>
                                                         </tr>
                                                     }
                                                 })
@@ -286,21 +332,43 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                                         </tbody>
                                     </table>
                                 </div>
-                                <div>
+                                <div class="min-w-0">
                                     <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">
-                                        "File & Edit"
+                                        "File"
                                     </h3>
-                                    <table class="text-sm">
+                                    <table class="text-sm w-full table-fixed">
                                         <tbody>
                                             {FILE_SHORTCUTS
                                                 .iter()
                                                 .map(|(key, desc)| {
                                                     view! {
                                                         <tr>
-                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-nowrap">
+                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-normal break-words align-top">
                                                                 {*key}
                                                             </td>
-                                                            <td class="py-1 text-fg whitespace-nowrap">{*desc}</td>
+                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">{*desc}</td>
+                                                        </tr>
+                                                    }
+                                                })
+                                                .collect::<Vec<_>>()}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="min-w-0">
+                                    <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">
+                                        "Edit"
+                                    </h3>
+                                    <table class="text-sm w-full table-fixed">
+                                        <tbody>
+                                            {EDIT_SHORTCUTS
+                                                .iter()
+                                                .map(|(key, desc)| {
+                                                    view! {
+                                                        <tr>
+                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-normal break-words align-top">
+                                                                {*key}
+                                                            </td>
+                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">{*desc}</td>
                                                         </tr>
                                                     }
                                                 })

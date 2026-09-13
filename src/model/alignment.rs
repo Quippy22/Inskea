@@ -1,4 +1,4 @@
-use super::interaction::layout_bounds;
+use super::interaction::{distribution_bounds, layout_bounds};
 use super::{ElementId, Offset, Rect, Scene};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,6 +24,18 @@ struct SelectionItem {
 }
 
 fn selection_items(scene: &Scene, ids: &[ElementId]) -> Vec<SelectionItem> {
+    selection_items_with_bounds(scene, ids, layout_bounds)
+}
+
+fn distribution_items(scene: &Scene, ids: &[ElementId]) -> Vec<SelectionItem> {
+    selection_items_with_bounds(scene, ids, distribution_bounds)
+}
+
+fn selection_items_with_bounds(
+    scene: &Scene,
+    ids: &[ElementId],
+    bounds_for: fn(&super::Element) -> Rect,
+) -> Vec<SelectionItem> {
     let mut items = Vec::new();
     let mut grouped_ids = Vec::new();
 
@@ -36,7 +48,7 @@ fn selection_items(scene: &Scene, ids: &[ElementId]) -> Vec<SelectionItem> {
         let Some(group) = scene.group_containing(id) else {
             items.push(SelectionItem {
                 ids: vec![id],
-                bounds: layout_bounds(element),
+                bounds: bounds_for(element),
             });
             continue;
         };
@@ -44,7 +56,7 @@ fn selection_items(scene: &Scene, ids: &[ElementId]) -> Vec<SelectionItem> {
         if !group.members.iter().all(|member| ids.contains(member)) {
             items.push(SelectionItem {
                 ids: vec![id],
-                bounds: layout_bounds(element),
+                bounds: bounds_for(element),
             });
             continue;
         }
@@ -53,8 +65,8 @@ fn selection_items(scene: &Scene, ids: &[ElementId]) -> Vec<SelectionItem> {
         for member in &group.members {
             if let Some(element) = scene.element_by_id(*member) {
                 bounds = Some(match bounds {
-                    Some(current) => current.union(&layout_bounds(element)),
-                    None => layout_bounds(element),
+                    Some(current) => current.union(&bounds_for(element)),
+                    None => bounds_for(element),
                 });
             }
         }
@@ -117,7 +129,7 @@ pub fn align_selection(scene: &mut Scene, ids: &[ElementId], alignment: Alignmen
 }
 
 pub fn distribute_selection(scene: &mut Scene, ids: &[ElementId], distribution: Distribution) {
-    let mut items = selection_items(scene, ids);
+    let mut items = distribution_items(scene, ids);
     if items.len() < 3 {
         return;
     }
@@ -174,8 +186,9 @@ pub fn distribute_selection(scene: &mut Scene, ids: &[ElementId], distribution: 
 mod tests {
     use super::*;
     use crate::model::elements::rect::Rectangle;
+    use crate::model::elements::text::{Text, WrappedText};
     use crate::model::elements::Bounds;
-    use crate::model::{Element, ElementData, Point};
+    use crate::model::{Element, ElementData, Point, TextAlign};
 
     fn rectangle(id: ElementId, x: f64, y: f64, width: f64, height: f64) -> Element {
         Element::Rectangle(Rectangle {
@@ -186,6 +199,18 @@ mod tests {
                 height,
                 ..ElementData::new(id)
             },
+        })
+    }
+
+    fn text(id: ElementId, x: f64, y: f64, raw: &str, width: f64, height: f64) -> Element {
+        let mut data = ElementData::new(id);
+        data.world_point = Point::new(x, y);
+        data.width = width;
+        data.height = height;
+        Element::Text(Text {
+            data,
+            wrapped: WrappedText::new(raw),
+            align: TextAlign::Left,
         })
     }
 
@@ -229,6 +254,42 @@ mod tests {
         assert_eq!(scene.element_by_id(1).unwrap().bounds().x, 10.0);
         assert_eq!(scene.element_by_id(2).unwrap().bounds().x, 100.0);
         assert_eq!(scene.element_by_id(3).unwrap().bounds().x, 180.0);
+    }
+
+    #[test]
+    fn distribute_horizontal_uses_text_content_bounds() {
+        let mut scene = Scene::new();
+        scene.add_element(rectangle(0, 0.0, 0.0, 20.0, 20.0));
+        scene.add_element(text(0, 40.0, 0.0, "text", 100.0, 22.0));
+        scene.add_element(rectangle(0, 140.0, 0.0, 20.0, 20.0));
+
+        distribute_selection(&mut scene, &[1, 2, 3], Distribution::Horizontal);
+
+        let first = distribution_bounds(scene.element_by_id(1).unwrap());
+        let middle = distribution_bounds(scene.element_by_id(2).unwrap());
+        let last = distribution_bounds(scene.element_by_id(3).unwrap());
+        let first_gap = middle.x - first.right();
+        let last_gap = last.x - middle.right();
+        assert!((first_gap - last_gap).abs() < 1e-9);
+        assert!(middle.x > 40.0);
+    }
+
+    #[test]
+    fn distribute_vertical_uses_text_content_bounds() {
+        let mut scene = Scene::new();
+        scene.add_element(rectangle(0, 0.0, 0.0, 20.0, 20.0));
+        scene.add_element(text(0, 0.0, 30.0, "text", 100.0, 80.0));
+        scene.add_element(rectangle(0, 0.0, 140.0, 20.0, 20.0));
+
+        distribute_selection(&mut scene, &[1, 2, 3], Distribution::Vertical);
+
+        let first = distribution_bounds(scene.element_by_id(1).unwrap());
+        let middle = distribution_bounds(scene.element_by_id(2).unwrap());
+        let last = distribution_bounds(scene.element_by_id(3).unwrap());
+        let first_gap = middle.y - first.bottom();
+        let last_gap = last.y - middle.bottom();
+        assert!((first_gap - last_gap).abs() < 1e-9);
+        assert!(middle.y > 30.0);
     }
 
     #[test]

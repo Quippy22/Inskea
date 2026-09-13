@@ -16,6 +16,13 @@ pub fn visual_bounds(element: &Element) -> Rect {
     }
 }
 
+/// Bounds used when distributing visible content. Text has a larger layout
+/// column than its rendered glyphs, so using its layout box makes mixed text
+/// and shape distributions look uneven to the user.
+pub fn distribution_bounds(element: &Element) -> Rect {
+    visual_bounds(element)
+}
+
 /// Return the axis-aligned bounds of the selected elements.
 pub fn combined_bounds(ids: &[ElementId], elements: &[Element]) -> Option<Rect> {
     elements
