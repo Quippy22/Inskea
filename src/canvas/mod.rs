@@ -6,6 +6,7 @@ mod grid;
 mod modes;
 mod selection;
 pub mod settings;
+mod smart_guides;
 mod state;
 mod text_edit;
 
