@@ -5,6 +5,20 @@ pub const GUIDE_TOLERANCE: f64 = 8.0;
 /// Time a candidate must remain stable before the move is held on the guide.
 pub const GUIDE_HOLD_MS: f64 = 300.0;
 
+pub fn now_ms() -> f64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        web_sys::window()
+            .and_then(|window| window.performance().ok())
+            .map(|performance| performance.now())
+            .unwrap_or(0.0)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        0.0
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GuideAxis {
     /// A vertical line, matching an x-coordinate.

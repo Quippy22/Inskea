@@ -3,6 +3,7 @@ use super::utils::{
     HANDLE_RESIZE_RADIUS, HANDLE_ROTATE_RADIUS, PATH_MERGE_DIST, SELECT_PADDING,
 };
 use super::MIN_DRAG_DIST;
+use crate::canvas::smart_guides::{self, SmartGuideState};
 use crate::canvas::state::{CanvasInputs, CanvasState, DragOperation};
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{Bounds, Offset, PathPoints, Resize, Rotate, SnapToGrid};
@@ -520,9 +521,33 @@ fn do_path_midpoint_drag(world: Point, st: &mut CanvasState, props: &mut CanvasI
 /// Offset all selected elements by the delta since the drag anchor.
 #[inline]
 fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
-    let dx = world.x - anchor.x;
-    let dy = world.y - anchor.y;
     let ids = st.selected_ids.get();
+    let raw_dx = world.x - anchor.x;
+    let raw_dy = world.y - anchor.y;
+    let smart_enabled =
+        st.shift_pressed.get() && matches!(st.drag.drag_action.get(), Some(DragOperation::Move));
+    let (snap_dx, snap_dy, next_guides) = props.scene.with(|scene| {
+        let Some(bounds) = combined_bounds(&ids, scene.elements()) else {
+            return (0.0, 0.0, SmartGuideState::default());
+        };
+        let proposed = Rect::new(bounds.x + raw_dx, bounds.y + raw_dy, bounds.w, bounds.h);
+        let others = scene
+            .elements()
+            .iter()
+            .filter(|element| !ids.contains(&element.id()))
+            .map(|element| (element.id(), element.bounds()))
+            .collect::<Vec<_>>();
+        let resolution = smart_guides::resolve_move(
+            proposed,
+            &others,
+            smart_guides::now_ms(),
+            smart_enabled,
+            &st.drag.smart_guides.get_untracked(),
+        );
+        (resolution.snap_dx, resolution.snap_dy, resolution.state)
+    });
+    let dx = raw_dx + snap_dx;
+    let dy = raw_dy + snap_dy;
     props.scene.update(|s| {
         for el in s.elements_mut().iter_mut() {
             if ids.contains(&el.id()) {
@@ -530,6 +555,7 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
             }
         }
     });
+    st.drag.smart_guides.set(next_guides);
     st.drag.moving_anchor.set(Some(world));
 }
 
@@ -611,6 +637,7 @@ fn clear_drag_state(st: &mut CanvasState) {
     st.drag.last_world.set(None);
     st.drag.drag_originals.set(Vec::new());
     st.drag.hovered_handle.set(None);
+    st.drag.smart_guides.set(SmartGuideState::default());
     st.select_anchor.set(None);
 }
 
@@ -647,6 +674,7 @@ pub fn select_pointer_down(
 ) {
     st.drag.overlay_freeze.set(None);
     st.drag.rotation_delta.set(0.0);
+    st.drag.smart_guides.set(SmartGuideState::default());
 
     if handle_text_double_click(detail, world, st, props) {
         return;

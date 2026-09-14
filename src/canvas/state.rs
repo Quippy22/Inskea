@@ -1,4 +1,5 @@
 use crate::canvas::settings::CanvasSettings;
+use crate::canvas::smart_guides::SmartGuideState;
 use crate::model::interaction::hit_test_topmost;
 use crate::model::resize::ResizeHandle;
 use crate::model::Color;
@@ -48,6 +49,7 @@ pub struct DragState {
     pub overlay_freeze: RwSignal<Option<Rect>>,
     pub rotation_delta: RwSignal<f64>,
     pub hovered_handle: RwSignal<Option<DragOperation>>,
+    pub smart_guides: RwSignal<SmartGuideState>,
 }
 
 impl DragState {
@@ -62,6 +64,7 @@ impl DragState {
             overlay_freeze: create_rw_signal(None),
             rotation_delta: create_rw_signal(0.0),
             hovered_handle: create_rw_signal(None),
+            smart_guides: create_rw_signal(SmartGuideState::default()),
         }
     }
 }
