@@ -753,10 +753,11 @@ pub fn select_pointer_up(
             finish_path_point_drag(st, props, idx);
         }
 
+        let smart_guide_active = !st.drag.smart_guides.get().guides.is_empty();
         if st.shift_pressed.get() {
             if let Some(DragOperation::PathPoint(idx)) = drag_action {
                 snap_path_point_to_grid(st, props, idx);
-            } else {
+            } else if !smart_guide_active {
                 snap_elements_to_grid(st, props);
             }
         }
