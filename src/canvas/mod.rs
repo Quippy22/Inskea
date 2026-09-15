@@ -710,6 +710,7 @@ pub fn Canvas(
             }
 
             {drawing_preview}
+            {smart_guides::guide_overlay(st.drag.smart_guides)}
             {selection::selection_preview_overlay(st.select_anchor, props.cursor_world)}
             {selection::selection_handle_overlay(
                 st.selected_ids,

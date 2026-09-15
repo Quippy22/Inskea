@@ -1,4 +1,5 @@
 use crate::model::{ElementId, Point, Rect};
+use leptos::*;
 
 /// Maximum distance at which a proposed position can become a smart-guide candidate.
 pub const GUIDE_TOLERANCE: f64 = 8.0;
@@ -345,6 +346,57 @@ pub fn resolve_move(
         snap_dx,
         snap_dy,
         state: SmartGuideState { guides, pending },
+    }
+}
+
+pub fn guide_overlay(guide_state: RwSignal<SmartGuideState>) -> impl Fn() -> Option<View> {
+    move || {
+        let state = guide_state.get();
+        if state.guides.is_empty() {
+            return None;
+        }
+
+        let lines = state
+            .guides
+            .iter()
+            .map(|guide| {
+                let label = guide.label.map(|value| {
+                    let x = (guide.start.x + guide.end.x) / 2.0;
+                    let y = (guide.start.y + guide.end.y) / 2.0 - 4.0;
+                    view! {
+                        <text
+                            x=x
+                            y=y
+                            fill="#7aa2f7"
+                            font-size="10"
+                            text-anchor="middle"
+                            pointer-events="none"
+                        >
+                            {format!("{:.0}", value.abs())}
+                        </text>
+                    }
+                    .into_view()
+                });
+                view! {
+                    <g pointer-events="none">
+                        <line
+                            x1=guide.start.x
+                            y1=guide.start.y
+                            x2=guide.end.x
+                            y2=guide.end.y
+                            stroke="#7aa2f7"
+                            stroke-width="1"
+                            stroke-dasharray="4 3"
+                            opacity="0.9"
+                        />
+                        {label}
+                    </g>
+                }
+                .into_view()
+            })
+            .collect_view();
+
+        Some(view! { <g pointer-events="none">{lines}</g> }.into_view())
     }
 }
 
