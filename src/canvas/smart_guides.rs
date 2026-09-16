@@ -9,10 +9,7 @@ pub const GUIDE_HOLD_MS: f64 = 300.0;
 pub fn now_ms() -> f64 {
     #[cfg(target_arch = "wasm32")]
     {
-        web_sys::window()
-            .and_then(|window| window.performance().ok())
-            .map(|performance| performance.now())
-            .unwrap_or(0.0)
+        js_sys::Date::now()
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
