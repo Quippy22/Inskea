@@ -197,17 +197,22 @@ fn equal_spacing_candidate(
             right.bounds.x,
             moving.bounds.x,
             moving.bounds.w,
-            moving.bounds.y.min(left.bounds.y).min(right.bounds.y) - 12.0,
+            moving.bounds.center().y,
         ),
         GuideAxis::Horizontal => (
             left.bounds.bottom(),
             right.bounds.y,
             moving.bounds.y,
             moving.bounds.h,
-            moving.bounds.x.min(left.bounds.x).min(right.bounds.x) - 12.0,
+            moving.bounds.center().x,
         ),
     };
     if start > end {
+        return None;
+    }
+
+    let moving_end = moving_start + moving_size;
+    if moving_end < start - GUIDE_TOLERANCE || moving_start > end + GUIDE_TOLERANCE {
         return None;
     }
 
@@ -228,7 +233,7 @@ fn equal_spacing_candidate(
             GuideLine {
                 start: Point::new(desired_start + moving_size, guide_position),
                 end: Point::new(end, guide_position),
-                label: None,
+                label: Some(gap),
             },
         ],
         GuideAxis::Horizontal => vec![
@@ -240,7 +245,7 @@ fn equal_spacing_candidate(
             GuideLine {
                 start: Point::new(guide_position, desired_start + moving_size),
                 end: Point::new(guide_position, end),
-                label: None,
+                label: Some(gap),
             },
         ],
     };
@@ -301,11 +306,18 @@ fn best_candidate(
     best
 }
 
+fn same_candidate_slot(left: GuideKey, right: GuideKey) -> bool {
+    left.axis == right.axis
+        && left.kind == right.kind
+        && left.target_a == right.target_a
+        && left.target_b == right.target_b
+}
+
 fn previous_pending(previous: &SmartGuideState, key: GuideKey, now_ms: f64) -> (f64, bool) {
     previous
         .pending
         .iter()
-        .find(|pending| pending.key == key)
+        .find(|pending| same_candidate_slot(pending.key, key))
         .map(|pending| (pending.since_ms, pending.applied))
         .unwrap_or((now_ms, false))
 }
@@ -498,6 +510,35 @@ mod tests {
     }
 
     #[test]
+    fn alignment_feature_changes_do_not_rearm_the_same_target() {
+        let others = [rect(1, 200.0, 140.0, 20.0, 20.0)];
+        let first = resolve_move(
+            Rect::new(180.0, 100.0, 20.0, 20.0),
+            &others,
+            0.0,
+            true,
+            &SmartGuideState::default(),
+        );
+        let held = resolve_move(
+            Rect::new(180.0, 100.0, 20.0, 20.0),
+            &others,
+            GUIDE_HOLD_MS,
+            true,
+            &first.state,
+        );
+        assert!(held.state.pending[0].applied);
+
+        let feature_changed = resolve_move(
+            Rect::new(194.0, 100.0, 20.0, 20.0),
+            &others,
+            GUIDE_HOLD_MS + 16.0,
+            true,
+            &held.state,
+        );
+        assert_eq!(feature_changed.snap_dx, 0.0);
+    }
+
+    #[test]
     fn alignment_guides_stop_at_element_edges() {
         let moving = GuideBox {
             id: 0,
@@ -535,6 +576,7 @@ mod tests {
         assert_eq!(held.snap_dx, 6.0);
         assert_eq!(held.state.guides.len(), 2);
         assert_eq!(held.state.guides[0].label, Some(30.0));
+        assert_eq!(held.state.guides[1].label, Some(30.0));
     }
 
     #[test]
