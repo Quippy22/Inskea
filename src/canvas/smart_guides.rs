@@ -352,6 +352,7 @@ pub fn resolve_move(
     let mut snap_dx = 0.0;
     let mut snap_dy = 0.0;
     let mut pending = Vec::new();
+    let mut preview_guides = Vec::new();
     let mut show_vertical = false;
     let mut show_horizontal = false;
     for candidate in candidates {
@@ -362,6 +363,7 @@ pub fn resolve_move(
             since_ms,
             applied: was_applied || held,
         });
+        preview_guides.extend(candidate.lines.iter().copied());
         if held && !was_applied {
             match candidate.key.axis {
                 GuideAxis::Vertical => snap_dx = candidate.snap_delta,
@@ -381,7 +383,7 @@ pub fn resolve_move(
         proposed.w,
         proposed.h,
     );
-    let guides = [
+    let applied_guides = [
         (GuideAxis::Vertical, show_vertical),
         (GuideAxis::Horizontal, show_horizontal),
     ]
@@ -401,6 +403,11 @@ pub fn resolve_move(
     .flatten()
     .flat_map(|candidate| candidate.lines)
     .collect();
+    let guides = if show_vertical || show_horizontal {
+        applied_guides
+    } else {
+        preview_guides
+    };
 
     GuideResolution {
         snap_dx,
@@ -474,7 +481,7 @@ mod tests {
         let proposed = Rect::new(194.0, 100.0, 20.0, 20.0);
         let first = resolve_move(proposed, &others, 0.0, true, &SmartGuideState::default());
         assert_eq!(first.snap_dx, 0.0);
-        assert!(first.state.guides.is_empty());
+        assert!(!first.state.guides.is_empty());
 
         let held = resolve_move(proposed, &others, GUIDE_HOLD_MS, true, &first.state);
         assert_eq!(held.snap_dx, 6.0);
@@ -521,7 +528,8 @@ mod tests {
         ];
         let proposed = Rect::new(44.0, 50.0, 20.0, 20.0);
         let first = resolve_move(proposed, &others, 0.0, true, &SmartGuideState::default());
-        assert!(first.state.guides.is_empty());
+        assert_eq!(first.state.guides.len(), 2);
+        assert_eq!(first.state.guides[0].label, Some(30.0));
 
         let held = resolve_move(proposed, &others, GUIDE_HOLD_MS, true, &first.state);
         assert_eq!(held.snap_dx, 6.0);
