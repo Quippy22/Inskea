@@ -135,7 +135,7 @@ fn alignment_candidate(
 
             if best
                 .as_ref()
-                .is_none_or(|current| candidate_is_better(&candidate, current))
+                .is_none_or(|current| alignment_candidate_is_better(&candidate, current))
             {
                 best = Some(candidate);
             }
@@ -268,10 +268,20 @@ fn equal_spacing_candidate(
     })
 }
 
-fn candidate_is_better(candidate: &GuideCandidate, current: &GuideCandidate) -> bool {
+fn alignment_candidate_is_better(candidate: &GuideCandidate, current: &GuideCandidate) -> bool {
     let candidate_priority = u8::from(candidate.key.moving_feature != candidate.key.target_feature);
     let current_priority = u8::from(current.key.moving_feature != current.key.target_feature);
     (candidate_priority, candidate.snap_delta.abs()) < (current_priority, current.snap_delta.abs())
+}
+
+fn candidate_is_better(candidate: &GuideCandidate, current: &GuideCandidate) -> bool {
+    let candidate_priority = u8::from(candidate.key.moving_feature != candidate.key.target_feature);
+    let current_priority = u8::from(current.key.moving_feature != current.key.target_feature);
+    let delta_order = candidate
+        .snap_delta
+        .abs()
+        .total_cmp(&current.snap_delta.abs());
+    delta_order.is_lt() || (delta_order.is_eq() && candidate_priority < current_priority)
 }
 
 fn best_candidate(
@@ -282,7 +292,13 @@ fn best_candidate(
     let mut best = others
         .iter()
         .filter_map(|target| alignment_candidate(moving, *target, axis))
-        .min_by(|left, right| left.snap_delta.abs().total_cmp(&right.snap_delta.abs()));
+        .reduce(|left, right| {
+            if candidate_is_better(&left, &right) {
+                left
+            } else {
+                right
+            }
+        });
 
     for (index, left) in others.iter().enumerate() {
         for right in others.iter().skip(index + 1) {
@@ -616,6 +632,20 @@ mod tests {
         assert_eq!(held.state.guides.len(), 2);
         assert_eq!(held.state.guides[0].label, Some(30.0));
         assert_eq!(held.state.guides[1].label, Some(30.0));
+    }
+
+    #[test]
+    fn exact_equal_spacing_beats_a_nearby_alignment_candidate() {
+        let others = [
+            rect(1, 0.0, 100.0, 20.0, 20.0),
+            rect(2, 100.0, 100.0, 20.0, 20.0),
+            rect(3, 52.0, 200.0, 20.0, 20.0),
+        ];
+        let proposed = Rect::new(50.0, 50.0, 20.0, 20.0);
+        let resolution = resolve_move(proposed, &others, 0.0, true, &SmartGuideState::default());
+        assert_eq!(resolution.state.guides.len(), 2);
+        assert_eq!(resolution.state.guides[0].label, Some(30.0));
+        assert_eq!(resolution.state.guides[1].label, Some(30.0));
     }
 
     #[test]
