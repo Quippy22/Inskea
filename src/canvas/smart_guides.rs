@@ -439,9 +439,19 @@ pub fn guide_overlay(guide_state: RwSignal<SmartGuideState>) -> impl Fn() -> Opt
             .guides
             .iter()
             .map(|guide| {
+                let is_vertical = (guide.start.x - guide.end.x).abs() <= f64::EPSILON;
                 let label = guide.label.map(|value| {
-                    let x = (guide.start.x + guide.end.x) / 2.0;
-                    let y = (guide.start.y + guide.end.y) / 2.0 - 4.0;
+                    let (x, y) = if is_vertical {
+                        (
+                            (guide.start.x + guide.end.x) / 2.0 + 8.0,
+                            (guide.start.y + guide.end.y) / 2.0,
+                        )
+                    } else {
+                        (
+                            (guide.start.x + guide.end.x) / 2.0,
+                            (guide.start.y + guide.end.y) / 2.0 - 4.0,
+                        )
+                    };
                     view! {
                         <text
                             x=x
@@ -449,6 +459,7 @@ pub fn guide_overlay(guide_state: RwSignal<SmartGuideState>) -> impl Fn() -> Opt
                             fill="#7aa2f7"
                             font-size="10"
                             text-anchor="middle"
+                            dominant-baseline="middle"
                             pointer-events="none"
                         >
                             {format!("{:.0}", value.abs())}
@@ -456,6 +467,11 @@ pub fn guide_overlay(guide_state: RwSignal<SmartGuideState>) -> impl Fn() -> Opt
                     }
                     .into_view()
                 });
+                let marker = if guide.label.is_some() {
+                    "url(#smart-guide-arrow)"
+                } else {
+                    "none"
+                };
                 view! {
                     <g pointer-events="none">
                         <line
@@ -464,8 +480,11 @@ pub fn guide_overlay(guide_state: RwSignal<SmartGuideState>) -> impl Fn() -> Opt
                             x2=guide.end.x
                             y2=guide.end.y
                             stroke="#7aa2f7"
-                            stroke-width="1"
+                            stroke-width="1.25"
                             stroke-dasharray="4 3"
+                            stroke-linecap="round"
+                            marker-start=marker
+                            marker-end=marker
                             opacity="0.9"
                         />
                         {label}
@@ -475,7 +494,27 @@ pub fn guide_overlay(guide_state: RwSignal<SmartGuideState>) -> impl Fn() -> Opt
             })
             .collect_view();
 
-        Some(view! { <g pointer-events="none">{lines}</g> }.into_view())
+        Some(
+            view! {
+                <g pointer-events="none">
+                    <defs>
+                        <marker
+                            id="smart-guide-arrow"
+                            marker-width="6"
+                            marker-height="6"
+                            ref-x="3"
+                            ref-y="3"
+                            orient="auto-start-reverse"
+                            marker-units="userSpaceOnUse"
+                        >
+                            <path d="M 0 0 L 6 3 L 0 6 z" fill="#7aa2f7"/>
+                        </marker>
+                    </defs>
+                    {lines}
+                </g>
+            }
+            .into_view(),
+        )
     }
 }
 
