@@ -101,6 +101,7 @@ fn handle_path_move_icon(
         st.drag.moving_anchor.set(Some(world));
         st.drag.drag_bounds.set(Some(el.bounds()));
         st.drag.last_world.set(Some(world));
+        st.drag.drag_originals.set(vec![el.clone()]);
         return true;
     }
     false
@@ -153,6 +154,8 @@ fn hit_move_handle(
     st: &mut CanvasState,
     props: &CanvasInputs,
     world: Point,
+    ids: &[ElementId],
+    els: &[Element],
 ) -> bool {
     let (mut bx, mut by, mut bw, mut bh) = (bounds.x, bounds.y, bounds.w, bounds.h);
     bx -= SELECT_PADDING;
@@ -168,6 +171,12 @@ fn hit_move_handle(
         st.drag.moving_anchor.set(Some(world));
         st.drag.drag_bounds.set(Some(bounds));
         st.drag.last_world.set(Some(world));
+        st.drag.drag_originals.set(
+            els.iter()
+                .filter(|el| ids.contains(&el.id()))
+                .cloned()
+                .collect(),
+        );
         return true;
     }
     false
@@ -237,7 +246,7 @@ fn handle_selection_handles(
     if hit_resize_handle(test, b, st, props, world, ids, els) {
         return true;
     }
-    if hit_move_handle(test, b, st, props, world) {
+    if hit_move_handle(test, b, st, props, world, ids, els) {
         return true;
     }
     if hit_rotate_handle(test, b, st, props, world, ids, els) {
@@ -312,6 +321,9 @@ fn handle_element_selection(
                     st.drag.moving_anchor.set(Some(world));
                     st.drag.drag_bounds.set(Some(bounds));
                     st.drag.last_world.set(Some(world));
+                    st.drag
+                        .drag_originals
+                        .set(els.iter().filter(|el| el.id() == id).cloned().collect());
                 }
             }
         }
@@ -330,6 +342,12 @@ fn handle_element_selection(
             st.drag.moving_anchor.set(Some(world));
             st.drag.drag_bounds.set(Some(bounds));
             st.drag.last_world.set(Some(world));
+            st.drag.drag_originals.set(
+                els.iter()
+                    .filter(|el| expanded.contains(&el.id()))
+                    .cloned()
+                    .collect(),
+            );
         }
     }
     true
@@ -522,14 +540,15 @@ fn do_path_midpoint_drag(world: Point, st: &mut CanvasState, props: &mut CanvasI
 #[inline]
 fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
     let ids = st.selected_ids.get();
+    let originals = st.drag.drag_originals.get();
+    let Some(bounds) = st.drag.drag_bounds.get() else {
+        return;
+    };
     let raw_dx = world.x - anchor.x;
     let raw_dy = world.y - anchor.y;
     let smart_enabled =
         st.shift_pressed.get() && matches!(st.drag.drag_action.get(), Some(DragOperation::Move));
     let (snap_dx, snap_dy, next_guides) = props.scene.with(|scene| {
-        let Some(bounds) = combined_bounds(&ids, scene.elements()) else {
-            return (0.0, 0.0, SmartGuideState::default());
-        };
         let proposed = Rect::new(bounds.x + raw_dx, bounds.y + raw_dy, bounds.w, bounds.h);
         let others = scene
             .elements()
@@ -550,12 +569,14 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
     props.scene.update(|s| {
         for el in s.elements_mut().iter_mut() {
             if ids.contains(&el.id()) {
-                el.offset(dx, dy);
+                if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
+                    *el = orig.clone();
+                    el.offset(dx, dy);
+                }
             }
         }
     });
     st.drag.smart_guides.set(next_guides);
-    st.drag.moving_anchor.set(Some(world));
 }
 
 /// On pointer-up, collapse a path point if it sits too close to its chord.

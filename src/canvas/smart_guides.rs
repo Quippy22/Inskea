@@ -1,10 +1,13 @@
 use crate::model::{ElementId, Point, Rect};
+use crate::util::now_ms;
 use leptos::*;
 
 /// Maximum distance at which a proposed position can become a smart-guide candidate.
 pub const GUIDE_TOLERANCE: f64 = 6.0;
 /// Distance at which an already active guide releases.
 pub const GUIDE_RELEASE_TOLERANCE: f64 = 9.0;
+/// Time to hold a newly snapped guide before allowing release (ms).
+const GUIDE_LOCK_MS: u64 = 300;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GuideAxis {
@@ -55,6 +58,7 @@ pub struct GuideCandidate {
 pub struct SmartGuideState {
     pub guides: Vec<GuideLine>,
     pub active: Vec<GuideKey>,
+    pub lock_until_ms: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -127,42 +131,50 @@ fn alignment_candidate(
     best
 }
 
-/// Draw alignment guides only through the space between element edges. If
-/// their bounds overlap along the guide's length, no connector is drawn
-/// instead of drawing through the middle of either element.
+/// Draw alignment guides between the nearest facing edges of the two elements.
+/// If they overlap along the perpendicular axis, draw the line spanning the
+/// full extent of both elements so the guide is always visible when snapping.
 fn alignment_lines(moving: Rect, target: Rect, axis: GuideAxis, coordinate: f64) -> Vec<GuideLine> {
     match axis {
         GuideAxis::Vertical => {
-            let (moving_edge, target_edge) = if moving.center().y <= target.center().y {
-                (moving.bottom(), target.y)
+            let moving_top = moving.y;
+            let moving_bottom = moving.bottom();
+            let target_top = target.y;
+            let target_bottom = target.bottom();
+
+            let (start_y, end_y) = if moving_bottom <= target_top {
+                (moving_bottom, target_top)
+            } else if target_bottom <= moving_top {
+                (target_bottom, moving_top)
             } else {
-                (moving.y, target.bottom())
+                (moving_top.min(target_top), moving_bottom.max(target_bottom))
             };
-            if moving_edge <= target_edge {
-                vec![GuideLine {
-                    start: Point::new(coordinate, moving_edge),
-                    end: Point::new(coordinate, target_edge),
-                    kind: GuideKind::Alignment,
-                }]
-            } else {
-                Vec::new()
-            }
+
+            vec![GuideLine {
+                start: Point::new(coordinate, start_y),
+                end: Point::new(coordinate, end_y),
+                kind: GuideKind::Alignment,
+            }]
         }
         GuideAxis::Horizontal => {
-            let (moving_edge, target_edge) = if moving.center().x <= target.center().x {
-                (moving.right(), target.x)
+            let moving_left = moving.x;
+            let moving_right = moving.right();
+            let target_left = target.x;
+            let target_right = target.right();
+
+            let (start_x, end_x) = if moving_right <= target_left {
+                (moving_right, target_left)
+            } else if target_right <= moving_left {
+                (target_right, moving_left)
             } else {
-                (moving.x, target.right())
+                (moving_left.min(target_left), moving_right.max(target_right))
             };
-            if moving_edge <= target_edge {
-                vec![GuideLine {
-                    start: Point::new(moving_edge, coordinate),
-                    end: Point::new(target_edge, coordinate),
-                    kind: GuideKind::Alignment,
-                }]
-            } else {
-                Vec::new()
-            }
+
+            vec![GuideLine {
+                start: Point::new(start_x, coordinate),
+                end: Point::new(end_x, coordinate),
+                kind: GuideKind::Alignment,
+            }]
         }
     }
 }
@@ -307,6 +319,8 @@ fn best_candidate(candidates: Vec<GuideCandidate>) -> Option<GuideCandidate> {
 fn same_candidate_slot(left: GuideKey, right: GuideKey) -> bool {
     left.axis == right.axis
         && left.kind == right.kind
+        && left.moving_feature == right.moving_feature
+        && left.target_feature == right.target_feature
         && left.target_a == right.target_a
         && left.target_b == right.target_b
 }
@@ -316,14 +330,18 @@ fn active_candidate(
     others: &[GuideBox],
     axis: GuideAxis,
     previous: &SmartGuideState,
+    now_ms: f64,
 ) -> Option<GuideCandidate> {
     let candidates = candidates_for_axis(moving, others, axis, GUIDE_RELEASE_TOLERANCE);
+
+    let is_locked = previous.lock_until_ms.map_or(false, |lock| now_ms < lock);
+
     if let Some(active_key) = previous.active.iter().find(|key| key.axis == axis) {
         if let Some(candidate) = candidates
             .iter()
             .find(|candidate| same_candidate_slot(candidate.key, *active_key))
         {
-            if candidate.snap_delta.abs() <= GUIDE_RELEASE_TOLERANCE {
+            if is_locked || candidate.snap_delta.abs() <= GUIDE_RELEASE_TOLERANCE {
                 return Some(candidate.clone());
             }
         }
@@ -342,6 +360,7 @@ fn active_candidate(
 /// Resolve both axes on every pointer update. Active guides use a slightly
 /// wider release band so they remain stable while the pointer crosses the
 /// candidate, but they are reacquired continuously after release.
+/// Newly snapped guides are locked for GUIDE_LOCK_MS to prevent aggressive re-snapping.
 pub fn resolve_move(
     proposed: Rect,
     others: &[(ElementId, Rect)],
@@ -356,6 +375,7 @@ pub fn resolve_move(
         };
     }
 
+    let now_ms = now_ms();
     let moving = GuideBox {
         id: 0,
         bounds: proposed,
@@ -368,8 +388,8 @@ pub fn resolve_move(
         })
         .collect();
     let candidates = [
-        active_candidate(moving, &others, GuideAxis::Vertical, previous),
-        active_candidate(moving, &others, GuideAxis::Horizontal, previous),
+        active_candidate(moving, &others, GuideAxis::Vertical, previous, now_ms),
+        active_candidate(moving, &others, GuideAxis::Horizontal, previous, now_ms),
     ]
     .into_iter()
     .flatten()
@@ -378,13 +398,27 @@ pub fn resolve_move(
     let mut snap_dx = 0.0;
     let mut snap_dy = 0.0;
     let mut active = Vec::new();
-    for candidate in candidates {
+    let mut new_lock = false;
+    for candidate in &candidates {
         active.push(candidate.key);
         match candidate.key.axis {
             GuideAxis::Vertical => snap_dx = candidate.snap_delta,
             GuideAxis::Horizontal => snap_dy = candidate.snap_delta,
         }
+        if !previous
+            .active
+            .iter()
+            .any(|k| same_candidate_slot(*k, candidate.key))
+        {
+            new_lock = true;
+        }
     }
+
+    let lock_until_ms = if new_lock {
+        Some(now_ms + GUIDE_LOCK_MS as f64)
+    } else {
+        previous.lock_until_ms.filter(|&lock| now_ms < lock)
+    };
 
     let snapped_moving = GuideBox {
         id: 0,
@@ -406,7 +440,9 @@ pub fn resolve_move(
                 &SmartGuideState {
                     guides: Vec::new(),
                     active: active.clone(),
+                    lock_until_ms,
                 },
+                now_ms,
             )
         })
         .flat_map(|candidate| candidate.lines)
@@ -415,7 +451,11 @@ pub fn resolve_move(
     GuideResolution {
         snap_dx,
         snap_dy,
-        state: SmartGuideState { guides, active },
+        state: SmartGuideState {
+            guides,
+            active,
+            lock_until_ms,
+        },
     }
 }
 
@@ -561,7 +601,15 @@ mod tests {
             GUIDE_RELEASE_TOLERANCE,
         )
         .unwrap();
-        assert!(candidate.lines.is_empty());
+        assert_eq!(candidate.lines.len(), 1);
+        assert_eq!(
+            candidate.lines[0].start.y,
+            moving.bounds.y.min(overlapping.bounds.y)
+        );
+        assert_eq!(
+            candidate.lines[0].end.y,
+            moving.bounds.bottom().max(overlapping.bounds.bottom())
+        );
     }
 
     #[test]
