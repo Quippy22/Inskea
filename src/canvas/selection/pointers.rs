@@ -540,7 +540,6 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
         let resolution = smart_guides::resolve_move(
             proposed,
             &others,
-            smart_guides::now_ms(),
             smart_enabled,
             &st.drag.smart_guides.get_untracked(),
         );
@@ -753,13 +752,7 @@ pub fn select_pointer_up(
             finish_path_point_drag(st, props, idx);
         }
 
-        let smart_guide_active = st
-            .drag
-            .smart_guides
-            .get()
-            .pending
-            .iter()
-            .any(|pending| pending.applied);
+        let smart_guide_active = !st.drag.smart_guides.get().active.is_empty();
         if st.shift_pressed.get() {
             if let Some(DragOperation::PathPoint(idx)) = drag_action {
                 snap_path_point_to_grid(st, props, idx);

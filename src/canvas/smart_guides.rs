@@ -2,20 +2,9 @@ use crate::model::{ElementId, Point, Rect};
 use leptos::*;
 
 /// Maximum distance at which a proposed position can become a smart-guide candidate.
-pub const GUIDE_TOLERANCE: f64 = 8.0;
-/// Time a candidate must remain stable before the move is held on the guide.
-pub const GUIDE_HOLD_MS: f64 = 300.0;
-
-pub fn now_ms() -> f64 {
-    #[cfg(target_arch = "wasm32")]
-    {
-        js_sys::Date::now()
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        0.0
-    }
-}
+pub const GUIDE_TOLERANCE: f64 = 6.0;
+/// Distance at which an already active guide releases.
+pub const GUIDE_RELEASE_TOLERANCE: f64 = 9.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GuideAxis {
@@ -52,7 +41,7 @@ pub struct GuideKey {
 pub struct GuideLine {
     pub start: Point,
     pub end: Point,
-    pub label: Option<f64>,
+    pub kind: GuideKind,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -62,18 +51,10 @@ pub struct GuideCandidate {
     pub lines: Vec<GuideLine>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct PendingGuide {
-    pub key: GuideKey,
-    pub since_ms: f64,
-    /// Whether the one-time alignment correction has already been applied.
-    pub applied: bool,
-}
-
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SmartGuideState {
     pub guides: Vec<GuideLine>,
-    pub pending: Vec<PendingGuide>,
+    pub active: Vec<GuideKey>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -108,6 +89,7 @@ fn alignment_candidate(
     moving: GuideBox,
     target: GuideBox,
     axis: GuideAxis,
+    tolerance: f64,
 ) -> Option<GuideCandidate> {
     let moving_features = features(moving.bounds, axis);
     let target_features = features(target.bounds, axis);
@@ -116,7 +98,7 @@ fn alignment_candidate(
     for (moving_feature, moving_value) in moving_features {
         for (target_feature, target_value) in target_features {
             let snap_delta = target_value - moving_value;
-            if snap_delta.abs() > GUIDE_TOLERANCE {
+            if snap_delta.abs() > tolerance {
                 continue;
             }
 
@@ -160,7 +142,7 @@ fn alignment_lines(moving: Rect, target: Rect, axis: GuideAxis, coordinate: f64)
                 vec![GuideLine {
                     start: Point::new(coordinate, moving_edge),
                     end: Point::new(coordinate, target_edge),
-                    label: None,
+                    kind: GuideKind::Alignment,
                 }]
             } else {
                 Vec::new()
@@ -176,7 +158,7 @@ fn alignment_lines(moving: Rect, target: Rect, axis: GuideAxis, coordinate: f64)
                 vec![GuideLine {
                     start: Point::new(moving_edge, coordinate),
                     end: Point::new(target_edge, coordinate),
-                    label: None,
+                    kind: GuideKind::Alignment,
                 }]
             } else {
                 Vec::new()
@@ -190,6 +172,7 @@ fn equal_spacing_candidate(
     left: GuideBox,
     right: GuideBox,
     axis: GuideAxis,
+    tolerance: f64,
 ) -> Option<GuideCandidate> {
     let (start, end, moving_start, moving_size, guide_position) = match axis {
         GuideAxis::Vertical => (
@@ -212,40 +195,39 @@ fn equal_spacing_candidate(
     }
 
     let moving_end = moving_start + moving_size;
-    if moving_end < start - GUIDE_TOLERANCE || moving_start > end + GUIDE_TOLERANCE {
+    if moving_end < start - tolerance || moving_start > end + tolerance {
         return None;
     }
 
     let desired_start = (start + end - moving_size) / 2.0;
     let snap_delta = desired_start - moving_start;
-    if snap_delta.abs() > GUIDE_TOLERANCE {
+    if snap_delta.abs() > tolerance {
         return None;
     }
 
-    let gap = desired_start - start;
     let lines = match axis {
         GuideAxis::Vertical => vec![
             GuideLine {
                 start: Point::new(start, guide_position),
                 end: Point::new(desired_start, guide_position),
-                label: Some(gap),
+                kind: GuideKind::EqualSpacing,
             },
             GuideLine {
                 start: Point::new(desired_start + moving_size, guide_position),
                 end: Point::new(end, guide_position),
-                label: Some(gap),
+                kind: GuideKind::EqualSpacing,
             },
         ],
         GuideAxis::Horizontal => vec![
             GuideLine {
                 start: Point::new(guide_position, start),
                 end: Point::new(guide_position, desired_start),
-                label: Some(gap),
+                kind: GuideKind::EqualSpacing,
             },
             GuideLine {
                 start: Point::new(guide_position, desired_start + moving_size),
                 end: Point::new(guide_position, end),
-                label: Some(gap),
+                kind: GuideKind::EqualSpacing,
             },
         ],
     };
@@ -284,21 +266,16 @@ fn candidate_is_better(candidate: &GuideCandidate, current: &GuideCandidate) -> 
     delta_order.is_lt() || (delta_order.is_eq() && candidate_priority < current_priority)
 }
 
-fn best_candidate(
+fn candidates_for_axis(
     moving: GuideBox,
     others: &[GuideBox],
     axis: GuideAxis,
-) -> Option<GuideCandidate> {
-    let mut best = others
+    tolerance: f64,
+) -> Vec<GuideCandidate> {
+    let mut candidates = others
         .iter()
-        .filter_map(|target| alignment_candidate(moving, *target, axis))
-        .reduce(|left, right| {
-            if candidate_is_better(&left, &right) {
-                left
-            } else {
-                right
-            }
-        });
+        .filter_map(|target| alignment_candidate(moving, *target, axis, tolerance))
+        .collect::<Vec<_>>();
 
     for (index, left) in others.iter().enumerate() {
         for right in others.iter().skip(index + 1) {
@@ -308,18 +285,23 @@ fn best_candidate(
                 GuideAxis::Horizontal if left.bounds.y <= right.bounds.y => (*left, *right),
                 GuideAxis::Horizontal => (*right, *left),
             };
-            if let Some(candidate) = equal_spacing_candidate(moving, left, right, axis) {
-                let is_better = best
-                    .as_ref()
-                    .is_none_or(|current| candidate_is_better(&candidate, current));
-                if is_better {
-                    best = Some(candidate);
-                }
+            if let Some(candidate) = equal_spacing_candidate(moving, left, right, axis, tolerance) {
+                candidates.push(candidate);
             }
         }
     }
 
-    best
+    candidates
+}
+
+fn best_candidate(candidates: Vec<GuideCandidate>) -> Option<GuideCandidate> {
+    candidates.into_iter().reduce(|left, right| {
+        if candidate_is_better(&left, &right) {
+            left
+        } else {
+            right
+        }
+    })
 }
 
 fn same_candidate_slot(left: GuideKey, right: GuideKey) -> bool {
@@ -329,24 +311,40 @@ fn same_candidate_slot(left: GuideKey, right: GuideKey) -> bool {
         && left.target_b == right.target_b
 }
 
-fn previous_pending(previous: &SmartGuideState, key: GuideKey, now_ms: f64) -> (f64, bool) {
-    previous
-        .pending
-        .iter()
-        .find(|pending| same_candidate_slot(pending.key, key))
-        .map(|pending| (pending.since_ms, pending.applied))
-        .unwrap_or((now_ms, false))
+fn active_candidate(
+    moving: GuideBox,
+    others: &[GuideBox],
+    axis: GuideAxis,
+    previous: &SmartGuideState,
+) -> Option<GuideCandidate> {
+    let candidates = candidates_for_axis(moving, others, axis, GUIDE_RELEASE_TOLERANCE);
+    if let Some(active_key) = previous.active.iter().find(|key| key.axis == axis) {
+        if let Some(candidate) = candidates
+            .iter()
+            .find(|candidate| same_candidate_slot(candidate.key, *active_key))
+        {
+            if candidate.snap_delta.abs() <= GUIDE_RELEASE_TOLERANCE {
+                return Some(candidate.clone());
+            }
+        }
+    }
+
+    best_candidate(
+        candidates
+            .into_iter()
+            .filter(|candidate| candidate.snap_delta.abs() <= GUIDE_TOLERANCE)
+            .collect(),
+    )
 }
 
 /// Resolve smart-guide candidates for a proposed move.
 ///
-/// A candidate is applied only after it remains stable for
-/// [`GUIDE_HOLD_MS`]. Once applied, it is not reapplied until the candidate is
-/// left and entered again, so moving away from an alignment never feels stuck.
+/// Resolve both axes on every pointer update. Active guides use a slightly
+/// wider release band so they remain stable while the pointer crosses the
+/// candidate, but they are reacquired continuously after release.
 pub fn resolve_move(
     proposed: Rect,
     others: &[(ElementId, Rect)],
-    now_ms: f64,
     enabled: bool,
     previous: &SmartGuideState,
 ) -> GuideResolution {
@@ -370,8 +368,8 @@ pub fn resolve_move(
         })
         .collect();
     let candidates = [
-        best_candidate(moving, &others, GuideAxis::Vertical),
-        best_candidate(moving, &others, GuideAxis::Horizontal),
+        active_candidate(moving, &others, GuideAxis::Vertical, previous),
+        active_candidate(moving, &others, GuideAxis::Horizontal, previous),
     ]
     .into_iter()
     .flatten()
@@ -379,68 +377,45 @@ pub fn resolve_move(
 
     let mut snap_dx = 0.0;
     let mut snap_dy = 0.0;
-    let mut pending = Vec::new();
-    let mut preview_guides = Vec::new();
-    let mut show_vertical = false;
-    let mut show_horizontal = false;
+    let mut active = Vec::new();
     for candidate in candidates {
-        let (since_ms, was_applied) = previous_pending(previous, candidate.key, now_ms);
-        let held = now_ms - since_ms >= GUIDE_HOLD_MS;
-        pending.push(PendingGuide {
-            key: candidate.key,
-            since_ms,
-            applied: was_applied || held,
-        });
-        preview_guides.extend(candidate.lines.iter().copied());
-        if held && !was_applied {
-            match candidate.key.axis {
-                GuideAxis::Vertical => snap_dx = candidate.snap_delta,
-                GuideAxis::Horizontal => snap_dy = candidate.snap_delta,
-            }
-        }
-        let exact_after_apply = was_applied && candidate.snap_delta.abs() <= f64::EPSILON;
+        active.push(candidate.key);
         match candidate.key.axis {
-            GuideAxis::Vertical => show_vertical |= held && (!was_applied || exact_after_apply),
-            GuideAxis::Horizontal => show_horizontal |= held && (!was_applied || exact_after_apply),
+            GuideAxis::Vertical => snap_dx = candidate.snap_delta,
+            GuideAxis::Horizontal => snap_dy = candidate.snap_delta,
         }
     }
 
-    let snapped_moving = Rect::new(
-        proposed.x + snap_dx,
-        proposed.y + snap_dy,
-        proposed.w,
-        proposed.h,
-    );
-    let applied_guides = [
-        (GuideAxis::Vertical, show_vertical),
-        (GuideAxis::Horizontal, show_horizontal),
-    ]
-    .into_iter()
-    .filter_map(|(axis, show)| {
-        show.then(|| {
-            best_candidate(
-                GuideBox {
-                    id: 0,
-                    bounds: snapped_moving,
-                },
+    let snapped_moving = GuideBox {
+        id: 0,
+        bounds: Rect::new(
+            proposed.x + snap_dx,
+            proposed.y + snap_dy,
+            proposed.w,
+            proposed.h,
+        ),
+    };
+    let guides = [GuideAxis::Vertical, GuideAxis::Horizontal]
+        .into_iter()
+        .filter(|axis| active.iter().any(|key| key.axis == *axis))
+        .filter_map(|axis| {
+            active_candidate(
+                snapped_moving,
                 &others,
                 axis,
+                &SmartGuideState {
+                    guides: Vec::new(),
+                    active: active.clone(),
+                },
             )
         })
-    })
-    .flatten()
-    .flat_map(|candidate| candidate.lines)
-    .collect();
-    let guides = if show_vertical || show_horizontal {
-        applied_guides
-    } else {
-        preview_guides
-    };
+        .flat_map(|candidate| candidate.lines)
+        .collect();
 
     GuideResolution {
         snap_dx,
         snap_dy,
-        state: SmartGuideState { guides, pending },
+        state: SmartGuideState { guides, active },
     }
 }
 
@@ -455,35 +430,7 @@ pub fn guide_overlay(guide_state: RwSignal<SmartGuideState>) -> impl Fn() -> Opt
             .guides
             .iter()
             .map(|guide| {
-                let is_vertical = (guide.start.x - guide.end.x).abs() <= f64::EPSILON;
-                let label = guide.label.map(|value| {
-                    let (x, y) = if is_vertical {
-                        (
-                            (guide.start.x + guide.end.x) / 2.0 + 8.0,
-                            (guide.start.y + guide.end.y) / 2.0,
-                        )
-                    } else {
-                        (
-                            (guide.start.x + guide.end.x) / 2.0,
-                            (guide.start.y + guide.end.y) / 2.0 - 4.0,
-                        )
-                    };
-                    view! {
-                        <text
-                            x=x
-                            y=y
-                            fill="#7aa2f7"
-                            font-size="10"
-                            text-anchor="middle"
-                            dominant-baseline="middle"
-                            pointer-events="none"
-                        >
-                            {format!("{:.0}", value.abs())}
-                        </text>
-                    }
-                    .into_view()
-                });
-                let marker = if guide.label.is_some() {
+                let marker = if guide.kind == GuideKind::EqualSpacing {
                     "url(#smart-guide-arrow)"
                 } else {
                     "none"
@@ -503,7 +450,6 @@ pub fn guide_overlay(guide_state: RwSignal<SmartGuideState>) -> impl Fn() -> Opt
                             marker-end=marker
                             opacity="0.9"
                         />
-                        {label}
                     </g>
                 }
                 .into_view()
@@ -543,54 +489,48 @@ mod tests {
     }
 
     #[test]
-    fn alignment_candidate_waits_before_snapping() {
+    fn alignment_snaps_continuously_until_released() {
         let others = [rect(1, 200.0, 140.0, 20.0, 20.0)];
         let proposed = Rect::new(194.0, 100.0, 20.0, 20.0);
-        let first = resolve_move(proposed, &others, 0.0, true, &SmartGuideState::default());
-        assert_eq!(first.snap_dx, 0.0);
+        let first = resolve_move(proposed, &others, true, &SmartGuideState::default());
+        assert_eq!(first.snap_dx, 6.0);
+        assert_eq!(first.state.active.len(), 1);
         assert!(!first.state.guides.is_empty());
-
-        let held = resolve_move(proposed, &others, GUIDE_HOLD_MS, true, &first.state);
-        assert_eq!(held.snap_dx, 6.0);
-        assert!(!held.state.guides.is_empty());
 
         let moving_again = resolve_move(
             Rect::new(195.0, 100.0, 20.0, 20.0),
             &others,
-            GUIDE_HOLD_MS + 16.0,
             true,
-            &held.state,
+            &first.state,
         );
-        assert_eq!(moving_again.snap_dx, 0.0);
+        assert_eq!(moving_again.snap_dx, 5.0);
+
+        let released = resolve_move(
+            Rect::new(232.0, 100.0, 20.0, 20.0),
+            &others,
+            true,
+            &moving_again.state,
+        );
+        assert_eq!(released.snap_dx, 0.0);
+        assert!(released.state.active.is_empty());
     }
 
     #[test]
-    fn alignment_feature_changes_do_not_rearm_the_same_target() {
+    fn alignment_feature_changes_remain_continuous() {
         let others = [rect(1, 200.0, 140.0, 20.0, 20.0)];
         let first = resolve_move(
             Rect::new(180.0, 100.0, 20.0, 20.0),
             &others,
-            0.0,
             true,
             &SmartGuideState::default(),
         );
-        let held = resolve_move(
-            Rect::new(180.0, 100.0, 20.0, 20.0),
-            &others,
-            GUIDE_HOLD_MS,
-            true,
-            &first.state,
-        );
-        assert!(held.state.pending[0].applied);
-
         let feature_changed = resolve_move(
             Rect::new(194.0, 100.0, 20.0, 20.0),
             &others,
-            GUIDE_HOLD_MS + 16.0,
             true,
-            &held.state,
+            &first.state,
         );
-        assert_eq!(feature_changed.snap_dx, 0.0);
+        assert_eq!(feature_changed.snap_dx, 6.0);
     }
 
     #[test]
@@ -603,7 +543,9 @@ mod tests {
             id: 1,
             bounds: Rect::new(100.0, 40.0, 20.0, 20.0),
         };
-        let candidate = alignment_candidate(moving, target, GuideAxis::Vertical).unwrap();
+        let candidate =
+            alignment_candidate(moving, target, GuideAxis::Vertical, GUIDE_RELEASE_TOLERANCE)
+                .unwrap();
         assert_eq!(candidate.lines.len(), 1);
         assert_eq!(candidate.lines[0].start.y, moving.bounds.bottom());
         assert_eq!(candidate.lines[0].end.y, target.bounds.y);
@@ -612,26 +554,44 @@ mod tests {
             id: 1,
             bounds: Rect::new(100.0, 10.0, 20.0, 20.0),
         };
-        let candidate = alignment_candidate(moving, overlapping, GuideAxis::Vertical).unwrap();
+        let candidate = alignment_candidate(
+            moving,
+            overlapping,
+            GuideAxis::Vertical,
+            GUIDE_RELEASE_TOLERANCE,
+        )
+        .unwrap();
         assert!(candidate.lines.is_empty());
     }
 
     #[test]
-    fn equal_spacing_candidate_holds_at_the_middle_gap() {
+    fn equal_spacing_snaps_continuously_at_the_middle_gap() {
         let others = [
             rect(1, 0.0, 100.0, 20.0, 20.0),
             rect(2, 100.0, 100.0, 20.0, 20.0),
         ];
         let proposed = Rect::new(44.0, 50.0, 20.0, 20.0);
-        let first = resolve_move(proposed, &others, 0.0, true, &SmartGuideState::default());
+        let first = resolve_move(proposed, &others, true, &SmartGuideState::default());
+        assert_eq!(first.snap_dx, 6.0);
         assert_eq!(first.state.guides.len(), 2);
-        assert_eq!(first.state.guides[0].label, Some(30.0));
+        assert_eq!(first.state.guides[0].kind, GuideKind::EqualSpacing);
 
-        let held = resolve_move(proposed, &others, GUIDE_HOLD_MS, true, &first.state);
-        assert_eq!(held.snap_dx, 6.0);
-        assert_eq!(held.state.guides.len(), 2);
-        assert_eq!(held.state.guides[0].label, Some(30.0));
-        assert_eq!(held.state.guides[1].label, Some(30.0));
+        let moving_again = resolve_move(
+            Rect::new(45.0, 50.0, 20.0, 20.0),
+            &others,
+            true,
+            &first.state,
+        );
+        assert_eq!(moving_again.snap_dx, 5.0);
+
+        let released = resolve_move(
+            Rect::new(60.0, 50.0, 20.0, 20.0),
+            &others,
+            true,
+            &moving_again.state,
+        );
+        assert_eq!(released.snap_dx, 0.0);
+        assert!(released.state.active.is_empty());
     }
 
     #[test]
@@ -642,25 +602,25 @@ mod tests {
             rect(3, 52.0, 200.0, 20.0, 20.0),
         ];
         let proposed = Rect::new(50.0, 50.0, 20.0, 20.0);
-        let resolution = resolve_move(proposed, &others, 0.0, true, &SmartGuideState::default());
+        let resolution = resolve_move(proposed, &others, true, &SmartGuideState::default());
         assert_eq!(resolution.state.guides.len(), 2);
-        assert_eq!(resolution.state.guides[0].label, Some(30.0));
-        assert_eq!(resolution.state.guides[1].label, Some(30.0));
+        assert_eq!(resolution.state.guides[0].kind, GuideKind::EqualSpacing);
+        assert_eq!(resolution.state.guides[1].kind, GuideKind::EqualSpacing);
     }
 
     #[test]
-    fn leaving_a_candidate_clears_the_hold() {
+    fn leaving_a_candidate_clears_the_active_guide() {
         let others = [rect(1, 200.0, 100.0, 20.0, 20.0)];
         let proposed = Rect::new(194.0, 100.0, 20.0, 20.0);
-        let first = resolve_move(proposed, &others, 0.0, true, &SmartGuideState::default());
+        let first = resolve_move(proposed, &others, true, &SmartGuideState::default());
         let cleared = resolve_move(
             Rect::new(170.0, 170.0, 20.0, 20.0),
             &others,
-            GUIDE_HOLD_MS,
             true,
             &first.state,
         );
         assert!(cleared.state.guides.is_empty());
+        assert!(cleared.state.active.is_empty());
         assert_eq!(cleared.snap_dx, 0.0);
     }
 }
