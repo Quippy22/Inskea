@@ -134,6 +134,60 @@ fn alignment_candidate(
 /// Draw alignment guides between the nearest facing edges of the two elements.
 /// If they overlap along the perpendicular axis, draw the line spanning the
 /// full extent of both elements so the guide is always visible when snapping.
+fn feature_value(bounds: Rect, axis: GuideAxis, feature: GuideFeature) -> f64 {
+    match (axis, feature) {
+        (GuideAxis::Vertical, GuideFeature::Start) => bounds.x,
+        (GuideAxis::Vertical, GuideFeature::Center) => bounds.center().x,
+        (GuideAxis::Vertical, GuideFeature::End) => bounds.right(),
+        (GuideAxis::Horizontal, GuideFeature::Start) => bounds.y,
+        (GuideAxis::Horizontal, GuideFeature::Center) => bounds.center().y,
+        (GuideAxis::Horizontal, GuideFeature::End) => bounds.bottom(),
+    }
+}
+
+fn candidate_lines(
+    snapped_moving: GuideBox,
+    others: &[GuideBox],
+    candidate: &GuideCandidate,
+) -> Vec<GuideLine> {
+    if candidate.key.kind != GuideKind::Alignment {
+        return candidate.lines.clone();
+    }
+
+    let axis = candidate.key.axis;
+    let feature = candidate.key.moving_feature;
+    let coordinate = feature_value(snapped_moving.bounds, axis, feature);
+
+    let mut boxes = vec![snapped_moving];
+    for other in others {
+        let val = feature_value(other.bounds, axis, feature);
+        if (val - coordinate).abs() < 1.0 {
+            boxes.push(*other);
+        }
+    }
+
+    if boxes.len() < 2 {
+        return candidate.lines.clone();
+    }
+
+    boxes.sort_by(|a, b| {
+        let (pos_a, pos_b) = match axis {
+            GuideAxis::Vertical => (a.bounds.y, b.bounds.y),
+            GuideAxis::Horizontal => (a.bounds.x, b.bounds.x),
+        };
+        pos_a.total_cmp(&pos_b)
+    });
+
+    let mut lines = Vec::new();
+    for window in boxes.windows(2) {
+        let a = window[0];
+        let b = window[1];
+        lines.extend(alignment_lines(a.bounds, b.bounds, axis, coordinate));
+    }
+
+    lines
+}
+
 fn alignment_lines(moving: Rect, target: Rect, axis: GuideAxis, coordinate: f64) -> Vec<GuideLine> {
     match axis {
         GuideAxis::Vertical => {
@@ -445,7 +499,7 @@ pub fn resolve_move(
                 now_ms,
             )
         })
-        .flat_map(|candidate| candidate.lines)
+        .flat_map(|candidate| candidate_lines(snapped_moving, &others, &candidate))
         .collect();
 
     GuideResolution {
@@ -656,6 +710,22 @@ mod tests {
         assert_eq!(resolution.state.guides[1].kind, GuideKind::EqualSpacing);
     }
 
+    #[test]
+    fn multi_element_alignment_guides_connect_adjacent_elements() {
+        let others = [
+            rect(1, 140.0, 0.0, 20.0, 50.0),
+            rect(2, 140.0, 100.0, 20.0, 50.0),
+        ];
+        let proposed = Rect::new(134.0, 200.0, 20.0, 50.0);
+        let resolution = resolve_move(proposed, &others, true, &SmartGuideState::default());
+
+        assert_eq!(resolution.snap_dx, 6.0);
+        assert_eq!(resolution.state.guides.len(), 2);
+        assert_eq!(resolution.state.guides[0].start.y, 50.0);
+        assert_eq!(resolution.state.guides[0].end.y, 100.0);
+        assert_eq!(resolution.state.guides[1].start.y, 150.0);
+        assert_eq!(resolution.state.guides[1].end.y, 200.0);
+    }
     #[test]
     fn leaving_a_candidate_clears_the_active_guide() {
         let others = [rect(1, 200.0, 100.0, 20.0, 20.0)];
