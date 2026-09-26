@@ -233,13 +233,23 @@ fn alignment_lines(moving: Rect, target: Rect, axis: GuideAxis, coordinate: f64)
     }
 }
 
-fn equal_spacing_candidate(
+fn perpendicular_gap(moving: Rect, target: Rect, axis: GuideAxis) -> f64 {
+    match axis {
+        GuideAxis::Vertical if moving.bottom() < target.y => target.y - moving.bottom(),
+        GuideAxis::Vertical if target.bottom() < moving.y => moving.y - target.bottom(),
+        GuideAxis::Horizontal if moving.right() < target.x => target.x - moving.right(),
+        GuideAxis::Horizontal if target.right() < moving.x => moving.x - target.right(),
+        _ => 0.0,
+    }
+}
+
+fn equal_spacing_gap(
     moving: GuideBox,
     left: GuideBox,
     right: GuideBox,
     axis: GuideAxis,
     tolerance: f64,
-) -> Option<GuideCandidate> {
+) -> Option<(f64, f64, f64, f64, f64)> {
     let (start, end, moving_start, moving_size, guide_position) = match axis {
         GuideAxis::Vertical => (
             left.bounds.right(),
@@ -256,22 +266,29 @@ fn equal_spacing_candidate(
             moving.bounds.center().x,
         ),
     };
-    if start > end {
+    let gap = end - start;
+    if gap <= 0.0 || moving_size >= gap {
+        return None;
+    }
+    if perpendicular_gap(moving.bounds, left.bounds, axis) > tolerance
+        || perpendicular_gap(moving.bounds, right.bounds, axis) > tolerance
+        || perpendicular_gap(left.bounds, right.bounds, axis) > tolerance
+    {
         return None;
     }
 
-    let moving_end = moving_start + moving_size;
-    if moving_end < start - tolerance || moving_start > end + tolerance {
-        return None;
-    }
+    Some((start, end, moving_start, moving_size, guide_position))
+}
 
+fn equal_spacing_lines(
+    start: f64,
+    end: f64,
+    moving_size: f64,
+    guide_position: f64,
+    axis: GuideAxis,
+) -> Vec<GuideLine> {
     let desired_start = (start + end - moving_size) / 2.0;
-    let snap_delta = desired_start - moving_start;
-    if snap_delta.abs() > tolerance {
-        return None;
-    }
-
-    let lines = match axis {
+    match axis {
         GuideAxis::Vertical => vec![
             GuideLine {
                 start: Point::new(start, guide_position),
@@ -296,7 +313,29 @@ fn equal_spacing_candidate(
                 kind: GuideKind::EqualSpacing,
             },
         ],
-    };
+    }
+}
+
+fn equal_spacing_candidate(
+    moving: GuideBox,
+    left: GuideBox,
+    right: GuideBox,
+    axis: GuideAxis,
+    tolerance: f64,
+) -> Option<GuideCandidate> {
+    let (start, end, moving_start, moving_size, guide_position) =
+        equal_spacing_gap(moving, left, right, axis, tolerance)?;
+
+    let moving_end = moving_start + moving_size;
+    if moving_end < start - tolerance || moving_start > end + tolerance {
+        return None;
+    }
+
+    let desired_start = (start + end - moving_size) / 2.0;
+    let snap_delta = desired_start - moving_start;
+    if snap_delta.abs() > tolerance {
+        return None;
+    }
 
     let (moving_feature, target_feature) = match axis {
         GuideAxis::Vertical => (GuideFeature::Start, GuideFeature::End),
@@ -312,7 +351,7 @@ fn equal_spacing_candidate(
             target_b: right.id,
         },
         snap_delta,
-        lines,
+        lines: equal_spacing_lines(start, end, moving_size, guide_position, axis),
     })
 }
 
@@ -360,6 +399,55 @@ fn candidates_for_axis(
     candidates
 }
 
+fn equal_spacing_distance(candidate: &GuideCandidate) -> f64 {
+    let first = &candidate.lines[0];
+    let second = &candidate.lines[1];
+    match candidate.key.axis {
+        GuideAxis::Vertical => first.end.x - first.start.x + second.end.x - second.start.x,
+        GuideAxis::Horizontal => first.end.y - first.start.y + second.end.y - second.start.y,
+    }
+}
+
+fn equal_spacing_gap_matches(left: f64, right: f64) -> bool {
+    let epsilon = 1e-6 * left.abs().max(right.abs()).max(1.0);
+    (left - right).abs() <= epsilon
+}
+
+fn equal_spacing_guides(
+    moving: GuideBox,
+    others: &[GuideBox],
+    selected: &GuideCandidate,
+    tolerance: f64,
+) -> Vec<GuideLine> {
+    let distance = equal_spacing_distance(selected);
+    let mut guides = Vec::new();
+    for (index, left) in others.iter().enumerate() {
+        for right in others.iter().skip(index + 1) {
+            let (left, right) = match selected.key.axis {
+                GuideAxis::Vertical if left.bounds.x <= right.bounds.x => (*left, *right),
+                GuideAxis::Vertical => (*right, *left),
+                GuideAxis::Horizontal if left.bounds.y <= right.bounds.y => (*left, *right),
+                GuideAxis::Horizontal => (*right, *left),
+            };
+            let Some((start, end, _, moving_size, guide_position)) =
+                equal_spacing_gap(moving, left, right, selected.key.axis, tolerance)
+            else {
+                continue;
+            };
+            if equal_spacing_gap_matches(end - start - moving_size, distance) {
+                guides.extend(equal_spacing_lines(
+                    start,
+                    end,
+                    moving_size,
+                    guide_position,
+                    selected.key.axis,
+                ));
+            }
+        }
+    }
+    guides
+}
+
 fn best_candidate(candidates: Vec<GuideCandidate>) -> Option<GuideCandidate> {
     candidates.into_iter().reduce(|left, right| {
         if candidate_is_better(&left, &right) {
@@ -386,12 +474,12 @@ fn active_candidate(
     previous: &SmartGuideState,
     now_ms: f64,
 ) -> Option<GuideCandidate> {
-    let candidates = candidates_for_axis(moving, others, axis, GUIDE_RELEASE_TOLERANCE);
+    let release_candidates = candidates_for_axis(moving, others, axis, GUIDE_RELEASE_TOLERANCE);
 
     let is_locked = previous.lock_until_ms.map_or(false, |lock| now_ms < lock);
 
     if let Some(active_key) = previous.active.iter().find(|key| key.axis == axis) {
-        if let Some(candidate) = candidates
+        if let Some(candidate) = release_candidates
             .iter()
             .find(|candidate| same_candidate_slot(candidate.key, *active_key))
         {
@@ -401,12 +489,7 @@ fn active_candidate(
         }
     }
 
-    best_candidate(
-        candidates
-            .into_iter()
-            .filter(|candidate| candidate.snap_delta.abs() <= GUIDE_TOLERANCE)
-            .collect(),
-    )
+    best_candidate(candidates_for_axis(moving, others, axis, GUIDE_TOLERANCE))
 }
 
 /// Resolve smart-guide candidates for a proposed move.
@@ -487,7 +570,7 @@ pub fn resolve_move(
         .into_iter()
         .filter(|axis| active.iter().any(|key| key.axis == *axis))
         .filter_map(|axis| {
-            active_candidate(
+            let candidate = active_candidate(
                 snapped_moving,
                 &others,
                 axis,
@@ -497,9 +580,23 @@ pub fn resolve_move(
                     lock_until_ms,
                 },
                 now_ms,
-            )
+            )?;
+            Some(if candidate.key.kind == GuideKind::EqualSpacing {
+                let tolerance = if previous
+                    .active
+                    .iter()
+                    .any(|key| same_candidate_slot(*key, candidate.key))
+                {
+                    GUIDE_RELEASE_TOLERANCE
+                } else {
+                    GUIDE_TOLERANCE
+                };
+                equal_spacing_guides(snapped_moving, &others, &candidate, tolerance)
+            } else {
+                candidate_lines(snapped_moving, &others, &candidate)
+            })
         })
-        .flat_map(|candidate| candidate_lines(snapped_moving, &others, &candidate))
+        .flatten()
         .collect();
 
     GuideResolution {
@@ -580,6 +677,137 @@ mod tests {
 
     fn rect(id: ElementId, x: f64, y: f64, w: f64, h: f64) -> (ElementId, Rect) {
         (id, Rect::new(x, y, w, h))
+    }
+
+    fn guide(id: ElementId, bounds: Rect) -> GuideBox {
+        GuideBox { id, bounds }
+    }
+
+    #[test]
+    fn alignment_snaps_edges_and_centers() {
+        for axis in [GuideAxis::Vertical, GuideAxis::Horizontal] {
+            for (feature, moving_start, moving_size, target_start, target_size) in [
+                (GuideFeature::Start, 100.0, 40.0, 106.0, 80.0),
+                (GuideFeature::End, 0.0, 100.0, 66.0, 40.0),
+                (GuideFeature::Center, 100.0, 40.0, 86.0, 80.0),
+            ] {
+                let moving = match axis {
+                    GuideAxis::Vertical => Rect::new(moving_start, 0.0, moving_size, 20.0),
+                    GuideAxis::Horizontal => Rect::new(0.0, moving_start, 20.0, moving_size),
+                };
+                let target = match axis {
+                    GuideAxis::Vertical => Rect::new(target_start, 0.0, target_size, 20.0),
+                    GuideAxis::Horizontal => Rect::new(0.0, target_start, 20.0, target_size),
+                };
+                let candidate =
+                    alignment_candidate(guide(0, moving), guide(1, target), axis, GUIDE_TOLERANCE)
+                        .unwrap();
+                assert_eq!(candidate.key.moving_feature, feature);
+                assert_eq!(candidate.snap_delta, 6.0);
+            }
+        }
+    }
+
+    #[test]
+    fn equal_spacing_renders_all_matching_inline_gaps() {
+        let vertical = [
+            rect(1, 0.0, 0.0, 100.0, 100.0),
+            rect(2, 50.0, 0.0, 50.0, 100.0),
+            rect(3, 200.0, 0.0, 20.0, 100.0),
+            rect(4, 200.0, 0.0, 70.0, 100.0),
+        ];
+        let resolution = resolve_move(
+            Rect::new(141.0, 20.0, 20.0, 20.0),
+            &vertical,
+            true,
+            &SmartGuideState::default(),
+        );
+        assert_eq!((resolution.snap_dx, resolution.snap_dy), (-1.0, 0.0));
+        assert_eq!(resolution.state.guides.len(), 8);
+    }
+
+    #[test]
+    fn equal_spacing_renders_matching_gap_outside_moving_pair() {
+        let others = [
+            rect(1, 0.0, 0.0, 20.0, 100.0),
+            rect(2, 100.0, 0.0, 20.0, 100.0),
+            rect(3, 200.0, 0.0, 20.0, 100.0),
+            rect(4, 300.0, 0.0, 20.0, 100.0),
+            rect(5, 200.0, 200.0, 20.0, 20.0),
+            rect(6, 300.0, 200.0, 20.0, 20.0),
+        ];
+        let resolution = resolve_move(
+            Rect::new(45.0, 20.0, 20.0, 20.0),
+            &others,
+            true,
+            &SmartGuideState::default(),
+        );
+        assert_eq!(resolution.snap_dx, 5.0);
+        assert_eq!(resolution.state.guides.len(), 6);
+        assert!(resolution
+            .state
+            .guides
+            .iter()
+            .all(|line| line.kind == GuideKind::EqualSpacing));
+    }
+
+    #[test]
+    fn fresh_equal_spacing_uses_acquisition_tolerance_for_matching_gaps() {
+        let others = [
+            rect(1, 0.0, 0.0, 20.0, 100.0),
+            rect(2, 100.0, 0.0, 20.0, 100.0),
+            rect(3, 200.0, 0.0, 20.0, 100.0),
+            rect(4, 300.0, 0.0, 20.0, 100.0),
+        ];
+        let resolution = resolve_move(
+            Rect::new(44.0, 24.0, 20.0, 1.0),
+            &others,
+            true,
+            &SmartGuideState::default(),
+        );
+        assert_eq!(resolution.snap_dx, 6.0);
+        assert_eq!(resolution.state.guides.len(), 6);
+    }
+
+    #[test]
+    fn equal_spacing_matches_gaps_with_floating_point_roundoff() {
+        let moving = guide(0, Rect::new(54.1, 20.0, 20.0, 20.0));
+        let left = guide(1, Rect::new(0.1, 0.0, 20.0, 100.0));
+        let right = guide(2, Rect::new(100.1, 0.0, 20.0, 100.0));
+        let shifted_left = guide(3, Rect::new(200.1, 0.0, 20.0, 100.0));
+        let shifted_right = guide(4, Rect::new(300.1, 0.0, 20.0, 100.0));
+        let selected =
+            equal_spacing_candidate(moving, left, right, GuideAxis::Vertical, GUIDE_TOLERANCE)
+                .unwrap();
+        let others = [left, right, shifted_left, shifted_right];
+        let lines = equal_spacing_guides(moving, &others, &selected, GUIDE_TOLERANCE);
+        assert_eq!(lines.len(), 6);
+    }
+
+    #[test]
+    fn equal_spacing_rejects_invalid_gaps_and_wrong_rows() {
+        let left = guide(1, Rect::new(0.0, 0.0, 20.0, 20.0));
+        let right = guide(2, Rect::new(100.0, 0.0, 20.0, 20.0));
+        let gap = right.bounds.x - left.bounds.right();
+        for moving_size in [gap, gap + 20.0] {
+            let position = (left.bounds.right() + right.bounds.x - moving_size) / 2.0 - 4.0;
+            assert!(equal_spacing_candidate(
+                guide(0, Rect::new(position, 0.0, moving_size, 20.0)),
+                left,
+                right,
+                GuideAxis::Vertical,
+                GUIDE_TOLERANCE,
+            )
+            .is_none());
+        }
+        assert!(equal_spacing_candidate(
+            guide(0, Rect::new(46.0, 30.0, 20.0, 20.0)),
+            left,
+            right,
+            GuideAxis::Vertical,
+            GUIDE_TOLERANCE,
+        )
+        .is_none());
     }
 
     #[test]
@@ -669,17 +897,17 @@ mod tests {
     #[test]
     fn equal_spacing_snaps_continuously_at_the_middle_gap() {
         let others = [
-            rect(1, 0.0, 100.0, 20.0, 20.0),
-            rect(2, 100.0, 100.0, 20.0, 20.0),
+            rect(1, 0.0, 0.0, 20.0, 100.0),
+            rect(2, 100.0, 0.0, 20.0, 100.0),
         ];
-        let proposed = Rect::new(44.0, 50.0, 20.0, 20.0);
+        let proposed = Rect::new(44.0, 20.0, 20.0, 20.0);
         let first = resolve_move(proposed, &others, true, &SmartGuideState::default());
         assert_eq!(first.snap_dx, 6.0);
         assert_eq!(first.state.guides.len(), 2);
         assert_eq!(first.state.guides[0].kind, GuideKind::EqualSpacing);
 
         let moving_again = resolve_move(
-            Rect::new(45.0, 50.0, 20.0, 20.0),
+            Rect::new(45.0, 20.0, 20.0, 20.0),
             &others,
             true,
             &first.state,
@@ -687,7 +915,7 @@ mod tests {
         assert_eq!(moving_again.snap_dx, 5.0);
 
         let released = resolve_move(
-            Rect::new(60.0, 50.0, 20.0, 20.0),
+            Rect::new(60.0, 20.0, 20.0, 20.0),
             &others,
             true,
             &moving_again.state,
@@ -697,13 +925,72 @@ mod tests {
     }
 
     #[test]
+    fn active_equal_spacing_uses_release_tolerance() {
+        let others = [
+            rect(1, 0.0, 0.0, 20.0, 20.0),
+            rect(2, 100.0, 0.0, 20.0, 20.0),
+        ];
+        let first = resolve_move(
+            Rect::new(44.0, 0.0, 20.0, 20.0),
+            &others,
+            true,
+            &SmartGuideState::default(),
+        );
+        let moving_again = resolve_move(
+            Rect::new(43.0, 27.0, 20.0, 20.0),
+            &others,
+            true,
+            &first.state,
+        );
+        assert_eq!(moving_again.snap_dx, 7.0);
+        assert_eq!(moving_again.state.active.len(), 1);
+        assert_eq!(moving_again.state.active[0].kind, GuideKind::EqualSpacing);
+        assert_eq!(moving_again.state.guides.len(), 2);
+
+        let fresh = resolve_move(
+            Rect::new(43.0, 27.0, 20.0, 20.0),
+            &others,
+            true,
+            &SmartGuideState::default(),
+        );
+        assert_eq!(fresh.snap_dx, 0.0);
+        assert!(fresh.state.active.is_empty());
+        assert!(fresh.state.guides.is_empty());
+    }
+
+    #[test]
+    fn fresh_equal_spacing_rejects_offsets_outside_acquisition_band() {
+        for (others, proposed) in [
+            (
+                [
+                    rect(1, 0.0, 0.0, 20.0, 20.0),
+                    rect(2, 100.0, 0.0, 20.0, 20.0),
+                ],
+                Rect::new(45.0, 27.0, 20.0, 20.0),
+            ),
+            (
+                [
+                    rect(1, 0.0, 0.0, 20.0, 20.0),
+                    rect(2, 0.0, 100.0, 20.0, 20.0),
+                ],
+                Rect::new(27.0, 45.0, 20.0, 20.0),
+            ),
+        ] {
+            let resolution = resolve_move(proposed, &others, true, &SmartGuideState::default());
+            assert_eq!((resolution.snap_dx, resolution.snap_dy), (0.0, 0.0));
+            assert!(resolution.state.active.is_empty());
+            assert!(resolution.state.guides.is_empty());
+        }
+    }
+
+    #[test]
     fn exact_equal_spacing_beats_a_nearby_alignment_candidate() {
         let others = [
-            rect(1, 0.0, 100.0, 20.0, 20.0),
-            rect(2, 100.0, 100.0, 20.0, 20.0),
+            rect(1, 0.0, 0.0, 20.0, 100.0),
+            rect(2, 100.0, 0.0, 20.0, 100.0),
             rect(3, 52.0, 200.0, 20.0, 20.0),
         ];
-        let proposed = Rect::new(50.0, 50.0, 20.0, 20.0);
+        let proposed = Rect::new(50.0, 20.0, 20.0, 20.0);
         let resolution = resolve_move(proposed, &others, true, &SmartGuideState::default());
         assert_eq!(resolution.state.guides.len(), 2);
         assert_eq!(resolution.state.guides[0].kind, GuideKind::EqualSpacing);
