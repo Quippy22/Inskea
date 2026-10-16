@@ -30,6 +30,9 @@ pub const GUIDE_SPACING_OFFSET_PX: f64 = 9.0;
 pub const GUIDE_SPACING_BAND_PX: f64 = 8.0;
 /// Length of the spacing marker's end ticks, in screen pixels.
 pub const GUIDE_SPACING_CAP_PX: f64 = 15.0;
+/// Gap between an end tick's far tip and the edge it reaches towards, in
+/// screen pixels.
+pub const GUIDE_SPACING_CLEARANCE_PX: f64 = 1.5;
 const GUIDE_ALIGNMENT_COLOR: &str = "#7aa2f7";
 const GUIDE_SPACING_COLOR: &str = "#9ece6a";
 const EPSILON: f64 = 1e-9;
@@ -72,6 +75,10 @@ pub struct GuideKey {
 pub struct GuideLine {
     pub start: Point,
     pub end: Point,
+    /// Cross coordinate each end tick may reach towards: the near edge of the
+    /// piece beside that end, so ticks stay attached to pieces of different
+    /// sizes. Alignment guides carry their own coordinate.
+    pub stops: [f64; 2],
     pub kind: GuideKind,
 }
 
@@ -538,6 +545,7 @@ fn alignment_guides(moving: Rect, others: &[GuideBox], key: GuideKey) -> Vec<Gui
             guides.push(GuideLine {
                 start: axis_point(axis, coordinate, reach),
                 end: axis_point(axis, coordinate, start),
+                stops: [coordinate, coordinate],
                 kind: GuideKind::Alignment,
             });
         }
@@ -546,30 +554,49 @@ fn alignment_guides(moving: Rect, others: &[GuideBox], key: GuideKey) -> Vec<Gui
     guides
 }
 
-fn spacing_line(start: f64, end: f64, cross: f64, axis: GuideAxis, kind: GuideKind) -> GuideLine {
+fn spacing_line(
+    start: f64,
+    end: f64,
+    cross: f64,
+    stops: [f64; 2],
+    axis: GuideAxis,
+    kind: GuideKind,
+) -> GuideLine {
     GuideLine {
         start: axis_point(axis, start, cross),
         end: axis_point(axis, end, cross),
+        stops,
         kind,
     }
 }
 
 /// The two arrow segments a gap is drawn as: the free space left of the box
-/// and the free space right of it, equal once the box sits centred.
+/// and the free space right of it, equal once the box sits centred. `stops`
+/// are the cross starts of the piece left of the gap, the moving box, and the
+/// piece right of it.
 fn spacing_lines(
     start: f64,
     end: f64,
     moving_size: f64,
     cross: f64,
+    stops: [f64; 3],
     axis: GuideAxis,
 ) -> Vec<GuideLine> {
     let desired_start = (start + end - moving_size) / 2.0;
     vec![
-        spacing_line(start, desired_start, cross, axis, GuideKind::EqualSpacing),
+        spacing_line(
+            start,
+            desired_start,
+            cross,
+            [stops[0], stops[1]],
+            axis,
+            GuideKind::EqualSpacing,
+        ),
         spacing_line(
             desired_start + moving_size,
             end,
             cross,
+            [stops[1], stops[2]],
             axis,
             GuideKind::EqualSpacing,
         ),
@@ -620,7 +647,22 @@ fn equal_spacing_guides(
         } else {
             marker_lane(pair_left.bounds, pair_right.bounds, axis, tolerances.marker)
         };
-        guides.extend(spacing_lines(start, end, moving_size, cross, axis));
+        let stops = if pair_left.id == candidate.key.target_a {
+            [
+                cross_start(pair_left.bounds, axis),
+                cross_start(moving, axis),
+                cross_start(pair_right.bounds, axis),
+            ]
+        } else {
+            // A phantom box fits the gap; its ticks keep the standard length.
+            let top = cross_start(pair_left.bounds, axis).min(cross_start(pair_right.bounds, axis));
+            [
+                cross_start(pair_left.bounds, axis),
+                top,
+                cross_start(pair_right.bounds, axis),
+            ]
+        };
+        guides.extend(spacing_lines(start, end, moving_size, cross, stops, axis));
     }
 
     guides
@@ -647,15 +689,24 @@ fn chain_spacing_guides(
     let chain_gap = along_start(right.bounds, axis) - along_end(left.bounds, axis);
 
     let moving_start = along_start(moving, axis);
-    let (start, end) = if moving_start >= along_end(near.bounds, axis) {
-        (along_end(near.bounds, axis), moving_start)
+    let (start, end, stops) = if moving_start >= along_end(near.bounds, axis) {
+        (
+            along_end(near.bounds, axis),
+            moving_start,
+            [cross_start(near.bounds, axis), cross_start(moving, axis)],
+        )
     } else {
-        (along_end(moving, axis), along_start(near.bounds, axis))
+        (
+            along_end(moving, axis),
+            along_start(near.bounds, axis),
+            [cross_start(moving, axis), cross_start(near.bounds, axis)],
+        )
     };
     let mut guides = vec![spacing_line(
         start,
         end,
         marker_lane(moving, near.bounds, axis, tolerances.marker),
+        stops,
         axis,
         GuideKind::ChainSpacing,
     )];
@@ -675,6 +726,10 @@ fn chain_spacing_guides(
             start,
             end,
             marker_lane(pair_left.bounds, pair_right.bounds, axis, tolerances.marker),
+            [
+                cross_start(pair_left.bounds, axis),
+                cross_start(pair_right.bounds, axis),
+            ],
             axis,
             GuideKind::ChainSpacing,
         ));
@@ -715,6 +770,10 @@ fn equal_spacing_run_lines(
             start,
             end,
             marker_lane(left.bounds, right.bounds, axis, tolerances.marker),
+            [
+                cross_start(left.bounds, axis),
+                cross_start(right.bounds, axis),
+            ],
             axis,
             GuideKind::EqualSpacing,
         );
@@ -873,6 +932,7 @@ pub fn guide_overlay(
         };
         let band = GUIDE_SPACING_BAND_PX / 2.0 / zoom;
         let cap = GUIDE_SPACING_CAP_PX / 2.0 / zoom;
+        let clearance = GUIDE_SPACING_CLEARANCE_PX / zoom;
 
         // Equal gaps read as soft bands with solid end ticks, drawn outside
         // the boxes so they never sit on an alignment line.
@@ -897,23 +957,35 @@ pub fn guide_overlay(
                         (guide.end.y - guide.start.y).abs(),
                     )
                 };
+                // Each tick reaches past the band towards the piece beside it,
+                // so it stays attached when the pieces differ in size.
                 let caps = if horizontal {
                     [
-                        (x, guide.start.y - cap, x, guide.start.y + cap),
+                        (
+                            x,
+                            guide.start.y - cap,
+                            x,
+                            (guide.start.y + cap).max(guide.stops[0] - clearance),
+                        ),
                         (
                             x + width,
                             guide.start.y - cap,
                             x + width,
-                            guide.start.y + cap,
+                            (guide.start.y + cap).max(guide.stops[1] - clearance),
                         ),
                     ]
                 } else {
                     [
-                        (guide.start.x - cap, y, guide.start.x + cap, y),
+                        (
+                            guide.start.x - cap,
+                            y,
+                            (guide.start.x + cap).max(guide.stops[0] - clearance),
+                            y,
+                        ),
                         (
                             guide.start.x - cap,
                             y + height,
-                            guide.start.x + cap,
+                            (guide.start.x + cap).max(guide.stops[1] - clearance),
                             y + height,
                         ),
                     ]
@@ -1065,6 +1137,7 @@ mod tests {
             GuideLine {
                 start: Point::new(140.0, 50.0),
                 end: Point::new(140.0, 100.0),
+                stops: [140.0, 140.0],
                 kind: GuideKind::Alignment,
             }
         );
@@ -1073,6 +1146,7 @@ mod tests {
             GuideLine {
                 start: Point::new(140.0, 150.0),
                 end: Point::new(140.0, 212.0),
+                stops: [140.0, 140.0],
                 kind: GuideKind::Alignment,
             }
         );
@@ -1088,6 +1162,7 @@ mod tests {
             vec![GuideLine {
                 start: Point::new(100.0, 0.0),
                 end: Point::new(160.0, 0.0),
+                stops: [0.0, 0.0],
                 kind: GuideKind::Alignment,
             }]
         );
@@ -1197,6 +1272,7 @@ mod tests {
             GuideLine {
                 start: Point::new(20.0, -9.0),
                 end: Point::new(50.0, -9.0),
+                stops: [0.0, 20.0],
                 kind: GuideKind::EqualSpacing,
             }
         );
@@ -1281,11 +1357,13 @@ mod tests {
                 GuideLine {
                     start: Point::new(120.0, -9.0),
                     end: Point::new(200.0, -9.0),
+                    stops: [0.0, 8.0],
                     kind: GuideKind::ChainSpacing,
                 },
                 GuideLine {
                     start: Point::new(20.0, -9.0),
                     end: Point::new(100.0, -9.0),
+                    stops: [0.0, 0.0],
                     kind: GuideKind::ChainSpacing,
                 },
             ]
@@ -1314,11 +1392,13 @@ mod tests {
                 GuideLine {
                     start: Point::new(20.0, -9.0),
                     end: Point::new(100.0, -9.0),
+                    stops: [8.0, 0.0],
                     kind: GuideKind::ChainSpacing,
                 },
                 GuideLine {
                     start: Point::new(120.0, -9.0),
                     end: Point::new(200.0, -9.0),
+                    stops: [0.0, 0.0],
                     kind: GuideKind::ChainSpacing,
                 },
             ]
@@ -1415,6 +1495,7 @@ mod tests {
             GuideLine {
                 start: Point::new(202.0, 20.0),
                 end: Point::new(202.0, 300.0),
+                stops: [202.0, 202.0],
                 kind: GuideKind::Alignment,
             }
         );
@@ -1465,6 +1546,7 @@ mod tests {
             GuideLine {
                 start: Point::new(100.0, 20.0),
                 end: Point::new(100.0, 250.0),
+                stops: [100.0, 100.0],
                 kind: GuideKind::Alignment,
             }
         );
@@ -1473,6 +1555,7 @@ mod tests {
             GuideLine {
                 start: Point::new(20.0, -9.0),
                 end: Point::new(100.0, -9.0),
+                stops: [0.0, 0.0],
                 kind: GuideKind::EqualSpacing,
             }
         );
@@ -1481,6 +1564,7 @@ mod tests {
             GuideLine {
                 start: Point::new(220.0, -9.0),
                 end: Point::new(300.0, -9.0),
+                stops: [0.0, 0.0],
                 kind: GuideKind::EqualSpacing,
             }
         );
