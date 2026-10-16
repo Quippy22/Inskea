@@ -566,6 +566,7 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
     let raw_dy = world.y - anchor.y;
     let smart_enabled =
         st.shift_pressed.get() && matches!(st.drag.drag_action.get(), Some(DragOperation::Move));
+    let zoom = props.viewport.get_untracked().zoom;
     let (snap_dx, snap_dy, next_guides) = props.scene.with(|scene| {
         let proposed = Rect::new(bounds.x + raw_dx, bounds.y + raw_dy, bounds.w, bounds.h);
         let others = scene
@@ -578,6 +579,7 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
             proposed,
             &others,
             smart_enabled,
+            zoom,
             &st.drag.smart_guides.get_untracked(),
         );
         (resolution.snap_dx, resolution.snap_dy, resolution.state)
