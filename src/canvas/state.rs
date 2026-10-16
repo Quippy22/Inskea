@@ -50,6 +50,9 @@ pub struct DragState {
     pub rotation_delta: RwSignal<f64>,
     pub hovered_handle: RwSignal<Option<DragOperation>>,
     pub smart_guides: RwSignal<SmartGuideState>,
+    /// Set when a Shift press grabbed an already selected element: unless the
+    /// press turns into a real drag, pointer-up applies the toggle instead.
+    pub pending_shift_toggle: RwSignal<Option<Vec<ElementId>>>,
 }
 
 impl DragState {
@@ -65,6 +68,7 @@ impl DragState {
             rotation_delta: create_rw_signal(0.0),
             hovered_handle: create_rw_signal(None),
             smart_guides: create_rw_signal(SmartGuideState::default()),
+            pending_shift_toggle: create_rw_signal(None),
         }
     }
 }

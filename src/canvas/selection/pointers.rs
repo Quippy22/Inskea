@@ -308,49 +308,67 @@ fn handle_element_selection(
         }
     }
 
+    let shift = st.shift_pressed.get();
     if st.group_editing.get().is_some() {
-        if st.shift_pressed.get() {
-            let ids = normalize_ids(&props.scene.get_untracked(), &st.selected_ids.get());
-            st.selected_ids.set(toggle_ids(&ids, &[id]));
-        } else {
-            st.selected_ids.set(vec![id]);
-            if let Some(element) = els.iter().find(|element| element.id() == id) {
-                if let Some(bounds) = combined_bounds(&[id], std::slice::from_ref(element)) {
-                    (props.push_snapshot)();
-                    st.drag.drag_action.set(Some(DragOperation::Move));
-                    st.drag.moving_anchor.set(Some(world));
-                    st.drag.drag_bounds.set(Some(bounds));
-                    st.drag.last_world.set(Some(world));
-                    st.drag
-                        .drag_originals
-                        .set(els.iter().filter(|el| el.id() == id).cloned().collect());
-                }
-            }
-        }
+        select_and_begin_move(world, st, props, els, &[id], shift);
         return true;
     }
 
     let expanded = props.scene.with(|s| expand_ids(s, &[id]));
-    let ids = normalize_ids(&props.scene.get_untracked(), &st.selected_ids.get());
-    if st.shift_pressed.get() {
-        st.selected_ids.set(toggle_ids(&ids, &expanded));
-    } else {
-        st.selected_ids.set(expanded.clone());
-        if let Some(bounds) = combined_bounds(&expanded, els) {
-            (props.push_snapshot)();
-            st.drag.drag_action.set(Some(DragOperation::Move));
-            st.drag.moving_anchor.set(Some(world));
-            st.drag.drag_bounds.set(Some(bounds));
-            st.drag.last_world.set(Some(world));
-            st.drag.drag_originals.set(
-                els.iter()
-                    .filter(|el| expanded.contains(&el.id()))
-                    .cloned()
-                    .collect(),
-            );
-        }
-    }
+    select_and_begin_move(world, st, props, els, &expanded, shift);
     true
+}
+
+/// Apply the selection change for a press on `target` and start the move drag.
+/// Shift toggles selection as usual, except on an already selected element:
+/// there the toggle is deferred to pointer-up so a Shift-drag moves the
+/// selection (with snapping) instead of deselecting the grabbed element.
+fn select_and_begin_move(
+    world: Point,
+    st: &mut CanvasState,
+    props: &CanvasInputs,
+    els: &[Element],
+    target: &[ElementId],
+    shift: bool,
+) {
+    let ids = normalize_ids(&props.scene.get_untracked(), &st.selected_ids.get());
+    let moving = if shift && target.iter().all(|id| ids.contains(id)) {
+        st.drag.pending_shift_toggle.set(Some(target.to_vec()));
+        ids
+    } else {
+        let next = if shift {
+            toggle_ids(&ids, target)
+        } else {
+            target.to_vec()
+        };
+        st.selected_ids.set(next.clone());
+        next
+    };
+    begin_move_drag(world, st, props, els, &moving);
+}
+
+/// Capture the drag originals, bounds, and operation for an element move.
+fn begin_move_drag(
+    world: Point,
+    st: &mut CanvasState,
+    props: &CanvasInputs,
+    els: &[Element],
+    ids: &[ElementId],
+) {
+    let Some(bounds) = combined_bounds(ids, els) else {
+        return;
+    };
+    (props.push_snapshot)();
+    st.drag.drag_action.set(Some(DragOperation::Move));
+    st.drag.moving_anchor.set(Some(world));
+    st.drag.drag_bounds.set(Some(bounds));
+    st.drag.last_world.set(Some(world));
+    st.drag.drag_originals.set(
+        els.iter()
+            .filter(|el| ids.contains(&el.id()))
+            .cloned()
+            .collect(),
+    );
 }
 
 /// Figure out which handle (if any) the cursor is hovering over.
@@ -658,6 +676,7 @@ fn clear_drag_state(st: &mut CanvasState) {
     st.drag.drag_originals.set(Vec::new());
     st.drag.hovered_handle.set(None);
     st.drag.smart_guides.set(SmartGuideState::default());
+    st.drag.pending_shift_toggle.set(None);
     st.select_anchor.set(None);
 }
 
@@ -773,8 +792,16 @@ pub fn select_pointer_up(
             finish_path_point_drag(st, props, idx);
         }
 
+        let travelled =
+            st.drag.moving_anchor.get().is_some_and(|anchor| {
+                (world.x - anchor.x).hypot(world.y - anchor.y) >= MIN_DRAG_DIST
+            });
+        if matches!(drag_action, Some(DragOperation::Move)) && !travelled {
+            finish_shift_click(st, props);
+        }
+
         let smart_guide_active = !st.drag.smart_guides.get().active.is_empty();
-        if st.shift_pressed.get() {
+        if st.shift_pressed.get() && travelled {
             if let Some(DragOperation::PathPoint(idx)) = drag_action {
                 snap_path_point_to_grid(st, props, idx);
             } else if !smart_guide_active {
@@ -787,4 +814,25 @@ pub fn select_pointer_up(
     }
 
     complete_marquee_selection(world, st, props);
+}
+
+/// Finish a press that never became a drag. If the press was a Shift grab of an
+/// already selected element, undo the sub-threshold offset and toggle it out of
+/// the selection: Shift-click keeps toggling, only Shift-drags move.
+fn finish_shift_click(st: &mut CanvasState, props: &mut CanvasInputs) {
+    let Some(target) = st.drag.pending_shift_toggle.get() else {
+        return;
+    };
+    let originals = st.drag.drag_originals.get();
+    props.scene.update(|s| {
+        for el in s.elements_mut().iter_mut() {
+            if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
+                *el = orig.clone();
+            }
+        }
+    });
+    if st.shift_pressed.get() {
+        let ids = normalize_ids(&props.scene.get_untracked(), &st.selected_ids.get());
+        st.selected_ids.set(toggle_ids(&ids, &target));
+    }
 }
