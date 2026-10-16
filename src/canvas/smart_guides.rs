@@ -10,6 +10,7 @@
 use super::viewport::Viewport;
 use crate::model::{ElementId, Point, Rect};
 use leptos::*;
+use std::collections::HashSet;
 
 /// Distance at which a proposed position acquires a guide, in screen pixels.
 pub const GUIDE_ACQUIRE_PX: f64 = 6.0;
@@ -38,6 +39,8 @@ pub enum GuideAxis {
 pub enum GuideKind {
     Alignment,
     EqualSpacing,
+    /// A gap the moving box closed against the end of an evenly spaced chain.
+    ChainSpacing,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -206,6 +209,32 @@ fn inline_pairs(others: &[GuideBox], axis: GuideAxis, lane: f64) -> Vec<(GuideBo
     pairs
 }
 
+/// Inline pairs for chain attachments: the near box is always a scanned box
+/// while the far box may sit beyond the search radius, since it only supplies
+/// the distance to match.
+fn chain_connections(
+    scanned: &[GuideBox],
+    all: &[GuideBox],
+    axis: GuideAxis,
+    lane: f64,
+) -> Vec<(GuideBox, GuideBox)> {
+    let scanned_ids: HashSet<ElementId> = scanned.iter().map(|b| b.id).collect();
+    let mut pairs = Vec::new();
+    for near in scanned {
+        for far in all {
+            if far.id == near.id || perpendicular_gap(near.bounds, far.bounds, axis) > lane {
+                continue;
+            }
+            // Emit each pair once; skip the mirrored visit when both are scanned.
+            if scanned_ids.contains(&far.id) && far.id < near.id {
+                continue;
+            }
+            pairs.push(ordered_pair(*near, *far, axis));
+        }
+    }
+    pairs
+}
+
 /// Perpendicular centre of the strip the two boxes share; the lane a spacing
 /// line between them should be drawn in.
 fn lane_center(left: Rect, right: Rect, axis: GuideAxis) -> f64 {
@@ -314,6 +343,69 @@ fn spacing_candidate(
     })
 }
 
+/// A candidate for closing the gap between the moving box and one end of an
+/// inline pair, to match the pair's gap and grow the chain by one link.
+fn chain_candidate(
+    moving: Rect,
+    all: &[GuideBox],
+    left: GuideBox,
+    right: GuideBox,
+    axis: GuideAxis,
+    lane: f64,
+    tolerance: f64,
+) -> Option<GuideCandidate> {
+    let left_end = along_end(left.bounds, axis);
+    let gap = along_start(right.bounds, axis) - left_end;
+    if gap <= 0.0 {
+        return None;
+    }
+
+    let crossed = all.iter().any(|other| {
+        other.id != left.id
+            && other.id != right.id
+            && perpendicular_gap(left.bounds, other.bounds, axis) <= lane
+            && along_start(other.bounds, axis) > left_end
+            && along_end(other.bounds, axis) < along_start(right.bounds, axis)
+    });
+    if crossed {
+        return None;
+    }
+
+    let moving_start = along_start(moving, axis);
+    let moving_end = along_end(moving, axis);
+    let (near, far, delta) = if moving_start >= along_end(right.bounds, axis) {
+        (
+            right,
+            left,
+            along_end(right.bounds, axis) + gap - moving_start,
+        )
+    } else if moving_end <= along_start(left.bounds, axis) {
+        (
+            left,
+            right,
+            along_start(left.bounds, axis) - gap - moving_end,
+        )
+    } else {
+        return None;
+    };
+
+    if delta.abs() > tolerance || perpendicular_gap(moving, near.bounds, axis) > lane {
+        return None;
+    }
+
+    Some(GuideCandidate {
+        key: GuideKey {
+            axis,
+            kind: GuideKind::ChainSpacing,
+            moving_feature: GuideFeature::Start,
+            target_feature: GuideFeature::End,
+            target_a: near.id,
+            target_b: far.id,
+        },
+        snap_delta: delta,
+    })
+}
+
 fn feature_rank(key: GuideKey) -> u8 {
     u8::from(key.moving_feature != key.target_feature)
 }
@@ -321,7 +413,7 @@ fn feature_rank(key: GuideKey) -> u8 {
 fn kind_rank(kind: GuideKind) -> u8 {
     match kind {
         // Equal spacing is the more specific relationship, so it wins ties.
-        GuideKind::EqualSpacing => 0,
+        GuideKind::EqualSpacing | GuideKind::ChainSpacing => 0,
         GuideKind::Alignment => 1,
     }
 }
@@ -344,7 +436,9 @@ fn candidate_order(a: &GuideCandidate, b: &GuideCandidate) -> std::cmp::Ordering
 fn candidates_for_axis(
     moving: Rect,
     others: &[GuideBox],
+    all: &[GuideBox],
     pairs: &[(GuideBox, GuideBox)],
+    chain_pairs: &[(GuideBox, GuideBox)],
     axis: GuideAxis,
     lane: f64,
     tolerance: f64,
@@ -359,6 +453,12 @@ fn candidates_for_axis(
             candidates.push(candidate);
         }
     }
+    for (left, right) in chain_pairs {
+        if let Some(candidate) = chain_candidate(moving, all, *left, *right, axis, lane, tolerance)
+        {
+            candidates.push(candidate);
+        }
+    }
 
     candidates
 }
@@ -369,7 +469,9 @@ fn candidates_for_axis(
 fn axis_candidate(
     moving: Rect,
     others: &[GuideBox],
+    all: &[GuideBox],
     pairs: &[(GuideBox, GuideBox)],
+    chain_pairs: &[(GuideBox, GuideBox)],
     axis: GuideAxis,
     previous: &SmartGuideState,
     tolerances: &Tolerances,
@@ -377,7 +479,9 @@ fn axis_candidate(
     let candidates = candidates_for_axis(
         moving,
         others,
+        all,
         pairs,
+        chain_pairs,
         axis,
         tolerances.lane,
         tolerances.release,
@@ -434,11 +538,11 @@ fn alignment_guides(moving: Rect, others: &[GuideBox], key: GuideKey) -> Vec<Gui
     guides
 }
 
-fn spacing_line(start: f64, end: f64, cross: f64, axis: GuideAxis) -> GuideLine {
+fn spacing_line(start: f64, end: f64, cross: f64, axis: GuideAxis, kind: GuideKind) -> GuideLine {
     GuideLine {
         start: axis_point(axis, start, cross),
         end: axis_point(axis, end, cross),
-        kind: GuideKind::EqualSpacing,
+        kind,
     }
 }
 
@@ -453,8 +557,14 @@ fn spacing_lines(
 ) -> Vec<GuideLine> {
     let desired_start = (start + end - moving_size) / 2.0;
     vec![
-        spacing_line(start, desired_start, cross, axis),
-        spacing_line(desired_start + moving_size, end, cross, axis),
+        spacing_line(start, desired_start, cross, axis, GuideKind::EqualSpacing),
+        spacing_line(
+            desired_start + moving_size,
+            end,
+            cross,
+            axis,
+            GuideKind::EqualSpacing,
+        ),
     ]
 }
 
@@ -505,6 +615,63 @@ fn equal_spacing_guides(
     guides
 }
 
+/// Arrows for the gap the moving box just closed against a chain, plus every
+/// inline gap of the same length, so the chain lights up whole.
+fn chain_spacing_guides(
+    moving: Rect,
+    all: &[GuideBox],
+    chain_pairs: &[(GuideBox, GuideBox)],
+    candidate: &GuideCandidate,
+    tolerances: &Tolerances,
+) -> Vec<GuideLine> {
+    let axis = candidate.key.axis;
+    let selected = all
+        .iter()
+        .find(|b| b.id == candidate.key.target_a)
+        .zip(all.iter().find(|b| b.id == candidate.key.target_b));
+    let Some((near, far)) = selected else {
+        return Vec::new();
+    };
+    let (left, right) = ordered_pair(*near, *far, axis);
+    let chain_gap = along_start(right.bounds, axis) - along_end(left.bounds, axis);
+
+    let moving_start = along_start(moving, axis);
+    let (start, end) = if moving_start >= along_end(near.bounds, axis) {
+        (along_end(near.bounds, axis), moving_start)
+    } else {
+        (along_end(moving, axis), along_start(near.bounds, axis))
+    };
+    let mut guides = vec![spacing_line(
+        start,
+        end,
+        lane_center(moving, near.bounds, axis),
+        axis,
+        GuideKind::ChainSpacing,
+    )];
+
+    for (pair_left, pair_right) in chain_pairs {
+        let start = along_end(pair_left.bounds, axis);
+        let end = along_start(pair_right.bounds, axis);
+        if !same_gap(end - start, chain_gap) {
+            continue;
+        }
+        if perpendicular_gap(moving, pair_left.bounds, axis) > tolerances.lane
+            || perpendicular_gap(moving, pair_right.bounds, axis) > tolerances.lane
+        {
+            continue;
+        }
+        guides.push(spacing_line(
+            start,
+            end,
+            lane_center(pair_left.bounds, pair_right.bounds, axis),
+            axis,
+            GuideKind::ChainSpacing,
+        ));
+    }
+
+    guides
+}
+
 /// Highlight runs of evenly spaced boxes: at least two inline pairs sharing
 /// one gap. A gap crossed by another box is not a run, and runs are shown
 /// only while an alignment on the same axis is active.
@@ -538,6 +705,7 @@ fn equal_spacing_run_lines(
             end,
             lane_center(left.bounds, right.bounds, axis),
             axis,
+            GuideKind::EqualSpacing,
         );
         match runs
             .iter_mut()
@@ -573,12 +741,16 @@ pub fn resolve_move(
     }
 
     let tolerances = Tolerances::for_zoom(zoom);
-    let others: Vec<GuideBox> = others
+    let all: Vec<GuideBox> = others
         .iter()
         .map(|(id, bounds)| GuideBox {
             id: *id,
             bounds: *bounds,
         })
+        .collect();
+    let others: Vec<GuideBox> = all
+        .iter()
+        .copied()
         .filter(|other| rect_distance(proposed, other.bounds) <= tolerances.radius)
         .collect();
     if others.is_empty() {
@@ -587,10 +759,14 @@ pub fn resolve_move(
 
     let vertical_pairs = inline_pairs(&others, GuideAxis::Vertical, tolerances.lane);
     let horizontal_pairs = inline_pairs(&others, GuideAxis::Horizontal, tolerances.lane);
+    let vertical_chain = chain_connections(&others, &all, GuideAxis::Vertical, tolerances.lane);
+    let horizontal_chain = chain_connections(&others, &all, GuideAxis::Horizontal, tolerances.lane);
     let vertical = axis_candidate(
         proposed,
         &others,
+        &all,
         &vertical_pairs,
+        &vertical_chain,
         GuideAxis::Vertical,
         previous,
         &tolerances,
@@ -598,7 +774,9 @@ pub fn resolve_move(
     let horizontal = axis_candidate(
         proposed,
         &others,
+        &all,
         &horizontal_pairs,
+        &horizontal_chain,
         GuideAxis::Horizontal,
         previous,
         &tolerances,
@@ -615,9 +793,19 @@ pub fn resolve_move(
 
     let mut active = Vec::new();
     let mut guides = Vec::new();
-    for (axis, candidate, pairs) in [
-        (GuideAxis::Vertical, vertical, &vertical_pairs),
-        (GuideAxis::Horizontal, horizontal, &horizontal_pairs),
+    for (axis, candidate, pairs, chain_pairs) in [
+        (
+            GuideAxis::Vertical,
+            vertical,
+            &vertical_pairs,
+            &vertical_chain,
+        ),
+        (
+            GuideAxis::Horizontal,
+            horizontal,
+            &horizontal_pairs,
+            &horizontal_chain,
+        ),
     ] {
         let Some(candidate) = candidate else {
             continue;
@@ -638,6 +826,15 @@ pub fn resolve_move(
                     snapped,
                     &others,
                     pairs,
+                    &candidate,
+                    &tolerances,
+                ));
+            }
+            GuideKind::ChainSpacing => {
+                guides.extend(chain_spacing_guides(
+                    snapped,
+                    &all,
+                    chain_pairs,
                     &candidate,
                     &tolerances,
                 ));
@@ -676,12 +873,12 @@ pub fn guide_overlay(
             .map(|guide| {
                 let stroke = match guide.kind {
                     GuideKind::Alignment => GUIDE_ALIGNMENT_COLOR,
-                    GuideKind::EqualSpacing => GUIDE_SPACING_COLOR,
+                    GuideKind::EqualSpacing | GuideKind::ChainSpacing => GUIDE_SPACING_COLOR,
                 };
-                let marker = if guide.kind == GuideKind::EqualSpacing {
-                    "url(#smart-guide-arrow)"
-                } else {
+                let marker = if guide.kind == GuideKind::Alignment {
                     "none"
+                } else {
+                    "url(#smart-guide-arrow)"
                 };
                 view! {
                     <line
@@ -781,7 +978,7 @@ mod tests {
             rect(1, 140.0, 0.0, 20.0, 50.0),
             rect(2, 140.0, 100.0, 20.0, 50.0),
         ];
-        let resolution = solve(Rect::new(134.0, 200.0, 20.0, 50.0), &others);
+        let resolution = solve(Rect::new(134.0, 212.0, 20.0, 50.0), &others);
         assert_eq!(resolution.snap_dx, 6.0);
         assert_eq!(resolution.state.guides.len(), 2);
         assert_eq!(
@@ -796,7 +993,7 @@ mod tests {
             resolution.state.guides[1],
             GuideLine {
                 start: Point::new(140.0, 150.0),
-                end: Point::new(140.0, 200.0),
+                end: Point::new(140.0, 212.0),
                 kind: GuideKind::Alignment,
             }
         );
@@ -977,6 +1174,130 @@ mod tests {
         );
         assert_eq!(resolution.state.guides[2].start, Point::new(120.0, 50.0));
         assert_eq!(resolution.state.guides[5].end, Point::new(300.0, 50.0));
+    }
+
+    #[test]
+    fn chain_attachment_snaps_the_gap_to_the_chain() {
+        let others = [
+            rect(1, 0.0, 0.0, 20.0, 20.0),
+            rect(2, 100.0, 0.0, 20.0, 20.0),
+        ];
+        let resolution = solve(Rect::new(202.0, 8.0, 20.0, 20.0), &others);
+        assert_eq!((resolution.snap_dx, resolution.snap_dy), (-2.0, 0.0));
+        assert_eq!(resolution.state.active.len(), 1);
+        assert_eq!(resolution.state.active[0].kind, GuideKind::ChainSpacing);
+        assert_eq!(resolution.state.active[0].target_a, 2);
+        assert_eq!(
+            resolution.state.guides,
+            vec![
+                GuideLine {
+                    start: Point::new(120.0, 14.0),
+                    end: Point::new(200.0, 14.0),
+                    kind: GuideKind::ChainSpacing,
+                },
+                GuideLine {
+                    start: Point::new(20.0, 10.0),
+                    end: Point::new(100.0, 10.0),
+                    kind: GuideKind::ChainSpacing,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn chain_attachment_snaps_from_the_left() {
+        let others = [
+            rect(1, 100.0, 0.0, 20.0, 20.0),
+            rect(2, 200.0, 0.0, 20.0, 20.0),
+        ];
+        let resolution = solve(Rect::new(2.0, 8.0, 20.0, 20.0), &others);
+        assert_eq!((resolution.snap_dx, resolution.snap_dy), (-2.0, 0.0));
+        assert_eq!(resolution.state.active[0].kind, GuideKind::ChainSpacing);
+        assert_eq!(
+            (
+                resolution.state.active[0].target_a,
+                resolution.state.active[0].target_b
+            ),
+            (1, 2)
+        );
+        assert_eq!(
+            resolution.state.guides,
+            vec![
+                GuideLine {
+                    start: Point::new(20.0, 14.0),
+                    end: Point::new(100.0, 14.0),
+                    kind: GuideKind::ChainSpacing,
+                },
+                GuideLine {
+                    start: Point::new(120.0, 10.0),
+                    end: Point::new(200.0, 10.0),
+                    kind: GuideKind::ChainSpacing,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn chain_attachment_requires_a_connection() {
+        let resolution = solve(
+            Rect::new(202.0, 8.0, 20.0, 20.0),
+            &[rect(1, 100.0, 0.0, 20.0, 20.0)],
+        );
+        assert_eq!((resolution.snap_dx, resolution.snap_dy), (0.0, 0.0));
+        assert!(resolution.state.active.is_empty());
+        assert!(resolution.state.guides.is_empty());
+    }
+
+    #[test]
+    fn chain_attachment_skips_a_gap_crossed_by_a_box() {
+        let others = [
+            rect(1, 0.0, 0.0, 20.0, 20.0),
+            rect(2, 50.0, 0.0, 20.0, 20.0),
+            rect(3, 100.0, 0.0, 20.0, 20.0),
+        ];
+        let resolution = solve(Rect::new(202.0, 8.0, 20.0, 20.0), &others);
+        assert_eq!((resolution.snap_dx, resolution.snap_dy), (0.0, 0.0));
+        assert!(resolution.state.active.is_empty());
+        assert!(resolution.state.guides.is_empty());
+    }
+
+    #[test]
+    fn chain_attachment_handles_negative_coordinates() {
+        let others = [
+            rect(1, -140.0, -116.5, 100.0, 80.0),
+            rect(2, 60.0, -116.5, 100.0, 80.0),
+        ];
+        let resolution = solve(Rect::new(262.0, -116.5, 100.0, 80.0), &others);
+        assert_eq!(resolution.snap_dx, -2.0);
+    }
+
+    #[test]
+    fn chain_attachment_extends_a_run() {
+        let others = [
+            rect(1, 0.0, 0.0, 20.0, 20.0),
+            rect(2, 100.0, 0.0, 20.0, 20.0),
+            rect(3, 200.0, 0.0, 20.0, 20.0),
+        ];
+        let resolution = solve(Rect::new(302.0, 8.0, 20.0, 20.0), &others);
+        assert_eq!((resolution.snap_dx, resolution.snap_dy), (-2.0, 0.0));
+        assert_eq!(resolution.state.active[0].kind, GuideKind::ChainSpacing);
+        assert_eq!(
+            (
+                resolution.state.active[0].target_a,
+                resolution.state.active[0].target_b
+            ),
+            (3, 2)
+        );
+        assert_eq!(resolution.state.guides.len(), 3);
+        assert!(resolution
+            .state
+            .guides
+            .iter()
+            .all(|line| line.kind == GuideKind::ChainSpacing));
+        assert_eq!(resolution.state.guides[0].start, Point::new(220.0, 14.0));
+        assert_eq!(resolution.state.guides[0].end, Point::new(300.0, 14.0));
+        assert_eq!(resolution.state.guides[1].start, Point::new(20.0, 10.0));
+        assert_eq!(resolution.state.guides[2].end, Point::new(200.0, 10.0));
     }
 
     #[test]
