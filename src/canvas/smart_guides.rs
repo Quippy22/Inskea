@@ -397,33 +397,41 @@ fn axis_candidate(
         .min_by(|a, b| candidate_order(a, b))
 }
 
-/// One continuous line through every box that shares the snapped coordinate,
-/// so the guide spans the whole aligned group instead of a chain of gaps.
+/// The free stretches between the boxes that share the snapped coordinate.
+/// Only those gaps are drawn, so the guide connects the exterior edges and
+/// never runs along or through a box.
 fn alignment_guides(moving: Rect, others: &[GuideBox], key: GuideKey) -> Vec<GuideLine> {
     let axis = key.axis;
     let coordinate = feature_value(moving, axis, key.moving_feature);
     let epsilon = EPSILON * (1.0 + coordinate.abs());
 
-    let mut lo = cross_start(moving, axis);
-    let mut hi = cross_end(moving, axis);
+    let mut spans = vec![(cross_start(moving, axis), cross_end(moving, axis))];
     for other in others {
         if features(other.bounds, axis)
             .iter()
             .any(|value| (value - coordinate).abs() <= epsilon)
         {
-            lo = lo.min(cross_start(other.bounds, axis));
-            hi = hi.max(cross_end(other.bounds, axis));
+            spans.push((
+                cross_start(other.bounds, axis),
+                cross_end(other.bounds, axis),
+            ));
         }
     }
+    spans.sort_by(|a, b| a.0.total_cmp(&b.0));
 
-    if hi - lo <= epsilon {
-        return Vec::new();
+    let mut guides = Vec::new();
+    let mut reach = spans[0].1;
+    for &(start, end) in &spans[1..] {
+        if start - reach > epsilon {
+            guides.push(GuideLine {
+                start: axis_point(axis, coordinate, reach),
+                end: axis_point(axis, coordinate, start),
+                kind: GuideKind::Alignment,
+            });
+        }
+        reach = reach.max(end);
     }
-    vec![GuideLine {
-        start: axis_point(axis, coordinate, lo),
-        end: axis_point(axis, coordinate, hi),
-        kind: GuideKind::Alignment,
-    }]
+    guides
 }
 
 fn spacing_line(start: f64, end: f64, cross: f64, axis: GuideAxis) -> GuideLine {
@@ -768,48 +776,56 @@ mod tests {
     }
 
     #[test]
-    fn alignment_guide_spans_every_matching_element() {
+    fn alignment_guides_connect_every_matching_element() {
         let others = [
             rect(1, 140.0, 0.0, 20.0, 50.0),
             rect(2, 140.0, 100.0, 20.0, 50.0),
         ];
         let resolution = solve(Rect::new(134.0, 200.0, 20.0, 50.0), &others);
         assert_eq!(resolution.snap_dx, 6.0);
-        assert_eq!(resolution.state.guides.len(), 1);
-        assert_eq!(
-            resolution.state.guides[0],
-            GuideLine {
-                start: Point::new(140.0, 0.0),
-                end: Point::new(140.0, 250.0),
-                kind: GuideKind::Alignment,
-            }
-        );
-    }
-
-    #[test]
-    fn coincident_boxes_emit_two_full_length_guides() {
-        let resolution = solve(
-            Rect::new(10.0, 10.0, 20.0, 20.0),
-            &[rect(1, 10.0, 10.0, 20.0, 20.0)],
-        );
-        assert_eq!((resolution.snap_dx, resolution.snap_dy), (0.0, 0.0));
         assert_eq!(resolution.state.guides.len(), 2);
         assert_eq!(
             resolution.state.guides[0],
             GuideLine {
-                start: Point::new(10.0, 10.0),
-                end: Point::new(10.0, 30.0),
+                start: Point::new(140.0, 50.0),
+                end: Point::new(140.0, 100.0),
                 kind: GuideKind::Alignment,
             }
         );
         assert_eq!(
             resolution.state.guides[1],
             GuideLine {
-                start: Point::new(10.0, 10.0),
-                end: Point::new(30.0, 10.0),
+                start: Point::new(140.0, 150.0),
+                end: Point::new(140.0, 200.0),
                 kind: GuideKind::Alignment,
             }
         );
+    }
+
+    #[test]
+    fn alignment_guide_connects_the_gap_between_side_by_side_boxes() {
+        let others = [rect(1, 0.0, 0.0, 100.0, 80.0)];
+        let resolution = solve(Rect::new(160.0, 0.0, 100.0, 80.0), &others);
+        assert_eq!((resolution.snap_dx, resolution.snap_dy), (0.0, 0.0));
+        assert_eq!(
+            resolution.state.guides,
+            vec![GuideLine {
+                start: Point::new(100.0, 0.0),
+                end: Point::new(160.0, 0.0),
+                kind: GuideKind::Alignment,
+            }]
+        );
+    }
+
+    #[test]
+    fn coincident_boxes_emit_no_guides() {
+        let resolution = solve(
+            Rect::new(10.0, 10.0, 20.0, 20.0),
+            &[rect(1, 10.0, 10.0, 20.0, 20.0)],
+        );
+        assert_eq!((resolution.snap_dx, resolution.snap_dy), (0.0, 0.0));
+        assert_eq!(resolution.state.active.len(), 2);
+        assert!(resolution.state.guides.is_empty());
     }
 
     #[test]
@@ -988,8 +1004,8 @@ mod tests {
         assert_eq!(
             resolution.state.guides[0],
             GuideLine {
-                start: Point::new(202.0, 0.0),
-                end: Point::new(202.0, 320.0),
+                start: Point::new(202.0, 20.0),
+                end: Point::new(202.0, 300.0),
                 kind: GuideKind::Alignment,
             }
         );
@@ -1038,8 +1054,8 @@ mod tests {
         assert_eq!(
             resolution.state.guides[0],
             GuideLine {
-                start: Point::new(100.0, 0.0),
-                end: Point::new(100.0, 270.0),
+                start: Point::new(100.0, 20.0),
+                end: Point::new(100.0, 250.0),
                 kind: GuideKind::Alignment,
             }
         );
