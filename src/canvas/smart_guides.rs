@@ -7,6 +7,7 @@
 //! state is threaded back in for hysteresis: an active guide stays latched
 //! until the pointer leaves a slightly wider release band.
 
+use super::viewport::Viewport;
 use crate::model::{ElementId, Point, Rect};
 use leptos::*;
 
@@ -643,12 +644,23 @@ pub fn resolve_move(
     }
 }
 
-pub fn guide_overlay(guide_state: RwSignal<SmartGuideState>) -> impl Fn() -> Option<View> {
+pub fn guide_overlay(
+    guide_state: RwSignal<SmartGuideState>,
+    viewport: RwSignal<Viewport>,
+) -> impl Fn() -> Option<View> {
     move || {
         let state = guide_state.get();
         if state.guides.is_empty() {
             return None;
         }
+
+        let zoom = viewport.get().zoom;
+        let zoom = if zoom.is_finite() && zoom > 0.0 {
+            zoom
+        } else {
+            1.0
+        };
+        let arrow = 6.0 / zoom;
 
         let lines = state
             .guides
@@ -664,21 +676,20 @@ pub fn guide_overlay(guide_state: RwSignal<SmartGuideState>) -> impl Fn() -> Opt
                     "none"
                 };
                 view! {
-                    <g pointer-events="none">
-                        <line
-                            x1=guide.start.x
-                            y1=guide.start.y
-                            x2=guide.end.x
-                            y2=guide.end.y
-                            stroke=stroke
-                            stroke-width="1.25"
-                            stroke-dasharray="4 3"
-                            stroke-linecap="round"
-                            marker-start=marker
-                            marker-end=marker
-                            opacity="0.9"
-                        />
-                    </g>
+                    <line
+                        x1=guide.start.x
+                        y1=guide.start.y
+                        x2=guide.end.x
+                        y2=guide.end.y
+                        stroke=stroke
+                        stroke-width="1.5"
+                        stroke-dasharray="4 3"
+                        stroke-linecap="round"
+                        vector-effect="non-scaling-stroke"
+                        marker-start=marker
+                        marker-end=marker
+                        opacity="0.9"
+                    />
                 }
                 .into_view()
             })
@@ -690,14 +701,17 @@ pub fn guide_overlay(guide_state: RwSignal<SmartGuideState>) -> impl Fn() -> Opt
                     <defs>
                         <marker
                             id="smart-guide-arrow"
-                            marker-width="6"
-                            marker-height="6"
-                            ref-x="3"
-                            ref-y="3"
+                            marker-width=arrow
+                            marker-height=arrow
+                            ref-x=arrow / 2.0
+                            ref-y=arrow / 2.0
                             orient="auto-start-reverse"
                             marker-units="userSpaceOnUse"
                         >
-                            <path d="M 0 0 L 6 3 L 0 6 z" fill=GUIDE_SPACING_COLOR/>
+                            <path
+                                d=format!("M 0 0 L {arrow} {} L 0 {arrow} z", arrow / 2.0)
+                                fill=GUIDE_SPACING_COLOR
+                            />
                         </marker>
                     </defs>
                     {lines}
