@@ -22,6 +22,14 @@ pub const GUIDE_LANE_PX: f64 = 12.0;
 /// Objects further away than this from the moving box, in screen pixels, are
 /// ignored outright.
 pub const GUIDE_SEARCH_RADIUS_PX: f64 = 300.0;
+/// Distance from the boxes to a spacing marker's centre, in screen pixels:
+/// the marker sits outside the shared band, clear of the feature lines an
+/// alignment guide rides on.
+pub const GUIDE_SPACING_OFFSET_PX: f64 = 9.0;
+/// Height of the spacing marker band, in screen pixels.
+pub const GUIDE_SPACING_BAND_PX: f64 = 8.0;
+/// Length of the spacing marker's end ticks, in screen pixels.
+pub const GUIDE_SPACING_CAP_PX: f64 = 15.0;
 const GUIDE_ALIGNMENT_COLOR: &str = "#7aa2f7";
 const GUIDE_SPACING_COLOR: &str = "#9ece6a";
 const EPSILON: f64 = 1e-9;
@@ -99,6 +107,7 @@ struct Tolerances {
     release: f64,
     lane: f64,
     radius: f64,
+    marker: f64,
 }
 
 impl Tolerances {
@@ -113,6 +122,7 @@ impl Tolerances {
             release: GUIDE_RELEASE_PX / zoom,
             lane: GUIDE_LANE_PX / zoom,
             radius: GUIDE_SEARCH_RADIUS_PX / zoom,
+            marker: GUIDE_SPACING_OFFSET_PX / zoom,
         }
     }
 }
@@ -235,12 +245,10 @@ fn chain_connections(
     pairs
 }
 
-/// Perpendicular centre of the strip the two boxes share; the lane a spacing
-/// line between them should be drawn in.
-fn lane_center(left: Rect, right: Rect, axis: GuideAxis) -> f64 {
-    let start = cross_start(left, axis).max(cross_start(right, axis));
-    let end = cross_end(left, axis).min(cross_end(right, axis));
-    (start + end) / 2.0
+/// Perpendicular coordinate a spacing marker is drawn at: just outside the
+/// boxes' shared edges, clear of the features alignment guides ride on.
+fn marker_lane(a: Rect, b: Rect, axis: GuideAxis, offset: f64) -> f64 {
+    cross_start(a, axis).min(cross_start(b, axis)) - offset
 }
 
 fn same_gap(a: f64, b: f64) -> bool {
@@ -590,7 +598,10 @@ fn equal_spacing_guides(
     let selected_gap = along_start(right.bounds, axis) - along_end(left.bounds, axis);
     let moving_start = along_start(moving, axis);
     let moving_size = along_end(moving, axis) - moving_start;
-    let moving_cross = (cross_start(moving, axis) + cross_end(moving, axis)) / 2.0;
+    let selected_cross = cross_start(moving, axis)
+        .min(cross_start(left.bounds, axis))
+        .min(cross_start(right.bounds, axis))
+        - tolerances.marker;
     let mut guides = Vec::new();
 
     for (pair_left, pair_right) in pairs {
@@ -605,9 +616,9 @@ fn equal_spacing_guides(
             continue;
         }
         let cross = if pair_left.id == candidate.key.target_a {
-            moving_cross
+            selected_cross
         } else {
-            lane_center(pair_left.bounds, pair_right.bounds, axis)
+            marker_lane(pair_left.bounds, pair_right.bounds, axis, tolerances.marker)
         };
         guides.extend(spacing_lines(start, end, moving_size, cross, axis));
     }
@@ -644,7 +655,7 @@ fn chain_spacing_guides(
     let mut guides = vec![spacing_line(
         start,
         end,
-        lane_center(moving, near.bounds, axis),
+        marker_lane(moving, near.bounds, axis, tolerances.marker),
         axis,
         GuideKind::ChainSpacing,
     )];
@@ -663,7 +674,7 @@ fn chain_spacing_guides(
         guides.push(spacing_line(
             start,
             end,
-            lane_center(pair_left.bounds, pair_right.bounds, axis),
+            marker_lane(pair_left.bounds, pair_right.bounds, axis, tolerances.marker),
             axis,
             GuideKind::ChainSpacing,
         ));
@@ -679,7 +690,7 @@ fn equal_spacing_run_lines(
     others: &[GuideBox],
     pairs: &[(GuideBox, GuideBox)],
     axis: GuideAxis,
-    lane: f64,
+    tolerances: &Tolerances,
 ) -> Vec<GuideLine> {
     let mut runs: Vec<(f64, Vec<GuideLine>)> = Vec::new();
 
@@ -692,7 +703,7 @@ fn equal_spacing_run_lines(
         }
 
         let crossed = others.iter().any(|other| {
-            perpendicular_gap(left.bounds, other.bounds, axis) <= lane
+            perpendicular_gap(left.bounds, other.bounds, axis) <= tolerances.lane
                 && along_start(other.bounds, axis) > start
                 && along_end(other.bounds, axis) < end
         });
@@ -703,7 +714,7 @@ fn equal_spacing_run_lines(
         let line = spacing_line(
             start,
             end,
-            lane_center(left.bounds, right.bounds, axis),
+            marker_lane(left.bounds, right.bounds, axis, tolerances.marker),
             axis,
             GuideKind::EqualSpacing,
         );
@@ -814,12 +825,7 @@ pub fn resolve_move(
         match candidate.key.kind {
             GuideKind::Alignment => {
                 guides.extend(alignment_guides(snapped, &others, candidate.key));
-                guides.extend(equal_spacing_run_lines(
-                    &others,
-                    pairs,
-                    axis,
-                    tolerances.lane,
-                ));
+                guides.extend(equal_spacing_run_lines(&others, pairs, axis, &tolerances));
             }
             GuideKind::EqualSpacing => {
                 guides.extend(equal_spacing_guides(
@@ -865,36 +871,124 @@ pub fn guide_overlay(
         } else {
             1.0
         };
-        let arrow = 6.0 / zoom;
+        let band = GUIDE_SPACING_BAND_PX / 2.0 / zoom;
+        let cap = GUIDE_SPACING_CAP_PX / 2.0 / zoom;
 
+        // Equal gaps read as soft bands with solid end ticks, drawn outside
+        // the boxes so they never sit on an alignment line.
+        let markers = state
+            .guides
+            .iter()
+            .filter(|guide| guide.kind != GuideKind::Alignment)
+            .map(|guide| {
+                let horizontal = guide.start.y == guide.end.y;
+                let (x, y, width, height) = if horizontal {
+                    (
+                        guide.start.x.min(guide.end.x),
+                        guide.start.y - band,
+                        (guide.end.x - guide.start.x).abs(),
+                        band * 2.0,
+                    )
+                } else {
+                    (
+                        guide.start.x - band,
+                        guide.start.y.min(guide.end.y),
+                        band * 2.0,
+                        (guide.end.y - guide.start.y).abs(),
+                    )
+                };
+                let caps = if horizontal {
+                    [
+                        (x, guide.start.y - cap, x, guide.start.y + cap),
+                        (
+                            x + width,
+                            guide.start.y - cap,
+                            x + width,
+                            guide.start.y + cap,
+                        ),
+                    ]
+                } else {
+                    [
+                        (guide.start.x - cap, y, guide.start.x + cap, y),
+                        (
+                            guide.start.x - cap,
+                            y + height,
+                            guide.start.x + cap,
+                            y + height,
+                        ),
+                    ]
+                };
+                let [(ax1, ay1, ax2, ay2), (bx1, by1, bx2, by2)] = caps;
+                view! {
+                    <g>
+                        <rect
+                            x=x
+                            y=y
+                            width=width
+                            height=height
+                            rx=band
+                            fill=GUIDE_SPACING_COLOR
+                            fill-opacity="0.28"
+                        />
+                        <line
+                            x1=ax1
+                            y1=ay1
+                            x2=ax2
+                            y2=ay2
+                            stroke=GUIDE_SPACING_COLOR
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            vector-effect="non-scaling-stroke"
+                            opacity="0.9"
+                        />
+                        <line
+                            x1=bx1
+                            y1=by1
+                            x2=bx2
+                            y2=by2
+                            stroke=GUIDE_SPACING_COLOR
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            vector-effect="non-scaling-stroke"
+                            opacity="0.9"
+                        />
+                    </g>
+                }
+                .into_view()
+            })
+            .collect_view();
+
+        // Alignment guides: a crisp line over a soft halo.
         let lines = state
             .guides
             .iter()
+            .filter(|guide| guide.kind == GuideKind::Alignment)
             .map(|guide| {
-                let stroke = match guide.kind {
-                    GuideKind::Alignment => GUIDE_ALIGNMENT_COLOR,
-                    GuideKind::EqualSpacing | GuideKind::ChainSpacing => GUIDE_SPACING_COLOR,
-                };
-                let marker = if guide.kind == GuideKind::Alignment {
-                    "none"
-                } else {
-                    "url(#smart-guide-arrow)"
-                };
                 view! {
-                    <line
-                        x1=guide.start.x
-                        y1=guide.start.y
-                        x2=guide.end.x
-                        y2=guide.end.y
-                        stroke=stroke
-                        stroke-width="1.5"
-                        stroke-dasharray="4 3"
-                        stroke-linecap="round"
-                        vector-effect="non-scaling-stroke"
-                        marker-start=marker
-                        marker-end=marker
-                        opacity="0.9"
-                    />
+                    <g>
+                        <line
+                            x1=guide.start.x
+                            y1=guide.start.y
+                            x2=guide.end.x
+                            y2=guide.end.y
+                            stroke=GUIDE_ALIGNMENT_COLOR
+                            stroke-width="4"
+                            stroke-linecap="round"
+                            vector-effect="non-scaling-stroke"
+                            opacity="0.18"
+                        />
+                        <line
+                            x1=guide.start.x
+                            y1=guide.start.y
+                            x2=guide.end.x
+                            y2=guide.end.y
+                            stroke=GUIDE_ALIGNMENT_COLOR
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            vector-effect="non-scaling-stroke"
+                            opacity="0.95"
+                        />
+                    </g>
                 }
                 .into_view()
             })
@@ -903,22 +997,7 @@ pub fn guide_overlay(
         Some(
             view! {
                 <g pointer-events="none">
-                    <defs>
-                        <marker
-                            id="smart-guide-arrow"
-                            marker-width=arrow
-                            marker-height=arrow
-                            ref-x=arrow / 2.0
-                            ref-y=arrow / 2.0
-                            orient="auto-start-reverse"
-                            marker-units="userSpaceOnUse"
-                        >
-                            <path
-                                d=format!("M 0 0 L {arrow} {} L 0 {arrow} z", arrow / 2.0)
-                                fill=GUIDE_SPACING_COLOR
-                            />
-                        </marker>
-                    </defs>
+                    {markers}
                     {lines}
                 </g>
             }
@@ -1116,8 +1195,8 @@ mod tests {
         assert_eq!(
             first.state.guides[0],
             GuideLine {
-                start: Point::new(20.0, 30.0),
-                end: Point::new(50.0, 30.0),
+                start: Point::new(20.0, -9.0),
+                end: Point::new(50.0, -9.0),
                 kind: GuideKind::EqualSpacing,
             }
         );
@@ -1149,8 +1228,8 @@ mod tests {
         let others = [
             rect(1, 0.0, 0.0, 20.0, 100.0),
             rect(2, 100.0, 0.0, 20.0, 100.0),
-            rect(3, 200.0, 0.0, 20.0, 100.0),
-            rect(4, 300.0, 0.0, 20.0, 100.0),
+            rect(3, 200.0, 10.0, 20.0, 100.0),
+            rect(4, 300.0, 10.0, 20.0, 100.0),
         ];
         let resolution = solve(Rect::new(44.0, 20.0, 20.0, 20.0), &others);
         assert_eq!(resolution.snap_dx, 6.0);
@@ -1160,20 +1239,29 @@ mod tests {
             .guides
             .iter()
             .all(|line| line.kind == GuideKind::EqualSpacing));
-        // The snapped pair draws at the moving box, the others in their lane.
-        assert_eq!(resolution.state.guides[0].start, Point::new(20.0, 30.0));
-        assert_eq!(resolution.state.guides[1].end, Point::new(100.0, 30.0));
+        // Markers ride just outside their own pair's boxes.
+        assert_eq!(resolution.state.guides[0].start, Point::new(20.0, -9.0));
+        assert_eq!(resolution.state.guides[1].end, Point::new(100.0, -9.0));
         assert_eq!(
             resolution
                 .state
                 .guides
                 .iter()
-                .filter(|line| line.start.y == 50.0)
+                .filter(|line| line.start.y == -9.0)
                 .count(),
             4
         );
-        assert_eq!(resolution.state.guides[2].start, Point::new(120.0, 50.0));
-        assert_eq!(resolution.state.guides[5].end, Point::new(300.0, 50.0));
+        assert_eq!(
+            resolution
+                .state
+                .guides
+                .iter()
+                .filter(|line| line.start.y == 1.0)
+                .count(),
+            2
+        );
+        assert_eq!(resolution.state.guides[2].start, Point::new(120.0, -9.0));
+        assert_eq!(resolution.state.guides[5].end, Point::new(300.0, 1.0));
     }
 
     #[test]
@@ -1191,13 +1279,13 @@ mod tests {
             resolution.state.guides,
             vec![
                 GuideLine {
-                    start: Point::new(120.0, 14.0),
-                    end: Point::new(200.0, 14.0),
+                    start: Point::new(120.0, -9.0),
+                    end: Point::new(200.0, -9.0),
                     kind: GuideKind::ChainSpacing,
                 },
                 GuideLine {
-                    start: Point::new(20.0, 10.0),
-                    end: Point::new(100.0, 10.0),
+                    start: Point::new(20.0, -9.0),
+                    end: Point::new(100.0, -9.0),
                     kind: GuideKind::ChainSpacing,
                 },
             ]
@@ -1224,13 +1312,13 @@ mod tests {
             resolution.state.guides,
             vec![
                 GuideLine {
-                    start: Point::new(20.0, 14.0),
-                    end: Point::new(100.0, 14.0),
+                    start: Point::new(20.0, -9.0),
+                    end: Point::new(100.0, -9.0),
                     kind: GuideKind::ChainSpacing,
                 },
                 GuideLine {
-                    start: Point::new(120.0, 10.0),
-                    end: Point::new(200.0, 10.0),
+                    start: Point::new(120.0, -9.0),
+                    end: Point::new(200.0, -9.0),
                     kind: GuideKind::ChainSpacing,
                 },
             ]
@@ -1294,10 +1382,10 @@ mod tests {
             .guides
             .iter()
             .all(|line| line.kind == GuideKind::ChainSpacing));
-        assert_eq!(resolution.state.guides[0].start, Point::new(220.0, 14.0));
-        assert_eq!(resolution.state.guides[0].end, Point::new(300.0, 14.0));
-        assert_eq!(resolution.state.guides[1].start, Point::new(20.0, 10.0));
-        assert_eq!(resolution.state.guides[2].end, Point::new(200.0, 10.0));
+        assert_eq!(resolution.state.guides[0].start, Point::new(220.0, -9.0));
+        assert_eq!(resolution.state.guides[0].end, Point::new(300.0, -9.0));
+        assert_eq!(resolution.state.guides[1].start, Point::new(20.0, -9.0));
+        assert_eq!(resolution.state.guides[2].end, Point::new(200.0, -9.0));
     }
 
     #[test]
@@ -1383,16 +1471,16 @@ mod tests {
         assert_eq!(
             resolution.state.guides[1],
             GuideLine {
-                start: Point::new(20.0, 10.0),
-                end: Point::new(100.0, 10.0),
+                start: Point::new(20.0, -9.0),
+                end: Point::new(100.0, -9.0),
                 kind: GuideKind::EqualSpacing,
             }
         );
         assert_eq!(
             resolution.state.guides[3],
             GuideLine {
-                start: Point::new(220.0, 10.0),
-                end: Point::new(300.0, 10.0),
+                start: Point::new(220.0, -9.0),
+                end: Point::new(300.0, -9.0),
                 kind: GuideKind::EqualSpacing,
             }
         );
@@ -1407,7 +1495,13 @@ mod tests {
         ];
         let lane = GUIDE_LANE_PX;
         let pairs = inline_pairs(&boxes, GuideAxis::Vertical, lane);
-        assert!(equal_spacing_run_lines(&boxes, &pairs, GuideAxis::Vertical, lane).is_empty());
+        assert!(equal_spacing_run_lines(
+            &boxes,
+            &pairs,
+            GuideAxis::Vertical,
+            &Tolerances::for_zoom(1.0)
+        )
+        .is_empty());
     }
 
     #[test]
@@ -1415,7 +1509,13 @@ mod tests {
         let lane = GUIDE_LANE_PX;
         let run_count = |boxes: &[GuideBox]| {
             let pairs = inline_pairs(boxes, GuideAxis::Vertical, lane);
-            equal_spacing_run_lines(boxes, &pairs, GuideAxis::Vertical, lane).len()
+            equal_spacing_run_lines(
+                boxes,
+                &pairs,
+                GuideAxis::Vertical,
+                &Tolerances::for_zoom(1.0),
+            )
+            .len()
         };
 
         let clear = [
