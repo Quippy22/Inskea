@@ -11,41 +11,88 @@ use super::{
 use crate::model::Rect;
 
 /// The free stretches between the boxes that share the snapped coordinate.
-/// Only those gaps are drawn, so the guide connects the exterior edges and
-/// never runs along or through a box.
+/// Only those gaps are drawn, so the guide connects the exterior edges; a gap
+/// another box sits across is cut at that box rather than drawn through it.
 pub(super) fn alignment_guides(moving: Rect, others: &[GuideBox], key: GuideKey) -> Vec<GuideLine> {
     let axis = key.axis;
     let coordinate = feature_value(moving, axis, key.moving_feature);
     let epsilon = EPSILON * (1.0 + coordinate.abs());
 
     let mut spans = vec![(cross_start(moving, axis), cross_end(moving, axis))];
+    let mut blockers: Vec<(f64, f64)> = Vec::new();
     for other in others {
-        if features(other.bounds, axis)
+        let connected = features(other.bounds, axis)
             .iter()
-            .any(|value| (value - coordinate).abs() <= epsilon)
-        {
-            spans.push((
+            .any(|value| (value - coordinate).abs() <= epsilon);
+        // Any box the line would run through breaks it, whether or not its own
+        // features are among the ones being matched.
+        let covering = along_start(other.bounds, axis) < coordinate - epsilon
+            && along_end(other.bounds, axis) > coordinate + epsilon;
+        if connected || covering {
+            let span = (
                 cross_start(other.bounds, axis),
                 cross_end(other.bounds, axis),
-            ));
+            );
+            if connected {
+                spans.push(span);
+            }
+            if covering {
+                blockers.push(span);
+            }
         }
     }
     spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+    blockers.sort_by(|a, b| a.0.total_cmp(&b.0));
 
     let mut guides = Vec::new();
     let mut reach = spans[0].1;
     for &(start, end) in &spans[1..] {
         if start - reach > epsilon {
-            guides.push(GuideLine {
-                start: axis_point(axis, coordinate, reach),
-                end: axis_point(axis, coordinate, start),
-                stops: [coordinate, coordinate],
-                kind: GuideKind::Alignment,
-            });
+            free_stretches(&mut guides, reach, start, &blockers, axis, coordinate);
         }
         reach = reach.max(end);
     }
     guides
+}
+
+/// Draw the part of the free stretch from `from` to `to` that no blocker
+/// covers, cutting the line where a box sits in the way.
+fn free_stretches(
+    guides: &mut Vec<GuideLine>,
+    from: f64,
+    to: f64,
+    blockers: &[(f64, f64)],
+    axis: GuideAxis,
+    coordinate: f64,
+) {
+    let mut edge = from;
+    for &(block_start, block_end) in blockers {
+        if block_end <= edge {
+            continue;
+        }
+        if block_start >= to {
+            break;
+        }
+        if block_start > edge {
+            guides.push(alignment_segment(axis, coordinate, edge, block_start));
+        }
+        edge = block_end;
+        if edge >= to {
+            return;
+        }
+    }
+    if to > edge {
+        guides.push(alignment_segment(axis, coordinate, edge, to));
+    }
+}
+
+fn alignment_segment(axis: GuideAxis, coordinate: f64, from: f64, to: f64) -> GuideLine {
+    GuideLine {
+        start: axis_point(axis, coordinate, from),
+        end: axis_point(axis, coordinate, to),
+        stops: [coordinate, coordinate],
+        kind: GuideKind::Alignment,
+    }
 }
 
 fn spacing_line(

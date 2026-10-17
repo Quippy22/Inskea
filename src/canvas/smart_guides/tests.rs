@@ -436,6 +436,34 @@ fn closest_alignment_wins_between_targets() {
 }
 
 #[test]
+fn alignment_guide_breaks_at_a_box_across_its_path() {
+    let others = [
+        rect(1, 100.0, 100.0, 20.0, 20.0),
+        // Straddles the matched coordinate without sharing it, so reaching the
+        // far box would run the line through this one.
+        rect(2, 80.0, 150.0, 50.0, 20.0),
+        rect(3, 100.0, 200.0, 20.0, 20.0),
+    ];
+    let resolution = solve(Rect::new(100.0, 0.0, 20.0, 20.0), &others);
+    assert_eq!(resolution.snap_dx, 0.0);
+    assert!(resolution
+        .state
+        .guides
+        .iter()
+        .all(|line| line.start.x == 100.0 && line.end.x == 100.0));
+    let segments: Vec<(f64, f64)> = resolution
+        .state
+        .guides
+        .iter()
+        .map(|line| (line.start.y, line.end.y))
+        .collect();
+    assert_eq!(
+        segments,
+        vec![(20.0, 100.0), (120.0, 150.0), (170.0, 200.0)]
+    );
+}
+
+#[test]
 fn exact_ties_between_targets_resolve_to_the_smallest_id() {
     let others = [
         rect(1, 94.0, 0.0, 20.0, 20.0),
