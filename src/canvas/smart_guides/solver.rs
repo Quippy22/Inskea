@@ -11,22 +11,19 @@ use crate::model::{ElementId, Rect};
 
 /// Resolve smart-guide candidates for a proposed move.
 ///
-/// Resolves both axes on every pointer update. Active guides use a slightly
-/// wider release band so they remain stable while the pointer crosses the
-/// candidate, but they are reacquired continuously after release. Objects
-/// beyond the search radius are dropped before anything is scanned, so with
-/// nothing nearby the resolution is empty and clears any previous guide.
+/// Call this only while guides are enabled; a disabled caller keeps the
+/// previous state cleared instead. Resolves both axes on every pointer update.
+/// Active guides use a slightly wider release band so they remain stable while
+/// the pointer crosses the candidate, but they are reacquired continuously
+/// after release. Objects beyond the search radius are dropped before anything
+/// is scanned, so with nothing nearby the resolution is empty and clears any
+/// previous guide.
 pub fn resolve_move(
     proposed: Rect,
     others: &[(ElementId, Rect)],
-    enabled: bool,
     zoom: f64,
     previous: &SmartGuideState,
 ) -> GuideResolution {
-    if !enabled {
-        return GuideResolution::default();
-    }
-
     let tolerances = Tolerances::for_zoom(zoom);
     let all: Vec<GuideBox> = others
         .iter()

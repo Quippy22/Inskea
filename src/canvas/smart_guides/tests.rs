@@ -12,7 +12,7 @@ fn guide(id: ElementId, bounds: Rect) -> GuideBox {
 }
 
 fn solve(proposed: Rect, others: &[(ElementId, Rect)]) -> GuideResolution {
-    resolve_move(proposed, others, true, 1.0, &SmartGuideState::default())
+    resolve_move(proposed, others, 1.0, &SmartGuideState::default())
 }
 
 #[test]
@@ -111,7 +111,6 @@ fn active_candidate_holds_through_the_release_band() {
     let held = resolve_move(
         Rect::new(192.0, 300.0, 20.0, 20.0),
         &others,
-        true,
         1.0,
         &first.state,
     );
@@ -131,7 +130,6 @@ fn active_candidate_releases_beyond_the_band() {
     let released = resolve_move(
         Rect::new(170.0, 300.0, 20.0, 20.0),
         &others,
-        true,
         1.0,
         &first.state,
     );
@@ -148,7 +146,6 @@ fn tolerances_are_screen_space_and_scale_with_zoom() {
     let miss = resolve_move(
         Rect::new(196.5, 240.0, 20.0, 20.0),
         &others,
-        true,
         2.0,
         &SmartGuideState::default(),
     );
@@ -158,7 +155,6 @@ fn tolerances_are_screen_space_and_scale_with_zoom() {
     let edge = resolve_move(
         Rect::new(197.0, 240.0, 20.0, 20.0),
         &others,
-        true,
         2.0,
         &SmartGuideState::default(),
     );
@@ -170,7 +166,6 @@ fn tolerances_are_screen_space_and_scale_with_zoom() {
     let held = resolve_move(
         Rect::new(195.5, 240.0, 20.0, 20.0),
         &others,
-        true,
         2.0,
         &edge.state,
     );
@@ -202,7 +197,6 @@ fn equal_spacing_snaps_into_the_middle_of_a_gap() {
     let again = resolve_move(
         Rect::new(45.0, 20.0, 20.0, 20.0),
         &others,
-        true,
         1.0,
         &first.state,
     );
@@ -211,7 +205,6 @@ fn equal_spacing_snaps_into_the_middle_of_a_gap() {
     let released = resolve_move(
         Rect::new(61.0, 20.0, 20.0, 20.0),
         &others,
-        true,
         1.0,
         &again.state,
     );
@@ -554,16 +547,15 @@ fn objects_beyond_the_search_radius_are_ignored() {
     assert!(ignored.state.active.is_empty());
 
     // Zoomed out the radius covers more world space...
-    let zoomed_out = resolve_move(moving, &far, true, 0.5, &SmartGuideState::default());
+    let zoomed_out = resolve_move(moving, &far, 0.5, &SmartGuideState::default());
     assert_eq!((zoomed_out.snap_dx, zoomed_out.snap_dy), (5.0, 0.0));
     // ...and zoomed in, less.
-    let zoomed_in = resolve_move(moving, &near, true, 2.0, &SmartGuideState::default());
+    let zoomed_in = resolve_move(moving, &near, 2.0, &SmartGuideState::default());
     assert_eq!((zoomed_in.snap_dx, zoomed_in.snap_dy), (0.0, 0.0));
 }
 
 #[test]
-fn disabled_resolution_is_empty() {
-    let others = [rect(1, 10.0, 0.0, 20.0, 20.0)];
+fn no_targets_clear_the_previous_state() {
     let previous = SmartGuideState {
         guides: Vec::new(),
         active: vec![GuideKey {
@@ -575,13 +567,7 @@ fn disabled_resolution_is_empty() {
             target_b: 0,
         }],
     };
-    let resolution = resolve_move(
-        Rect::new(10.0, 0.0, 20.0, 20.0),
-        &others,
-        false,
-        1.0,
-        &previous,
-    );
+    let resolution = resolve_move(Rect::new(10.0, 0.0, 20.0, 20.0), &[], 1.0, &previous);
     assert_eq!((resolution.snap_dx, resolution.snap_dy), (0.0, 0.0));
     assert_eq!(resolution.state, SmartGuideState::default());
 }
@@ -622,7 +608,7 @@ fn randomized_positions_stay_finite() {
             rng.next().abs() + 0.1,
             rng.next().abs() + 0.1,
         );
-        let resolution = resolve_move(proposed, &others, round % 7 != 0, zoom, &state);
+        let resolution = resolve_move(proposed, &others, zoom, &state);
         assert!(resolution.snap_dx.is_finite() && resolution.snap_dy.is_finite());
         assert!(resolution.state.active.len() <= 2);
         for line in &resolution.state.guides {
