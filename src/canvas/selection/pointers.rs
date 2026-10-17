@@ -639,7 +639,7 @@ fn finish_path_point_drag(st: &mut CanvasState, props: &mut CanvasInputs, idx: u
     }
 }
 
-/// Snap a single path point to the grid (Shift+up after point drag).
+/// Snap a single path point to the grid (Alt-release after a point drag).
 #[inline]
 fn snap_path_point_to_grid(st: &mut CanvasState, props: &mut CanvasInputs, idx: usize) {
     let ids = st.selected_ids.get();
@@ -661,7 +661,7 @@ fn snap_path_point_to_grid(st: &mut CanvasState, props: &mut CanvasInputs, idx: 
     }
 }
 
-/// Snap all selected elements to the grid (Shift+up after move/resize/rotate).
+/// Snap all selected elements to the grid (Alt-release after move/resize/rotate).
 #[inline]
 fn snap_elements_to_grid(st: &mut CanvasState, props: &mut CanvasInputs) {
     let ids = st.selected_ids.get();
@@ -812,8 +812,9 @@ pub fn select_pointer_up(
             finish_shift_click(st, props);
         }
 
+        // Alt is the grid-snap key; Shift stays reserved for smart guides.
         let smart_guide_active = !st.drag.smart_guides.get().active.is_empty();
-        if st.shift_pressed.get() && travelled {
+        if st.alt_pressed.get() && travelled {
             if let Some(DragOperation::PathPoint(idx)) = drag_action {
                 snap_path_point_to_grid(st, props, idx);
             } else if !smart_guide_active {

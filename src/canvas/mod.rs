@@ -514,7 +514,7 @@ pub fn Canvas(
     // 3. Dispatches by mode:
     //    - `Pan` → clears the pan anchor (stops panning).
     //    - `Select` → `modes::select_pointer_up` – if a move/resize/rotate
-    //      drag just finished, optionally snaps to grid (shift held), then
+    //      drag just finished, optionally snaps to grid (Alt held), then
     //      clears all drag state. If a marquee drag just finished, selects
     //      all elements fully inside the rectangle.
     //    - `Draw` → `modes::draw_pointer_up` – finalises the element from
