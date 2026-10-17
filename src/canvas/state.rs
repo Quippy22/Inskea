@@ -50,6 +50,10 @@ pub struct DragState {
     pub rotation_delta: RwSignal<f64>,
     pub hovered_handle: RwSignal<Option<DragOperation>>,
     pub smart_guides: RwSignal<SmartGuideState>,
+    /// Bounds of every element outside the drag, captured when a move starts.
+    /// The scene cannot change underneath a drag, so each pointer update reads
+    /// this list instead of rescanning and re-measuring the whole scene.
+    pub smart_guide_targets: RwSignal<Vec<(ElementId, Rect)>>,
     /// Set when a Shift press grabbed an already selected element: unless the
     /// press turns into a real drag, pointer-up applies the toggle instead.
     pub pending_shift_toggle: RwSignal<Option<Vec<ElementId>>>,
@@ -68,6 +72,7 @@ impl DragState {
             rotation_delta: create_rw_signal(0.0),
             hovered_handle: create_rw_signal(None),
             smart_guides: create_rw_signal(SmartGuideState::default()),
+            smart_guide_targets: create_rw_signal(Vec::new()),
             pending_shift_toggle: create_rw_signal(None),
         }
     }

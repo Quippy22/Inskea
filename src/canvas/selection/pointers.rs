@@ -87,6 +87,7 @@ fn handle_path_move_icon(
     world: Point,
     st: &mut CanvasState,
     props: &CanvasInputs,
+    els: &[Element],
     el: &Element,
 ) -> bool {
     if el.path_points().is_none() {
@@ -102,6 +103,7 @@ fn handle_path_move_icon(
         st.drag.drag_bounds.set(Some(el.bounds()));
         st.drag.last_world.set(Some(world));
         st.drag.drag_originals.set(vec![el.clone()]);
+        capture_smart_guide_targets(st, &[el.id()], els);
         return true;
     }
     false
@@ -177,6 +179,7 @@ fn hit_move_handle(
                 .cloned()
                 .collect(),
         );
+        capture_smart_guide_targets(st, ids, els);
         return true;
     }
     false
@@ -347,6 +350,17 @@ fn select_and_begin_move(
     begin_move_drag(world, st, props, els, &moving);
 }
 
+/// Capture the elements the smart guides may snap against when a move starts.
+#[inline]
+fn capture_smart_guide_targets(st: &mut CanvasState, ids: &[ElementId], els: &[Element]) {
+    st.drag.smart_guide_targets.set(
+        els.iter()
+            .filter(|el| !ids.contains(&el.id()))
+            .map(|el| (el.id(), el.bounds()))
+            .collect(),
+    );
+}
+
 /// Capture the drag originals, bounds, and operation for an element move.
 fn begin_move_drag(
     world: Point,
@@ -369,6 +383,7 @@ fn begin_move_drag(
             .cloned()
             .collect(),
     );
+    capture_smart_guide_targets(st, ids, els);
 }
 
 /// Figure out which handle (if any) the cursor is hovering over.
@@ -568,21 +583,12 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
         st.shift_pressed.get() && matches!(st.drag.drag_action.get(), Some(DragOperation::Move));
     let (snap_dx, snap_dy, next_guides) = if smart_enabled {
         let zoom = props.viewport.get_untracked().zoom;
-        props.scene.with(|scene| {
-            let proposed = Rect::new(bounds.x + raw_dx, bounds.y + raw_dy, bounds.w, bounds.h);
-            let others = scene
-                .elements()
-                .iter()
-                .filter(|element| !ids.contains(&element.id()))
-                .map(|element| (element.id(), element.bounds()))
-                .collect::<Vec<_>>();
-            let resolution = smart_guides::resolve_move(
-                proposed,
-                &others,
-                zoom,
-                &st.drag.smart_guides.get_untracked(),
-            );
-            (resolution.snap_dx, resolution.snap_dy, resolution.state)
+        st.drag.smart_guides.with(|previous| {
+            st.drag.smart_guide_targets.with(|targets| {
+                let proposed = Rect::new(bounds.x + raw_dx, bounds.y + raw_dy, bounds.w, bounds.h);
+                let resolution = smart_guides::resolve_move(proposed, targets, zoom, previous);
+                (resolution.snap_dx, resolution.snap_dy, resolution.state)
+            })
         })
     } else {
         (0.0, 0.0, SmartGuideState::default())
@@ -681,6 +687,7 @@ fn clear_drag_state(st: &mut CanvasState) {
     st.drag.drag_originals.set(Vec::new());
     st.drag.hovered_handle.set(None);
     st.drag.smart_guides.set(SmartGuideState::default());
+    st.drag.smart_guide_targets.set(Vec::new());
     st.drag.pending_shift_toggle.set(None);
     st.select_anchor.set(None);
 }
@@ -734,7 +741,7 @@ pub fn select_pointer_down(
     if ids.len() == 1 {
         if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
             if handle_path_point_hit(world, st, props, el)
-                || handle_path_move_icon(world, st, props, el)
+                || handle_path_move_icon(world, st, props, &els, el)
             {
                 return;
             }
