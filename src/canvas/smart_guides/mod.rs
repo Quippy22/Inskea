@@ -1,8 +1,9 @@
 //! Smart guides for move drags.
 //!
 //! Resolution is a pure function of the proposed rectangle, the neighbouring
-//! element bounds, and the zoom: [`resolve_move`] returns the snap delta plus
-//! the guides to draw. Tolerances are specified in screen pixels and divided
+//! element bounds, the visible world rectangle, and the zoom: [`resolve_move`]
+//! returns the snap delta plus the guides to draw. Targets are the elements
+//! the viewport shows. Tolerances are specified in screen pixels and divided
 //! by the zoom, so snapping feels the same at every zoom level. The previous
 //! state is threaded back in for hysteresis: an active guide stays latched
 //! until the pointer leaves a slightly wider release band.
@@ -27,9 +28,13 @@ pub const GUIDE_RELEASE_PX: f64 = 10.0;
 /// Perpendicular distance at which two boxes count as sharing a lane,
 /// in screen pixels.
 pub const GUIDE_LANE_PX: f64 = 12.0;
-/// Objects further away than this from the moving box, in screen pixels, are
-/// ignored outright.
-pub const GUIDE_SEARCH_RADIUS_PX: f64 = 300.0;
+/// Objects further away than this from the moving box, in screen pixels, no
+/// longer take part in the spacing scans. Alignment still reads everything on
+/// screen: the spacing scans are the quadratic ones, so they get the bound.
+pub const GUIDE_PAIR_REACH_PX: f64 = 600.0;
+/// Upper bound on the boxes the spacing scans pair up, nearest first. Only a
+/// pathological scene (thousands of boxes in one lane, zoomed out) reaches it.
+const GUIDE_MAX_PAIR_TARGETS: usize = 96;
 /// Distance from the boxes to a spacing marker's centre, in screen pixels:
 /// the marker sits outside the shared band, clear of the feature lines an
 /// alignment guide rides on.
@@ -121,7 +126,7 @@ struct Tolerances {
     acquire: f64,
     release: f64,
     lane: f64,
-    radius: f64,
+    reach: f64,
     marker: f64,
 }
 
@@ -136,7 +141,7 @@ impl Tolerances {
             acquire: GUIDE_ACQUIRE_PX / zoom,
             release: GUIDE_RELEASE_PX / zoom,
             lane: GUIDE_LANE_PX / zoom,
-            radius: GUIDE_SEARCH_RADIUS_PX / zoom,
+            reach: GUIDE_PAIR_REACH_PX / zoom,
             marker: GUIDE_SPACING_OFFSET_PX / zoom,
         }
     }

@@ -108,7 +108,7 @@ fn spacing_candidate(
 /// inline pair, to match the pair's gap and grow the chain by one link.
 fn chain_candidate(
     moving: Rect,
-    all: &[GuideBox],
+    nearby: &[GuideBox],
     left: GuideBox,
     right: GuideBox,
     axis: GuideAxis,
@@ -145,7 +145,7 @@ fn chain_candidate(
         return None;
     }
 
-    let crossed = all.iter().any(|other| {
+    let crossed = nearby.iter().any(|other| {
         other.id != left.id
             && other.id != right.id
             && perpendicular_gap(left.bounds, other.bounds, axis) <= lane
@@ -198,15 +198,15 @@ fn candidate_order(a: &GuideCandidate, b: &GuideCandidate) -> std::cmp::Ordering
 
 fn candidates_for_axis(
     moving: Rect,
-    others: &[GuideBox],
-    all: &[GuideBox],
+    targets: &[GuideBox],
+    nearby: &[GuideBox],
     pairs: &[(GuideBox, GuideBox)],
     chain_pairs: &[(GuideBox, GuideBox)],
     axis: GuideAxis,
     lane: f64,
     tolerance: f64,
 ) -> Vec<GuideCandidate> {
-    let mut candidates = others
+    let mut candidates = targets
         .iter()
         .filter_map(|target| alignment_candidate(moving, *target, axis, tolerance))
         .collect::<Vec<_>>();
@@ -217,7 +217,8 @@ fn candidates_for_axis(
         }
     }
     for (left, right) in chain_pairs {
-        if let Some(candidate) = chain_candidate(moving, all, *left, *right, axis, lane, tolerance)
+        if let Some(candidate) =
+            chain_candidate(moving, nearby, *left, *right, axis, lane, tolerance)
         {
             candidates.push(candidate);
         }
@@ -231,8 +232,8 @@ fn candidates_for_axis(
 /// band; otherwise the closest candidate inside the acquisition band wins.
 pub(super) fn axis_candidate(
     moving: Rect,
-    others: &[GuideBox],
-    all: &[GuideBox],
+    targets: &[GuideBox],
+    nearby: &[GuideBox],
     pairs: &[(GuideBox, GuideBox)],
     chain_pairs: &[(GuideBox, GuideBox)],
     axis: GuideAxis,
@@ -241,8 +242,8 @@ pub(super) fn axis_candidate(
 ) -> Option<GuideCandidate> {
     let candidates = candidates_for_axis(
         moving,
-        others,
-        all,
+        targets,
+        nearby,
         pairs,
         chain_pairs,
         axis,

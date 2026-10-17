@@ -582,11 +582,13 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
     let smart_enabled =
         st.shift_pressed.get() && matches!(st.drag.drag_action.get(), Some(DragOperation::Move));
     let (snap_dx, snap_dy, next_guides) = if smart_enabled {
-        let zoom = props.viewport.get_untracked().zoom;
+        let viewport = props.viewport.get_untracked();
+        let visible = viewport.visible_rect(st.screen_size.get_untracked());
         st.drag.smart_guides.with(|previous| {
             st.drag.smart_guide_targets.with(|targets| {
                 let proposed = Rect::new(bounds.x + raw_dx, bounds.y + raw_dy, bounds.w, bounds.h);
-                let resolution = smart_guides::resolve_move(proposed, targets, zoom, previous);
+                let resolution =
+                    smart_guides::resolve_move(proposed, targets, visible, viewport.zoom, previous);
                 (resolution.snap_dx, resolution.snap_dy, resolution.state)
             })
         })

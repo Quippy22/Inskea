@@ -2,7 +2,7 @@
 //! guide emitters: start/end along the guide axis, start/end across it, and
 //! the pair helpers built on top.
 
-use super::{GuideAxis, GuideBox, GuideFeature};
+use super::{GuideAxis, GuideBox, GuideFeature, GuideLine};
 use crate::model::{ElementId, Point, Rect};
 use std::collections::HashSet;
 
@@ -62,6 +62,32 @@ pub(super) fn rect_distance(a: Rect, b: Rect) -> f64 {
     let gap_x = (a.x - b.right()).max(b.x - a.right()).max(0.0);
     let gap_y = (a.y - b.bottom()).max(b.y - a.bottom()).max(0.0);
     (gap_x * gap_x + gap_y * gap_y).sqrt()
+}
+
+/// Overlap test that counts touching edges as overlap.
+pub(super) fn intersects(a: Rect, b: Rect) -> bool {
+    a.x <= b.right() && b.x <= a.right() && a.y <= b.bottom() && b.y <= a.bottom()
+}
+
+/// Clamp a point into `area`.
+pub(super) fn clamp_to(p: Point, area: Rect) -> Point {
+    Point::new(
+        p.x.clamp(area.x, area.right()),
+        p.y.clamp(area.y, area.bottom()),
+    )
+}
+
+/// Trim a guide to the visible area so a long row does not draw a line far
+/// past the edge of the screen. Guides left degenerate are dropped.
+pub(super) fn clamp_guide(line: GuideLine, area: Rect) -> Option<GuideLine> {
+    let start = clamp_to(line.start, area);
+    let end = clamp_to(line.end, area);
+    (start != end).then_some(GuideLine {
+        start,
+        end,
+        stops: line.stops,
+        kind: line.kind,
+    })
 }
 
 /// Gap between two boxes across the perpendicular of `axis`; zero when they

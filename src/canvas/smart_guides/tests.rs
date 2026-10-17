@@ -11,8 +11,14 @@ fn guide(id: ElementId, bounds: Rect) -> GuideBox {
     GuideBox { id, bounds }
 }
 
+/// World rectangle the tests treat as on screen: wide enough that small
+/// fixtures are never filtered or trimmed.
+fn view() -> Rect {
+    Rect::new(-10_000.0, -10_000.0, 20_000.0, 20_000.0)
+}
+
 fn solve(proposed: Rect, others: &[(ElementId, Rect)]) -> GuideResolution {
-    resolve_move(proposed, others, 1.0, &SmartGuideState::default())
+    resolve_move(proposed, others, view(), 1.0, &SmartGuideState::default())
 }
 
 #[test]
@@ -111,6 +117,7 @@ fn active_candidate_holds_through_the_release_band() {
     let held = resolve_move(
         Rect::new(192.0, 300.0, 20.0, 20.0),
         &others,
+        view(),
         1.0,
         &first.state,
     );
@@ -130,6 +137,7 @@ fn active_candidate_releases_beyond_the_band() {
     let released = resolve_move(
         Rect::new(170.0, 300.0, 20.0, 20.0),
         &others,
+        view(),
         1.0,
         &first.state,
     );
@@ -146,6 +154,7 @@ fn tolerances_are_screen_space_and_scale_with_zoom() {
     let miss = resolve_move(
         Rect::new(196.5, 240.0, 20.0, 20.0),
         &others,
+        view(),
         2.0,
         &SmartGuideState::default(),
     );
@@ -155,6 +164,7 @@ fn tolerances_are_screen_space_and_scale_with_zoom() {
     let edge = resolve_move(
         Rect::new(197.0, 240.0, 20.0, 20.0),
         &others,
+        view(),
         2.0,
         &SmartGuideState::default(),
     );
@@ -166,6 +176,7 @@ fn tolerances_are_screen_space_and_scale_with_zoom() {
     let held = resolve_move(
         Rect::new(195.5, 240.0, 20.0, 20.0),
         &others,
+        view(),
         2.0,
         &edge.state,
     );
@@ -197,6 +208,7 @@ fn equal_spacing_snaps_into_the_middle_of_a_gap() {
     let again = resolve_move(
         Rect::new(45.0, 20.0, 20.0, 20.0),
         &others,
+        view(),
         1.0,
         &first.state,
     );
@@ -205,6 +217,7 @@ fn equal_spacing_snaps_into_the_middle_of_a_gap() {
     let released = resolve_move(
         Rect::new(61.0, 20.0, 20.0, 20.0),
         &others,
+        view(),
         1.0,
         &again.state,
     );
@@ -533,25 +546,68 @@ fn runs_skip_a_gap_crossed_by_an_object() {
 }
 
 #[test]
-fn objects_beyond_the_search_radius_are_ignored() {
+fn only_targets_on_screen_are_considered() {
     let moving = Rect::new(0.0, 0.0, 20.0, 20.0);
+    let view = Rect::new(0.0, 0.0, 300.0, 300.0);
     let near = [rect(1, 5.0, 280.0, 20.0, 20.0)];
     let far = [rect(1, 5.0, 340.0, 20.0, 20.0)];
+    let solve_in = |others: &[(ElementId, Rect)]| {
+        resolve_move(moving, others, view, 1.0, &SmartGuideState::default())
+    };
 
-    let snapped = solve(moving, &near);
+    let snapped = solve_in(&near);
     assert_eq!((snapped.snap_dx, snapped.snap_dy), (5.0, 0.0));
     assert_eq!(snapped.state.active.len(), 1);
 
-    let ignored = solve(moving, &far);
+    // 40 world px further out, so off screen and out of reach.
+    let ignored = solve_in(&far);
     assert_eq!((ignored.snap_dx, ignored.snap_dy), (0.0, 0.0));
     assert!(ignored.state.active.is_empty());
+}
 
-    // Zoomed out the radius covers more world space...
-    let zoomed_out = resolve_move(moving, &far, 0.5, &SmartGuideState::default());
-    assert_eq!((zoomed_out.snap_dx, zoomed_out.snap_dy), (5.0, 0.0));
-    // ...and zoomed in, less.
-    let zoomed_in = resolve_move(moving, &near, 2.0, &SmartGuideState::default());
-    assert_eq!((zoomed_in.snap_dx, zoomed_in.snap_dy), (0.0, 0.0));
+#[test]
+fn targets_far_away_on_screen_still_align() {
+    let moving = Rect::new(0.0, 0.0, 20.0, 20.0);
+    let view = Rect::new(-500.0, -500.0, 4_000.0, 4_000.0);
+    let far = [rect(1, 5.0, 3_000.0, 20.0, 20.0)];
+
+    let resolution = resolve_move(moving, &far, view, 1.0, &SmartGuideState::default());
+    assert_eq!((resolution.snap_dx, resolution.snap_dy), (5.0, 0.0));
+    assert_eq!(resolution.state.active.len(), 1);
+}
+
+#[test]
+fn guides_are_trimmed_to_the_screen() {
+    let others = [rect(1, 0.0, 0.0, 100.0, 80.0)];
+    let view = Rect::new(-50.0, -50.0, 400.0, 400.0);
+
+    // The moving box is dragged below the screen while still sharing its left
+    // edge with the box above it.
+    let moving = Rect::new(0.0, 400.0, 100.0, 80.0);
+    let resolution = resolve_move(moving, &others, view, 1.0, &SmartGuideState::default());
+    assert_eq!(resolution.state.guides.len(), 1);
+    assert_eq!(resolution.state.guides[0].start, Point::new(0.0, 80.0));
+    // The span stops at the bottom edge instead of running to the box.
+    assert_eq!(resolution.state.guides[0].end, Point::new(0.0, 350.0));
+}
+
+#[test]
+fn spacing_pairs_are_bounded_by_the_reach() {
+    let others = [
+        rect(1, 0.0, 0.0, 20.0, 100.0),
+        rect(2, 1_300.0, 0.0, 20.0, 100.0),
+    ];
+    let moving = Rect::new(650.0, 20.0, 20.0, 20.0);
+    let view = Rect::new(-500.0, -500.0, 3_000.0, 3_000.0);
+
+    // 630px from each box, just past the pair reach at zoom 1...
+    let zoomed_in = resolve_move(moving, &others, view, 1.0, &SmartGuideState::default());
+    assert!(zoomed_in.state.active.is_empty());
+
+    // ...but the reach is measured in screen pixels, so zooming out brings
+    // the pair back into play.
+    let zoomed_out = resolve_move(moving, &others, view, 0.5, &SmartGuideState::default());
+    assert_eq!(zoomed_out.state.active[0].kind, GuideKind::EqualSpacing);
 }
 
 #[test]
@@ -567,7 +623,13 @@ fn no_targets_clear_the_previous_state() {
             target_b: 0,
         }],
     };
-    let resolution = resolve_move(Rect::new(10.0, 0.0, 20.0, 20.0), &[], 1.0, &previous);
+    let resolution = resolve_move(
+        Rect::new(10.0, 0.0, 20.0, 20.0),
+        &[],
+        view(),
+        1.0,
+        &previous,
+    );
     assert_eq!((resolution.snap_dx, resolution.snap_dy), (0.0, 0.0));
     assert_eq!(resolution.state, SmartGuideState::default());
 }
@@ -608,7 +670,7 @@ fn randomized_positions_stay_finite() {
             rng.next().abs() + 0.1,
             rng.next().abs() + 0.1,
         );
-        let resolution = resolve_move(proposed, &others, zoom, &state);
+        let resolution = resolve_move(proposed, &others, view(), zoom, &state);
         assert!(resolution.snap_dx.is_finite() && resolution.snap_dy.is_finite());
         assert!(resolution.state.active.len() <= 2);
         for line in &resolution.state.guides {
