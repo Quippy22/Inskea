@@ -8,8 +8,8 @@ use crate::canvas::state::{CanvasInputs, CanvasState, DragOperation};
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{Bounds, Offset, PathPoints, Resize, Rotate, SnapToGrid};
 use crate::model::interaction::{
-    combined_bounds, hit_test_topmost, point_inside_any_element, rect_fully_contains_element,
-    CLICK_MARGIN, HIT_MARGIN,
+    guide_bounds, guide_union_bounds, hit_test_topmost, point_inside_any_element,
+    rect_fully_contains_element, CLICK_MARGIN, HIT_MARGIN,
 };
 use crate::model::resize::ResizeContext;
 use crate::model::resize::ResizeHandle;
@@ -100,7 +100,7 @@ fn handle_path_move_icon(
         (props.push_snapshot)();
         st.drag.drag_action.set(Some(DragOperation::Move));
         st.drag.moving_anchor.set(Some(world));
-        st.drag.drag_bounds.set(Some(el.bounds()));
+        st.drag.drag_bounds.set(Some(guide_bounds(el)));
         st.drag.last_world.set(Some(world));
         st.drag.drag_originals.set(vec![el.clone()]);
         capture_smart_guide_targets(st, &[el.id()], els);
@@ -168,10 +168,13 @@ fn hit_move_handle(
     let hp = hpos[8];
 
     if ((test.x - hp.x).powi(2) + (test.y - hp.y).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+        let Some(drag_bounds) = guide_union_bounds(ids, els) else {
+            return false;
+        };
         (props.push_snapshot)();
         st.drag.drag_action.set(Some(DragOperation::Move));
         st.drag.moving_anchor.set(Some(world));
-        st.drag.drag_bounds.set(Some(bounds));
+        st.drag.drag_bounds.set(Some(drag_bounds));
         st.drag.last_world.set(Some(world));
         st.drag.drag_originals.set(
             els.iter()
@@ -356,7 +359,7 @@ fn capture_smart_guide_targets(st: &mut CanvasState, ids: &[ElementId], els: &[E
     st.drag.smart_guide_targets.set(
         els.iter()
             .filter(|el| !ids.contains(&el.id()))
-            .map(|el| (el.id(), el.bounds()))
+            .map(|el| (el.id(), guide_bounds(el)))
             .collect(),
     );
 }
@@ -369,7 +372,7 @@ fn begin_move_drag(
     els: &[Element],
     ids: &[ElementId],
 ) {
-    let Some(bounds) = combined_bounds(ids, els) else {
+    let Some(bounds) = guide_union_bounds(ids, els) else {
         return;
     };
     (props.push_snapshot)();
