@@ -611,9 +611,85 @@ fn spacing_pairs_are_bounded_by_the_reach() {
 }
 
 #[test]
+fn spacing_labels_report_the_gap() {
+    let others = [
+        rect(1, 0.0, 0.0, 20.0, 100.0),
+        rect(2, 100.0, 0.0, 20.0, 100.0),
+    ];
+    let spacing = solve(Rect::new(44.0, 20.0, 20.0, 20.0), &others);
+    assert_eq!(spacing.state.active[0].kind, GuideKind::EqualSpacing);
+    // Centred, both bands measure 30; the label hangs off the first one.
+    assert_eq!(
+        spacing.state.labels,
+        vec![GuideLabel {
+            at: Point::new(35.0, -9.0),
+            distance: 30.0,
+            axis: GuideAxis::Vertical,
+        }]
+    );
+
+    // Alignment on its own is not a measurement.
+    let aligned = solve(Rect::new(0.0, 300.0, 20.0, 20.0), &others[..1]);
+    assert_eq!(aligned.state.active[0].kind, GuideKind::Alignment);
+    assert!(aligned.state.labels.is_empty());
+}
+
+#[test]
+fn chain_labels_report_the_closed_gap() {
+    let others = [
+        rect(1, 0.0, 0.0, 20.0, 20.0),
+        rect(2, 100.0, 0.0, 20.0, 20.0),
+    ];
+    let resolution = solve(Rect::new(202.0, 8.0, 20.0, 20.0), &others);
+    assert_eq!(resolution.state.active[0].kind, GuideKind::ChainSpacing);
+    assert_eq!(
+        resolution.state.labels,
+        vec![GuideLabel {
+            at: Point::new(160.0, -9.0),
+            distance: 80.0,
+            axis: GuideAxis::Vertical,
+        }]
+    );
+}
+
+#[test]
+fn labels_slide_into_view_and_drop_with_their_band() {
+    let others = [
+        rect(1, 0.0, 0.0, 20.0, 20.0),
+        rect(2, 100.0, 0.0, 20.0, 20.0),
+    ];
+    // The chain's closed gap runs from the last box out to the moving box,
+    // which sits past the right edge: the label slides left to stay visible.
+    let visible = Rect::new(-50.0, -50.0, 200.0, 400.0);
+    let resolution = resolve_move(
+        Rect::new(202.0, 8.0, 20.0, 20.0),
+        &others,
+        visible,
+        1.0,
+        &SmartGuideState::default(),
+    );
+    assert_eq!(resolution.state.labels[0].at, Point::new(150.0, -9.0));
+    assert_eq!(resolution.state.labels[0].distance, 80.0);
+
+    // A window whose top edge clips the band's lane entirely: the measurement
+    // goes with it, since there is nothing on screen to read it against.
+    let clipped = Rect::new(-50.0, 0.0, 400.0, 400.0);
+    let resolution = resolve_move(
+        Rect::new(202.0, 8.0, 20.0, 20.0),
+        &others,
+        clipped,
+        1.0,
+        &SmartGuideState::default(),
+    );
+    assert_eq!(resolution.state.active[0].kind, GuideKind::ChainSpacing);
+    assert!(resolution.state.labels.is_empty());
+}
+
+#[test]
 fn no_targets_clear_the_previous_state() {
     let previous = SmartGuideState {
         guides: Vec::new(),
+        labels: Vec::new(),
         active: vec![GuideKey {
             axis: GuideAxis::Vertical,
             kind: GuideKind::Alignment,

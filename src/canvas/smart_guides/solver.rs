@@ -2,15 +2,57 @@
 //! guides for every active candidate.
 
 use super::candidates::axis_candidate;
-use super::geometry::{chain_connections, clamp_guide, inline_pairs, intersects, rect_distance};
+use super::geometry::{
+    axis_point, chain_connections, clamp_guide, inline_pairs, intersects, rect_distance,
+};
 use super::guides::{
     alignment_guides, chain_spacing_guides, equal_spacing_guides, equal_spacing_run_lines,
 };
 use super::{
-    GuideAxis, GuideBox, GuideKind, GuideResolution, SmartGuideState, Tolerances,
-    GUIDE_MAX_PAIR_TARGETS,
+    GuideAxis, GuideBox, GuideKind, GuideLabel, GuideLine, GuideResolution, SmartGuideState,
+    Tolerances, GUIDE_MAX_PAIR_TARGETS,
 };
-use crate::model::{ElementId, Rect};
+use crate::model::{ElementId, Point, Rect};
+
+/// Readout for a spacing band: the free space between its two ends, measured
+/// along the guide axis and reported from the middle of the band.
+fn band_label(band: GuideLine, axis: GuideAxis) -> GuideLabel {
+    let (from, to, cross) = match axis {
+        GuideAxis::Vertical => (band.start.x, band.end.x, band.start.y),
+        GuideAxis::Horizontal => (band.start.y, band.end.y, band.start.x),
+    };
+    GuideLabel {
+        at: axis_point(axis, (from + to) / 2.0, cross),
+        distance: (to - from).abs(),
+        axis,
+    }
+}
+
+/// Keep a label on screen: slide it along its band into view, and drop it when
+/// the band itself sits off screen.
+fn fit_label(mut label: GuideLabel, visible: Rect) -> Option<GuideLabel> {
+    let horizontal_band = label.axis == GuideAxis::Vertical;
+    let (along_range, cross_range) = if horizontal_band {
+        ((visible.x, visible.right()), (visible.y, visible.bottom()))
+    } else {
+        ((visible.y, visible.bottom()), (visible.x, visible.right()))
+    };
+    let (along, cross) = if horizontal_band {
+        (label.at.x, label.at.y)
+    } else {
+        (label.at.y, label.at.x)
+    };
+    if cross < cross_range.0 || cross > cross_range.1 {
+        return None;
+    }
+    let along = along.clamp(along_range.0, along_range.1);
+    label.at = if horizontal_band {
+        Point::new(along, cross)
+    } else {
+        Point::new(cross, along)
+    };
+    Some(label)
+}
 
 /// Resolve smart-guide candidates for a proposed move.
 ///
@@ -95,6 +137,7 @@ pub fn resolve_move(
 
     let mut active = Vec::new();
     let mut guides = Vec::new();
+    let mut labels = Vec::new();
     for (axis, candidate, pairs, chain_pairs) in [
         (
             GuideAxis::Vertical,
@@ -113,40 +156,45 @@ pub fn resolve_move(
             continue;
         };
         active.push(candidate.key);
-        match candidate.key.kind {
+        let lines = match candidate.key.kind {
             GuideKind::Alignment => {
-                guides.extend(alignment_guides(snapped, &all, candidate.key));
-                guides.extend(equal_spacing_run_lines(&near, pairs, axis, &tolerances));
+                let mut lines = alignment_guides(snapped, &all, candidate.key);
+                lines.extend(equal_spacing_run_lines(&near, pairs, axis, &tolerances));
+                lines
             }
             GuideKind::EqualSpacing => {
-                guides.extend(equal_spacing_guides(
-                    snapped,
-                    &near,
-                    pairs,
-                    &candidate,
-                    &tolerances,
-                ));
+                equal_spacing_guides(snapped, &near, pairs, &candidate, &tolerances)
             }
             GuideKind::ChainSpacing => {
-                guides.extend(chain_spacing_guides(
-                    snapped,
-                    &near,
-                    chain_pairs,
-                    &candidate,
-                    &tolerances,
-                ));
+                chain_spacing_guides(snapped, &near, chain_pairs, &candidate, &tolerances)
+            }
+        };
+        if candidate.key.kind != GuideKind::Alignment {
+            // The first line of a spacing guide is the band the moving box
+            // closed against; it is the one worth measuring.
+            if let Some(band) = lines.first() {
+                labels.push(band_label(*band, axis));
             }
         }
+        guides.extend(lines);
     }
 
     let guides = guides
         .into_iter()
         .filter_map(|line| clamp_guide(line, visible))
         .collect();
+    let labels = labels
+        .into_iter()
+        .filter_map(|label| fit_label(label, visible))
+        .collect();
 
     GuideResolution {
         snap_dx,
         snap_dy,
-        state: SmartGuideState { guides, active },
+        state: SmartGuideState {
+            guides,
+            labels,
+            active,
+        },
     }
 }

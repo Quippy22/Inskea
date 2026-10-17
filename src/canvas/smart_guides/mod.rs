@@ -46,6 +46,13 @@ pub const GUIDE_SPACING_CAP_PX: f64 = 15.0;
 /// Gap between an end tick's far tip and the edge it reaches towards, in
 /// screen pixels.
 pub const GUIDE_SPACING_CLEARANCE_PX: f64 = 1.5;
+/// Clearance between a spacing band and its measurement label, in screen px.
+pub const GUIDE_LABEL_CLEARANCE_PX: f64 = 7.0;
+/// Font size of a measurement label, in screen pixels.
+pub const GUIDE_LABEL_FONT_PX: f64 = 11.0;
+/// Bands shorter than this on screen get no label: there is no room to read
+/// one without it spilling over the pieces the band measures.
+pub const GUIDE_MIN_LABEL_SPAN_PX: f64 = 34.0;
 const GUIDE_ALIGNMENT_COLOR: &str = "#7aa2f7";
 const GUIDE_SPACING_COLOR: &str = "#9ece6a";
 const EPSILON: f64 = 1e-9;
@@ -95,9 +102,24 @@ pub struct GuideLine {
     pub kind: GuideKind,
 }
 
+/// Distance readout beside a spacing band: the free space the band covers, in
+/// world units, drawn as a number of a fixed screen size.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GuideLabel {
+    /// Point on the band the label hangs from: the band's midpoint along the
+    /// axis. The renderer offsets it across the band, away from the pieces.
+    pub at: Point,
+    /// Distance between the two edges the band spans, in world units.
+    pub distance: f64,
+    /// Axis of the band's guide. The band runs across it and the label is
+    /// offset along it, so the two never overlap.
+    pub axis: GuideAxis,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SmartGuideState {
     pub guides: Vec<GuideLine>,
+    pub labels: Vec<GuideLabel>,
     pub active: Vec<GuideKey>,
 }
 

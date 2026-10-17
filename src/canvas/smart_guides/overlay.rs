@@ -2,7 +2,8 @@
 //! transform.
 
 use super::{
-    GuideKind, SmartGuideState, GUIDE_ALIGNMENT_COLOR, GUIDE_SPACING_BAND_PX, GUIDE_SPACING_CAP_PX,
+    GuideAxis, GuideKind, SmartGuideState, GUIDE_ALIGNMENT_COLOR, GUIDE_LABEL_CLEARANCE_PX,
+    GUIDE_LABEL_FONT_PX, GUIDE_MIN_LABEL_SPAN_PX, GUIDE_SPACING_BAND_PX, GUIDE_SPACING_CAP_PX,
     GUIDE_SPACING_CLEARANCE_PX, GUIDE_SPACING_COLOR,
 };
 use crate::canvas::viewport::Viewport;
@@ -160,11 +161,51 @@ pub fn guide_overlay(
             })
             .collect_view();
 
+        // Measurement readouts: a number beside each active band, in screen
+        // pixels whatever the zoom, haloed so it reads over any artwork.
+        let font = GUIDE_LABEL_FONT_PX / zoom;
+        let label_offset = band + GUIDE_LABEL_CLEARANCE_PX / zoom;
+        let labels = state
+            .labels
+            .iter()
+            .filter(|label| label.distance * zoom >= GUIDE_MIN_LABEL_SPAN_PX)
+            .map(|label| {
+                let horizontal_band = label.axis == GuideAxis::Vertical;
+                let (x, y, rotation) = if horizontal_band {
+                    (label.at.x, label.at.y - label_offset, 0.0)
+                } else {
+                    (label.at.x - label_offset, label.at.y, -90.0)
+                };
+                let distance = format!("{:.0}", label.distance);
+                view! {
+                    <text
+                        x=x
+                        y=y
+                        transform=format!("rotate({rotation} {x} {y})")
+                        text-anchor="middle"
+                        dominant-baseline="middle"
+                        font-family="sans-serif"
+                        font-size=font
+                        fill=GUIDE_SPACING_COLOR
+                        stroke="#0b0d12"
+                        stroke-opacity="0.85"
+                        stroke-width=font * 0.3
+                        stroke-linejoin="round"
+                        paint-order="stroke"
+                    >
+                        {distance}
+                    </text>
+                }
+                .into_view()
+            })
+            .collect_view();
+
         Some(
             view! {
                 <g pointer-events="none">
                     {markers}
                     {lines}
+                    {labels}
                 </g>
             }
             .into_view(),
