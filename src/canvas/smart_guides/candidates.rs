@@ -121,17 +121,6 @@ fn chain_candidate(
         return None;
     }
 
-    let crossed = all.iter().any(|other| {
-        other.id != left.id
-            && other.id != right.id
-            && perpendicular_gap(left.bounds, other.bounds, axis) <= lane
-            && along_start(other.bounds, axis) > left_end
-            && along_end(other.bounds, axis) < along_start(right.bounds, axis)
-    });
-    if crossed {
-        return None;
-    }
-
     let moving_start = along_start(moving, axis);
     let moving_end = along_end(moving, axis);
     let (near, far, delta) = if moving_start >= along_end(right.bounds, axis) {
@@ -150,7 +139,20 @@ fn chain_candidate(
         return None;
     };
 
+    // The tolerance test is cheap and rejects almost every pair, so it runs
+    // before the crossing scan, which walks the whole scene.
     if delta.abs() > tolerance || perpendicular_gap(moving, near.bounds, axis) > lane {
+        return None;
+    }
+
+    let crossed = all.iter().any(|other| {
+        other.id != left.id
+            && other.id != right.id
+            && perpendicular_gap(left.bounds, other.bounds, axis) <= lane
+            && along_start(other.bounds, axis) > left_end
+            && along_end(other.bounds, axis) < along_start(right.bounds, axis)
+    });
+    if crossed {
         return None;
     }
 
