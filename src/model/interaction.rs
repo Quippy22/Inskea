@@ -24,16 +24,18 @@ pub fn distribution_bounds(element: &Element) -> Rect {
 }
 
 /// The box smart guides line up: the visible content box, turned into world
-/// space for elements that rotate in place. Rotating keeps the box centre, so
-/// the corners of the rotated box give the rectangle the guides should match
-/// against.
+/// space for elements that rotate in place. Rotation keeps the layout box
+/// centre, so the corners of the content box swung around that centre give
+/// the rectangle the guides should match against. Text snaps to its glyphs,
+/// the same box its selection outline hugs, instead of the taller and wider
+/// layout column.
 pub fn guide_bounds(element: &Element) -> Rect {
-    let bounds = layout_bounds(element);
+    let bounds = visual_bounds(element);
     let rotation = element.data().rotation;
     if rotation == 0.0 {
         return bounds;
     }
-    rotated_aabb(bounds, bounds.center(), rotation)
+    rotated_aabb(bounds, layout_bounds(element).center(), rotation)
 }
 
 /// Union of the boxes smart guides line up for a selection.
@@ -144,5 +146,37 @@ mod tests {
             Some(Rect::new(0.0, 0.0, 120.0, 70.0))
         );
         assert_eq!(guide_union_bounds(&[3], &elements), None);
+    }
+
+    #[test]
+    fn text_guides_hug_the_glyphs() {
+        use crate::model::elements::text::{Text, TextAlign, WrappedText};
+
+        let mut data = ElementData::new(1);
+        data.world_point = Point::new(0.0, 0.0);
+        data.width = 300.0;
+        data.height = 200.0;
+        data.style.font_size = 20.0;
+        let element = Element::Text(Text {
+            data,
+            wrapped: WrappedText::new("Hello"),
+            align: TextAlign::Left,
+        });
+
+        // The layout column is 300 wide and 200 tall; the guides read the
+        // glyphs, which sit at the anchor and stay well inside it.
+        let bounds = guide_bounds(&element);
+        assert!(bounds.w > 0.0 && bounds.w < 300.0);
+        assert!(bounds.h > 0.0 && bounds.h < 200.0);
+        assert_eq!(bounds.x, 0.0);
+
+        // Quarter-turned, the box follows the glyphs around the layout centre.
+        let mut turned = element.clone();
+        if let Element::Text(text) = &mut turned {
+            text.data.rotation = std::f64::consts::FRAC_PI_2;
+        }
+        let turned = guide_bounds(&turned);
+        assert!((turned.w - bounds.h).abs() < 1e-9);
+        assert!((turned.h - bounds.w).abs() < 1e-9);
     }
 }
