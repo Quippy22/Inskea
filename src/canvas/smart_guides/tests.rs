@@ -21,6 +21,13 @@ fn solve(proposed: Rect, others: &[(ElementId, Rect)]) -> GuideResolution {
     resolve_move(proposed, others, view(), 1.0, &SmartGuideState::default())
 }
 
+/// The solver hands the crossed-gap scans a copy sorted along the guide axis.
+fn along_sorted(boxes: &[GuideBox], axis: GuideAxis) -> Vec<GuideBox> {
+    let mut sorted = boxes.to_vec();
+    sorted.sort_by(|a, b| along_start(a.bounds, axis).total_cmp(&along_start(b.bounds, axis)));
+    sorted
+}
+
 #[test]
 fn alignment_snaps_start_center_and_end_on_both_axes() {
     for axis in [GuideAxis::Vertical, GuideAxis::Horizontal] {
@@ -499,11 +506,14 @@ fn runs_are_highlighted_while_an_alignment_is_active() {
 
 #[test]
 fn runs_need_two_matching_gaps() {
-    let boxes = [
-        guide(1, Rect::new(0.0, 0.0, 20.0, 20.0)),
-        guide(2, Rect::new(100.0, 0.0, 20.0, 20.0)),
-        guide(3, Rect::new(600.0, 0.0, 20.0, 20.0)),
-    ];
+    let boxes = along_sorted(
+        &[
+            guide(1, Rect::new(0.0, 0.0, 20.0, 20.0)),
+            guide(2, Rect::new(100.0, 0.0, 20.0, 20.0)),
+            guide(3, Rect::new(600.0, 0.0, 20.0, 20.0)),
+        ],
+        GuideAxis::Vertical,
+    );
     let lane = GUIDE_LANE_PX;
     let pairs = inline_pairs(&boxes, GuideAxis::Vertical, lane);
     assert!(equal_spacing_run_lines(
@@ -519,9 +529,10 @@ fn runs_need_two_matching_gaps() {
 fn runs_skip_a_gap_crossed_by_an_object() {
     let lane = GUIDE_LANE_PX;
     let run_count = |boxes: &[GuideBox]| {
-        let pairs = inline_pairs(boxes, GuideAxis::Vertical, lane);
+        let boxes = along_sorted(boxes, GuideAxis::Vertical);
+        let pairs = inline_pairs(&boxes, GuideAxis::Vertical, lane);
         equal_spacing_run_lines(
-            boxes,
+            &boxes,
             &pairs,
             GuideAxis::Vertical,
             &Tolerances::for_zoom(1.0),

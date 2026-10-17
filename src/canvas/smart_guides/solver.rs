@@ -3,7 +3,7 @@
 
 use super::candidates::axis_candidate;
 use super::geometry::{
-    axis_point, chain_connections, clamp_guide, inline_pairs, intersects, rect_distance,
+    along_start, axis_point, clamp_guide, inline_pairs, intersects, rect_distance,
 };
 use super::guides::{
     alignment_guides, chain_spacing_guides, equal_spacing_guides, equal_spacing_run_lines,
@@ -52,6 +52,14 @@ fn fit_label(mut label: GuideLabel, visible: Rect) -> Option<GuideLabel> {
         Point::new(cross, along)
     };
     Some(label)
+}
+
+/// Copy of the local targets sorted along `axis`, so the crossed-gap scans
+/// can stop as soon as a box starts past the gap they are testing.
+fn sorted_along(near: &[GuideBox], axis: GuideAxis) -> Vec<GuideBox> {
+    let mut sorted = near.to_vec();
+    sorted.sort_by(|a, b| along_start(a.bounds, axis).total_cmp(&along_start(b.bounds, axis)));
+    sorted
 }
 
 /// Resolve smart-guide candidates for a proposed move.
@@ -103,14 +111,13 @@ pub fn resolve_move(
 
     let vertical_pairs = inline_pairs(&near, GuideAxis::Vertical, tolerances.lane);
     let horizontal_pairs = inline_pairs(&near, GuideAxis::Horizontal, tolerances.lane);
-    let vertical_chain = chain_connections(&near, &near, GuideAxis::Vertical, tolerances.lane);
-    let horizontal_chain = chain_connections(&near, &near, GuideAxis::Horizontal, tolerances.lane);
+    let vertical_crossed = sorted_along(&near, GuideAxis::Vertical);
+    let horizontal_crossed = sorted_along(&near, GuideAxis::Horizontal);
     let vertical = axis_candidate(
         proposed,
         &all,
-        &near,
+        &vertical_crossed,
         &vertical_pairs,
-        &vertical_chain,
         GuideAxis::Vertical,
         previous,
         &tolerances,
@@ -118,9 +125,8 @@ pub fn resolve_move(
     let horizontal = axis_candidate(
         proposed,
         &all,
-        &near,
+        &horizontal_crossed,
         &horizontal_pairs,
-        &horizontal_chain,
         GuideAxis::Horizontal,
         previous,
         &tolerances,
@@ -138,18 +144,18 @@ pub fn resolve_move(
     let mut active = Vec::new();
     let mut guides = Vec::new();
     let mut labels = Vec::new();
-    for (axis, candidate, pairs, chain_pairs) in [
+    for (axis, candidate, pairs, crossed) in [
         (
             GuideAxis::Vertical,
             vertical,
             &vertical_pairs,
-            &vertical_chain,
+            &vertical_crossed,
         ),
         (
             GuideAxis::Horizontal,
             horizontal,
             &horizontal_pairs,
-            &horizontal_chain,
+            &horizontal_crossed,
         ),
     ] {
         let Some(candidate) = candidate else {
@@ -159,14 +165,14 @@ pub fn resolve_move(
         let lines = match candidate.key.kind {
             GuideKind::Alignment => {
                 let mut lines = alignment_guides(snapped, &all, candidate.key);
-                lines.extend(equal_spacing_run_lines(&near, pairs, axis, &tolerances));
+                lines.extend(equal_spacing_run_lines(crossed, pairs, axis, &tolerances));
                 lines
             }
             GuideKind::EqualSpacing => {
-                equal_spacing_guides(snapped, &near, pairs, &candidate, &tolerances)
+                equal_spacing_guides(snapped, crossed, pairs, &candidate, &tolerances)
             }
             GuideKind::ChainSpacing => {
-                chain_spacing_guides(snapped, &near, chain_pairs, &candidate, &tolerances)
+                chain_spacing_guides(snapped, crossed, pairs, &candidate, &tolerances)
             }
         };
         if candidate.key.kind != GuideKind::Alignment {

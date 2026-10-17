@@ -3,8 +3,7 @@
 //! the pair helpers built on top.
 
 use super::{GuideAxis, GuideBox, GuideFeature, GuideLine};
-use crate::model::{ElementId, Point, Rect};
-use std::collections::HashSet;
+use crate::model::{Point, Rect};
 
 pub(super) fn along_start(bounds: Rect, axis: GuideAxis) -> f64 {
     match axis {
@@ -90,6 +89,32 @@ pub(super) fn clamp_guide(line: GuideLine, area: Rect) -> Option<GuideLine> {
     })
 }
 
+/// Whether another box sits inside the gap from `start` to `end` in the lane
+/// of `left`. `others` must be sorted by along start on `axis`: the scan then
+/// jumps straight to the first box past `start` and gives up as soon as one
+/// begins past `end`.
+pub(super) fn gap_crossed(
+    others: &[GuideBox],
+    left: Rect,
+    axis: GuideAxis,
+    start: f64,
+    end: f64,
+    lane: f64,
+) -> bool {
+    let from = others.partition_point(|other| along_start(other.bounds, axis) <= start);
+    for other in &others[from..] {
+        if along_start(other.bounds, axis) >= end {
+            return false;
+        }
+        if along_end(other.bounds, axis) < end
+            && perpendicular_gap(left, other.bounds, axis) <= lane
+        {
+            return true;
+        }
+    }
+    false
+}
+
 /// Gap between two boxes across the perpendicular of `axis`; zero when they
 /// overlap or touch on that axis.
 pub(super) fn perpendicular_gap(a: Rect, b: Rect, axis: GuideAxis) -> f64 {
@@ -127,32 +152,6 @@ pub(super) fn inline_pairs(
             if perpendicular_gap(left.bounds, right.bounds, axis) <= lane {
                 pairs.push(ordered_pair(*left, *right, axis));
             }
-        }
-    }
-    pairs
-}
-
-/// Inline pairs for chain attachments: the near box is always a scanned box
-/// while the far box may sit beyond the search radius, since it only supplies
-/// the distance to match.
-pub(super) fn chain_connections(
-    scanned: &[GuideBox],
-    all: &[GuideBox],
-    axis: GuideAxis,
-    lane: f64,
-) -> Vec<(GuideBox, GuideBox)> {
-    let scanned_ids: HashSet<ElementId> = scanned.iter().map(|b| b.id).collect();
-    let mut pairs = Vec::new();
-    for near in scanned {
-        for far in all {
-            if far.id == near.id || perpendicular_gap(near.bounds, far.bounds, axis) > lane {
-                continue;
-            }
-            // Emit each pair once; skip the mirrored visit when both are scanned.
-            if scanned_ids.contains(&far.id) && far.id < near.id {
-                continue;
-            }
-            pairs.push(ordered_pair(*near, *far, axis));
         }
     }
     pairs

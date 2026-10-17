@@ -1,7 +1,7 @@
 //! Candidate scan: one alignment, spacing, or chain candidate per target,
 //! then a single winner per axis with hysteresis against the previous state.
 
-use super::geometry::{along_end, along_start, features, perpendicular_gap};
+use super::geometry::{along_end, along_start, features, gap_crossed, perpendicular_gap};
 use super::{
     GuideAxis, GuideBox, GuideCandidate, GuideFeature, GuideKey, GuideKind, SmartGuideState,
     Tolerances, FEATURES,
@@ -145,13 +145,14 @@ fn chain_candidate(
         return None;
     }
 
-    let crossed = nearby.iter().any(|other| {
-        other.id != left.id
-            && other.id != right.id
-            && perpendicular_gap(left.bounds, other.bounds, axis) <= lane
-            && along_start(other.bounds, axis) > left_end
-            && along_end(other.bounds, axis) < along_start(right.bounds, axis)
-    });
+    let crossed = gap_crossed(
+        nearby,
+        left.bounds,
+        axis,
+        left_end,
+        along_start(right.bounds, axis),
+        lane,
+    );
     if crossed {
         return None;
     }
@@ -201,7 +202,6 @@ fn candidates_for_axis(
     targets: &[GuideBox],
     nearby: &[GuideBox],
     pairs: &[(GuideBox, GuideBox)],
-    chain_pairs: &[(GuideBox, GuideBox)],
     axis: GuideAxis,
     lane: f64,
     tolerance: f64,
@@ -215,8 +215,6 @@ fn candidates_for_axis(
         if let Some(candidate) = spacing_candidate(moving, *left, *right, axis, lane, tolerance) {
             candidates.push(candidate);
         }
-    }
-    for (left, right) in chain_pairs {
         if let Some(candidate) =
             chain_candidate(moving, nearby, *left, *right, axis, lane, tolerance)
         {
@@ -235,7 +233,6 @@ pub(super) fn axis_candidate(
     targets: &[GuideBox],
     nearby: &[GuideBox],
     pairs: &[(GuideBox, GuideBox)],
-    chain_pairs: &[(GuideBox, GuideBox)],
     axis: GuideAxis,
     previous: &SmartGuideState,
     tolerances: &Tolerances,
@@ -245,7 +242,6 @@ pub(super) fn axis_candidate(
         targets,
         nearby,
         pairs,
-        chain_pairs,
         axis,
         tolerances.lane,
         tolerances.release,

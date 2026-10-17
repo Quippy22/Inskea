@@ -3,7 +3,7 @@
 
 use super::geometry::{
     along_end, along_start, axis_point, cross_end, cross_start, feature_value, features,
-    marker_lane, ordered_pair, perpendicular_gap, same_gap,
+    gap_crossed, marker_lane, ordered_pair, perpendicular_gap, same_gap,
 };
 use super::{
     GuideAxis, GuideBox, GuideCandidate, GuideKey, GuideKind, GuideLine, Tolerances, EPSILON,
@@ -167,7 +167,7 @@ pub(super) fn equal_spacing_guides(
 pub(super) fn chain_spacing_guides(
     moving: Rect,
     all: &[GuideBox],
-    chain_pairs: &[(GuideBox, GuideBox)],
+    pairs: &[(GuideBox, GuideBox)],
     candidate: &GuideCandidate,
     tolerances: &Tolerances,
 ) -> Vec<GuideLine> {
@@ -205,7 +205,7 @@ pub(super) fn chain_spacing_guides(
         GuideKind::ChainSpacing,
     )];
 
-    for (pair_left, pair_right) in chain_pairs {
+    for (pair_left, pair_right) in pairs {
         let start = along_end(pair_left.bounds, axis);
         let end = along_start(pair_right.bounds, axis);
         if !same_gap(end - start, chain_gap) {
@@ -234,7 +234,8 @@ pub(super) fn chain_spacing_guides(
 
 /// Highlight runs of evenly spaced boxes: at least two inline pairs sharing
 /// one gap. A gap crossed by another box is not a run, and runs are shown
-/// only while an alignment on the same axis is active.
+/// only while an alignment on the same axis is active. `others` must be sorted
+/// by along start, which the crossed-gap test relies on.
 pub(super) fn equal_spacing_run_lines(
     others: &[GuideBox],
     pairs: &[(GuideBox, GuideBox)],
@@ -251,15 +252,10 @@ pub(super) fn equal_spacing_run_lines(
             continue;
         }
 
-        let crossed = others.iter().any(|other| {
-            perpendicular_gap(left.bounds, other.bounds, axis) <= tolerances.lane
-                && along_start(other.bounds, axis) > start
-                && along_end(other.bounds, axis) < end
-        });
+        let crossed = gap_crossed(others, left.bounds, axis, start, end, tolerances.lane);
         if crossed {
             continue;
         }
-
         let line = spacing_line(
             start,
             end,
