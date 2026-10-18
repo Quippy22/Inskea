@@ -3,12 +3,13 @@
 
 use super::geometry::{
     along_end, along_start, axis_point, cross_start, feature_value, features, frame_span,
-    gap_crossed, marker_lane, ordered_pair, perpendicular_gap, same_gap,
+    gap_crossed, marker_lane, ordered_pair, same_gap, share_lane,
 };
 use super::{
     GuideAxis, GuideBox, GuideCandidate, GuideKey, GuideKind, GuideLine, Tolerances, EPSILON,
 };
-use crate::model::{Point, Rect};
+use crate::model::interaction::GuideFrame;
+use crate::model::Rect;
 
 /// The free stretches between the boxes that share the snapped coordinate.
 /// Only those gaps are drawn, so the guide connects the exterior edges and
@@ -16,7 +17,7 @@ use crate::model::{Point, Rect};
 /// than drawn through it.
 pub(super) fn alignment_guides(
     moving: Rect,
-    moving_corners: [Point; 4],
+    moving_frame: GuideFrame,
     others: &[GuideBox],
     key: GuideKey,
 ) -> Vec<GuideLine> {
@@ -24,7 +25,7 @@ pub(super) fn alignment_guides(
     let coordinate = feature_value(moving, axis, key.moving_feature);
     let epsilon = EPSILON * (1.0 + coordinate.abs());
 
-    let mut spans = vec![frame_span(moving_corners, axis, coordinate)];
+    let mut spans = vec![frame_span(moving_frame, axis, coordinate)];
     let mut blockers: Vec<(f64, f64)> = Vec::new();
     for other in others {
         let connected = features(other.bounds, axis)
@@ -35,7 +36,7 @@ pub(super) fn alignment_guides(
         let covering = along_start(other.bounds, axis) < coordinate - epsilon
             && along_end(other.bounds, axis) > coordinate + epsilon;
         if connected || covering {
-            let span = frame_span(other.corners, axis, coordinate);
+            let span = frame_span(other.frame, axis, coordinate);
             if connected {
                 spans.push(span);
             }
@@ -181,9 +182,13 @@ pub(super) fn equal_spacing_guides(
         if !same_gap(end - start, selected_gap) || moving_size >= end - start {
             continue;
         }
-        if perpendicular_gap(moving, pair_left.bounds, axis) > tolerances.lane
-            || perpendicular_gap(moving, pair_right.bounds, axis) > tolerances.lane
-        {
+        if !share_lane(
+            moving,
+            pair_left.bounds,
+            pair_right.bounds,
+            axis,
+            tolerances.lane,
+        ) {
             continue;
         }
         let cross = if pair_left.id == candidate.key.target_a {
@@ -261,9 +266,13 @@ pub(super) fn chain_spacing_guides(
         if !same_gap(end - start, chain_gap) {
             continue;
         }
-        if perpendicular_gap(moving, pair_left.bounds, axis) > tolerances.lane
-            || perpendicular_gap(moving, pair_right.bounds, axis) > tolerances.lane
-        {
+        if !share_lane(
+            moving,
+            pair_left.bounds,
+            pair_right.bounds,
+            axis,
+            tolerances.lane,
+        ) {
             continue;
         }
         guides.push(spacing_line(
@@ -298,9 +307,7 @@ pub(super) fn equal_spacing_run_lines(
     let mut runs: Vec<(f64, Vec<GuideLine>)> = Vec::new();
 
     for (left, right) in pairs {
-        if perpendicular_gap(moving, left.bounds, axis) > tolerances.lane
-            || perpendicular_gap(moving, right.bounds, axis) > tolerances.lane
-        {
+        if !share_lane(moving, left.bounds, right.bounds, axis, tolerances.lane) {
             continue;
         }
         let start = along_end(left.bounds, axis);

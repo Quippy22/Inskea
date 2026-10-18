@@ -1,9 +1,10 @@
 use super::geometry::*;
 use super::guides::*;
 use super::*;
+use crate::model::elements::ellipse::Ellipse;
 use crate::model::elements::rect::Rectangle;
 use crate::model::elements::ElementData;
-use crate::model::interaction::{guide_bounds, guide_corners};
+use crate::model::interaction::{guide_bounds, guide_frame, FrameShape, GuideFrame};
 use crate::model::{Element, ElementId, Point, Rect};
 
 fn rect(id: ElementId, x: f64, y: f64, w: f64, h: f64) -> GuideBox {
@@ -11,7 +12,7 @@ fn rect(id: ElementId, x: f64, y: f64, w: f64, h: f64) -> GuideBox {
     GuideBox {
         id,
         bounds,
-        corners: bounds.corners(),
+        frame: GuideFrame::rect(bounds),
     }
 }
 
@@ -20,20 +21,48 @@ fn guide(id: ElementId, bounds: Rect) -> GuideBox {
     rect(id, bounds.x, bounds.y, bounds.w, bounds.h)
 }
 
-/// A target taken from a real element, so its frame comes from the same
-/// helpers the canvas uses.
-fn element(id: ElementId, x: f64, y: f64, w: f64, h: f64, rotation: f64) -> GuideBox {
+fn placed_data(id: ElementId, x: f64, y: f64, w: f64, h: f64, rotation: f64) -> ElementData {
     let mut data = ElementData::new(id);
     data.world_point = Point::new(x, y);
     data.width = w;
     data.height = h;
     data.rotation = rotation;
-    let element = Element::Rectangle(Rectangle { data });
+    data
+}
+
+/// A target taken from a real element, so its frame comes from the same
+/// helpers the canvas uses.
+fn element(id: ElementId, x: f64, y: f64, w: f64, h: f64, rotation: f64) -> GuideBox {
+    let element = Element::Rectangle(Rectangle {
+        data: placed_data(id, x, y, w, h, rotation),
+    });
     GuideBox {
         id,
         bounds: guide_bounds(&element),
-        corners: guide_corners(&element),
+        frame: guide_frame(&element),
     }
+}
+
+/// The same, for the shape whose guides end on its outline.
+fn ellipse(id: ElementId, x: f64, y: f64, w: f64, h: f64, rotation: f64) -> GuideBox {
+    let element = Element::Ellipse(Ellipse {
+        data: placed_data(id, x, y, w, h, rotation),
+    });
+    GuideBox {
+        id,
+        bounds: guide_bounds(&element),
+        frame: guide_frame(&element),
+    }
+}
+
+/// Cross intervals of the vertical guide segments, in draw order.
+fn y_segments(resolution: &GuideResolution) -> Vec<(f64, f64)> {
+    resolution
+        .state
+        .guides
+        .iter()
+        .map(|line| (line.start.y, line.end.y))
+        .collect()
 }
 
 /// World rectangle the tests treat as on screen: wide enough that small
@@ -52,7 +81,7 @@ fn resolve(
 ) -> GuideResolution {
     resolve_move(
         proposed,
-        proposed.corners(),
+        GuideFrame::rect(proposed),
         others,
         visible,
         zoom,
@@ -487,12 +516,7 @@ fn alignment_guide_breaks_at_a_box_across_its_path() {
         .guides
         .iter()
         .all(|line| line.start.x == 100.0 && line.end.x == 100.0));
-    let segments: Vec<(f64, f64)> = resolution
-        .state
-        .guides
-        .iter()
-        .map(|line| (line.start.y, line.end.y))
-        .collect();
+    let segments = y_segments(&resolution);
     assert_eq!(
         segments,
         vec![(20.0, 100.0), (120.0, 150.0), (170.0, 200.0)]
@@ -522,7 +546,7 @@ fn alignment_guide_leaves_a_rotated_mover_at_its_corner() {
     let target = rect(1, square.bounds.x, 400.0, 20.0, 20.0);
     let resolution = resolve_move(
         square.bounds,
-        square.corners,
+        square.frame,
         &[target],
         view(),
         1.0,
@@ -564,17 +588,124 @@ fn alignment_guide_cuts_a_rotated_blocker_at_its_frame() {
         rect(3, 100.0, 900.0, 20.0, 20.0),
     ];
     let resolution = solve(Rect::new(100.0, 0.0, 20.0, 20.0), &others);
-    let segments: Vec<(f64, f64)> = resolution
-        .state
-        .guides
-        .iter()
-        .map(|line| (line.start.y, line.end.y))
-        .collect();
+    let segments = y_segments(&resolution);
     let reach = 50.0 * 2.0f64.sqrt();
     assert_eq!(segments.len(), 3);
     assert_eq!(segments[0], (20.0, 100.0));
     assert!((segments[1].0 - 120.0).abs() < 1e-9 && (segments[1].1 - (705.0 - reach)).abs() < 1e-9);
     assert!((segments[2].0 - (695.0 + reach)).abs() < 1e-9 && (segments[2].1 - 900.0).abs() < 1e-9);
+}
+
+#[test]
+fn alignment_guide_meets_a_circle_at_its_tangent() {
+    // A circle matched on its left edge: the line ends level with the centre,
+    // where it touches the outline, not on the corner of the box around it.
+    let circle = ellipse(1, 0.0, 0.0, 100.0, 100.0, 0.0);
+    let resolution = solve(Rect::new(circle.bounds.x, 400.0, 20.0, 20.0), &[circle]);
+    assert_eq!(resolution.snap_dx, 0.0);
+    assert_eq!(resolution.state.guides.len(), 1);
+    let line = resolution.state.guides[0];
+    assert_eq!(line.start.x, 0.0);
+    assert!((line.start.y - 50.0).abs() < 1e-9, "{line:?}");
+    assert_eq!(line.end.y, 400.0);
+}
+
+#[test]
+fn alignment_guide_meets_a_circle_at_its_tangent_horizontally() {
+    // The same on the other axis, through the ellipse solver's other branch.
+    let circle = ellipse(1, 0.0, 0.0, 100.0, 100.0, 0.0);
+    let resolution = solve(Rect::new(400.0, circle.bounds.y, 20.0, 20.0), &[circle]);
+    assert_eq!(resolution.snap_dy, 0.0);
+    assert_eq!(resolution.state.guides.len(), 1);
+    let line = resolution.state.guides[0];
+    assert_eq!(line.start.y, 0.0);
+    assert!((line.start.x - 50.0).abs() < 1e-9, "{line:?}");
+    assert_eq!(line.end.x, 400.0);
+}
+
+#[test]
+fn alignment_guide_meets_a_turned_circle_at_its_tangent() {
+    // Turning a circle changes nothing about its outline or its extent: the
+    // box's envelope would swing out by sqrt(2), the guides keep riding the
+    // circle itself.
+    let circle = ellipse(1, 0.0, 0.0, 100.0, 100.0, std::f64::consts::FRAC_PI_4);
+    let resolution = solve(Rect::new(circle.bounds.x, 400.0, 20.0, 20.0), &[circle]);
+    assert!(resolution.snap_dx.abs() < 1e-9);
+    assert_eq!(resolution.state.guides.len(), 1);
+    let line = resolution.state.guides[0];
+    assert!((line.start.x).abs() < 1e-9, "{line:?}");
+    // A turned graze is ill-conditioned: the tangent point can come out with
+    // float noise around it, far below a pixel.
+    assert!((line.start.y - 50.0).abs() < 1e-5, "{line:?}");
+    assert_eq!(line.end.y, 400.0);
+}
+
+#[test]
+fn alignment_guide_meets_a_turned_oval_at_its_tangent() {
+    // An oval is not a circle: the extreme that faces the guide sits off the
+    // centre line, and the line must end where the tangent touches there.
+    let oval = ellipse(1, 0.0, 0.0, 200.0, 100.0, std::f64::consts::FRAC_PI_4);
+    let resolution = solve(Rect::new(oval.bounds.x, 400.0, 20.0, 20.0), &[oval]);
+    assert!(resolution.snap_dx.abs() < 1e-9);
+    assert_eq!(resolution.state.guides.len(), 1);
+    let line = resolution.state.guides[0];
+    // That tangent point sits (rx^2 - ry^2) sin * cos / half_x off the
+    // centre, on the side where the outline's tangent turns vertical.
+    let (sin, cos) = std::f64::consts::FRAC_PI_4.sin_cos();
+    let half_x = ((100.0 * cos).powi(2) + (50.0 * sin).powi(2)).sqrt();
+    let drop = (100.0f64.powi(2) - 50.0f64.powi(2)) * sin * cos / half_x;
+    assert!((line.start.y - (50.0 - drop)).abs() < 1e-9, "{line:?}");
+    assert_eq!(line.end.y, 400.0);
+}
+
+#[test]
+fn alignment_guide_cuts_a_circle_at_its_chord() {
+    // A circle standing in the way, left of its centre: the line is cut at
+    // the chord of the outline, not at the box drawn around the circle.
+    let circle = ellipse(2, 50.0, 100.0, 100.0, 100.0, 0.0);
+    let others = [rect(1, 75.0, 0.0, 20.0, 20.0), circle];
+    let resolution = solve(Rect::new(75.0, 800.0, 20.0, 20.0), &others);
+    let segments = y_segments(&resolution);
+    let reach = (50.0f64 * 50.0 - 25.0 * 25.0).sqrt();
+    assert_eq!(segments.len(), 2);
+    assert!(
+        (segments[0].0 - 20.0).abs() < 1e-9 && (segments[0].1 - (150.0 - reach)).abs() < 1e-9,
+        "{segments:?}"
+    );
+    assert!(
+        (segments[1].0 - (150.0 + reach)).abs() < 1e-9 && (segments[1].1 - 800.0).abs() < 1e-9,
+        "{segments:?}"
+    );
+}
+
+#[test]
+fn alignment_guide_cuts_a_circle_far_from_the_origin_at_its_chord() {
+    // The same cut, two million units out, where the viewport has followed:
+    // the span must stay the chord's width, not collapse to a point because
+    // of where the world origin happens to be.
+    let circle = ellipse(2, 50.0, 2_000_100.0, 100.0, 100.0, 0.0);
+    let others = [rect(1, 75.0, 2_000_000.0, 20.0, 20.0), circle];
+    let visible = Rect::new(-1_000.0, 1_999_000.0, 2_000.0, 2_000.0);
+    let resolution = resolve(
+        Rect::new(75.0, 2_000_800.0, 20.0, 20.0),
+        &others,
+        visible,
+        1.0,
+        &SmartGuideState::default(),
+    );
+    let segments = y_segments(&resolution);
+    let reach = (50.0f64 * 50.0 - 25.0 * 25.0).sqrt();
+    assert_eq!(segments.len(), 2);
+    assert!(
+        (segments[0].0 - 2_000_020.0).abs() < 1e-9
+            && (segments[0].1 - (2_000_150.0 - reach)).abs() < 1e-9,
+        "{segments:?}"
+    );
+    assert!(
+        (segments[1].0 - (2_000_150.0 + reach)).abs() < 1e-9
+            && (segments[1].1 - 2_000_800.0).abs() < 1e-9,
+        "{segments:?}"
+    );
 }
 
 #[test]
@@ -916,13 +1047,18 @@ fn randomized_positions_stay_finite() {
         let count = (rng.next().abs() as usize % 6) + 1;
         let others: Vec<GuideBox> = (0..count)
             .map(|i| {
-                rect(
-                    i as ElementId + 1,
+                let (x, y, w, h) = (
                     rng.next(),
                     rng.next(),
                     rng.next().abs() + 0.1,
                     rng.next().abs() + 0.1,
-                )
+                );
+                if i % 2 == 0 {
+                    rect(i as ElementId + 1, x, y, w, h)
+                } else {
+                    // Ellipses put the tangent solve under the same fuzz.
+                    ellipse(i as ElementId + 1, x, y, w, h, rng.next())
+                }
             })
             .collect();
         let zoom = [0.25, 1.0, 4.0][round % 3];
@@ -932,7 +1068,22 @@ fn randomized_positions_stay_finite() {
             rng.next().abs() + 0.1,
             rng.next().abs() + 0.1,
         );
-        let resolution = resolve(proposed, &others, view(), zoom, &state);
+        let resolution = if round % 4 == 3 {
+            // And an ellipse on the moving side solves its half too.
+            resolve_move(
+                proposed,
+                GuideFrame {
+                    corners: proposed.corners(),
+                    shape: FrameShape::Ellipse,
+                },
+                &others,
+                view(),
+                zoom,
+                &state,
+            )
+        } else {
+            resolve(proposed, &others, view(), zoom, &state)
+        };
         assert!(resolution.snap_dx.is_finite() && resolution.snap_dy.is_finite());
         assert!(resolution.state.active.len() <= 2);
         for line in &resolution.state.guides {

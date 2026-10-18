@@ -1,7 +1,9 @@
 //! Candidate scan: one alignment, spacing, or chain candidate per target,
 //! then a single winner per axis with hysteresis against the previous state.
 
-use super::geometry::{along_end, along_start, features, gap_crossed, perpendicular_gap};
+use super::geometry::{
+    along_end, along_start, features, gap_crossed, perpendicular_gap, share_lane,
+};
 use super::{
     GuideAxis, GuideBox, GuideCandidate, GuideFeature, GuideKey, GuideKind, SmartGuideState,
     Tolerances, FEATURES,
@@ -65,8 +67,7 @@ fn spacing_candidate(
     lane: f64,
     tolerance: f64,
 ) -> Option<GuideCandidate> {
-    if perpendicular_gap(moving, left.bounds, axis) > lane
-        || perpendicular_gap(moving, right.bounds, axis) > lane
+    if !share_lane(moving, left.bounds, right.bounds, axis, lane)
         || perpendicular_gap(left.bounds, right.bounds, axis) > lane
     {
         return None;

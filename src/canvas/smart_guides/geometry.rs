@@ -3,6 +3,7 @@
 //! the pair helpers built on top.
 
 use super::{GuideAxis, GuideBox, GuideFeature, GuideLine, EPSILON};
+use crate::model::interaction::{FrameShape, GuideFrame};
 use crate::model::{Point, Rect};
 
 pub(super) fn along_start(bounds: Rect, axis: GuideAxis) -> f64 {
@@ -57,14 +58,22 @@ pub(super) fn along_cross(point: Point, axis: GuideAxis) -> (f64, f64) {
     }
 }
 
-/// The stretch of the line at `coordinate` that runs inside the frame with
-/// those corners: the frame's silhouette there. An unrotated box is its own
-/// frame, so this is the box's cross extent. A rotated frame is met at one of
-/// its corners or edges, so the guide ends on the shape instead of on the
-/// corner of its envelope. The coordinate always lies within the frame's
-/// projection, so at least one edge matches and a tangent coordinate meets the
-/// frame at its corner.
-pub(super) fn frame_span(corners: [Point; 4], axis: GuideAxis, coordinate: f64) -> (f64, f64) {
+/// The stretch of the line at `coordinate` that runs inside the frame: the
+/// silhouette of the shape it carries. A box is met at its own edges, so a
+/// guide ends on the shape instead of on the corner of its envelope; an
+/// ellipse is met at the chord of its outline, which collapses to the tangent
+/// point at an extreme coordinate. The coordinate always lies within the
+/// shape's projection, so the line is never clear of it.
+pub(super) fn frame_span(frame: GuideFrame, axis: GuideAxis, coordinate: f64) -> (f64, f64) {
+    match frame.shape {
+        FrameShape::Rect => box_span(frame.corners, axis, coordinate),
+        FrameShape::Ellipse => ellipse_span(frame.corners, axis, coordinate),
+    }
+}
+
+/// The box's silhouette on the line: the edges it crosses, plus the edges that
+/// lie along it, which is what a tangent coordinate meets the box at.
+fn box_span(corners: [Point; 4], axis: GuideAxis, coordinate: f64) -> (f64, f64) {
     let epsilon = EPSILON * (1.0 + coordinate.abs());
     let mut low = f64::INFINITY;
     let mut high = f64::NEG_INFINITY;
@@ -87,6 +96,61 @@ pub(super) fn frame_span(corners: [Point; 4], axis: GuideAxis, coordinate: f64) 
         }
     }
     (low, high)
+}
+
+/// The chord of the ellipse inscribed in the box with these corners, on the
+/// line at `coordinate`. Corners keep their box order: `0 -> 1` is the
+/// half-width axis and `0 -> 3` the half-height one, both swung by the frame's
+/// rotation.
+fn ellipse_span(corners: [Point; 4], axis: GuideAxis, coordinate: f64) -> (f64, f64) {
+    let center = Point::new(
+        (corners[0].x + corners[2].x) / 2.0,
+        (corners[0].y + corners[2].y) / 2.0,
+    );
+    let half_w = (corners[1].x - corners[0].x).hypot(corners[1].y - corners[0].y) / 2.0;
+    let half_h = (corners[3].x - corners[0].x).hypot(corners[3].y - corners[0].y) / 2.0;
+    if half_w <= EPSILON || half_h <= EPSILON {
+        return box_span(corners, axis, coordinate);
+    }
+    let angle = (corners[1].y - corners[0].y).atan2(corners[1].x - corners[0].x);
+    let (sin, cos) = angle.sin_cos();
+    // Into the ellipse's own frame, where the outline is
+    // (a / half_w)^2 + (b / half_h)^2 = 1.
+    let to_local = |dx: f64, dy: f64| (dx * cos + dy * sin, -dx * sin + dy * cos);
+
+    // Parameterise the line by its cross coordinate measured from the centre,
+    // so the quadratic below only ever works with the ellipse's own scale: an
+    // origin far from the shape must not affect how a graze is resolved.
+    let center_cross = match axis {
+        GuideAxis::Vertical => center.y,
+        GuideAxis::Horizontal => center.x,
+    };
+    let (base_a, base_b) = match axis {
+        GuideAxis::Vertical => to_local(coordinate - center.x, 0.0),
+        GuideAxis::Horizontal => to_local(0.0, coordinate - center.y),
+    };
+    let (dir_a, dir_b) = match axis {
+        GuideAxis::Vertical => (sin, cos),
+        GuideAxis::Horizontal => (cos, -sin),
+    };
+    let scale_a = 1.0 / (half_w * half_w);
+    let scale_b = 1.0 / (half_h * half_h);
+    let qa = dir_a * dir_a * scale_a + dir_b * dir_b * scale_b;
+    let qb = 2.0 * (base_a * dir_a * scale_a + base_b * dir_b * scale_b);
+    let qc = base_a * base_a * scale_a + base_b * base_b * scale_b - 1.0;
+    let disc = qb * qb - 4.0 * qa * qc;
+    // A graze — a discriminant on or just under zero — resolves to its
+    // vertex, the one point where the line touches the outline. At a turned
+    // graze float noise can leave a vanishingly narrow chord instead, well
+    // under a pixel wide, which no one can tell from the point.
+    let (low, high) = if disc <= 0.0 {
+        let tangent = -qb / (2.0 * qa);
+        (tangent, tangent)
+    } else {
+        let root = disc.sqrt();
+        ((-qb - root) / (2.0 * qa), (-qb + root) / (2.0 * qa))
+    };
+    (center_cross + low, center_cross + high)
 }
 
 /// Shortest distance between two rects, zero when they touch or overlap.
@@ -158,6 +222,18 @@ pub(super) fn perpendicular_gap(a: Rect, b: Rect, axis: GuideAxis) -> f64 {
         GuideAxis::Horizontal if b.right() < a.x => a.x - b.right(),
         _ => 0.0,
     }
+}
+
+/// Whether the moving box and both boxes of a pair share a lane across the
+/// axis.
+pub(super) fn share_lane(
+    moving: Rect,
+    left: Rect,
+    right: Rect,
+    axis: GuideAxis,
+    lane: f64,
+) -> bool {
+    perpendicular_gap(moving, left, axis) <= lane && perpendicular_gap(moving, right, axis) <= lane
 }
 
 pub(super) fn ordered_pair(

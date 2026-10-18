@@ -8,8 +8,8 @@ use crate::canvas::state::{CanvasInputs, CanvasState, DragOperation};
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{Bounds, Offset, PathPoints, Resize, Rotate, SnapToGrid};
 use crate::model::interaction::{
-    guide_bounds, guide_corners, guide_union_bounds, guide_union_corners, hit_test_topmost,
-    point_inside_any_element, rect_fully_contains_element, CLICK_MARGIN, HIT_MARGIN,
+    guide_bounds, guide_frame, guide_union_bounds, guide_union_frame, hit_test_topmost,
+    point_inside_any_element, rect_fully_contains_element, GuideFrame, CLICK_MARGIN, HIT_MARGIN,
 };
 use crate::model::resize::ResizeContext;
 use crate::model::resize::ResizeHandle;
@@ -101,7 +101,7 @@ fn handle_path_move_icon(
         st.drag.drag_action.set(Some(DragOperation::Move));
         st.drag.moving_anchor.set(Some(world));
         st.drag.drag_bounds.set(Some(guide_bounds(el)));
-        st.drag.smart_guide_corners.set(Some(guide_corners(el)));
+        st.drag.smart_guide_frame.set(Some(guide_frame(el)));
         st.drag.last_world.set(Some(world));
         st.drag.drag_originals.set(vec![el.clone()]);
         capture_smart_guide_targets(st, &[el.id()], els);
@@ -176,9 +176,7 @@ fn hit_move_handle(
         st.drag.drag_action.set(Some(DragOperation::Move));
         st.drag.moving_anchor.set(Some(world));
         st.drag.drag_bounds.set(Some(drag_bounds));
-        st.drag
-            .smart_guide_corners
-            .set(guide_union_corners(ids, els));
+        st.drag.smart_guide_frame.set(guide_union_frame(ids, els));
         st.drag.last_world.set(Some(world));
         st.drag.drag_originals.set(
             els.iter()
@@ -366,7 +364,7 @@ fn capture_smart_guide_targets(st: &mut CanvasState, ids: &[ElementId], els: &[E
             .map(|el| GuideBox {
                 id: el.id(),
                 bounds: guide_bounds(el),
-                corners: guide_corners(el),
+                frame: guide_frame(el),
             })
             .collect(),
     );
@@ -387,9 +385,7 @@ fn begin_move_drag(
     st.drag.drag_action.set(Some(DragOperation::Move));
     st.drag.moving_anchor.set(Some(world));
     st.drag.drag_bounds.set(Some(bounds));
-    st.drag
-        .smart_guide_corners
-        .set(guide_union_corners(ids, els));
+    st.drag.smart_guide_frame.set(guide_union_frame(ids, els));
     st.drag.last_world.set(Some(world));
     st.drag.drag_originals.set(
         els.iter()
@@ -599,16 +595,16 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
         let viewport = props.viewport.get_untracked();
         let visible = viewport.visible_rect(st.screen_size.get_untracked());
         st.drag.smart_guides.with(|previous| {
-            st.drag.smart_guide_corners.with(|corners| {
+            st.drag.smart_guide_frame.with(|frame| {
                 st.drag.smart_guide_targets.with(|targets| {
                     let proposed =
                         Rect::new(bounds.x + raw_dx, bounds.y + raw_dy, bounds.w, bounds.h);
-                    let corners = corners
-                        .unwrap_or(bounds.corners())
-                        .map(|corner| Point::new(corner.x + raw_dx, corner.y + raw_dy));
+                    let frame = frame
+                        .unwrap_or_else(|| GuideFrame::rect(bounds))
+                        .translated(raw_dx, raw_dy);
                     let resolution = smart_guides::resolve_move(
                         proposed,
-                        corners,
+                        frame,
                         targets,
                         visible,
                         viewport.zoom,
@@ -716,7 +712,7 @@ fn clear_drag_state(st: &mut CanvasState) {
     st.drag.hovered_handle.set(None);
     st.drag.smart_guides.set(SmartGuideState::default());
     st.drag.smart_guide_targets.set(Vec::new());
-    st.drag.smart_guide_corners.set(None);
+    st.drag.smart_guide_frame.set(None);
     st.drag.pending_shift_toggle.set(None);
     st.select_anchor.set(None);
 }

@@ -12,6 +12,7 @@ use super::{
     GuideAxis, GuideBox, GuideKind, GuideLabel, GuideLine, GuideResolution, SmartGuideState,
     Tolerances, GUIDE_MAX_PAIR_TARGETS,
 };
+use crate::model::interaction::GuideFrame;
 use crate::model::{Point, Rect};
 
 /// Readout for a spacing band: the free space between its two ends, measured
@@ -66,8 +67,9 @@ pub(super) fn sorted_along(near: &[GuideBox], axis: GuideAxis) -> Vec<GuideBox> 
 ///
 /// Call this only while guides are enabled; a disabled caller keeps the
 /// previous state cleared instead. `proposed` is the moving selection's
-/// envelope with `proposed_corners` the corners of its frame — the box the
-/// selection outline hugs, which is rotated for a single rotated element.
+/// envelope and `proposed_frame` the frame guides are drawn against: the
+/// corners of the box the selection outline hugs, plus the shape inside it, so
+/// a rotated element and an ellipse are both met on their own outline.
 /// `others` holds the frames of every element outside the drag and `visible`
 /// is the world rectangle on screen: only targets the user can see take part,
 /// and guide lines are trimmed to it. Alignment reads every one of those
@@ -79,7 +81,7 @@ pub(super) fn sorted_along(near: &[GuideBox], axis: GuideAxis) -> Vec<GuideBox> 
 /// and clears any previous guide.
 pub fn resolve_move(
     proposed: Rect,
-    proposed_corners: [Point; 4],
+    proposed_frame: GuideFrame,
     others: &[GuideBox],
     visible: Rect,
     zoom: f64,
@@ -141,8 +143,7 @@ pub fn resolve_move(
         proposed.w,
         proposed.h,
     );
-    let snapped_corners =
-        proposed_corners.map(|corner| Point::new(corner.x + snap_dx, corner.y + snap_dy));
+    let snapped_frame = proposed_frame.translated(snap_dx, snap_dy);
 
     let mut active = Vec::new();
     let mut guides = Vec::new();
@@ -167,7 +168,7 @@ pub fn resolve_move(
         active.push(candidate.key);
         let lines = match candidate.key.kind {
             GuideKind::Alignment => {
-                let mut lines = alignment_guides(snapped, snapped_corners, &all, candidate.key);
+                let mut lines = alignment_guides(snapped, snapped_frame, &all, candidate.key);
                 lines.extend(equal_spacing_run_lines(
                     snapped,
                     crossed,

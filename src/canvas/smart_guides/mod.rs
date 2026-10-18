@@ -1,12 +1,12 @@
 //! Smart guides for move drags.
 //!
-//! Resolution is a pure function of the proposed rectangle, the neighbouring
-//! element bounds, the visible world rectangle, and the zoom: [`resolve_move`]
-//! returns the snap delta plus the guides to draw. Targets are the elements
-//! the viewport shows. Tolerances are specified in screen pixels and divided
-//! by the zoom, so snapping feels the same at every zoom level. The previous
-//! state is threaded back in for hysteresis: an active guide stays latched
-//! until the pointer leaves a slightly wider release band.
+//! Resolution is a pure function of the proposed rectangle and frame, the
+//! neighbouring element boxes, the visible world rectangle, and the zoom:
+//! [`resolve_move`] returns the snap delta plus the guides to draw. Targets are
+//! the elements the viewport shows. Tolerances are specified in screen pixels
+//! and divided by the zoom, so snapping feels the same at every zoom level.
+//! The previous state is threaded back in for hysteresis: an active guide
+//! stays latched until the pointer leaves a slightly wider release band.
 
 mod candidates;
 mod geometry;
@@ -19,6 +19,7 @@ mod tests;
 pub use overlay::guide_overlay;
 pub use solver::resolve_move;
 
+use crate::model::interaction::GuideFrame;
 use crate::model::{ElementId, Point, Rect};
 
 /// Distance at which a proposed position acquires a guide, in screen pixels.
@@ -131,14 +132,14 @@ pub struct GuideResolution {
 }
 
 /// A box in the guide scan: the axis-aligned envelope its alignment features
-/// come from, plus the corners of the frame it is drawn with. The two differ
-/// for rotated elements, whose guides then meet the shape instead of the
-/// corners of its envelope.
+/// come from, plus the frame it is drawn with. The two differ for rotated
+/// elements and for ellipses, whose guides then meet the visible outline
+/// instead of the corners of the box drawn around it.
 #[derive(Clone, Copy)]
 pub struct GuideBox {
     pub id: ElementId,
     pub bounds: Rect,
-    pub corners: [Point; 4],
+    pub frame: GuideFrame,
 }
 
 #[derive(Clone, Copy)]
