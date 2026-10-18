@@ -364,7 +364,7 @@ pub fn browser_export_skea(scene: Scene) {
 /// Tauri-native SVG export: shows a save dialog, writes the SVG string to disk.
 pub fn tauri_export_svg(svg: String, selection: bool) {
     spawn_local(async move {
-        let dir = crate::tauri_bridge::get_app_data_dir().await.ok();
+        let dir = crate::tauri_bridge::get_documents_dir().await.ok();
         let name = if selection {
             "selection.svg"
         } else {
@@ -386,7 +386,7 @@ pub fn tauri_export_png(svg: String, selection: bool) {
             } else {
                 "canvas.png"
             };
-            let dir = crate::tauri_bridge::get_app_data_dir().await.ok();
+            let dir = crate::tauri_bridge::get_documents_dir().await.ok();
             let path = crate::tauri_bridge::pick_save_path_png(name, dir.as_deref()).await;
             if let Some(path) = path {
                 let ab_promise = js_sys::Promise::new(&mut {

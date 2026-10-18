@@ -2,8 +2,8 @@
 //! install bundled dependencies (fonts) on first launch.
 //!
 //! Called from Tauri's `.setup()` hook before the window is shown, and
-//! reused by the file commands so the app-data directory (and the sub-dirs
-//! it relies on) always exist before anything reads or writes them.
+//! reused by the file commands so the directories the app relies on (app
+//! data, user documents) always exist before anything reads or writes them.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -35,10 +35,17 @@ pub fn app_data_dir(handle: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-/// Resolve the user's documents directory inside app-data, creating it if needed.
+/// Resolve the default drawing folder (`<Documents>/Inskea`), creating it if
+/// needed. Falls back to app-data when the platform documents dir is unavailable.
 pub fn documents_dir(handle: &AppHandle) -> Result<PathBuf, String> {
-    let mut dir = app_data_dir(handle)?;
-    dir.push("documents");
+    let dir = match handle.path().document_dir() {
+        Ok(documents) => documents.join("Inskea"),
+        Err(_) => {
+            let mut fallback = app_data_dir(handle)?;
+            fallback.push("documents");
+            fallback
+        }
+    };
     fs::create_dir_all(&dir).map_err(|e| format!("failed to create documents dir: {e}"))?;
     Ok(dir)
 }

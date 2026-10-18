@@ -30,7 +30,7 @@ pub fn file_save(scene: RwSignal<Scene>, saved_path: RwSignal<Option<String>>) {
 pub fn file_save_as(scene: RwSignal<Scene>, saved_path: RwSignal<Option<String>>) {
     let s = scene.get();
     spawn_local(async move {
-        let dir = tauri_bridge::get_app_data_dir().await.ok();
+        let dir = tauri_bridge::get_documents_dir().await.ok();
         let path = tauri_bridge::pick_save_path("untitled.skea", dir.as_deref()).await;
         if let Some(path) = path {
             saved_path.set(Some(path.clone()));
@@ -46,7 +46,7 @@ pub fn file_open(
     selected_ids: RwSignal<Vec<ElementId>>,
 ) {
     spawn_local(async move {
-        let dir = tauri_bridge::get_app_data_dir().await.ok();
+        let dir = tauri_bridge::get_documents_dir().await.ok();
         let path = tauri_bridge::pick_open_path(dir.as_deref()).await;
         if let Some(path) = path {
             saved_path.set(Some(path.clone()));

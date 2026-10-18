@@ -78,16 +78,17 @@ pub async fn pick_open_path(default_dir: Option<&str>) -> Option<String> {
     result.as_string()
 }
 
-/// Get the platform-specific app data directory (creates it if missing).
-pub async fn get_app_data_dir() -> Result<String, String> {
+/// Get the default folder for drawings, `<Documents>/Inskea` (creates it if
+/// missing).
+pub async fn get_documents_dir() -> Result<String, String> {
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({}))
         .map_err(|e| format!("serialization error: {e}"))?;
-    let result = invoke("get_app_data_dir", args)
+    let result = invoke("get_documents_dir", args)
         .await
         .map_err(invoke_error)?;
     result
         .as_string()
-        .ok_or_else(|| "failed to get app data dir".into())
+        .ok_or_else(|| "failed to get documents dir".into())
 }
 
 /// Save content to a file at the given path (no extension enforcement).

@@ -176,7 +176,7 @@ where
             let s = scene.get();
             if tauri {
                 spawn_local(async move {
-                    let dir = tauri_bridge::get_app_data_dir().await.ok();
+                    let dir = tauri_bridge::get_documents_dir().await.ok();
                     let path = tauri_bridge::pick_save_path("untitled.skea", dir.as_deref()).await;
                     if let Some(path) = path {
                         let c = skea::save_to_string(&s);

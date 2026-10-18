@@ -60,7 +60,7 @@ mod tests {
 }
 
 #[tauri::command]
-fn get_app_data_dir(app_handle: tauri::AppHandle) -> Result<String, String> {
+fn get_documents_dir(app_handle: tauri::AppHandle) -> Result<String, String> {
     setup::documents_dir(&app_handle).map(|p| p.to_string_lossy().to_string())
 }
 
@@ -93,7 +93,7 @@ fn get_font_paths(app_handle: tauri::AppHandle) -> Result<Vec<String>, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![save_file, save_file_binary, save_skea, load_skea, get_app_data_dir, save_settings, load_settings, get_font_paths])
+        .invoke_handler(tauri::generate_handler![save_file, save_file_binary, save_skea, load_skea, get_documents_dir, save_settings, load_settings, get_font_paths])
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
