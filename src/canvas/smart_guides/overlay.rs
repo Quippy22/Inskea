@@ -7,7 +7,29 @@ use super::{
     GUIDE_SPACING_CLEARANCE_PX, GUIDE_SPACING_COLOR,
 };
 use crate::canvas::viewport::Viewport;
+use crate::model::Point;
 use leptos::*;
+
+/// One guide line, drawn with a stroke that keeps its screen width at any
+/// zoom.
+fn guide_line(start: Point, end: Point, color: &'static str, width: f64, opacity: f64) -> View {
+    let (x1, y1) = (start.x, start.y);
+    let (x2, y2) = (end.x, end.y);
+    view! {
+        <line
+            x1=x1
+            y1=y1
+            x2=x2
+            y2=y2
+            stroke=color
+            stroke-width=width
+            stroke-linecap="round"
+            vector-effect="non-scaling-stroke"
+            opacity=opacity
+        />
+    }
+    .into_view()
+}
 
 pub fn guide_overlay(
     guide_state: RwSignal<SmartGuideState>,
@@ -57,35 +79,33 @@ pub fn guide_overlay(
                 let caps = if horizontal {
                     [
                         (
-                            x,
-                            guide.start.y - cap,
-                            x,
-                            (guide.start.y + cap).max(guide.stops[0] - clearance),
+                            Point::new(x, guide.start.y - cap),
+                            Point::new(x, (guide.start.y + cap).max(guide.stops[0] - clearance)),
                         ),
                         (
-                            x + width,
-                            guide.start.y - cap,
-                            x + width,
-                            (guide.start.y + cap).max(guide.stops[1] - clearance),
+                            Point::new(x + width, guide.start.y - cap),
+                            Point::new(
+                                x + width,
+                                (guide.start.y + cap).max(guide.stops[1] - clearance),
+                            ),
                         ),
                     ]
                 } else {
                     [
                         (
-                            guide.start.x - cap,
-                            y,
-                            (guide.start.x + cap).max(guide.stops[0] - clearance),
-                            y,
+                            Point::new(guide.start.x - cap, y),
+                            Point::new((guide.start.x + cap).max(guide.stops[0] - clearance), y),
                         ),
                         (
-                            guide.start.x - cap,
-                            y + height,
-                            (guide.start.x + cap).max(guide.stops[1] - clearance),
-                            y + height,
+                            Point::new(guide.start.x - cap, y + height),
+                            Point::new(
+                                (guide.start.x + cap).max(guide.stops[1] - clearance),
+                                y + height,
+                            ),
                         ),
                     ]
                 };
-                let [(ax1, ay1, ax2, ay2), (bx1, by1, bx2, by2)] = caps;
+                let [(a1, a2), (b1, b2)] = caps;
                 view! {
                     <g>
                         <rect
@@ -97,28 +117,8 @@ pub fn guide_overlay(
                             fill=GUIDE_SPACING_COLOR
                             fill-opacity="0.28"
                         />
-                        <line
-                            x1=ax1
-                            y1=ay1
-                            x2=ax2
-                            y2=ay2
-                            stroke=GUIDE_SPACING_COLOR
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            vector-effect="non-scaling-stroke"
-                            opacity="0.9"
-                        />
-                        <line
-                            x1=bx1
-                            y1=by1
-                            x2=bx2
-                            y2=by2
-                            stroke=GUIDE_SPACING_COLOR
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            vector-effect="non-scaling-stroke"
-                            opacity="0.9"
-                        />
+                        {guide_line(a1, a2, GUIDE_SPACING_COLOR, 1.5, 0.9)}
+                        {guide_line(b1, b2, GUIDE_SPACING_COLOR, 1.5, 0.9)}
                     </g>
                 }
                 .into_view()
@@ -131,30 +131,11 @@ pub fn guide_overlay(
             .iter()
             .filter(|guide| guide.kind == GuideKind::Alignment)
             .map(|guide| {
+                let (start, end) = (guide.start, guide.end);
                 view! {
                     <g>
-                        <line
-                            x1=guide.start.x
-                            y1=guide.start.y
-                            x2=guide.end.x
-                            y2=guide.end.y
-                            stroke=GUIDE_ALIGNMENT_COLOR
-                            stroke-width="4"
-                            stroke-linecap="round"
-                            vector-effect="non-scaling-stroke"
-                            opacity="0.18"
-                        />
-                        <line
-                            x1=guide.start.x
-                            y1=guide.start.y
-                            x2=guide.end.x
-                            y2=guide.end.y
-                            stroke=GUIDE_ALIGNMENT_COLOR
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            vector-effect="non-scaling-stroke"
-                            opacity="0.95"
-                        />
+                        {guide_line(start, end, GUIDE_ALIGNMENT_COLOR, 4.0, 0.18)}
+                        {guide_line(start, end, GUIDE_ALIGNMENT_COLOR, 1.5, 0.95)}
                     </g>
                 }
                 .into_view()

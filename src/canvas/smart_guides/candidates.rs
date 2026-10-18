@@ -2,13 +2,99 @@
 //! then a single winner per axis with hysteresis against the previous state.
 
 use super::geometry::{
-    along_end, along_start, features, gap_crossed, perpendicular_gap, share_lane,
+    along_end, along_start, features, gap_crossed, gap_span, inline_pairs, perpendicular_gap,
+    share_lane, sorted_along,
 };
 use super::{
     GuideAxis, GuideBox, GuideCandidate, GuideFeature, GuideKey, GuideKind, SmartGuideState,
     Tolerances, FEATURES,
 };
 use crate::model::Rect;
+
+/// One axis' neighbourhood scan: the boxes sorted along the axis for the
+/// crossed-gap tests, and the inline pairs they form. The same scan backs the
+/// candidate search and the guides later drawn for its winner.
+pub(super) struct AxisScan {
+    pub(super) axis: GuideAxis,
+    pub(super) ordered: Vec<GuideBox>,
+    pub(super) pairs: Vec<(GuideBox, GuideBox)>,
+}
+
+impl AxisScan {
+    pub(super) fn new(axis: GuideAxis, near: &[GuideBox], lane: f64) -> Self {
+        Self {
+            axis,
+            ordered: sorted_along(near, axis),
+            pairs: inline_pairs(near, axis, lane),
+        }
+    }
+
+    /// Pick the candidate for this axis. A candidate that was active on the
+    /// previous frame stays active while it remains within the wider release
+    /// band; otherwise the closest candidate inside the acquisition band wins.
+    pub(super) fn candidate(
+        &self,
+        moving: Rect,
+        targets: &[GuideBox],
+        previous: &SmartGuideState,
+        tolerances: &Tolerances,
+    ) -> Option<GuideCandidate> {
+        let candidates = self.candidates(moving, targets, tolerances);
+
+        if let Some(active) = previous.active.iter().find(|key| key.axis == self.axis) {
+            if let Some(candidate) = candidates.iter().find(|c| c.key == *active) {
+                if candidate.snap_delta.abs() <= tolerances.release {
+                    return Some(*candidate);
+                }
+            }
+        }
+
+        candidates
+            .into_iter()
+            .filter(|candidate| candidate.snap_delta.abs() <= tolerances.acquire)
+            .min_by(|a, b| candidate_order(a, b))
+    }
+
+    fn candidates(
+        &self,
+        moving: Rect,
+        targets: &[GuideBox],
+        tolerances: &Tolerances,
+    ) -> Vec<GuideCandidate> {
+        let mut candidates = targets
+            .iter()
+            .filter_map(|target| {
+                alignment_candidate(moving, *target, self.axis, tolerances.release)
+            })
+            .collect::<Vec<_>>();
+
+        for (left, right) in &self.pairs {
+            if let Some(candidate) = spacing_candidate(
+                moving,
+                *left,
+                *right,
+                self.axis,
+                tolerances.lane,
+                tolerances.release,
+            ) {
+                candidates.push(candidate);
+            }
+            if let Some(candidate) = chain_candidate(
+                moving,
+                &self.ordered,
+                *left,
+                *right,
+                self.axis,
+                tolerances.lane,
+                tolerances.release,
+            ) {
+                candidates.push(candidate);
+            }
+        }
+
+        candidates
+    }
+}
 
 /// Per-target order: matching features (left to left) win over cross features
 /// (left to right), then the smallest offset wins.
@@ -73,8 +159,7 @@ fn spacing_candidate(
         return None;
     }
 
-    let start = along_end(left.bounds, axis);
-    let end = along_start(right.bounds, axis);
+    let (start, end) = gap_span(left.bounds, right.bounds, axis);
     let moving_start = along_start(moving, axis);
     let moving_size = along_end(moving, axis) - moving_start;
     let gap = end - start;
@@ -116,8 +201,8 @@ fn chain_candidate(
     lane: f64,
     tolerance: f64,
 ) -> Option<GuideCandidate> {
-    let left_end = along_end(left.bounds, axis);
-    let gap = along_start(right.bounds, axis) - left_end;
+    let (left_end, right_start) = gap_span(left.bounds, right.bounds, axis);
+    let gap = right_start - left_end;
     if gap <= 0.0 {
         return None;
     }
@@ -146,14 +231,7 @@ fn chain_candidate(
         return None;
     }
 
-    let crossed = gap_crossed(
-        nearby,
-        left.bounds,
-        axis,
-        left_end,
-        along_start(right.bounds, axis),
-        lane,
-    );
+    let crossed = gap_crossed(nearby, left.bounds, axis, left_end, right_start, lane);
     if crossed {
         return None;
     }
@@ -196,68 +274,4 @@ fn candidate_order(a: &GuideCandidate, b: &GuideCandidate) -> std::cmp::Ordering
         .then_with(|| a.key.target_b.cmp(&b.key.target_b))
         .then_with(|| a.key.moving_feature.cmp(&b.key.moving_feature))
         .then_with(|| a.key.target_feature.cmp(&b.key.target_feature))
-}
-
-fn candidates_for_axis(
-    moving: Rect,
-    targets: &[GuideBox],
-    nearby: &[GuideBox],
-    pairs: &[(GuideBox, GuideBox)],
-    axis: GuideAxis,
-    lane: f64,
-    tolerance: f64,
-) -> Vec<GuideCandidate> {
-    let mut candidates = targets
-        .iter()
-        .filter_map(|target| alignment_candidate(moving, *target, axis, tolerance))
-        .collect::<Vec<_>>();
-
-    for (left, right) in pairs {
-        if let Some(candidate) = spacing_candidate(moving, *left, *right, axis, lane, tolerance) {
-            candidates.push(candidate);
-        }
-        if let Some(candidate) =
-            chain_candidate(moving, nearby, *left, *right, axis, lane, tolerance)
-        {
-            candidates.push(candidate);
-        }
-    }
-
-    candidates
-}
-
-/// Pick the candidate for one axis. A candidate that was active on the
-/// previous frame stays active while it remains within the wider release
-/// band; otherwise the closest candidate inside the acquisition band wins.
-pub(super) fn axis_candidate(
-    moving: Rect,
-    targets: &[GuideBox],
-    nearby: &[GuideBox],
-    pairs: &[(GuideBox, GuideBox)],
-    axis: GuideAxis,
-    previous: &SmartGuideState,
-    tolerances: &Tolerances,
-) -> Option<GuideCandidate> {
-    let candidates = candidates_for_axis(
-        moving,
-        targets,
-        nearby,
-        pairs,
-        axis,
-        tolerances.lane,
-        tolerances.release,
-    );
-
-    if let Some(active) = previous.active.iter().find(|key| key.axis == axis) {
-        if let Some(candidate) = candidates.iter().find(|c| c.key == *active) {
-            if candidate.snap_delta.abs() <= tolerances.release {
-                return Some(*candidate);
-            }
-        }
-    }
-
-    candidates
-        .into_iter()
-        .filter(|candidate| candidate.snap_delta.abs() <= tolerances.acquire)
-        .min_by(|a, b| candidate_order(a, b))
 }

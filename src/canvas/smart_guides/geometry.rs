@@ -27,6 +27,13 @@ pub(super) fn cross_start(bounds: Rect, axis: GuideAxis) -> f64 {
     }
 }
 
+pub(super) fn cross_end(bounds: Rect, axis: GuideAxis) -> f64 {
+    match axis {
+        GuideAxis::Vertical => bounds.bottom(),
+        GuideAxis::Horizontal => bounds.right(),
+    }
+}
+
 pub(super) fn feature_value(bounds: Rect, axis: GuideAxis, feature: GuideFeature) -> f64 {
     let start = along_start(bounds, axis);
     let end = along_end(bounds, axis);
@@ -234,6 +241,20 @@ pub(super) fn share_lane(
     lane: f64,
 ) -> bool {
     perpendicular_gap(moving, left, axis) <= lane && perpendicular_gap(moving, right, axis) <= lane
+}
+
+/// The free gap between two boxes ordered along the axis: from the end of the
+/// left box to the start of the right one.
+pub(super) fn gap_span(left: Rect, right: Rect, axis: GuideAxis) -> (f64, f64) {
+    (along_end(left, axis), along_start(right, axis))
+}
+
+/// Copy of the boxes sorted along `axis`, so the crossed-gap scans can stop as
+/// soon as a box starts past the gap they are testing.
+pub(super) fn sorted_along(boxes: &[GuideBox], axis: GuideAxis) -> Vec<GuideBox> {
+    let mut sorted = boxes.to_vec();
+    sorted.sort_by(|a, b| along_start(a.bounds, axis).total_cmp(&along_start(b.bounds, axis)));
+    sorted
 }
 
 pub(super) fn ordered_pair(

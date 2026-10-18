@@ -1,9 +1,10 @@
 //! Guide emission: turn a winning candidate into the lines to draw, in world
 //! coordinates.
 
+use super::candidates::AxisScan;
 use super::geometry::{
     along_end, along_start, axis_point, cross_start, feature_value, features, frame_span,
-    gap_crossed, marker_lane, ordered_pair, same_gap, share_lane,
+    gap_crossed, gap_span, marker_lane, ordered_pair, same_gap, share_lane,
 };
 use super::{
     GuideAxis, GuideBox, GuideCandidate, GuideKey, GuideKind, GuideLine, Tolerances, EPSILON,
@@ -115,6 +116,35 @@ fn spacing_line(
     }
 }
 
+/// The boxes a candidate's key names, in key order.
+fn selected_pair(boxes: &[GuideBox], key: GuideKey) -> Option<(GuideBox, GuideBox)> {
+    let left = boxes.iter().find(|b| b.id == key.target_a)?;
+    let right = boxes.iter().find(|b| b.id == key.target_b)?;
+    Some((*left, *right))
+}
+
+/// The band drawn across one inline pair's gap, in the pair's own lane.
+fn pair_band(
+    left: GuideBox,
+    right: GuideBox,
+    axis: GuideAxis,
+    marker: f64,
+    kind: GuideKind,
+) -> GuideLine {
+    let (start, end) = gap_span(left.bounds, right.bounds, axis);
+    spacing_line(
+        start,
+        end,
+        marker_lane(left.bounds, right.bounds, axis, marker),
+        [
+            cross_start(left.bounds, axis),
+            cross_start(right.bounds, axis),
+        ],
+        axis,
+        kind,
+    )
+}
+
 /// The two arrow segments a gap is drawn as: the free space left of the box
 /// and the free space right of it, equal once the box sits centred. `stops`
 /// are the cross starts of the piece left of the gap, the moving box, and the
@@ -153,21 +183,17 @@ fn spacing_lines(
 /// not shown: their arrows would float outside the row.
 pub(super) fn equal_spacing_guides(
     moving: Rect,
-    others: &[GuideBox],
-    pairs: &[(GuideBox, GuideBox)],
+    scan: &AxisScan,
     candidate: &GuideCandidate,
     tolerances: &Tolerances,
 ) -> Vec<GuideLine> {
-    let axis = candidate.key.axis;
-    let selected = others
-        .iter()
-        .find(|b| b.id == candidate.key.target_a)
-        .zip(others.iter().find(|b| b.id == candidate.key.target_b));
-    let Some((left, right)) = selected else {
+    let axis = scan.axis;
+    let Some((left, right)) = selected_pair(&scan.ordered, candidate.key) else {
         return Vec::new();
     };
 
-    let selected_gap = along_start(right.bounds, axis) - along_end(left.bounds, axis);
+    let (selected_start, selected_end) = gap_span(left.bounds, right.bounds, axis);
+    let selected_gap = selected_end - selected_start;
     let moving_start = along_start(moving, axis);
     let moving_size = along_end(moving, axis) - moving_start;
     let selected_cross = cross_start(moving, axis)
@@ -176,9 +202,8 @@ pub(super) fn equal_spacing_guides(
         - tolerances.marker;
     let mut guides = Vec::new();
 
-    for (pair_left, pair_right) in pairs {
-        let start = along_end(pair_left.bounds, axis);
-        let end = along_start(pair_right.bounds, axis);
+    for (pair_left, pair_right) in &scan.pairs {
+        let (start, end) = gap_span(pair_left.bounds, pair_right.bounds, axis);
         if !same_gap(end - start, selected_gap) || moving_size >= end - start {
             continue;
         }
@@ -191,25 +216,28 @@ pub(super) fn equal_spacing_guides(
         ) {
             continue;
         }
-        let cross = if pair_left.id == candidate.key.target_a {
-            selected_cross
+        // The pair the drag snaps into keeps the moving box's lane; the others
+        // draw in their own. A phantom box fits their free gaps; its ticks
+        // keep the standard length.
+        let (cross, stops) = if pair_left.id == candidate.key.target_a {
+            (
+                selected_cross,
+                [
+                    cross_start(pair_left.bounds, axis),
+                    cross_start(moving, axis),
+                    cross_start(pair_right.bounds, axis),
+                ],
+            )
         } else {
-            marker_lane(pair_left.bounds, pair_right.bounds, axis, tolerances.marker)
-        };
-        let stops = if pair_left.id == candidate.key.target_a {
-            [
-                cross_start(pair_left.bounds, axis),
-                cross_start(moving, axis),
-                cross_start(pair_right.bounds, axis),
-            ]
-        } else {
-            // A phantom box fits the gap; its ticks keep the standard length.
             let top = cross_start(pair_left.bounds, axis).min(cross_start(pair_right.bounds, axis));
-            [
-                cross_start(pair_left.bounds, axis),
-                top,
-                cross_start(pair_right.bounds, axis),
-            ]
+            (
+                marker_lane(pair_left.bounds, pair_right.bounds, axis, tolerances.marker),
+                [
+                    cross_start(pair_left.bounds, axis),
+                    top,
+                    cross_start(pair_right.bounds, axis),
+                ],
+            )
         };
         guides.extend(spacing_lines(start, end, moving_size, cross, stops, axis));
     }
@@ -221,21 +249,17 @@ pub(super) fn equal_spacing_guides(
 /// inline gap of the same length, so the chain lights up whole.
 pub(super) fn chain_spacing_guides(
     moving: Rect,
-    all: &[GuideBox],
-    pairs: &[(GuideBox, GuideBox)],
+    scan: &AxisScan,
     candidate: &GuideCandidate,
     tolerances: &Tolerances,
 ) -> Vec<GuideLine> {
-    let axis = candidate.key.axis;
-    let selected = all
-        .iter()
-        .find(|b| b.id == candidate.key.target_a)
-        .zip(all.iter().find(|b| b.id == candidate.key.target_b));
-    let Some((near, far)) = selected else {
+    let axis = scan.axis;
+    let Some((near, far)) = selected_pair(&scan.ordered, candidate.key) else {
         return Vec::new();
     };
-    let (left, right) = ordered_pair(*near, *far, axis);
-    let chain_gap = along_start(right.bounds, axis) - along_end(left.bounds, axis);
+    let (left, right) = ordered_pair(near, far, axis);
+    let (chain_start, chain_end) = gap_span(left.bounds, right.bounds, axis);
+    let chain_gap = chain_end - chain_start;
 
     let moving_start = along_start(moving, axis);
     let (start, end, stops) = if moving_start >= along_end(near.bounds, axis) {
@@ -260,9 +284,8 @@ pub(super) fn chain_spacing_guides(
         GuideKind::ChainSpacing,
     )];
 
-    for (pair_left, pair_right) in pairs {
-        let start = along_end(pair_left.bounds, axis);
-        let end = along_start(pair_right.bounds, axis);
+    for (pair_left, pair_right) in &scan.pairs {
+        let (start, end) = gap_span(pair_left.bounds, pair_right.bounds, axis);
         if !same_gap(end - start, chain_gap) {
             continue;
         }
@@ -275,15 +298,11 @@ pub(super) fn chain_spacing_guides(
         ) {
             continue;
         }
-        guides.push(spacing_line(
-            start,
-            end,
-            marker_lane(pair_left.bounds, pair_right.bounds, axis, tolerances.marker),
-            [
-                cross_start(pair_left.bounds, axis),
-                cross_start(pair_right.bounds, axis),
-            ],
+        guides.push(pair_band(
+            *pair_left,
+            *pair_right,
             axis,
+            tolerances.marker,
             GuideKind::ChainSpacing,
         ));
     }
@@ -295,41 +314,42 @@ pub(super) fn chain_spacing_guides(
 /// one gap. A gap crossed by another box is not a run, and runs are shown
 /// only while an alignment on the same axis is active and the moving box
 /// shares their lane: the rhythm of a row the drag is nowhere near is noise,
-/// not a measurement of the drag. `others` must be sorted by along start,
+/// not a measurement of the drag. The scan's boxes are sorted along the axis,
 /// which the crossed-gap test relies on.
 pub(super) fn equal_spacing_run_lines(
     moving: Rect,
-    others: &[GuideBox],
-    pairs: &[(GuideBox, GuideBox)],
-    axis: GuideAxis,
+    scan: &AxisScan,
     tolerances: &Tolerances,
 ) -> Vec<GuideLine> {
+    let axis = scan.axis;
     let mut runs: Vec<(f64, Vec<GuideLine>)> = Vec::new();
 
-    for (left, right) in pairs {
+    for (left, right) in &scan.pairs {
         if !share_lane(moving, left.bounds, right.bounds, axis, tolerances.lane) {
             continue;
         }
-        let start = along_end(left.bounds, axis);
-        let end = along_start(right.bounds, axis);
+        let (start, end) = gap_span(left.bounds, right.bounds, axis);
         let gap = end - start;
         if gap <= 0.0 {
             continue;
         }
 
-        let crossed = gap_crossed(others, left.bounds, axis, start, end, tolerances.lane);
+        let crossed = gap_crossed(
+            &scan.ordered,
+            left.bounds,
+            axis,
+            start,
+            end,
+            tolerances.lane,
+        );
         if crossed {
             continue;
         }
-        let line = spacing_line(
-            start,
-            end,
-            marker_lane(left.bounds, right.bounds, axis, tolerances.marker),
-            [
-                cross_start(left.bounds, axis),
-                cross_start(right.bounds, axis),
-            ],
+        let line = pair_band(
+            *left,
+            *right,
             axis,
+            tolerances.marker,
             GuideKind::EqualSpacing,
         );
         match runs

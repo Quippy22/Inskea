@@ -1,9 +1,10 @@
 //! The resolution entry point: scan neighbours, snap both axes, assemble the
 //! guides for every active candidate.
 
-use super::candidates::axis_candidate;
+use super::candidates::AxisScan;
 use super::geometry::{
-    along_start, axis_point, clamp_guide, inline_pairs, intersects, rect_distance,
+    along_cross, along_end, along_start, axis_point, clamp_guide, cross_end, cross_start,
+    intersects, rect_distance,
 };
 use super::guides::{
     alignment_guides, chain_spacing_guides, equal_spacing_guides, equal_spacing_run_lines,
@@ -13,15 +14,13 @@ use super::{
     Tolerances, GUIDE_MAX_PAIR_TARGETS,
 };
 use crate::model::interaction::GuideFrame;
-use crate::model::{Point, Rect};
+use crate::model::Rect;
 
 /// Readout for a spacing band: the free space between its two ends, measured
 /// along the guide axis and reported from the middle of the band.
 fn band_label(band: GuideLine, axis: GuideAxis) -> GuideLabel {
-    let (from, to, cross) = match axis {
-        GuideAxis::Vertical => (band.start.x, band.end.x, band.start.y),
-        GuideAxis::Horizontal => (band.start.y, band.end.y, band.start.x),
-    };
+    let (from, cross) = along_cross(band.start, axis);
+    let (to, _) = along_cross(band.end, axis);
     GuideLabel {
         at: axis_point(axis, (from + to) / 2.0, cross),
         distance: (to - from).abs(),
@@ -32,35 +31,14 @@ fn band_label(band: GuideLine, axis: GuideAxis) -> GuideLabel {
 /// Keep a label on screen: slide it along its band into view, and drop it when
 /// the band itself sits off screen.
 fn fit_label(mut label: GuideLabel, visible: Rect) -> Option<GuideLabel> {
-    let horizontal_band = label.axis == GuideAxis::Vertical;
-    let (along_range, cross_range) = if horizontal_band {
-        ((visible.x, visible.right()), (visible.y, visible.bottom()))
-    } else {
-        ((visible.y, visible.bottom()), (visible.x, visible.right()))
-    };
-    let (along, cross) = if horizontal_band {
-        (label.at.x, label.at.y)
-    } else {
-        (label.at.y, label.at.x)
-    };
-    if cross < cross_range.0 || cross > cross_range.1 {
+    let axis = label.axis;
+    let (along, cross) = along_cross(label.at, axis);
+    if cross < cross_start(visible, axis) || cross > cross_end(visible, axis) {
         return None;
     }
-    let along = along.clamp(along_range.0, along_range.1);
-    label.at = if horizontal_band {
-        Point::new(along, cross)
-    } else {
-        Point::new(cross, along)
-    };
+    let along = along.clamp(along_start(visible, axis), along_end(visible, axis));
+    label.at = axis_point(axis, along, cross);
     Some(label)
-}
-
-/// Copy of the local targets sorted along `axis`, so the crossed-gap scans
-/// can stop as soon as a box starts past the gap they are testing.
-pub(super) fn sorted_along(near: &[GuideBox], axis: GuideAxis) -> Vec<GuideBox> {
-    let mut sorted = near.to_vec();
-    sorted.sort_by(|a, b| along_start(a.bounds, axis).total_cmp(&along_start(b.bounds, axis)));
-    sorted
 }
 
 /// Resolve smart-guide candidates for a proposed move.
@@ -112,31 +90,13 @@ pub fn resolve_move(
         near.truncate(GUIDE_MAX_PAIR_TARGETS);
     }
 
-    let vertical_pairs = inline_pairs(&near, GuideAxis::Vertical, tolerances.lane);
-    let horizontal_pairs = inline_pairs(&near, GuideAxis::Horizontal, tolerances.lane);
-    let vertical_crossed = sorted_along(&near, GuideAxis::Vertical);
-    let horizontal_crossed = sorted_along(&near, GuideAxis::Horizontal);
-    let vertical = axis_candidate(
-        proposed,
-        &all,
-        &vertical_crossed,
-        &vertical_pairs,
-        GuideAxis::Vertical,
-        previous,
-        &tolerances,
-    );
-    let horizontal = axis_candidate(
-        proposed,
-        &all,
-        &horizontal_crossed,
-        &horizontal_pairs,
-        GuideAxis::Horizontal,
-        previous,
-        &tolerances,
-    );
+    let vertical = AxisScan::new(GuideAxis::Vertical, &near, tolerances.lane);
+    let horizontal = AxisScan::new(GuideAxis::Horizontal, &near, tolerances.lane);
+    let vertical_choice = vertical.candidate(proposed, &all, previous, &tolerances);
+    let horizontal_choice = horizontal.candidate(proposed, &all, previous, &tolerances);
 
-    let snap_dx = vertical.map_or(0.0, |candidate| candidate.snap_delta);
-    let snap_dy = horizontal.map_or(0.0, |candidate| candidate.snap_delta);
+    let snap_dx = vertical_choice.map_or(0.0, |candidate| candidate.snap_delta);
+    let snap_dy = horizontal_choice.map_or(0.0, |candidate| candidate.snap_delta);
     let snapped = Rect::new(
         proposed.x + snap_dx,
         proposed.y + snap_dy,
@@ -148,48 +108,28 @@ pub fn resolve_move(
     let mut active = Vec::new();
     let mut guides = Vec::new();
     let mut labels = Vec::new();
-    for (axis, candidate, pairs, crossed) in [
-        (
-            GuideAxis::Vertical,
-            vertical,
-            &vertical_pairs,
-            &vertical_crossed,
-        ),
-        (
-            GuideAxis::Horizontal,
-            horizontal,
-            &horizontal_pairs,
-            &horizontal_crossed,
-        ),
+    for (scan, choice) in [
+        (&vertical, vertical_choice),
+        (&horizontal, horizontal_choice),
     ] {
-        let Some(candidate) = candidate else {
+        let Some(candidate) = choice else {
             continue;
         };
         active.push(candidate.key);
         let lines = match candidate.key.kind {
             GuideKind::Alignment => {
                 let mut lines = alignment_guides(snapped, snapped_frame, &all, candidate.key);
-                lines.extend(equal_spacing_run_lines(
-                    snapped,
-                    crossed,
-                    pairs,
-                    axis,
-                    &tolerances,
-                ));
+                lines.extend(equal_spacing_run_lines(snapped, scan, &tolerances));
                 lines
             }
-            GuideKind::EqualSpacing => {
-                equal_spacing_guides(snapped, crossed, pairs, &candidate, &tolerances)
-            }
-            GuideKind::ChainSpacing => {
-                chain_spacing_guides(snapped, crossed, pairs, &candidate, &tolerances)
-            }
+            GuideKind::EqualSpacing => equal_spacing_guides(snapped, scan, &candidate, &tolerances),
+            GuideKind::ChainSpacing => chain_spacing_guides(snapped, scan, &candidate, &tolerances),
         };
         if candidate.key.kind != GuideKind::Alignment {
             // The first line of a spacing guide is the band the moving box
             // closed against; it is the one worth measuring.
             if let Some(band) = lines.first() {
-                labels.push(band_label(*band, axis));
+                labels.push(band_label(*band, scan.axis));
             }
         }
         guides.extend(lines);
