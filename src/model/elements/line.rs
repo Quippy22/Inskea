@@ -59,7 +59,7 @@ impl FromDrag for Line {
 }
 
 impl UpdateDrag for Line {
-    fn update_drag(&mut self, current: Point, anchor: Point, shift: bool) {
+    fn update_drag(&mut self, current: Point, anchor: Point, shift: bool, _zoom: f64) {
         let (a, b) = line_endpoints(anchor, current, shift);
         if self.points.len() >= 2 {
             self.points[0] = a;

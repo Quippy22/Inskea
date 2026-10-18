@@ -112,6 +112,9 @@ pub struct DrawingState {
     pub tool: Tool,
     /// Colour to apply to the new element.
     pub color: Color,
+    /// The element already placed in the scene by this draw, if any
+    /// (only Freehand creates its element on pointer-down).
+    pub element_id: Option<ElementId>,
 }
 
 /// All interior mutable state owned by the canvas component.
@@ -166,6 +169,9 @@ pub struct CanvasInputs {
     pub eraser_active: RwSignal<bool>,
     pub settings: RwSignal<CanvasSettings>,
     pub push_snapshot: Rc<dyn Fn()>,
+    /// Pops the most recent undo snapshot. Used when an interaction is
+    /// aborted (a freehand click, Esc) so it leaves no no-op undo entry.
+    pub discard_snapshot: Rc<dyn Fn()>,
     pub export_crop_active: RwSignal<bool>,
     pub on_crop_export: RwSignal<Option<CropExportCallback>>,
     pub default_style: RwSignal<ElementStyle>,

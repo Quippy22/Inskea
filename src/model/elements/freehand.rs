@@ -4,12 +4,16 @@ use crate::model::*;
 use leptos::IntoView;
 use std::fmt::Write;
 
-/// Minimum distance (world-space) between consecutive sampled points.
-/// Points closer than this are discarded to keep the point array lean.
-const MIN_SAMPLE_DIST: f64 = 2.0;
+/// Minimum distance (screen pixels) between consecutive sampled points.
+/// Points closer than this are discarded to keep the point array lean; the
+/// threshold is converted to world units with the current zoom, so the sample
+/// density stays constant on screen at every zoom level.
+const MIN_SAMPLE_DIST_PX: f64 = 2.0;
 
-/// Epsilon for Ramer–Douglas–Peucker simplification applied on pointer-up.
-const SIMPLIFY_EPSILON: f64 = 0.5;
+/// Tolerance (screen pixels) of the Ramer–Douglas–Peucker pass applied when
+/// the stroke ends. Converted to world units with the zoom at release time,
+/// so simplification never visibly shifts the stroke on screen.
+const SIMPLIFY_EPSILON_PX: f64 = 0.5;
 
 /// A free-hand stroke made up of a list of sampled points.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -29,6 +33,12 @@ impl Freehand {
             return;
         }
         self.points = simplify_points(&self.points, epsilon);
+    }
+
+    /// Finalise a live stroke, simplifying it with a tolerance that
+    /// corresponds to [`SIMPLIFY_EPSILON_PX`] screen pixels at `zoom`.
+    pub fn finish(&mut self, zoom: f64) {
+        self.simplify(SIMPLIFY_EPSILON_PX / zoom);
     }
 }
 
@@ -83,7 +93,7 @@ fn perpendicular_dist(px: f64, py: f64, x1: f64, y1: f64, x2: f64, y2: f64) -> f
 
 impl FromDrag for Freehand {
     fn from_drag(anchor: Point, _current: Point, color: Color, _shift: bool) -> Self {
-        let mut fh = Self {
+        Self {
             data: ElementData {
                 style: super::ElementStyle {
                     stroke_color: color,
@@ -95,18 +105,16 @@ impl FromDrag for Freehand {
                 x: anchor.x,
                 y: anchor.y,
             }],
-        };
-        fh.simplify(SIMPLIFY_EPSILON);
-        fh
+        }
     }
 }
 
 impl UpdateDrag for Freehand {
-    fn update_drag(&mut self, current: Point, _anchor: Point, _shift: bool) {
+    fn update_drag(&mut self, current: Point, _anchor: Point, _shift: bool, zoom: f64) {
         if let Some(last) = self.points.last() {
             let dx = current.x - last.x;
             let dy = current.y - last.y;
-            if dx.hypot(dy) < MIN_SAMPLE_DIST {
+            if dx.hypot(dy) < MIN_SAMPLE_DIST_PX / zoom {
                 return;
             }
         }
@@ -151,7 +159,7 @@ impl Render for Freehand {
 /// The technique uses midpoints between consecutive original points as
 /// segment endpoints and the original points as control points, producing
 /// a smooth curve that passes through every original point.
-fn build_smooth_path(points: &[Point]) -> String {
+pub(crate) fn build_smooth_path(points: &[Point]) -> String {
     let n = points.len();
     if n == 0 {
         return String::new();
@@ -215,7 +223,13 @@ impl Offset for Freehand {
 
 impl SnapToGrid for Freehand {
     fn snap_to_grid(&mut self, grid: f64) {
-        crate::model::elements::path::snap_points_to_grid(&mut self.points, grid);
+        // Translate the whole stroke so its bounding box lands on the grid.
+        // Snapping every sample individually would shear the stroke's shape.
+        let b = self.bounds();
+        self.offset(
+            (b.x / grid).round() * grid - b.x,
+            (b.y / grid).round() * grid - b.y,
+        );
     }
 }
 
@@ -228,5 +242,60 @@ impl Rotate for Freehand {
 impl Resize for Freehand {
     fn resize(&mut self, ctx: &ResizeContext) {
         scale_points(&mut self.points, ctx);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn stroke(points: &[(f64, f64)]) -> Freehand {
+        Freehand {
+            data: ElementData::new(1),
+            points: points.iter().map(|&(x, y)| Point { x, y }).collect(),
+        }
+    }
+
+    #[test]
+    fn sampling_threshold_follows_the_zoom() {
+        // At 20× a 0.2-unit step is 4 screen px: sampled.
+        let mut fh = stroke(&[(0.0, 0.0)]);
+        fh.update_drag(
+            Point { x: 0.2, y: 0.0 },
+            Point { x: 0.0, y: 0.0 },
+            false,
+            20.0,
+        );
+        assert_eq!(fh.points.len(), 2);
+        // At 0.1× the same step is 0.02 screen px: dropped.
+        let mut fh = stroke(&[(0.0, 0.0)]);
+        fh.update_drag(
+            Point { x: 0.2, y: 0.0 },
+            Point { x: 0.0, y: 0.0 },
+            false,
+            0.1,
+        );
+        assert_eq!(fh.points.len(), 1);
+    }
+
+    #[test]
+    fn finish_keeps_detail_only_while_it_is_visible() {
+        // A zigzag 0.4 world units off the straight line: at 20× that is 8
+        // screen px of visible detail, at 0.1× it is 0.04 px and collapses.
+        let pts = [(0.0, 0.0), (10.0, 0.4), (20.0, 0.0)];
+        let mut zoomed_in = stroke(&pts);
+        let mut zoomed_out = stroke(&pts);
+        zoomed_in.finish(20.0);
+        zoomed_out.finish(0.1);
+        assert_eq!(zoomed_in.points.len(), 3);
+        assert_eq!(zoomed_out.points.len(), 2);
+    }
+
+    #[test]
+    fn snap_to_grid_translates_the_whole_stroke() {
+        let mut fh = stroke(&[(3.0, 4.0), (23.0, 14.0)]);
+        fh.snap_to_grid(20.0);
+        assert_eq!(fh.points[0], Point { x: 0.0, y: 0.0 });
+        assert_eq!(fh.points[1], Point { x: 20.0, y: 10.0 });
     }
 }

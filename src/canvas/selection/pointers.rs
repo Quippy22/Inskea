@@ -700,7 +700,7 @@ fn snap_elements_to_grid(st: &mut CanvasState, props: &mut CanvasInputs) {
 
 /// Reset all drag-tracking signals to their default (no-op) values.
 #[inline]
-fn clear_drag_state(st: &mut CanvasState) {
+pub(crate) fn clear_drag_state(st: &mut CanvasState) {
     st.drag.moving_anchor.set(None);
     st.drag.drag_action.set(None);
     st.drag.drag_bounds.set(None);

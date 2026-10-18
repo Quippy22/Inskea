@@ -55,6 +55,20 @@ pub fn App() -> impl IntoView {
         redo_stack.set(Vec::new());
     });
 
+    // Pops the most recent undo snapshot, but only when it still matches the
+    // current scene. Aborted interactions (a freehand click, Esc mid-stroke,
+    // dismissing an untouched new text) end exactly at the state their
+    // snapshot recorded, so undo history gets no no-op entries; anything that
+    // changed the scene in between is left alone.
+    let discard_snapshot = Rc::new(move || {
+        let current = scene.get_untracked();
+        undo_stack.update(|s| {
+            if s.last() == Some(&current) {
+                s.pop();
+            }
+        });
+    });
+
     let do_undo = {
         let scene = scene;
         let undo_stack = undo_stack;
@@ -187,6 +201,7 @@ pub fn App() -> impl IntoView {
                 eraser_active=eraser_active
                 settings=settings
                 push_snapshot=push_snapshot.clone()
+                discard_snapshot=discard_snapshot.clone()
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
                 selected_ids=selected_ids

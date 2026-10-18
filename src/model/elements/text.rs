@@ -306,7 +306,7 @@ impl FromDrag for Text {
 }
 
 impl UpdateDrag for Text {
-    fn update_drag(&mut self, _current: Point, _anchor: Point, _shift: bool) {
+    fn update_drag(&mut self, _current: Point, _anchor: Point, _shift: bool, _zoom: f64) {
         // Text elements are placed on click, not dragged to size.
     }
 }

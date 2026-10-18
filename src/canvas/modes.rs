@@ -3,9 +3,73 @@ use super::MIN_DRAG_DIST;
 use crate::model::elements::text::WrappedText;
 use crate::model::{
     Element, ElementData, Ellipse, Freehand, FromDrag, Line, Point, Rectangle, Text, TextAlign,
+    UpdateDrag,
 };
 use crate::ui::dock::Tool;
-use leptos::{ev, SignalGet, SignalSet, SignalUpdate, SignalWith};
+use leptos::{
+    ev, SignalGet, SignalGetUntracked, SignalSet, SignalUpdate, SignalWith, SignalWithUntracked,
+};
+
+/// Finish (or discard) the freehand stroke currently being drawn.
+///
+/// Appends the release point when one is available, then simplifies the
+/// stroke with a zoom-scaled tolerance. A stroke still at its starting point
+/// is treated as a click: the element and the undo snapshot taken when the
+/// stroke began are both discarded, so clicking with the freehand tool leaves
+/// no trace. Does nothing when the in-progress element is not freehand.
+pub(crate) fn finish_freehand(
+    st: &mut CanvasState,
+    props: &mut CanvasInputs,
+    world: Option<Point>,
+) {
+    let Some(state) = st.drawing.get_untracked() else {
+        return;
+    };
+    if state.tool != Tool::Freehand {
+        return;
+    }
+    st.drawing.set(None);
+    let Some(id) = state.element_id else {
+        return;
+    };
+    let zoom = props.viewport.get_untracked().zoom;
+    let mut is_click = false;
+    props.scene.update(|s| {
+        if let Some(Element::Freehand(fh)) = s.element_by_id_mut(id) {
+            if let Some(world) = world {
+                fh.update_drag(world, Point::from(state.anchor), false, zoom);
+            }
+            if fh.points.len() < 2 {
+                is_click = true;
+            } else {
+                fh.finish(zoom);
+            }
+        }
+    });
+    if is_click {
+        props.scene.update(|s| s.remove_by_id(id));
+        (props.discard_snapshot)();
+    }
+}
+
+/// Abort an in-progress draw (Esc, pointer cancel). Freehand elements live in
+/// the scene from pointer-down, so the element and its undo snapshot are both
+/// removed; other tools have nothing in the scene yet.
+pub(crate) fn cancel_drawing(st: &mut CanvasState, props: &mut CanvasInputs) {
+    let Some(state) = st.drawing.get_untracked() else {
+        return;
+    };
+    st.drawing.set(None);
+    if let Some(id) = state.element_id {
+        let exists = props
+            .scene
+            .with_untracked(|s| s.element_by_id(id).is_some());
+        if exists {
+            props.scene.update(|s| s.remove_by_id(id));
+            (props.discard_snapshot)();
+        }
+    }
+}
 
 /// Handle a pointer-down event while in `Draw` mode.
 ///
@@ -51,6 +115,7 @@ pub fn draw_pointer_down(world: Point, st: &mut CanvasState, props: &mut CanvasI
 
     if tool == Tool::Freehand {
         (props.push_snapshot)();
+        let id = props.scene.with(|s| s.next_id);
         props.scene.update(|s| {
             let mut data = ElementData::new(0);
             data.style = props.default_style.get();
@@ -63,6 +128,7 @@ pub fn draw_pointer_down(world: Point, st: &mut CanvasState, props: &mut CanvasI
             anchor: (world.x, world.y),
             tool,
             color,
+            element_id: Some(id),
         }));
         return;
     }
@@ -71,6 +137,7 @@ pub fn draw_pointer_down(world: Point, st: &mut CanvasState, props: &mut CanvasI
         anchor: (world.x, world.y),
         tool,
         color,
+        element_id: None,
     }));
 }
 
@@ -96,12 +163,7 @@ pub fn draw_pointer_up(
 ) {
     if let Some(state) = st.drawing.get() {
         if state.tool == Tool::Freehand {
-            props.scene.update(|s| {
-                if let Some(Element::Freehand(fh)) = s.elements_mut().last_mut() {
-                    fh.simplify(0.5);
-                }
-            });
-            st.drawing.set(None);
+            finish_freehand(st, props, Some(world));
             return;
         }
 

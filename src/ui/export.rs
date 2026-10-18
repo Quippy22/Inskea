@@ -138,8 +138,19 @@ fn el_svg(el: &Element) -> String {
         Element::Line(l) => {
             let d = crate::model::elements::path::path_d(&l.points, l.line_style.curve_mode);
             let opacity = l.data.style.opacity;
+            let linejoin = l.data.style.edge_style.stroke_linejoin();
+            let linecap = match l.data.style.edge_style {
+                crate::model::elements::EdgeStyle::Sharp => "butt",
+                crate::model::elements::EdgeStyle::Rounded => "round",
+            };
+            let dash = l.data.style.stroke_style.stroke_dasharray();
+            // Same stroke attributes as the on-screen render, including the
+            // arrowheads (which inherit them from their group there).
+            let attrs = format!(
+                r#"stroke-linecap="{linecap}" stroke-linejoin="{linejoin}" stroke-dasharray="{dash}""#
+            );
             let mut out = format!(
-                r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}" opacity="{}"/>"#,
+                r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}" {attrs} opacity="{}"/>"#,
                 d,
                 l.data.style.stroke_color.to_hex(),
                 l.data.style.stroke_width,
@@ -156,7 +167,7 @@ fn el_svg(el: &Element) -> String {
                     if !pts.is_empty() {
                         let _ = write!(
                             out,
-                            r#"<polyline points="{}" fill="none" stroke="{}" stroke-width="{}" opacity="{}"/>"#,
+                            r#"<polyline points="{}" fill="none" stroke="{}" stroke-width="{}" {attrs} opacity="{}"/>"#,
                             pts,
                             l.data.style.stroke_color.to_hex(),
                             sw,
@@ -173,7 +184,7 @@ fn el_svg(el: &Element) -> String {
                     if !pts.is_empty() {
                         let _ = write!(
                             out,
-                            r#"<polyline points="{}" fill="none" stroke="{}" stroke-width="{}" opacity="{}"/>"#,
+                            r#"<polyline points="{}" fill="none" stroke="{}" stroke-width="{}" {attrs} opacity="{}"/>"#,
                             pts,
                             l.data.style.stroke_color.to_hex(),
                             sw,
@@ -229,27 +240,22 @@ fn el_svg(el: &Element) -> String {
             }
         }
         Element::Freehand(f) => {
-            let mut d = String::new();
-            let pts = &f.points;
-            if !pts.is_empty() {
-                let _ = write!(d, "M{} {}", pts[0].x, pts[0].y);
-                if pts.len() > 1 {
-                    let mx = (pts[0].x + pts[1].x) / 2.0;
-                    let my = (pts[0].y + pts[1].y) / 2.0;
-                    let _ = write!(d, " L{} {}", mx, my);
-                    for i in 1..pts.len() - 1 {
-                        let mid_x = (pts[i].x + pts[i + 1].x) / 2.0;
-                        let mid_y = (pts[i].y + pts[i + 1].y) / 2.0;
-                        let _ = write!(d, " Q{} {} {} {}", pts[i].x, pts[i].y, mid_x, mid_y);
-                    }
-                    let _ = write!(d, " L{} {}", pts[pts.len() - 1].x, pts[pts.len() - 1].y);
-                }
-            }
+            // Reuse the on-screen smoothing so the exported stroke has the
+            // same shape, and mirror the stroke attributes exactly.
+            let d = crate::model::elements::freehand::build_smooth_path(&f.points);
+            let linejoin = f.data.style.edge_style.stroke_linejoin();
+            let linecap = match f.data.style.edge_style {
+                crate::model::elements::EdgeStyle::Sharp => "butt",
+                crate::model::elements::EdgeStyle::Rounded => "round",
+            };
             format!(
-                r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}" stroke-linecap="round" opacity="{}"/>"#,
+                r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}" stroke-linecap="{}" stroke-linejoin="{}" stroke-dasharray="{}" opacity="{}"/>"#,
                 d,
                 f.data.style.stroke_color.to_hex(),
                 f.data.style.stroke_width,
+                linecap,
+                linejoin,
+                f.data.style.stroke_style.stroke_dasharray(),
                 f.data.style.opacity,
             )
         }

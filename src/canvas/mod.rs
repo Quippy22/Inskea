@@ -11,7 +11,7 @@ mod state;
 mod text_edit;
 
 pub use crate::model::interaction::combined_bounds;
-use modes::{draw_pointer_down, draw_pointer_up};
+use modes::{cancel_drawing, draw_pointer_down, draw_pointer_up, finish_freehand};
 use selection::{select_pointer_down, select_pointer_move, select_pointer_up};
 pub use state::CanvasMode;
 pub use state::CropExportCallback;
@@ -124,6 +124,7 @@ pub fn Canvas(
     eraser_active: RwSignal<bool>,
     settings: RwSignal<CanvasSettings>,
     push_snapshot: Rc<dyn Fn()>,
+    discard_snapshot: Rc<dyn Fn()>,
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<CropExportCallback>>,
     selected_ids: RwSignal<Vec<ElementId>>,
@@ -143,6 +144,7 @@ pub fn Canvas(
         eraser_active,
         settings,
         push_snapshot,
+        discard_snapshot,
         export_crop_active,
         on_crop_export,
         default_style,
@@ -184,8 +186,8 @@ pub fn Canvas(
     //            (b) cancel in-progress draw, (c) clear selection.
     // Never changes canvas_mode or selected_tool.
     {
-        let _st = st;
-        let _props = props.clone();
+        let mut _st = st;
+        let mut _props = props.clone();
         let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
             if ev.key() != "Escape" {
                 return;
@@ -196,15 +198,12 @@ pub fn Canvas(
                 return;
             }
             // (b) Cancel an in-progress draw. For Freehand the element was
-            // added to the scene on pointer_down, so remove it.
+            // added to the scene on pointer_down, so it is removed together
+            // with its undo snapshot.
             if _st.drawing.get().is_some() {
-                let tool = _st.drawing.get().unwrap().tool;
-                _st.drawing.set(None);
-                if tool == Tool::Freehand {
-                    _props.scene.update(|s| {
-                        s.elements_mut().pop();
-                    });
-                }
+                let mut st = _st;
+                let mut props = _props.clone();
+                cancel_drawing(&mut st, &mut props);
                 return;
             }
             // (c) Exit group-edit mode before clearing the selection.
@@ -324,14 +323,19 @@ pub fn Canvas(
             (mode, tool)
         });
 
-        let _st = st;
-        let _props = props.clone();
+        let mut _st = st;
+        let mut _props = props.clone();
         let _commit_edit = commit_edit.clone();
         create_effect(move |prev: Option<(CanvasMode, Tool)>| {
             let mode = _props.canvas_mode.get();
             let tool = _props.selected_tool.get();
             if let Some(prev) = prev {
                 if prev != (mode, tool) {
+                    // Finalise a freehand stroke so a tool switch cannot
+                    // leave it half-drawn or appended to later.
+                    let mut st = _st;
+                    let mut props = _props.clone();
+                    finish_freehand(&mut st, &mut props, None);
                     if let Some(id) = _st.text_edit.editing_id.get_untracked() {
                         if _st.text_edit.edit_text.get_untracked().is_empty() {
                             _props.scene.update(|s| s.remove_by_id(id));
@@ -415,6 +419,13 @@ pub fn Canvas(
             let detail = ev.detail() as u32;
             let client = (ev.client_x() as f64, ev.client_y() as f64);
 
+            // Capture the pointer so releasing outside the canvas (over the
+            // toolbar or a panel) still ends the interaction instead of
+            // leaving a drag or stroke running.
+            if let Some(svg) = st.svg_ref.get() {
+                let _ = svg.set_pointer_capture(ev.pointer_id());
+            }
+
             if editing {
                 // A text edit is in progress: commit it, then handle this
                 // click synchronously. The textarea's blur is scoped to its
@@ -485,17 +496,24 @@ pub fn Canvas(
                     select_pointer_move(world, &ev, &mut st, &mut props);
                 }
                 CanvasMode::Draw => {
-                    if let Some(ref state) = st.drawing.get() {
+                    if let Some(state) = st.drawing.get() {
                         if state.tool == Tool::Freehand {
-                            props.scene.update(|s| {
-                                if let Some(el) = s.elements_mut().last_mut() {
-                                    el.update_drag(
-                                        world,
-                                        Point::from(state.anchor),
-                                        ev.shift_key(),
-                                    );
+                            if let Some(id) = state.element_id {
+                                let zoom = props.viewport.get().zoom;
+                                let anchor = Point::from(state.anchor);
+                                let shift = ev.shift_key();
+                                let mut stale = false;
+                                props.scene.update(|s| match s.element_by_id_mut(id) {
+                                    Some(Element::Freehand(fh)) => {
+                                        fh.update_drag(world, anchor, shift, zoom)
+                                    }
+                                    _ => stale = true,
+                                });
+                                if stale {
+                                    // The stroke was undone mid-draw: stop.
+                                    st.drawing.set(None);
                                 }
-                            });
+                            }
                         }
                     }
                 }
@@ -660,6 +678,25 @@ pub fn Canvas(
         }
     };
 
+    // ── Pointer cancel ───────────────────────────────────────────────────
+    // Fired when the browser or OS takes the pointer away (touch
+    // interruption, native context menu). Ends any interaction cleanly
+    // instead of leaving a drag or stroke running.
+    let on_pointer_cancel = {
+        let mut st = st;
+        let mut props = props.clone();
+        move |_ev: ev::PointerEvent| {
+            st.erasing.set(false);
+            st.pan_anchor.set(None);
+            st.select_anchor.set(None);
+            st.drag.last_world.set(None);
+            if st.drag.moving_anchor.get().is_some() {
+                selection::clear_drag_state(&mut st);
+            }
+            cancel_drawing(&mut st, &mut props);
+        }
+    };
+
     // ── Template ─────────────────────────────────────────────────────────
     let svg_ref = st.svg_ref;
     view! {
@@ -673,6 +710,7 @@ pub fn Canvas(
             on:pointerdown=on_pointer_down
             on:pointermove=on_pointer_move
             on:pointerup=on_pointer_up
+            on:pointercancel=on_pointer_cancel
             on:wheel=on_wheel
         >
             {grid::grid_overlay(props.settings)}

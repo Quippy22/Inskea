@@ -44,7 +44,7 @@ impl FromDrag for Rectangle {
 }
 
 impl UpdateDrag for Rectangle {
-    fn update_drag(&mut self, current: Point, anchor: Point, shift: bool) {
+    fn update_drag(&mut self, current: Point, anchor: Point, shift: bool, _zoom: f64) {
         let (pt, w, h) = rect_from_drag(anchor, current, shift);
         self.data.world_point.set(pt.x, pt.y);
         self.data.width = w;

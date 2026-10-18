@@ -354,8 +354,10 @@ pub trait FromDrag: Sized {
 
 /// Update an element while it is being drawn (e.g. freehand adding points).
 pub trait UpdateDrag {
-    /// Adjust the element in response to a mouse move during the drag that created it.
-    fn update_drag(&mut self, current: Point, anchor: Point, shift: bool);
+    /// Adjust the element in response to a mouse move during the drag that
+    /// created it. `zoom` is the viewport zoom, so screen-space sampling
+    /// density (freehand) stays constant at every zoom level.
+    fn update_drag(&mut self, current: Point, anchor: Point, shift: bool, zoom: f64);
 }
 
 // ── Blanket trait implementations on Element ───────────────────────────
@@ -396,7 +398,7 @@ dispatch_element!(Offset, offset(&mut self, dx: f64, dy: f64));
 dispatch_element!(SnapToGrid, snap_to_grid(&mut self, grid: f64));
 dispatch_element!(Rotate, rotate_around(&mut self, point: Point, delta: f64));
 dispatch_element!(Resize, resize(&mut self, ctx: &ResizeContext));
-dispatch_element!(UpdateDrag, update_drag(&mut self, current: Point, anchor: Point, shift: bool));
+dispatch_element!(UpdateDrag, update_drag(&mut self, current: Point, anchor: Point, shift: bool, zoom: f64));
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
