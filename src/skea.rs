@@ -315,7 +315,7 @@ mod tests {
         rd.width = 100.0;
         rd.height = 50.0;
         rd.style.stroke_color = Color::new(Color::BLUE);
-        rd.rotation = 0.785398; // ~45 degrees
+        rd.rotation = std::f64::consts::FRAC_PI_4; // ~45 degrees
         s.add_element(Element::Rectangle(Rectangle { data: rd }));
 
         let mut td = ElementData::new(0);

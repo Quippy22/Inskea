@@ -73,60 +73,6 @@ fn regroup_clones(scene: &mut Scene, groups: &[Group], id_map: &[(ElementId, Ele
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::model::elements::rect::Rectangle;
-    use crate::model::ElementData;
-
-    fn scene_with_three() -> Scene {
-        let mut s = Scene::new();
-        for _ in 0..3 {
-            s.add_element(Element::Rectangle(Rectangle {
-                data: ElementData::new(0),
-            }));
-        }
-        s
-    }
-
-    #[test]
-    fn regroup_remaps_full_group() {
-        let mut s = scene_with_three();
-        let groups = vec![Group {
-            id: 1,
-            members: vec![1, 2],
-        }];
-        let id_map = vec![(1, 4), (2, 5)];
-        regroup_clones(&mut s, &groups, &id_map);
-        assert_eq!(s.groups.len(), 1);
-        assert_eq!(s.groups[0].members, vec![4, 5]);
-    }
-
-    #[test]
-    fn regroup_skips_unmapped_members() {
-        let mut s = scene_with_three();
-        let groups = vec![Group {
-            id: 1,
-            members: vec![2, 3],
-        }];
-        let id_map = vec![(2, 4)];
-        regroup_clones(&mut s, &groups, &id_map);
-        assert!(s.groups.is_empty());
-    }
-
-    #[test]
-    fn regroup_partial_group_keeps_paste_pair() {
-        let mut s = scene_with_three();
-        s.create_group(&[1, 2, 3]);
-        let groups = s.groups.clone();
-        let id_map = vec![(1, 4), (2, 5)];
-        regroup_clones(&mut s, &groups, &id_map);
-        assert_eq!(s.groups.len(), 2);
-        let new_group = s.groups.iter().find(|g| !g.members.contains(&1)).unwrap();
-        assert_eq!(new_group.members, vec![4, 5]);
-    }
-}
-
 /// Clone every selected element, offset by 20px, and select the clones.
 /// Duplicates keep the group structure of the original selection.
 pub fn duplicate_selection(
@@ -275,4 +221,58 @@ pub fn distribute_selection(
     mutate_scene(scene, push_snapshot, |s| {
         crate::model::distribute_selection(s, &ids, distribution);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::elements::rect::Rectangle;
+    use crate::model::ElementData;
+
+    fn scene_with_three() -> Scene {
+        let mut s = Scene::new();
+        for _ in 0..3 {
+            s.add_element(Element::Rectangle(Rectangle {
+                data: ElementData::new(0),
+            }));
+        }
+        s
+    }
+
+    #[test]
+    fn regroup_remaps_full_group() {
+        let mut s = scene_with_three();
+        let groups = vec![Group {
+            id: 1,
+            members: vec![1, 2],
+        }];
+        let id_map = vec![(1, 4), (2, 5)];
+        regroup_clones(&mut s, &groups, &id_map);
+        assert_eq!(s.groups.len(), 1);
+        assert_eq!(s.groups[0].members, vec![4, 5]);
+    }
+
+    #[test]
+    fn regroup_skips_unmapped_members() {
+        let mut s = scene_with_three();
+        let groups = vec![Group {
+            id: 1,
+            members: vec![2, 3],
+        }];
+        let id_map = vec![(2, 4)];
+        regroup_clones(&mut s, &groups, &id_map);
+        assert!(s.groups.is_empty());
+    }
+
+    #[test]
+    fn regroup_partial_group_keeps_paste_pair() {
+        let mut s = scene_with_three();
+        s.create_group(&[1, 2, 3]);
+        let groups = s.groups.clone();
+        let id_map = vec![(1, 4), (2, 5)];
+        regroup_clones(&mut s, &groups, &id_map);
+        assert_eq!(s.groups.len(), 2);
+        let new_group = s.groups.iter().find(|g| !g.members.contains(&1)).unwrap();
+        assert_eq!(new_group.members, vec![4, 5]);
+    }
 }

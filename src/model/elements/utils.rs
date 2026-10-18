@@ -51,6 +51,54 @@ pub(crate) fn scale_points(points: &mut [Point], ctx: &ResizeContext) {
     super::path::scale_points(points, ctx, &orig_slice);
 }
 
+pub(crate) fn arrowhead_polyline(tail: &Point, tip: &Point, sw: f64) -> String {
+    let dx = tip.x - tail.x;
+    let dy = tip.y - tail.y;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len <= 0.0 {
+        return String::new();
+    }
+    let ux = dx / len;
+    let uy = dy / len;
+    let head_size = (sw * 4.0).max(4.0);
+    let tip_x = tip.x;
+    let tip_y = tip.y;
+    let lx = tip_x - ux * head_size - uy * head_size * 0.4;
+    let ly = tip_y - uy * head_size + ux * head_size * 0.4;
+    let rx = tip_x - ux * head_size + uy * head_size * 0.4;
+    let ry = tip_y - uy * head_size - ux * head_size * 0.4;
+    format!("{},{} {},{} {},{}", lx, ly, tip_x, tip_y, rx, ry)
+}
+
+pub(crate) fn rect_from_drag(anchor: Point, current: Point, shift: bool) -> (Point, f64, f64) {
+    let ax = anchor.x;
+    let ay = anchor.y;
+    let cx = current.x;
+    let cy = current.y;
+    let mut x = ax.min(cx);
+    let mut y = ay.min(cy);
+    let mut w = (cx - ax).abs();
+    let mut h = (cy - ay).abs();
+    if shift {
+        let s = w.max(h);
+        w = s;
+        h = s;
+        if cx < ax {
+            x = ax - s;
+        }
+        if cy < ay {
+            y = ay - s;
+        }
+    }
+    if w < MIN_DIMENSION {
+        w = MIN_DIMENSION;
+    }
+    if h < MIN_DIMENSION {
+        h = MIN_DIMENSION;
+    }
+    (Point { x, y }, w, h)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,52 +171,4 @@ mod tests {
         assert_eq!(w, 10.0);
         assert_eq!(h, 20.0);
     }
-}
-
-pub(crate) fn arrowhead_polyline(tail: &Point, tip: &Point, sw: f64) -> String {
-    let dx = tip.x - tail.x;
-    let dy = tip.y - tail.y;
-    let len = (dx * dx + dy * dy).sqrt();
-    if len <= 0.0 {
-        return String::new();
-    }
-    let ux = dx / len;
-    let uy = dy / len;
-    let head_size = (sw * 4.0).max(4.0);
-    let tip_x = tip.x;
-    let tip_y = tip.y;
-    let lx = tip_x - ux * head_size - uy * head_size * 0.4;
-    let ly = tip_y - uy * head_size + ux * head_size * 0.4;
-    let rx = tip_x - ux * head_size + uy * head_size * 0.4;
-    let ry = tip_y - uy * head_size - ux * head_size * 0.4;
-    format!("{},{} {},{} {},{}", lx, ly, tip_x, tip_y, rx, ry)
-}
-
-pub(crate) fn rect_from_drag(anchor: Point, current: Point, shift: bool) -> (Point, f64, f64) {
-    let ax = anchor.x;
-    let ay = anchor.y;
-    let cx = current.x;
-    let cy = current.y;
-    let mut x = ax.min(cx);
-    let mut y = ay.min(cy);
-    let mut w = (cx - ax).abs();
-    let mut h = (cy - ay).abs();
-    if shift {
-        let s = w.max(h);
-        w = s;
-        h = s;
-        if cx < ax {
-            x = ax - s;
-        }
-        if cy < ay {
-            y = ay - s;
-        }
-    }
-    if w < MIN_DIMENSION {
-        w = MIN_DIMENSION;
-    }
-    if h < MIN_DIMENSION {
-        h = MIN_DIMENSION;
-    }
-    (Point { x, y }, w, h)
 }

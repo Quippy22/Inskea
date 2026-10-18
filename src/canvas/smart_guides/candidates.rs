@@ -52,7 +52,7 @@ impl AxisScan {
         candidates
             .into_iter()
             .filter(|candidate| candidate.snap_delta.abs() <= tolerances.acquire)
-            .min_by(|a, b| candidate_order(a, b))
+            .min_by(candidate_order)
     }
 
     fn candidates(
