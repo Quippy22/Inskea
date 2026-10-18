@@ -211,7 +211,9 @@ fn render_multi_select_boxes(ids: &[ElementId], els: &[Element], hex: &'static s
         .collect()
 }
 
-/// Solid bounding-box rectangle with 8 hollow resize handle circles.
+/// Solid bounding-box rectangle with 8 hollow resize handle circles. The
+/// box is drawn as 8 segments that stop short of every circle, so the lines
+/// never cross through a handle.
 #[inline]
 fn render_bbox_overlay(bx: f64, by: f64, bw: f64, bh: f64, hr: f64, hex: &'static str) -> View {
     let corners = [
@@ -224,17 +226,47 @@ fn render_bbox_overlay(bx: f64, by: f64, bw: f64, bh: f64, hr: f64, hex: &'stati
         (bx + bw / 2.0, by + bh),
         (bx + bw, by + bh),
     ];
+
+    // Distance from a handle centre where the box line must stop: the handle
+    // radius plus clearance for the two strokes and a small visible gap.
+    let clear = hr + 2.0;
+    let xs = [bx, bx + bw / 2.0, bx + bw];
+    let ys = [by, by + bh / 2.0, by + bh];
+
+    let mut segments: Vec<(f64, f64, f64, f64)> = Vec::new();
+    for y in [by, by + bh] {
+        for (start, end) in [(xs[0], xs[1]), (xs[1], xs[2])] {
+            if end - start > clear * 2.0 {
+                segments.push((start + clear, y, end - clear, y));
+            }
+        }
+    }
+    for x in [bx, bx + bw] {
+        for (start, end) in [(ys[0], ys[1]), (ys[1], ys[2])] {
+            if end - start > clear * 2.0 {
+                segments.push((x, start + clear, x, end - clear));
+            }
+        }
+    }
+
     view! {
-        <rect
-            x=bx
-            y=by
-            width=bw
-            height=bh
-            fill="none"
-            stroke=hex
-            stroke-width="1"
-            pointer-events="none"
-        />
+        {segments
+            .iter()
+            .map(|&(x1, y1, x2, y2)| {
+                view! {
+                    <line
+                        x1=x1
+                        y1=y1
+                        x2=x2
+                        y2=y2
+                        stroke=hex
+                        stroke-width="1"
+                        pointer-events="none"
+                    />
+                }
+                    .into_view()
+            })
+            .collect_view()}
         {corners
             .iter()
             .map(|&(hx, hy)| {
@@ -245,7 +277,7 @@ fn render_bbox_overlay(bx: f64, by: f64, bw: f64, bh: f64, hr: f64, hex: &'stati
                         r=hr
                         fill="none"
                         stroke=hex
-                        stroke-width="1.5"
+                        stroke-width="1"
                         pointer-events="none"
                     />
                 }
