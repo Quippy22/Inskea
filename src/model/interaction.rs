@@ -23,19 +23,23 @@ pub fn distribution_bounds(element: &Element) -> Rect {
     visual_bounds(element)
 }
 
-/// The box smart guides line up: the visible content box, turned into world
-/// space for elements that rotate in place. Rotation keeps the layout box
-/// centre, so the corners of the content box swung around that centre give
-/// the rectangle the guides should match against. Text snaps to its glyphs,
-/// the same box its selection outline hugs, instead of the taller and wider
-/// layout column.
-pub fn guide_bounds(element: &Element) -> Rect {
+/// The frame smart guides attach to: the corners of the visible content box in
+/// world space. Elements that rotate in place keep their layout box centre, so
+/// the frame is the content box swung around it. Text uses its glyph box, the
+/// one its selection outline hugs, instead of the taller and wider layout
+/// column.
+pub fn guide_corners(element: &Element) -> [Point; 4] {
     let bounds = visual_bounds(element);
     let rotation = element.data().rotation;
     if rotation == 0.0 {
-        return bounds;
+        return bounds.corners();
     }
-    rotated_aabb(bounds, layout_bounds(element).center(), rotation)
+    rotated_corners(bounds, layout_bounds(element).center(), rotation)
+}
+
+/// The box smart guides line up: the axis-aligned envelope of the frame.
+pub fn guide_bounds(element: &Element) -> Rect {
+    envelope(guide_corners(element))
 }
 
 /// Union of the boxes smart guides line up for a selection.
@@ -47,20 +51,37 @@ pub fn guide_union_bounds(ids: &[ElementId], elements: &[Element]) -> Option<Rec
         .reduce(|left, right| left.union(&right))
 }
 
-/// Axis-aligned box around `bounds` after rotating it around `center`.
-fn rotated_aabb(bounds: Rect, center: Point, rotation: f64) -> Rect {
-    let (sin, cos) = rotation.sin_cos();
-    let mut min = Point::new(f64::INFINITY, f64::INFINITY);
-    let mut max = Point::new(f64::NEG_INFINITY, f64::NEG_INFINITY);
-    for corner in bounds.corners() {
-        let dx = corner.x - center.x;
-        let dy = corner.y - center.y;
-        let x = center.x + dx * cos - dy * sin;
-        let y = center.y + dx * sin + dy * cos;
-        min.x = min.x.min(x);
-        min.y = min.y.min(y);
-        max.x = max.x.max(x);
-        max.y = max.y.max(y);
+/// The frame smart guides attach to for a selection. A single element keeps
+/// its own rotated frame, so guides meet the shape the selection outline hugs.
+/// A multi-selection has no single frame and falls back to the corners of the
+/// union box.
+pub fn guide_union_corners(ids: &[ElementId], elements: &[Element]) -> Option<[Point; 4]> {
+    if ids.len() == 1 {
+        return elements
+            .iter()
+            .find(|el| el.id() == ids[0])
+            .map(guide_corners);
+    }
+    guide_union_bounds(ids, elements).map(Rect::corners)
+}
+
+/// Corners of `bounds` swung around `center` by `rotation` radians.
+fn rotated_corners(bounds: Rect, center: Point, rotation: f64) -> [Point; 4] {
+    bounds.corners().map(|mut corner| {
+        corner.rotate_around(center, rotation);
+        corner
+    })
+}
+
+/// Axis-aligned envelope of four corners.
+fn envelope(corners: [Point; 4]) -> Rect {
+    let mut min = corners[0];
+    let mut max = corners[0];
+    for corner in corners {
+        min.x = min.x.min(corner.x);
+        min.y = min.y.min(corner.y);
+        max.x = max.x.max(corner.x);
+        max.y = max.y.max(corner.y);
     }
     Rect::new(min.x, min.y, max.x - min.x, max.y - min.y)
 }
@@ -104,7 +125,7 @@ mod tests {
     use super::*;
     use crate::model::elements::rect::Rectangle;
     use crate::model::elements::ElementData;
-    use std::f64::consts::FRAC_PI_4;
+    use std::f64::consts::{FRAC_PI_2, FRAC_PI_4};
 
     fn rect_element(id: ElementId, x: f64, y: f64, w: f64, h: f64, rotation: f64) -> Element {
         let mut data = ElementData::new(id);
@@ -146,6 +167,52 @@ mod tests {
             Some(Rect::new(0.0, 0.0, 120.0, 70.0))
         );
         assert_eq!(guide_union_bounds(&[3], &elements), None);
+    }
+
+    #[test]
+    fn guide_corners_follow_the_rotation() {
+        // A quarter-turned box keeps its centre and swaps its sides.
+        let turned = rect_element(1, 0.0, 0.0, 100.0, 50.0, FRAC_PI_2);
+        assert_eq!(
+            envelope(guide_corners(&turned)),
+            Rect::new(25.0, -25.0, 50.0, 100.0)
+        );
+
+        // A square turned 45 degrees keeps its corners on the diamond around
+        // its centre, not on the corners of the envelope.
+        let square = rect_element(2, 0.0, 0.0, 100.0, 100.0, FRAC_PI_4);
+        let reach = 50.0 * 2.0f64.sqrt();
+        for corner in guide_corners(&square) {
+            let diamond = (corner.x - 50.0).abs() + (corner.y - 50.0).abs();
+            assert!((diamond - reach).abs() < 1e-9);
+        }
+
+        // Elements that bake rotation into their geometry stay unrotated here.
+        let straight = rect_element(3, 0.0, 0.0, 20.0, 10.0, 0.0);
+        assert_eq!(
+            guide_corners(&straight),
+            Rect::new(0.0, 0.0, 20.0, 10.0).corners()
+        );
+    }
+
+    #[test]
+    fn guide_union_corners_keep_a_single_frame() {
+        let square = rect_element(1, 0.0, 0.0, 100.0, 100.0, FRAC_PI_4);
+        assert_eq!(
+            guide_union_corners(&[1], std::slice::from_ref(&square)),
+            Some(guide_corners(&square))
+        );
+
+        // A multi-selection has no single frame: the union box's corners.
+        let elements = [
+            rect_element(1, 0.0, 0.0, 20.0, 20.0, 0.0),
+            rect_element(2, 100.0, 50.0, 20.0, 20.0, 0.0),
+        ];
+        assert_eq!(
+            guide_union_corners(&[1, 2], &elements),
+            Some(Rect::new(0.0, 0.0, 120.0, 70.0).corners())
+        );
+        assert_eq!(guide_union_corners(&[3], &elements), None);
     }
 
     #[test]

@@ -12,7 +12,7 @@ use super::{
     GuideAxis, GuideBox, GuideKind, GuideLabel, GuideLine, GuideResolution, SmartGuideState,
     Tolerances, GUIDE_MAX_PAIR_TARGETS,
 };
-use crate::model::{ElementId, Point, Rect};
+use crate::model::{Point, Rect};
 
 /// Readout for a spacing band: the free space between its two ends, measured
 /// along the guide axis and reported from the middle of the band.
@@ -56,7 +56,7 @@ fn fit_label(mut label: GuideLabel, visible: Rect) -> Option<GuideLabel> {
 
 /// Copy of the local targets sorted along `axis`, so the crossed-gap scans
 /// can stop as soon as a box starts past the gap they are testing.
-fn sorted_along(near: &[GuideBox], axis: GuideAxis) -> Vec<GuideBox> {
+pub(super) fn sorted_along(near: &[GuideBox], axis: GuideAxis) -> Vec<GuideBox> {
     let mut sorted = near.to_vec();
     sorted.sort_by(|a, b| along_start(a.bounds, axis).total_cmp(&along_start(b.bounds, axis)));
     sorted
@@ -65,18 +65,22 @@ fn sorted_along(near: &[GuideBox], axis: GuideAxis) -> Vec<GuideBox> {
 /// Resolve smart-guide candidates for a proposed move.
 ///
 /// Call this only while guides are enabled; a disabled caller keeps the
-/// previous state cleared instead. `others` holds the bounds of every element
-/// outside the drag and `visible` is the world rectangle on screen: only
-/// targets the user can see take part, and guide lines are trimmed to it.
-/// Alignment reads every one of those targets; the spacing scans pair up only
-/// the ones close to the moving box, since they are the quadratic part.
-/// Resolves both axes on every pointer update. Active guides use a slightly
-/// wider release band so they remain stable while the pointer crosses the
-/// candidate, but they are reacquired continuously after release. With nothing
-/// on screen the resolution is empty and clears any previous guide.
+/// previous state cleared instead. `proposed` is the moving selection's
+/// envelope with `proposed_corners` the corners of its frame — the box the
+/// selection outline hugs, which is rotated for a single rotated element.
+/// `others` holds the frames of every element outside the drag and `visible`
+/// is the world rectangle on screen: only targets the user can see take part,
+/// and guide lines are trimmed to it. Alignment reads every one of those
+/// targets; the spacing scans pair up only the ones close to the moving box,
+/// since they are the quadratic part. Resolves both axes on every pointer
+/// update. Active guides use a slightly wider release band so they remain
+/// stable while the pointer crosses the candidate, but they are reacquired
+/// continuously after release. With nothing on screen the resolution is empty
+/// and clears any previous guide.
 pub fn resolve_move(
     proposed: Rect,
-    others: &[(ElementId, Rect)],
+    proposed_corners: [Point; 4],
+    others: &[GuideBox],
     visible: Rect,
     zoom: f64,
     previous: &SmartGuideState,
@@ -84,11 +88,8 @@ pub fn resolve_move(
     let tolerances = Tolerances::for_zoom(zoom);
     let all: Vec<GuideBox> = others
         .iter()
-        .filter(|(_, bounds)| intersects(*bounds, visible))
-        .map(|(id, bounds)| GuideBox {
-            id: *id,
-            bounds: *bounds,
-        })
+        .filter(|other| intersects(other.bounds, visible))
+        .copied()
         .collect();
     if all.is_empty() {
         return GuideResolution::default();
@@ -140,6 +141,8 @@ pub fn resolve_move(
         proposed.w,
         proposed.h,
     );
+    let snapped_corners =
+        proposed_corners.map(|corner| Point::new(corner.x + snap_dx, corner.y + snap_dy));
 
     let mut active = Vec::new();
     let mut guides = Vec::new();
@@ -164,7 +167,7 @@ pub fn resolve_move(
         active.push(candidate.key);
         let lines = match candidate.key.kind {
             GuideKind::Alignment => {
-                let mut lines = alignment_guides(snapped, &all, candidate.key);
+                let mut lines = alignment_guides(snapped, snapped_corners, &all, candidate.key);
                 lines.extend(equal_spacing_run_lines(crossed, pairs, axis, &tolerances));
                 lines
             }

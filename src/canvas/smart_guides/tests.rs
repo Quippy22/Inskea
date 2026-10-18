@@ -1,14 +1,39 @@
 use super::geometry::*;
 use super::guides::*;
 use super::*;
-use crate::model::{ElementId, Point, Rect};
+use crate::model::elements::rect::Rectangle;
+use crate::model::elements::ElementData;
+use crate::model::interaction::{guide_bounds, guide_corners};
+use crate::model::{Element, ElementId, Point, Rect};
 
-fn rect(id: ElementId, x: f64, y: f64, w: f64, h: f64) -> (ElementId, Rect) {
-    (id, Rect::new(x, y, w, h))
+fn rect(id: ElementId, x: f64, y: f64, w: f64, h: f64) -> GuideBox {
+    let bounds = Rect::new(x, y, w, h);
+    GuideBox {
+        id,
+        bounds,
+        corners: bounds.corners(),
+    }
 }
 
+/// A target whose frame is its own envelope (an element that does not rotate).
 fn guide(id: ElementId, bounds: Rect) -> GuideBox {
-    GuideBox { id, bounds }
+    rect(id, bounds.x, bounds.y, bounds.w, bounds.h)
+}
+
+/// A target taken from a real element, so its frame comes from the same
+/// helpers the canvas uses.
+fn element(id: ElementId, x: f64, y: f64, w: f64, h: f64, rotation: f64) -> GuideBox {
+    let mut data = ElementData::new(id);
+    data.world_point = Point::new(x, y);
+    data.width = w;
+    data.height = h;
+    data.rotation = rotation;
+    let element = Element::Rectangle(Rectangle { data });
+    GuideBox {
+        id,
+        bounds: guide_bounds(&element),
+        corners: guide_corners(&element),
+    }
 }
 
 /// World rectangle the tests treat as on screen: wide enough that small
@@ -17,15 +42,26 @@ fn view() -> Rect {
     Rect::new(-10_000.0, -10_000.0, 20_000.0, 20_000.0)
 }
 
-fn solve(proposed: Rect, others: &[(ElementId, Rect)]) -> GuideResolution {
-    resolve_move(proposed, others, view(), 1.0, &SmartGuideState::default())
+/// Solve as if the moving box were unrotated, so its frame is its envelope.
+fn resolve(
+    proposed: Rect,
+    others: &[GuideBox],
+    visible: Rect,
+    zoom: f64,
+    previous: &SmartGuideState,
+) -> GuideResolution {
+    resolve_move(
+        proposed,
+        proposed.corners(),
+        others,
+        visible,
+        zoom,
+        previous,
+    )
 }
 
-/// The solver hands the crossed-gap scans a copy sorted along the guide axis.
-fn along_sorted(boxes: &[GuideBox], axis: GuideAxis) -> Vec<GuideBox> {
-    let mut sorted = boxes.to_vec();
-    sorted.sort_by(|a, b| along_start(a.bounds, axis).total_cmp(&along_start(b.bounds, axis)));
-    sorted
+fn solve(proposed: Rect, others: &[GuideBox]) -> GuideResolution {
+    resolve(proposed, others, view(), 1.0, &SmartGuideState::default())
 }
 
 #[test]
@@ -44,7 +80,7 @@ fn alignment_snaps_start_center_and_end_on_both_axes() {
                 GuideAxis::Vertical => Rect::new(target_start, 0.0, target_size, 20.0),
                 GuideAxis::Horizontal => Rect::new(0.0, target_start, 20.0, target_size),
             };
-            let resolution = solve(moving, &[(1, target)]);
+            let resolution = solve(moving, &[guide(1, target)]);
             let snap = match axis {
                 GuideAxis::Vertical => resolution.snap_dx,
                 GuideAxis::Horizontal => resolution.snap_dy,
@@ -121,7 +157,7 @@ fn active_candidate_holds_through_the_release_band() {
     assert_eq!(first.state.active.len(), 1);
 
     // 8px away: outside the acquisition band, still inside the release band.
-    let held = resolve_move(
+    let held = resolve(
         Rect::new(192.0, 300.0, 20.0, 20.0),
         &others,
         view(),
@@ -141,7 +177,7 @@ fn active_candidate_holds_through_the_release_band() {
 fn active_candidate_releases_beyond_the_band() {
     let others = [rect(1, 200.0, 100.0, 20.0, 20.0)];
     let first = solve(Rect::new(194.0, 300.0, 20.0, 20.0), &others);
-    let released = resolve_move(
+    let released = resolve(
         Rect::new(170.0, 300.0, 20.0, 20.0),
         &others,
         view(),
@@ -158,7 +194,7 @@ fn tolerances_are_screen_space_and_scale_with_zoom() {
     let others = [rect(1, 200.0, 100.0, 20.0, 20.0)];
 
     // At zoom 2 the acquisition band is 3 world px, so 3.5px misses...
-    let miss = resolve_move(
+    let miss = resolve(
         Rect::new(196.5, 240.0, 20.0, 20.0),
         &others,
         view(),
@@ -168,7 +204,7 @@ fn tolerances_are_screen_space_and_scale_with_zoom() {
     assert_eq!(miss.snap_dx, 0.0);
 
     // ...3px acquires, and the same 3.5px offset acquires at zoom 1.
-    let edge = resolve_move(
+    let edge = resolve(
         Rect::new(197.0, 240.0, 20.0, 20.0),
         &others,
         view(),
@@ -180,7 +216,7 @@ fn tolerances_are_screen_space_and_scale_with_zoom() {
     assert_eq!(close.snap_dx, 3.5);
 
     // A held guide survives to the wider release band (5px at zoom 2).
-    let held = resolve_move(
+    let held = resolve(
         Rect::new(195.5, 240.0, 20.0, 20.0),
         &others,
         view(),
@@ -212,7 +248,7 @@ fn equal_spacing_snaps_into_the_middle_of_a_gap() {
     );
 
     // The snap tracks continuously while held.
-    let again = resolve_move(
+    let again = resolve(
         Rect::new(45.0, 20.0, 20.0, 20.0),
         &others,
         view(),
@@ -221,7 +257,7 @@ fn equal_spacing_snaps_into_the_middle_of_a_gap() {
     );
     assert_eq!(again.snap_dx, 5.0);
 
-    let released = resolve_move(
+    let released = resolve(
         Rect::new(61.0, 20.0, 20.0, 20.0),
         &others,
         view(),
@@ -464,6 +500,84 @@ fn alignment_guide_breaks_at_a_box_across_its_path() {
 }
 
 #[test]
+fn alignment_guide_meets_a_rotated_target_at_its_corner() {
+    // A square turned 45 degrees: the frame's left corner sits on the
+    // envelope's left edge, level with the centre. Matching the envelope would
+    // end the line on its own corner, far below the shape.
+    let square = element(1, 0.0, 0.0, 100.0, 100.0, std::f64::consts::FRAC_PI_4);
+    let resolution = solve(Rect::new(square.bounds.x, 400.0, 20.0, 20.0), &[square]);
+    assert_eq!(resolution.snap_dx, 0.0);
+    assert_eq!(resolution.state.guides.len(), 1);
+    let line = resolution.state.guides[0];
+    assert_eq!(line.start.x, square.bounds.x);
+    assert!((line.start.y - 50.0).abs() < 1e-9, "{line:?}");
+    assert_eq!(line.end.y, 400.0);
+}
+
+#[test]
+fn alignment_guide_leaves_a_rotated_mover_at_its_corner() {
+    // The same square on the moving side: the line leaves its own corner
+    // rather than a corner of the envelope the drag reads.
+    let square = element(9, 0.0, 0.0, 100.0, 100.0, std::f64::consts::FRAC_PI_4);
+    let target = rect(1, square.bounds.x, 400.0, 20.0, 20.0);
+    let resolution = resolve_move(
+        square.bounds,
+        square.corners,
+        &[target],
+        view(),
+        1.0,
+        &SmartGuideState::default(),
+    );
+    assert_eq!(resolution.snap_dx, 0.0);
+    assert_eq!(resolution.state.guides.len(), 1);
+    let line = resolution.state.guides[0];
+    assert_eq!(line.start.x, square.bounds.x);
+    assert!((line.start.y - 50.0).abs() < 1e-9, "{line:?}");
+    assert_eq!(line.end.y, 400.0);
+}
+
+#[test]
+fn alignment_guide_meets_a_rotated_target_horizontally() {
+    // The diamond matched on the other axis: its top corner is a single
+    // point, so the line starts there rather than at the envelope's top edge.
+    let square = element(1, 0.0, 0.0, 100.0, 100.0, std::f64::consts::FRAC_PI_4);
+    let moving = Rect::new(400.0, square.bounds.y, 20.0, 20.0);
+    let resolution = solve(moving, &[square]);
+    assert_eq!(resolution.snap_dx, 0.0);
+    assert_eq!(resolution.snap_dy, 0.0);
+    assert_eq!(resolution.state.guides.len(), 1);
+    let line = resolution.state.guides[0];
+    assert_eq!(line.start.y, square.bounds.y);
+    assert!((line.start.x - 50.0).abs() < 1e-9, "{line:?}");
+    assert_eq!(line.end.x, 400.0);
+}
+
+#[test]
+fn alignment_guide_cuts_a_rotated_blocker_at_its_frame() {
+    // A diamond whose envelope straddles the matched coordinate, but whose
+    // frame only crosses it 5px inside: the line is cut at the frame, not at
+    // the box drawn around it.
+    let diamond = element(2, 55.0, 650.0, 100.0, 100.0, std::f64::consts::FRAC_PI_4);
+    let others = [
+        rect(1, 100.0, 100.0, 20.0, 20.0),
+        diamond,
+        rect(3, 100.0, 900.0, 20.0, 20.0),
+    ];
+    let resolution = solve(Rect::new(100.0, 0.0, 20.0, 20.0), &others);
+    let segments: Vec<(f64, f64)> = resolution
+        .state
+        .guides
+        .iter()
+        .map(|line| (line.start.y, line.end.y))
+        .collect();
+    let reach = 50.0 * 2.0f64.sqrt();
+    assert_eq!(segments.len(), 3);
+    assert_eq!(segments[0], (20.0, 100.0));
+    assert!((segments[1].0 - 120.0).abs() < 1e-9 && (segments[1].1 - (705.0 - reach)).abs() < 1e-9);
+    assert!((segments[2].0 - (695.0 + reach)).abs() < 1e-9 && (segments[2].1 - 900.0).abs() < 1e-9);
+}
+
+#[test]
 fn exact_ties_between_targets_resolve_to_the_smallest_id() {
     let others = [
         rect(1, 94.0, 0.0, 20.0, 20.0),
@@ -534,7 +648,7 @@ fn runs_are_highlighted_while_an_alignment_is_active() {
 
 #[test]
 fn runs_need_two_matching_gaps() {
-    let boxes = along_sorted(
+    let boxes = solver::sorted_along(
         &[
             guide(1, Rect::new(0.0, 0.0, 20.0, 20.0)),
             guide(2, Rect::new(100.0, 0.0, 20.0, 20.0)),
@@ -557,7 +671,7 @@ fn runs_need_two_matching_gaps() {
 fn runs_skip_a_gap_crossed_by_an_object() {
     let lane = GUIDE_LANE_PX;
     let run_count = |boxes: &[GuideBox]| {
-        let boxes = along_sorted(boxes, GuideAxis::Vertical);
+        let boxes = solver::sorted_along(boxes, GuideAxis::Vertical);
         let pairs = inline_pairs(&boxes, GuideAxis::Vertical, lane);
         equal_spacing_run_lines(
             &boxes,
@@ -590,9 +704,8 @@ fn only_targets_on_screen_are_considered() {
     let view = Rect::new(0.0, 0.0, 300.0, 300.0);
     let near = [rect(1, 5.0, 280.0, 20.0, 20.0)];
     let far = [rect(1, 5.0, 340.0, 20.0, 20.0)];
-    let solve_in = |others: &[(ElementId, Rect)]| {
-        resolve_move(moving, others, view, 1.0, &SmartGuideState::default())
-    };
+    let solve_in =
+        |others: &[GuideBox]| resolve(moving, others, view, 1.0, &SmartGuideState::default());
 
     let snapped = solve_in(&near);
     assert_eq!((snapped.snap_dx, snapped.snap_dy), (5.0, 0.0));
@@ -610,7 +723,7 @@ fn targets_far_away_on_screen_still_align() {
     let view = Rect::new(-500.0, -500.0, 4_000.0, 4_000.0);
     let far = [rect(1, 5.0, 3_000.0, 20.0, 20.0)];
 
-    let resolution = resolve_move(moving, &far, view, 1.0, &SmartGuideState::default());
+    let resolution = resolve(moving, &far, view, 1.0, &SmartGuideState::default());
     assert_eq!((resolution.snap_dx, resolution.snap_dy), (5.0, 0.0));
     assert_eq!(resolution.state.active.len(), 1);
 }
@@ -623,7 +736,7 @@ fn guides_are_trimmed_to_the_screen() {
     // The moving box is dragged below the screen while still sharing its left
     // edge with the box above it.
     let moving = Rect::new(0.0, 400.0, 100.0, 80.0);
-    let resolution = resolve_move(moving, &others, view, 1.0, &SmartGuideState::default());
+    let resolution = resolve(moving, &others, view, 1.0, &SmartGuideState::default());
     assert_eq!(resolution.state.guides.len(), 1);
     assert_eq!(resolution.state.guides[0].start, Point::new(0.0, 80.0));
     // The span stops at the bottom edge instead of running to the box.
@@ -640,12 +753,12 @@ fn spacing_pairs_are_bounded_by_the_reach() {
     let view = Rect::new(-500.0, -500.0, 3_000.0, 3_000.0);
 
     // 630px from each box, just past the pair reach at zoom 1...
-    let zoomed_in = resolve_move(moving, &others, view, 1.0, &SmartGuideState::default());
+    let zoomed_in = resolve(moving, &others, view, 1.0, &SmartGuideState::default());
     assert!(zoomed_in.state.active.is_empty());
 
     // ...but the reach is measured in screen pixels, so zooming out brings
     // the pair back into play.
-    let zoomed_out = resolve_move(moving, &others, view, 0.5, &SmartGuideState::default());
+    let zoomed_out = resolve(moving, &others, view, 0.5, &SmartGuideState::default());
     assert_eq!(zoomed_out.state.active[0].kind, GuideKind::EqualSpacing);
 }
 
@@ -700,7 +813,7 @@ fn labels_slide_into_view_and_drop_with_their_band() {
     // The chain's closed gap runs from the last box out to the moving box,
     // which sits past the right edge: the label slides left to stay visible.
     let visible = Rect::new(-50.0, -50.0, 200.0, 400.0);
-    let resolution = resolve_move(
+    let resolution = resolve(
         Rect::new(202.0, 8.0, 20.0, 20.0),
         &others,
         visible,
@@ -713,7 +826,7 @@ fn labels_slide_into_view_and_drop_with_their_band() {
     // A window whose top edge clips the band's lane entirely: the measurement
     // goes with it, since there is nothing on screen to read it against.
     let clipped = Rect::new(-50.0, 0.0, 400.0, 400.0);
-    let resolution = resolve_move(
+    let resolution = resolve(
         Rect::new(202.0, 8.0, 20.0, 20.0),
         &others,
         clipped,
@@ -738,7 +851,7 @@ fn no_targets_clear_the_previous_state() {
             target_b: 0,
         }],
     };
-    let resolution = resolve_move(
+    let resolution = resolve(
         Rect::new(10.0, 0.0, 20.0, 20.0),
         &[],
         view(),
@@ -765,16 +878,14 @@ fn randomized_positions_stay_finite() {
     let mut state = SmartGuideState::default();
     for round in 0..400 {
         let count = (rng.next().abs() as usize % 6) + 1;
-        let others: Vec<(ElementId, Rect)> = (0..count)
+        let others: Vec<GuideBox> = (0..count)
             .map(|i| {
-                (
+                rect(
                     i as ElementId + 1,
-                    Rect::new(
-                        rng.next(),
-                        rng.next(),
-                        rng.next().abs() + 0.1,
-                        rng.next().abs() + 0.1,
-                    ),
+                    rng.next(),
+                    rng.next(),
+                    rng.next().abs() + 0.1,
+                    rng.next().abs() + 0.1,
                 )
             })
             .collect();
@@ -785,7 +896,7 @@ fn randomized_positions_stay_finite() {
             rng.next().abs() + 0.1,
             rng.next().abs() + 0.1,
         );
-        let resolution = resolve_move(proposed, &others, view(), zoom, &state);
+        let resolution = resolve(proposed, &others, view(), zoom, &state);
         assert!(resolution.snap_dx.is_finite() && resolution.snap_dy.is_finite());
         assert!(resolution.state.active.len() <= 2);
         for line in &resolution.state.guides {

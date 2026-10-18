@@ -2,23 +2,29 @@
 //! coordinates.
 
 use super::geometry::{
-    along_end, along_start, axis_point, cross_end, cross_start, feature_value, features,
+    along_end, along_start, axis_point, cross_start, feature_value, features, frame_span,
     gap_crossed, marker_lane, ordered_pair, perpendicular_gap, same_gap,
 };
 use super::{
     GuideAxis, GuideBox, GuideCandidate, GuideKey, GuideKind, GuideLine, Tolerances, EPSILON,
 };
-use crate::model::Rect;
+use crate::model::{Point, Rect};
 
 /// The free stretches between the boxes that share the snapped coordinate.
-/// Only those gaps are drawn, so the guide connects the exterior edges; a gap
-/// another box sits across is cut at that box rather than drawn through it.
-pub(super) fn alignment_guides(moving: Rect, others: &[GuideBox], key: GuideKey) -> Vec<GuideLine> {
+/// Only those gaps are drawn, so the guide connects the exterior edges and
+/// ends on the frames; a gap another box sits across is cut at that box rather
+/// than drawn through it.
+pub(super) fn alignment_guides(
+    moving: Rect,
+    moving_corners: [Point; 4],
+    others: &[GuideBox],
+    key: GuideKey,
+) -> Vec<GuideLine> {
     let axis = key.axis;
     let coordinate = feature_value(moving, axis, key.moving_feature);
     let epsilon = EPSILON * (1.0 + coordinate.abs());
 
-    let mut spans = vec![(cross_start(moving, axis), cross_end(moving, axis))];
+    let mut spans = vec![frame_span(moving_corners, axis, coordinate)];
     let mut blockers: Vec<(f64, f64)> = Vec::new();
     for other in others {
         let connected = features(other.bounds, axis)
@@ -29,10 +35,7 @@ pub(super) fn alignment_guides(moving: Rect, others: &[GuideBox], key: GuideKey)
         let covering = along_start(other.bounds, axis) < coordinate - epsilon
             && along_end(other.bounds, axis) > coordinate + epsilon;
         if connected || covering {
-            let span = (
-                cross_start(other.bounds, axis),
-                cross_end(other.bounds, axis),
-            );
+            let span = frame_span(other.corners, axis, coordinate);
             if connected {
                 spans.push(span);
             }

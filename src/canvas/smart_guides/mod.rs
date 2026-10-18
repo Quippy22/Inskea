@@ -130,10 +130,15 @@ pub struct GuideResolution {
     pub state: SmartGuideState,
 }
 
+/// A box in the guide scan: the axis-aligned envelope its alignment features
+/// come from, plus the corners of the frame it is drawn with. The two differ
+/// for rotated elements, whose guides then meet the shape instead of the
+/// corners of its envelope.
 #[derive(Clone, Copy)]
-struct GuideBox {
-    id: ElementId,
-    bounds: Rect,
+pub struct GuideBox {
+    pub id: ElementId,
+    pub bounds: Rect,
+    pub corners: [Point; 4],
 }
 
 #[derive(Clone, Copy)]

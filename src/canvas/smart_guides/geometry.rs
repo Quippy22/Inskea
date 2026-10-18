@@ -2,7 +2,7 @@
 //! guide emitters: start/end along the guide axis, start/end across it, and
 //! the pair helpers built on top.
 
-use super::{GuideAxis, GuideBox, GuideFeature, GuideLine};
+use super::{GuideAxis, GuideBox, GuideFeature, GuideLine, EPSILON};
 use crate::model::{Point, Rect};
 
 pub(super) fn along_start(bounds: Rect, axis: GuideAxis) -> f64 {
@@ -23,13 +23,6 @@ pub(super) fn cross_start(bounds: Rect, axis: GuideAxis) -> f64 {
     match axis {
         GuideAxis::Vertical => bounds.y,
         GuideAxis::Horizontal => bounds.x,
-    }
-}
-
-pub(super) fn cross_end(bounds: Rect, axis: GuideAxis) -> f64 {
-    match axis {
-        GuideAxis::Vertical => bounds.bottom(),
-        GuideAxis::Horizontal => bounds.right(),
     }
 }
 
@@ -54,6 +47,46 @@ pub(super) fn axis_point(axis: GuideAxis, along: f64, cross: f64) -> Point {
         GuideAxis::Vertical => Point::new(along, cross),
         GuideAxis::Horizontal => Point::new(cross, along),
     }
+}
+
+/// Split a point into its coordinate along and across the guide axis.
+pub(super) fn along_cross(point: Point, axis: GuideAxis) -> (f64, f64) {
+    match axis {
+        GuideAxis::Vertical => (point.x, point.y),
+        GuideAxis::Horizontal => (point.y, point.x),
+    }
+}
+
+/// The stretch of the line at `coordinate` that runs inside the frame with
+/// those corners: the frame's silhouette there. An unrotated box is its own
+/// frame, so this is the box's cross extent. A rotated frame is met at one of
+/// its corners or edges, so the guide ends on the shape instead of on the
+/// corner of its envelope. The coordinate always lies within the frame's
+/// projection, so at least one edge matches and a tangent coordinate meets the
+/// frame at its corner.
+pub(super) fn frame_span(corners: [Point; 4], axis: GuideAxis, coordinate: f64) -> (f64, f64) {
+    let epsilon = EPSILON * (1.0 + coordinate.abs());
+    let mut low = f64::INFINITY;
+    let mut high = f64::NEG_INFINITY;
+    for index in 0..4 {
+        let (a_along, a_cross) = along_cross(corners[index], axis);
+        let (b_along, b_cross) = along_cross(corners[(index + 1) % 4], axis);
+        let (edge_start, edge_end) = (a_along.min(b_along), a_along.max(b_along));
+        if coordinate < edge_start - epsilon || coordinate > edge_end + epsilon {
+            continue;
+        }
+        if edge_end - edge_start <= epsilon {
+            // The edge lies along the line: the whole edge is on it.
+            low = low.min(a_cross.min(b_cross));
+            high = high.max(a_cross.max(b_cross));
+        } else {
+            let t = ((coordinate - a_along) / (b_along - a_along)).clamp(0.0, 1.0);
+            let cross = a_cross + (b_cross - a_cross) * t;
+            low = low.min(cross);
+            high = high.max(cross);
+        }
+    }
+    (low, high)
 }
 
 /// Shortest distance between two rects, zero when they touch or overlap.
