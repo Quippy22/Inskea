@@ -41,6 +41,13 @@ const ALIGN_OPTS: &[(TextAlign, &str)] = &[
     (TextAlign::Right, "Right"),
 ];
 
+/// Style mutation applied to the selected elements, or to the default style
+/// when the selection is empty.
+type UpdateStyle = Rc<dyn Fn(&dyn Fn(&mut ElementStyle))>;
+
+/// The same for freehand line styles.
+type UpdateLineStyle = Rc<dyn Fn(&dyn Fn(&mut LineStyle))>;
+
 #[component]
 pub fn StylingPanel(
     scene: RwSignal<Scene>,
@@ -137,7 +144,7 @@ pub fn StylingPanel(
         local_line_style.set(new_line_style);
     });
 
-    let update_style: Rc<dyn Fn(&dyn Fn(&mut ElementStyle))> = Rc::new({
+    let update_style: UpdateStyle = Rc::new({
         let scene = scene;
         let selected_ids = selected_ids;
         let default_style = default_style;
@@ -158,7 +165,7 @@ pub fn StylingPanel(
         }
     });
 
-    let update_line_style: Rc<dyn Fn(&dyn Fn(&mut LineStyle))> = Rc::new({
+    let update_line_style: UpdateLineStyle = Rc::new({
         let scene = scene;
         let selected_ids = selected_ids;
         let default_line_style = default_line_style;

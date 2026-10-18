@@ -1,5 +1,6 @@
 use crate::canvas::settings::CanvasSettings;
-use crate::model::interaction::hit_test_topmost;
+use crate::canvas::smart_guides::{GuideBox, SmartGuideState};
+use crate::model::interaction::{hit_test_topmost, GuideFrame};
 use crate::model::resize::ResizeHandle;
 use crate::model::Color;
 use crate::model::{Element, ElementId, ElementStyle, GroupId, LineStyle, Point, Rect, Scene};
@@ -48,6 +49,18 @@ pub struct DragState {
     pub overlay_freeze: RwSignal<Option<Rect>>,
     pub rotation_delta: RwSignal<f64>,
     pub hovered_handle: RwSignal<Option<DragOperation>>,
+    pub smart_guides: RwSignal<SmartGuideState>,
+    /// Frames of every element outside the drag, captured when a move starts.
+    /// The scene cannot change underneath a drag, so each pointer update reads
+    /// this list instead of rescanning and re-measuring the whole scene.
+    pub smart_guide_targets: RwSignal<Vec<GuideBox>>,
+    /// The moving selection's frame at the same moment, so guides meet a
+    /// rotated element — or a circle's outline — rather than the corners of
+    /// its envelope.
+    pub smart_guide_frame: RwSignal<Option<GuideFrame>>,
+    /// Set when a Shift press grabbed an already selected element: unless the
+    /// press turns into a real drag, pointer-up applies the toggle instead.
+    pub pending_shift_toggle: RwSignal<Option<Vec<ElementId>>>,
 }
 
 impl DragState {
@@ -62,6 +75,10 @@ impl DragState {
             overlay_freeze: create_rw_signal(None),
             rotation_delta: create_rw_signal(0.0),
             hovered_handle: create_rw_signal(None),
+            smart_guides: create_rw_signal(SmartGuideState::default()),
+            smart_guide_targets: create_rw_signal(Vec::new()),
+            smart_guide_frame: create_rw_signal(None),
+            pending_shift_toggle: create_rw_signal(None),
         }
     }
 }

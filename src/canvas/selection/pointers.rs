@@ -3,12 +3,13 @@ use super::utils::{
     HANDLE_RESIZE_RADIUS, HANDLE_ROTATE_RADIUS, PATH_MERGE_DIST, SELECT_PADDING,
 };
 use super::MIN_DRAG_DIST;
+use crate::canvas::smart_guides::{self, GuideBox, SmartGuideState};
 use crate::canvas::state::{CanvasInputs, CanvasState, DragOperation};
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{Bounds, Offset, PathPoints, Resize, Rotate, SnapToGrid};
 use crate::model::interaction::{
-    combined_bounds, hit_test_topmost, point_inside_any_element, rect_fully_contains_element,
-    CLICK_MARGIN, HIT_MARGIN,
+    guide_bounds, guide_frame, guide_union_bounds, guide_union_frame, hit_test_topmost,
+    point_inside_any_element, rect_fully_contains_element, GuideFrame, CLICK_MARGIN, HIT_MARGIN,
 };
 use crate::model::resize::ResizeContext;
 use crate::model::resize::ResizeHandle;
@@ -86,6 +87,7 @@ fn handle_path_move_icon(
     world: Point,
     st: &mut CanvasState,
     props: &CanvasInputs,
+    els: &[Element],
     el: &Element,
 ) -> bool {
     if el.path_points().is_none() {
@@ -98,8 +100,11 @@ fn handle_path_move_icon(
         (props.push_snapshot)();
         st.drag.drag_action.set(Some(DragOperation::Move));
         st.drag.moving_anchor.set(Some(world));
-        st.drag.drag_bounds.set(Some(el.bounds()));
+        st.drag.drag_bounds.set(Some(guide_bounds(el)));
+        st.drag.smart_guide_frame.set(Some(guide_frame(el)));
         st.drag.last_world.set(Some(world));
+        st.drag.drag_originals.set(vec![el.clone()]);
+        capture_smart_guide_targets(st, &[el.id()], els);
         return true;
     }
     false
@@ -152,6 +157,8 @@ fn hit_move_handle(
     st: &mut CanvasState,
     props: &CanvasInputs,
     world: Point,
+    ids: &[ElementId],
+    els: &[Element],
 ) -> bool {
     let (mut bx, mut by, mut bw, mut bh) = (bounds.x, bounds.y, bounds.w, bounds.h);
     bx -= SELECT_PADDING;
@@ -162,11 +169,22 @@ fn hit_move_handle(
     let hp = hpos[8];
 
     if ((test.x - hp.x).powi(2) + (test.y - hp.y).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+        let Some(drag_bounds) = guide_union_bounds(ids, els) else {
+            return false;
+        };
         (props.push_snapshot)();
         st.drag.drag_action.set(Some(DragOperation::Move));
         st.drag.moving_anchor.set(Some(world));
-        st.drag.drag_bounds.set(Some(bounds));
+        st.drag.drag_bounds.set(Some(drag_bounds));
+        st.drag.smart_guide_frame.set(guide_union_frame(ids, els));
         st.drag.last_world.set(Some(world));
+        st.drag.drag_originals.set(
+            els.iter()
+                .filter(|el| ids.contains(&el.id()))
+                .cloned()
+                .collect(),
+        );
+        capture_smart_guide_targets(st, ids, els);
         return true;
     }
     false
@@ -236,7 +254,7 @@ fn handle_selection_handles(
     if hit_resize_handle(test, b, st, props, world, ids, els) {
         return true;
     }
-    if hit_move_handle(test, b, st, props, world) {
+    if hit_move_handle(test, b, st, props, world, ids, els) {
         return true;
     }
     if hit_rotate_handle(test, b, st, props, world, ids, els) {
@@ -298,40 +316,84 @@ fn handle_element_selection(
         }
     }
 
+    let shift = st.shift_pressed.get();
     if st.group_editing.get().is_some() {
-        if st.shift_pressed.get() {
-            let ids = normalize_ids(&props.scene.get_untracked(), &st.selected_ids.get());
-            st.selected_ids.set(toggle_ids(&ids, &[id]));
-        } else {
-            st.selected_ids.set(vec![id]);
-            if let Some(element) = els.iter().find(|element| element.id() == id) {
-                if let Some(bounds) = combined_bounds(&[id], std::slice::from_ref(element)) {
-                    (props.push_snapshot)();
-                    st.drag.drag_action.set(Some(DragOperation::Move));
-                    st.drag.moving_anchor.set(Some(world));
-                    st.drag.drag_bounds.set(Some(bounds));
-                    st.drag.last_world.set(Some(world));
-                }
-            }
-        }
+        select_and_begin_move(world, st, props, els, &[id], shift);
         return true;
     }
 
     let expanded = props.scene.with(|s| expand_ids(s, &[id]));
-    let ids = normalize_ids(&props.scene.get_untracked(), &st.selected_ids.get());
-    if st.shift_pressed.get() {
-        st.selected_ids.set(toggle_ids(&ids, &expanded));
-    } else {
-        st.selected_ids.set(expanded.clone());
-        if let Some(bounds) = combined_bounds(&expanded, els) {
-            (props.push_snapshot)();
-            st.drag.drag_action.set(Some(DragOperation::Move));
-            st.drag.moving_anchor.set(Some(world));
-            st.drag.drag_bounds.set(Some(bounds));
-            st.drag.last_world.set(Some(world));
-        }
-    }
+    select_and_begin_move(world, st, props, els, &expanded, shift);
     true
+}
+
+/// Apply the selection change for a press on `target` and start the move drag.
+/// Shift toggles selection as usual, except on an already selected element:
+/// there the toggle is deferred to pointer-up so a Shift-drag moves the
+/// selection (with snapping) instead of deselecting the grabbed element.
+fn select_and_begin_move(
+    world: Point,
+    st: &mut CanvasState,
+    props: &CanvasInputs,
+    els: &[Element],
+    target: &[ElementId],
+    shift: bool,
+) {
+    let ids = normalize_ids(&props.scene.get_untracked(), &st.selected_ids.get());
+    let moving = if shift && target.iter().all(|id| ids.contains(id)) {
+        st.drag.pending_shift_toggle.set(Some(target.to_vec()));
+        ids
+    } else {
+        let next = if shift {
+            toggle_ids(&ids, target)
+        } else {
+            target.to_vec()
+        };
+        st.selected_ids.set(next.clone());
+        next
+    };
+    begin_move_drag(world, st, props, els, &moving);
+}
+
+/// Capture the elements the smart guides may snap against when a move starts.
+#[inline]
+fn capture_smart_guide_targets(st: &mut CanvasState, ids: &[ElementId], els: &[Element]) {
+    st.drag.smart_guide_targets.set(
+        els.iter()
+            .filter(|el| !ids.contains(&el.id()))
+            .map(|el| GuideBox {
+                id: el.id(),
+                bounds: guide_bounds(el),
+                frame: guide_frame(el),
+            })
+            .collect(),
+    );
+}
+
+/// Capture the drag originals, bounds, and operation for an element move.
+fn begin_move_drag(
+    world: Point,
+    st: &mut CanvasState,
+    props: &CanvasInputs,
+    els: &[Element],
+    ids: &[ElementId],
+) {
+    let Some(bounds) = guide_union_bounds(ids, els) else {
+        return;
+    };
+    (props.push_snapshot)();
+    st.drag.drag_action.set(Some(DragOperation::Move));
+    st.drag.moving_anchor.set(Some(world));
+    st.drag.drag_bounds.set(Some(bounds));
+    st.drag.smart_guide_frame.set(guide_union_frame(ids, els));
+    st.drag.last_world.set(Some(world));
+    st.drag.drag_originals.set(
+        els.iter()
+            .filter(|el| ids.contains(&el.id()))
+            .cloned()
+            .collect(),
+    );
+    capture_smart_guide_targets(st, ids, els);
 }
 
 /// Figure out which handle (if any) the cursor is hovering over.
@@ -520,17 +582,54 @@ fn do_path_midpoint_drag(world: Point, st: &mut CanvasState, props: &mut CanvasI
 /// Offset all selected elements by the delta since the drag anchor.
 #[inline]
 fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
-    let dx = world.x - anchor.x;
-    let dy = world.y - anchor.y;
     let ids = st.selected_ids.get();
+    let originals = st.drag.drag_originals.get();
+    let Some(bounds) = st.drag.drag_bounds.get() else {
+        return;
+    };
+    let raw_dx = world.x - anchor.x;
+    let raw_dy = world.y - anchor.y;
+    let smart_enabled =
+        st.shift_pressed.get() && matches!(st.drag.drag_action.get(), Some(DragOperation::Move));
+    let (snap_dx, snap_dy, next_guides) = if smart_enabled {
+        let viewport = props.viewport.get_untracked();
+        let visible = viewport.visible_rect(st.screen_size.get_untracked());
+        st.drag.smart_guides.with(|previous| {
+            st.drag.smart_guide_frame.with(|frame| {
+                st.drag.smart_guide_targets.with(|targets| {
+                    let proposed =
+                        Rect::new(bounds.x + raw_dx, bounds.y + raw_dy, bounds.w, bounds.h);
+                    let frame = frame
+                        .unwrap_or_else(|| GuideFrame::rect(bounds))
+                        .translated(raw_dx, raw_dy);
+                    let resolution = smart_guides::resolve_move(
+                        proposed,
+                        frame,
+                        targets,
+                        visible,
+                        viewport.zoom,
+                        previous,
+                    );
+                    (resolution.snap_dx, resolution.snap_dy, resolution.state)
+                })
+            })
+        })
+    } else {
+        (0.0, 0.0, SmartGuideState::default())
+    };
+    let dx = raw_dx + snap_dx;
+    let dy = raw_dy + snap_dy;
     props.scene.update(|s| {
         for el in s.elements_mut().iter_mut() {
             if ids.contains(&el.id()) {
-                el.offset(dx, dy);
+                if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
+                    *el = orig.clone();
+                    el.offset(dx, dy);
+                }
             }
         }
     });
-    st.drag.moving_anchor.set(Some(world));
+    st.drag.smart_guides.set(next_guides);
 }
 
 /// On pointer-up, collapse a path point if it sits too close to its chord.
@@ -564,7 +663,7 @@ fn finish_path_point_drag(st: &mut CanvasState, props: &mut CanvasInputs, idx: u
     }
 }
 
-/// Snap a single path point to the grid (Shift+up after point drag).
+/// Snap a single path point to the grid (Alt-release after a point drag).
 #[inline]
 fn snap_path_point_to_grid(st: &mut CanvasState, props: &mut CanvasInputs, idx: usize) {
     let ids = st.selected_ids.get();
@@ -586,7 +685,7 @@ fn snap_path_point_to_grid(st: &mut CanvasState, props: &mut CanvasInputs, idx: 
     }
 }
 
-/// Snap all selected elements to the grid (Shift+up after move/resize/rotate).
+/// Snap all selected elements to the grid (Alt-release after move/resize/rotate).
 #[inline]
 fn snap_elements_to_grid(st: &mut CanvasState, props: &mut CanvasInputs) {
     let ids = st.selected_ids.get();
@@ -611,6 +710,10 @@ fn clear_drag_state(st: &mut CanvasState) {
     st.drag.last_world.set(None);
     st.drag.drag_originals.set(Vec::new());
     st.drag.hovered_handle.set(None);
+    st.drag.smart_guides.set(SmartGuideState::default());
+    st.drag.smart_guide_targets.set(Vec::new());
+    st.drag.smart_guide_frame.set(None);
+    st.drag.pending_shift_toggle.set(None);
     st.select_anchor.set(None);
 }
 
@@ -647,6 +750,7 @@ pub fn select_pointer_down(
 ) {
     st.drag.overlay_freeze.set(None);
     st.drag.rotation_delta.set(0.0);
+    st.drag.smart_guides.set(SmartGuideState::default());
 
     if handle_text_double_click(detail, world, st, props) {
         return;
@@ -662,7 +766,7 @@ pub fn select_pointer_down(
     if ids.len() == 1 {
         if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
             if handle_path_point_hit(world, st, props, el)
-                || handle_path_move_icon(world, st, props, el)
+                || handle_path_move_icon(world, st, props, &els, el)
             {
                 return;
             }
@@ -725,10 +829,20 @@ pub fn select_pointer_up(
             finish_path_point_drag(st, props, idx);
         }
 
-        if st.shift_pressed.get() {
+        let travelled =
+            st.drag.moving_anchor.get().is_some_and(|anchor| {
+                (world.x - anchor.x).hypot(world.y - anchor.y) >= MIN_DRAG_DIST
+            });
+        if matches!(drag_action, Some(DragOperation::Move)) && !travelled {
+            finish_shift_click(st, props);
+        }
+
+        // Alt is the grid-snap key; Shift stays reserved for smart guides.
+        let smart_guide_active = !st.drag.smart_guides.get().active.is_empty();
+        if st.alt_pressed.get() && travelled {
             if let Some(DragOperation::PathPoint(idx)) = drag_action {
                 snap_path_point_to_grid(st, props, idx);
-            } else {
+            } else if !smart_guide_active {
                 snap_elements_to_grid(st, props);
             }
         }
@@ -738,4 +852,25 @@ pub fn select_pointer_up(
     }
 
     complete_marquee_selection(world, st, props);
+}
+
+/// Finish a press that never became a drag. If the press was a Shift grab of an
+/// already selected element, undo the sub-threshold offset and toggle it out of
+/// the selection: Shift-click keeps toggling, only Shift-drags move.
+fn finish_shift_click(st: &mut CanvasState, props: &mut CanvasInputs) {
+    let Some(target) = st.drag.pending_shift_toggle.get() else {
+        return;
+    };
+    let originals = st.drag.drag_originals.get();
+    props.scene.update(|s| {
+        for el in s.elements_mut().iter_mut() {
+            if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
+                *el = orig.clone();
+            }
+        }
+    });
+    if st.shift_pressed.get() {
+        let ids = normalize_ids(&props.scene.get_untracked(), &st.selected_ids.get());
+        st.selected_ids.set(toggle_ids(&ids, &target));
+    }
 }

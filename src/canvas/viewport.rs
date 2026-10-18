@@ -1,4 +1,4 @@
-use crate::model::Point;
+use crate::model::{Point, Rect};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Viewport {
@@ -18,12 +18,26 @@ impl Default for Viewport {
 }
 
 impl Viewport {
+    /// World rectangle the screen currently shows.
+    pub fn visible_rect(self, screen_size: Point) -> Rect {
+        let zoom = if self.zoom.is_finite() && self.zoom > 0.0 {
+            self.zoom
+        } else {
+            1.0
+        };
+        let width = screen_size.x / zoom;
+        let height = screen_size.y / zoom;
+        Rect::new(
+            self.offset_x - width / 2.0,
+            self.offset_y - height / 2.0,
+            width,
+            height,
+        )
+    }
+
     pub fn to_view_box(self, screen_width: f64, screen_height: f64) -> String {
-        let view_width = screen_width / self.zoom;
-        let view_height = screen_height / self.zoom;
-        let min_x = self.offset_x - view_width / 2.0;
-        let min_y = self.offset_y - view_height / 2.0;
-        format!("{min_x} {min_y} {view_width} {view_height}")
+        let view = self.visible_rect(Point::new(screen_width, screen_height));
+        format!("{} {} {} {}", view.x, view.y, view.w, view.h)
     }
 
     pub fn screen_to_world(&self, screen: Point, screen_size: Point) -> Point {
@@ -81,5 +95,18 @@ mod tests {
         };
         let view_box = vp.to_view_box(1000.0, 800.0);
         assert_eq!(view_box, "-500 -400 1000 800");
+    }
+
+    #[test]
+    fn visible_rect_scales_with_zoom() {
+        let vp = Viewport {
+            offset_x: 100.0,
+            offset_y: -50.0,
+            zoom: 2.0,
+        };
+        assert_eq!(
+            vp.visible_rect(Point::new(800.0, 400.0)),
+            Rect::new(100.0 - 200.0, -50.0 - 100.0, 400.0, 200.0)
+        );
     }
 }
