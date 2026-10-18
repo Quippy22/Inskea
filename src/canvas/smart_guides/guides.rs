@@ -284,9 +284,12 @@ pub(super) fn chain_spacing_guides(
 
 /// Highlight runs of evenly spaced boxes: at least two inline pairs sharing
 /// one gap. A gap crossed by another box is not a run, and runs are shown
-/// only while an alignment on the same axis is active. `others` must be sorted
-/// by along start, which the crossed-gap test relies on.
+/// only while an alignment on the same axis is active and the moving box
+/// shares their lane: the rhythm of a row the drag is nowhere near is noise,
+/// not a measurement of the drag. `others` must be sorted by along start,
+/// which the crossed-gap test relies on.
 pub(super) fn equal_spacing_run_lines(
+    moving: Rect,
     others: &[GuideBox],
     pairs: &[(GuideBox, GuideBox)],
     axis: GuideAxis,
@@ -295,6 +298,11 @@ pub(super) fn equal_spacing_run_lines(
     let mut runs: Vec<(f64, Vec<GuideLine>)> = Vec::new();
 
     for (left, right) in pairs {
+        if perpendicular_gap(moving, left.bounds, axis) > tolerances.lane
+            || perpendicular_gap(moving, right.bounds, axis) > tolerances.lane
+        {
+            continue;
+        }
         let start = along_end(left.bounds, axis);
         let end = along_start(right.bounds, axis);
         let gap = end - start;

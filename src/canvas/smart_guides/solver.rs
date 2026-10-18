@@ -168,7 +168,13 @@ pub fn resolve_move(
         let lines = match candidate.key.kind {
             GuideKind::Alignment => {
                 let mut lines = alignment_guides(snapped, snapped_corners, &all, candidate.key);
-                lines.extend(equal_spacing_run_lines(crossed, pairs, axis, &tolerances));
+                lines.extend(equal_spacing_run_lines(
+                    snapped,
+                    crossed,
+                    pairs,
+                    axis,
+                    &tolerances,
+                ));
                 lines
             }
             GuideKind::EqualSpacing => {

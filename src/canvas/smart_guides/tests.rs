@@ -614,14 +614,15 @@ fn runs_are_highlighted_while_an_alignment_is_active() {
         rect(3, 200.0, 0.0, 20.0, 20.0),
         rect(4, 300.0, 0.0, 20.0, 20.0),
     ];
-    let resolution = solve(Rect::new(106.0, 250.0, 20.0, 20.0), &others);
+    // The moving box rides just below the row, inside its lane.
+    let resolution = solve(Rect::new(106.0, 30.0, 30.0, 20.0), &others);
     assert_eq!(resolution.snap_dx, -6.0);
     assert_eq!(resolution.state.guides.len(), 4);
     assert_eq!(
         resolution.state.guides[0],
         GuideLine {
             start: Point::new(100.0, 20.0),
-            end: Point::new(100.0, 250.0),
+            end: Point::new(100.0, 30.0),
             stops: [100.0, 100.0],
             kind: GuideKind::Alignment,
         }
@@ -631,6 +632,15 @@ fn runs_are_highlighted_while_an_alignment_is_active() {
         GuideLine {
             start: Point::new(20.0, -9.0),
             end: Point::new(100.0, -9.0),
+            stops: [0.0, 0.0],
+            kind: GuideKind::EqualSpacing,
+        }
+    );
+    assert_eq!(
+        resolution.state.guides[2],
+        GuideLine {
+            start: Point::new(120.0, -9.0),
+            end: Point::new(200.0, -9.0),
             stops: [0.0, 0.0],
             kind: GuideKind::EqualSpacing,
         }
@@ -647,6 +657,30 @@ fn runs_are_highlighted_while_an_alignment_is_active() {
 }
 
 #[test]
+fn runs_hide_when_the_mover_leaves_the_lane() {
+    // The same row with the dragged box parked below it, aligned on the axis
+    // only: the row's rhythm says nothing about the drag, so its gaps stay
+    // unhighlighted while the alignment line still connects the two.
+    let others = [
+        rect(1, 0.0, 0.0, 20.0, 20.0),
+        rect(2, 100.0, 0.0, 20.0, 20.0),
+        rect(3, 200.0, 0.0, 20.0, 20.0),
+        rect(4, 300.0, 0.0, 20.0, 20.0),
+    ];
+    let resolution = solve(Rect::new(106.0, 250.0, 20.0, 20.0), &others);
+    assert_eq!(resolution.snap_dx, -6.0);
+    assert_eq!(
+        resolution.state.guides,
+        vec![GuideLine {
+            start: Point::new(100.0, 20.0),
+            end: Point::new(100.0, 250.0),
+            stops: [100.0, 100.0],
+            kind: GuideKind::Alignment,
+        }]
+    );
+}
+
+#[test]
 fn runs_need_two_matching_gaps() {
     let boxes = solver::sorted_along(
         &[
@@ -659,6 +693,7 @@ fn runs_need_two_matching_gaps() {
     let lane = GUIDE_LANE_PX;
     let pairs = inline_pairs(&boxes, GuideAxis::Vertical, lane);
     assert!(equal_spacing_run_lines(
+        Rect::new(0.0, 0.0, 20.0, 20.0),
         &boxes,
         &pairs,
         GuideAxis::Vertical,
@@ -674,6 +709,7 @@ fn runs_skip_a_gap_crossed_by_an_object() {
         let boxes = solver::sorted_along(boxes, GuideAxis::Vertical);
         let pairs = inline_pairs(&boxes, GuideAxis::Vertical, lane);
         equal_spacing_run_lines(
+            Rect::new(0.0, 0.0, 20.0, 20.0),
             &boxes,
             &pairs,
             GuideAxis::Vertical,
