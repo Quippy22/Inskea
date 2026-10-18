@@ -202,13 +202,19 @@ fn el_svg(el: &Element) -> String {
                 crate::model::TextAlign::Center => t.data.world_point.x + t.data.width / 2.0,
                 crate::model::TextAlign::Right => t.data.world_point.x + t.data.width,
             };
+            // Clamp exactly like the on-screen render, so the exported text
+            // sits on the same baseline at the same size.
+            let fs = t
+                .data
+                .style
+                .font_size
+                .max(crate::model::elements::text::MIN_FONT_SIZE);
             let mut out = format!(
                 r#"<text x="{}" y="{}" text-anchor="{}" font-size="{}" font-family="{}" fill="{}" opacity="{}">"#,
                 anchor_x,
-                t.data.world_point.y
-                    + t.data.style.font_size * crate::model::elements::text::TEXT_ASCENT_RATIO,
+                t.data.world_point.y + fs * crate::model::elements::text::TEXT_ASCENT_RATIO,
                 anchor,
-                t.data.style.font_size,
+                fs,
                 crate::model::elements::text::FONT_FAMILY,
                 t.data.style.stroke_color.to_hex(),
                 t.data.style.opacity,
@@ -218,11 +224,7 @@ fn el_svg(el: &Element) -> String {
                     .replace('&', "&amp;")
                     .replace('<', "&lt;")
                     .replace('>', "&gt;");
-                let dy = if i == 0 {
-                    0.0
-                } else {
-                    t.data.style.font_size * 1.2
-                };
+                let dy = if i == 0 { 0.0 } else { fs * 1.2 };
                 let _ = write!(
                     out,
                     r#"<tspan x="{}" dy="{}">{}</tspan>"#,

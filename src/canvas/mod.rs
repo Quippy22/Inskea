@@ -228,8 +228,13 @@ pub fn Canvas(
         });
     }
 
-    let commit_edit =
-        text_edit::make_commit_edit(st.text_edit.editing_id, st.text_edit.edit_text, props.scene);
+    let commit_edit = text_edit::make_commit_edit(
+        st.text_edit.editing_id,
+        st.text_edit.edit_text,
+        props.scene,
+        props.push_snapshot.clone(),
+        props.discard_snapshot.clone(),
+    );
 
     // Whenever a text edit opens, focus the editing textarea so the caret is
     // visible for typing. The textarea is inserted reactively (in a later

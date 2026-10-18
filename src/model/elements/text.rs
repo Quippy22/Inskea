@@ -319,13 +319,11 @@ impl Render for Text {
         let x = self.data.world_point.x;
         let baseline = self.data.world_point.y + font_size * TEXT_ASCENT_RATIO;
         let opacity = self.data.style.opacity;
-        let fill = self
-            .data
-            .style
-            .fill_color
-            .as_ref()
-            .map(|c| c.to_hex())
-            .unwrap_or_else(|| self.data.style.stroke_color.to_hex());
+        // Text is always painted with the stroke colour: that is the colour
+        // the panel's swatches edit. (A fill colour can be inherited from the
+        // default style, but it is meaningless for glyphs and used to make
+        // the swatches look dead.)
+        let fill = self.data.style.stroke_color.to_hex();
 
         // Alignment anchors each line inside the box column: lines of
         // different widths drift against `anchor_x` per `text-anchor`.
@@ -397,7 +395,14 @@ impl Render for Text {
 
 impl HitTest for Text {
     fn hit_test(&self, point: Point, margin: f64) -> bool {
-        let (px, py) = (point.x, point.y);
+        // Rotate the query into the text's own frame so a rotated box is
+        // clicked where it is drawn, not at its unrotated envelope.
+        let center = Point::new(
+            self.data.world_point.x + self.data.width / 2.0,
+            self.data.world_point.y + self.data.height / 2.0,
+        );
+        let pt = Point::unrotate(point, center.x, center.y, self.data.rotation);
+        let (px, py) = (pt.x, pt.y);
         px >= self.data.world_point.x - margin
             && px <= self.data.world_point.x + self.data.width + margin
             && py >= self.data.world_point.y - margin
@@ -791,5 +796,18 @@ mod tests {
         let left = t.visual_bounds().x;
         t.set_alignment(TextAlign::Center);
         assert!((t.visual_bounds().x - left).abs() < 0.001);
+    }
+
+    #[test]
+    fn hit_test_follows_the_rotation() {
+        // A 100 × 24 box at the origin, rotated a quarter turn about its
+        // centre (50, 12). (5, 2) lies inside the unrotated box but outside
+        // the rotated one; (50, -30) is the other way round.
+        let mut t = text_elem("hello", 100.0, 20.0);
+        t.data.height = 24.0;
+        assert!(t.hit_test(Point::new(5.0, 2.0), 0.0));
+        t.data.rotation = std::f64::consts::FRAC_PI_2;
+        assert!(!t.hit_test(Point::new(5.0, 2.0), 0.0));
+        assert!(t.hit_test(Point::new(50.0, -30.0), 0.0));
     }
 }

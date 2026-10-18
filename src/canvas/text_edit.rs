@@ -1,5 +1,5 @@
 use super::viewport::Viewport;
-use crate::model::elements::text::{natural_line_width, FONT_FAMILY};
+use crate::model::elements::text::{natural_line_width, FONT_FAMILY, MIN_FONT_SIZE};
 use crate::model::{Element, ElementId, Point, Scene};
 use leptos::*;
 use std::rc::Rc;
@@ -79,14 +79,8 @@ pub fn guide_textarea(
     let zoom = viewport.get().zoom;
     let sx = (vp_world.x - viewport.get().offset_x) * zoom + ss.x / 2.0;
     let sy = (vp_world.y - viewport.get().offset_y) * zoom + ss.y / 2.0;
-    let font_size = text_elem.data.style.font_size.max(12.0);
-    let fill = text_elem
-        .data
-        .style
-        .fill_color
-        .as_ref()
-        .map(|c| c.to_hex())
-        .unwrap_or_else(|| text_elem.data.style.stroke_color.to_hex());
+    let font_size = text_elem.data.style.font_size.max(MIN_FONT_SIZE);
+    let fill = text_elem.data.style.stroke_color.to_hex();
 
     let sty = raw.style();
     let _ = sty.set_property("left", &format!("{sx}px"));
@@ -131,7 +125,59 @@ pub fn guide_textarea(
     }
 
     let _ = sty.set_property("height", "auto");
-    let _ = sty.set_property("height", &format!("{}px", raw.scroll_height().max(1)));
+    let content_h = raw.scroll_height().max(1) as f64;
+    let _ = sty.set_property("height", &format!("{content_h}px"));
+
+    // Vertical follow: when the grown textarea passes the bottom padding
+    // band, pan the canvas up so the caret line stays on screen.
+    let top = sy - EDIT_BASELINE_SHIFT * font_size * zoom;
+    let band_bottom = (ss.y - EDIT_PAD).max(EDIT_PAD);
+    let overflow = top + content_h - band_bottom;
+    if overflow > 0.5 {
+        pan_viewport_y(top, top - overflow, &viewport);
+    }
+
+    // Keep a rotated textarea pivoting on the same centre as the SVG text.
+    if let Some((deg, ox, oy)) = rotation_css(
+        text_elem.data.rotation,
+        text_elem.data.width,
+        text_elem.data.height,
+        zoom,
+        EDIT_BASELINE_SHIFT * font_size * zoom,
+    ) {
+        let _ = sty.set_property("transform", &format!("rotate({deg}deg)"));
+        let _ = sty.set_property("transform-origin", &format!("{ox}px {oy}px"));
+    }
+}
+
+/// Rotation angle and CSS `transform-origin` (px) for the editing textarea.
+/// Mirrors the SVG pivot: the element's box centre, offset by the baseline
+/// shift between the textarea's top edge and the SVG text's top edge.
+fn rotation_css(
+    rotation: f64,
+    width: f64,
+    height: f64,
+    zoom: f64,
+    shift_up: f64,
+) -> Option<(f64, f64, f64)> {
+    (rotation != 0.0).then(|| {
+        (
+            rotation.to_degrees(),
+            width * zoom / 2.0,
+            height * zoom / 2.0 + shift_up,
+        )
+    })
+}
+
+/// Vertical counterpart of [`pan_and_reposition`]: ease `viewport.offset_y`
+/// so the editing textarea's top drifts toward `target_top` on screen.
+fn pan_viewport_y(sy: f64, target_top: f64, viewport: &RwSignal<Viewport>) {
+    let dy = sy - target_top;
+    if dy.abs() < 0.5 {
+        return;
+    }
+    let step = dy * PAN_SMOOTHING;
+    viewport.update(|vp| vp.offset_y += step / vp.zoom);
 }
 
 /// Pan `viewport.offset_x` so the text origin eases toward screen `target`,
@@ -166,10 +212,23 @@ pub fn make_commit_edit(
     editing_id: RwSignal<Option<ElementId>>,
     edit_text: RwSignal<String>,
     scene: RwSignal<Scene>,
+    push_snapshot: Rc<dyn Fn()>,
+    discard_snapshot: Rc<dyn Fn()>,
 ) -> Rc<dyn Fn()> {
     Rc::new(move || {
         if let Some(id) = editing_id.get() {
             let text = edit_text.get();
+            // Editing existing content is an undoable action; the snapshot
+            // for a freshly created text was already taken when it was made.
+            let edited = scene.with_untracked(|s| {
+                matches!(
+                    s.element_by_id(id),
+                    Some(Element::Text(t)) if !t.wrapped.raw.is_empty() && t.wrapped.raw != text
+                )
+            });
+            if edited {
+                push_snapshot();
+            }
             scene.update(|s| {
                 if text.is_empty() {
                     s.remove_by_id(id);
@@ -178,7 +237,7 @@ pub fn make_commit_edit(
                     // is committed at its natural, unwrapped width — measured
                     // from the model, not the clipped textarea — so the SVG
                     // shows it full-size as a single flowing line.
-                    let fs = text_elem.data.style.font_size.max(12.0);
+                    let fs = text_elem.data.style.font_size.max(MIN_FONT_SIZE);
                     let wrap_w = text_elem.data.width;
                     let new_w = if wrap_w > 0.0 {
                         wrap_w
@@ -189,6 +248,13 @@ pub fn make_commit_edit(
                     text_elem.data.width = new_w;
                 }
             });
+            if text.is_empty() {
+                // Dismissing a box that was never given content removes the
+                // element on the same state its creation snapshot recorded,
+                // so that snapshot goes too. The callback verifies the match;
+                // clearing out an existing text keeps its undo entry.
+                discard_snapshot();
+            }
             editing_id.set(None);
             edit_text.set(String::new());
         }
@@ -224,7 +290,7 @@ pub fn text_edit_overlay(
             })
         })?;
         let vp = viewport.get_untracked();
-        let font_size = text_elem.data.style.font_size.max(12.0);
+        let font_size = text_elem.data.style.font_size.max(MIN_FONT_SIZE);
         let ss = screen_size.get_untracked();
         let screen_pos = vp.world_to_screen(
             Point::new(text_elem.data.world_point.x, text_elem.data.world_point.y),
@@ -232,13 +298,16 @@ pub fn text_edit_overlay(
         );
         let (sx, sy) = (screen_pos.x, screen_pos.y);
         let shift_up = EDIT_BASELINE_SHIFT * font_size * vp.zoom;
-        let fill = text_elem
-            .data
-            .style
-            .fill_color
-            .as_ref()
-            .map(|c| c.to_hex())
-            .unwrap_or_else(|| text_elem.data.style.stroke_color.to_hex());
+        let fill = text_elem.data.style.stroke_color.to_hex();
+        let rotation_style = rotation_css(
+            text_elem.data.rotation,
+            text_elem.data.width,
+            text_elem.data.height,
+            vp.zoom,
+            shift_up,
+        )
+        .map(|(deg, ox, oy)| format!("transform:rotate({deg}deg);transform-origin:{ox}px {oy}px;"))
+        .unwrap_or_default();
 
         let ta_w = if text_elem.data.width > 0.0 {
             text_elem.data.width * vp.zoom
@@ -287,7 +356,7 @@ pub fn text_edit_overlay(
                          overflow:hidden;\
                          white-space:{};overflow-wrap:normal;\
                          padding:0;margin:0;z-index:100;\
-                         line-height:1.2;text-align:{};",
+                         line-height:1.2;text-align:{};{}",
                         sx,
                         sy - shift_up,
                         ta_w,
@@ -297,6 +366,7 @@ pub fn text_edit_overlay(
                         fill,
                         white_space,
                         text_elem.align.css(),
+                        rotation_style,
                     )
                     prop:value=move || edit_text.get()
                     on:input=move |ev| {

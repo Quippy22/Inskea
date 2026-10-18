@@ -1,3 +1,4 @@
+use crate::model::elements::text::MIN_FONT_SIZE;
 use crate::ui::components::NumberSlider;
 use leptos::*;
 use std::rc::Rc;
@@ -33,7 +34,7 @@ pub fn sliders_section(
         <div class:hidden=move || !is_text.get()>
             <NumberSlider
                 value=text_size
-                min=8.0
+                min=MIN_FONT_SIZE
                 max=200.0
                 increment=1.0
                 label="Font size"
