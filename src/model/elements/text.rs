@@ -184,16 +184,34 @@ fn measure_text_extent(text: &str, font_size: f64, font_family: &str) -> (f64, f
 }
 
 #[cfg(target_arch = "wasm32")]
+thread_local! {
+    /// Scratch 2D context reused for every glyph measurement. Creating a
+    /// fresh `<canvas>` per measurement allocated a DOM element on every
+    /// text render and hit test.
+    static MEASURE_CTX: std::cell::OnceCell<web_sys::CanvasRenderingContext2d> =
+        std::cell::OnceCell::new();
+}
+
+#[cfg(target_arch = "wasm32")]
 fn canvas_context() -> Option<web_sys::CanvasRenderingContext2d> {
     use wasm_bindgen::JsCast;
-    let document = web_sys::window()?.document()?;
-    let canvas = document.create_element("canvas").ok()?;
-    canvas
-        .dyn_into::<web_sys::HtmlCanvasElement>()
-        .ok()?
-        .get_context("2d")
-        .ok()?
-        .and_then(|ctx| ctx.dyn_into::<web_sys::CanvasRenderingContext2d>().ok())
+    MEASURE_CTX.with(|cell| {
+        cell.get()
+            .or_else(|| {
+                let document = web_sys::window()?.document()?;
+                let canvas = document.create_element("canvas").ok()?;
+                let ctx = canvas
+                    .dyn_into::<web_sys::HtmlCanvasElement>()
+                    .ok()?
+                    .get_context("2d")
+                    .ok()??
+                    .dyn_into::<web_sys::CanvasRenderingContext2d>()
+                    .ok()?;
+                cell.set(ctx).ok()?;
+                cell.get()
+            })
+            .cloned()
+    })
 }
 
 // ── Text element ───────────────────────────────────────────────────────
