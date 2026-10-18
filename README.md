@@ -1,31 +1,70 @@
-# Inskea
+<p align="center">
+  <img src="assets/banner.png" alt="Inskea, an infinite canvas for your ideas" width="100%">
+</p>
 
-**An infinite canvas for your ideas.**
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/version-0.9.0-blue?style=flat-square" alt="Version 0.9.0">
+  <img src="https://img.shields.io/badge/platform-desktop%20%7C%20browser-blueviolet?style=flat-square" alt="Platform: desktop and browser">
+</p>
 
-Sketch shapes, jot notes, sketch freehand, drop in charts and images — all on a canvas that never runs out of room. Save your work as a real, reopenable file and pick up right where you left off.
+--- 
+Inskea is a drawing app without edges. One canvas that never runs out of room, for sketching diagrams, drafting ideas, and drawing by hand. When you finish, save your work to a real file and pick it back up later.
 
-## Features
+It runs as a native desktop app and in the browser, with the same tools and the same files either way.
 
-- 🖊️ **Draw anything** — rectangles, ellipses, lines, arrows, freehand sketches, and text, all on one canvas
-- 🔍 **Infinite pan & zoom** — your canvas has no edges; zoom in for detail, zoom out for the big picture
-- 🎨 **Clean, consistent styling** — pick from a curated color palette, adjust stroke width, style, and opacity
-- 🖱️ **Full manipulation** — select, move, resize, rotate, and layer any element with intuitive handles
-- ↩️ **Undo/redo** — experiment freely, nothing is ever a mistake for long
-- 📊 **Built-in charts** — drop in bar, line, or pie charts without leaving the canvas
-- 🖼️ **Images** — drag and drop images straight onto your canvas
-- 💾 **Real files, not screenshots** — save and reopen your work as a native `.skea` file
-- 📤 **Export anywhere** — flatten your canvas to PNG or SVG for sharing outside the app
-- ⚡ **Fast everywhere** — run it as a native desktop app, or right in your browser
+### Draw
 
-## Built with
+- **Shapes.** Rectangles with sharp or rounded corners, ellipses, and lines that are straight or gently curved. Hold Shift while drawing for perfect squares and circles.
+- **Arrows.** Add an arrowhead to either end of a line, or both.
+- **Freehand.** Strokes are smoothed as you draw, which keeps hand-drawn lines from looking jittery.
+- **Text.** Click to place a cursor and type. Resize the box to set how the text wraps, change the font size, and align text left, center, or right.
+- **Eraser.** Drag across anything you want to remove.
+- **Point edits.** Reshape a line or arrow after the fact by dragging its points, or drag between two points to add a bend.
 
-Inskea is built entirely in **Rust**, and runs both as a native desktop app and in the browser from the same codebase. It's powered by:
+### Style
 
-- **[Tauri](https://tauri.app/)** — wraps the app in a lightweight native window for the desktop build, with access to the file system, dialogs, and OS integrations, at a fraction of the size of an Electron app
-- **[Leptos](https://leptos.dev/)** — a Rust web framework with fine-grained reactivity, compiled to WebAssembly, powering the UI and canvas in both the desktop and browser builds
-- **[Tailwind CSS](https://tailwindcss.com/)** — utility-first styling for the toolbar, panels, and UI chrome
-- **SVG rendering** — every shape on the canvas is a real, inspectable element rather than raw pixels, which is what makes selection, styling, and hit-testing feel snappy and precise
-- **serde** — handles serialization for the native `.skea` file format
+- **Colors.** Quick swatches or a full color picker for strokes, plus fills for rectangles and ellipses.
+- **Stroke options.** Solid, dashed, or dotted lines with adjustable width and opacity.
 
-The core editor logic is the same either way — Tauri is just the shell that adds native file system access and packaging when you want a standalone desktop app; drop that layer and the same Leptos app runs straight in a browser tab.
+### Arrange
 
+- **Selection.** Click an element, Shift-click to add or drop items, or drag a box to select everything inside.
+- **Move, resize, rotate.** Drag elements directly, resize from eight handles, and rotate from the top handle. Hold Shift to keep proportions or snap rotation to 15 degree steps, and Alt to resize around the center. Release a drag with Alt held to snap to the grid.
+- **Smart guides.** Hold Shift while moving elements and guides appear, snapping your selection to shared edges, centers, and even spacing.
+- **Groups.** Combine elements into a single unit, then double-click to step inside and edit one part.
+- **Alignment.** Align elements six ways, or distribute spacing evenly along either axis.
+- **Layering.** Move elements forward or backward, or jump straight to front or back.
+- **Copy, paste, duplicate.** Groups stay intact.
+- **Undo and redo.** Up to 100 steps of history.
+
+### Navigate
+
+- **Infinite pan and zoom.** Zoom with the scroll wheel from 10% up to 2000%, centered on your pointer, and drag with the Hand tool to move around.
+- **Reset view.** Click the zoom readout to jump back to 100%, centered.
+- **Grid.** Dots, lines, or off, with adjustable spacing.
+- **Center marker.** A crosshair or dot at the origin, so you can find your way back.
+- **Background.** Dark or light canvas.
+
+### Files and export
+
+- **`.skea` files.** Inskea's own format. Reopen your work at any time and keep editing; nothing gets flattened to a picture.
+- **Native file dialogs on the desktop.** Open, Save, and Save As work like any other desktop app. In the browser, you can import a `.skea` file or download one instead.
+- **PNG and SVG export.** Save the current view, or drag a rectangle to pick exactly what to export. PNG for sharing, SVG for editing elsewhere.
+
+## Keyboard shortcuts
+
+The shortcuts are chosen for one-handed use, so your other hand can stay on the mouse or pen while you draw. Press `?` in the app for the full list. The ones you will reach for most:
+
+| Action | Keys |
+| --- | --- |
+| Select, hand, draw, erase modes | `s`, `a`, `d`, `e` |
+| Rectangle, ellipse, line, arrow, text | `1`, `2`, `3`, `4`, `5` |
+| Freehand | `f` |
+| Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` |
+| Copy / paste / duplicate | `Ctrl+C` / `Ctrl+V` / `Ctrl+D` |
+| Group / ungroup | `Ctrl+G` / `Ctrl+Shift+G` |
+| Delete selection | `Delete` or `Backspace` |
+| New / open / save / save as | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` |
+| Cancel, deselect, or leave a group | `Esc` |
+| Shortcut help | `?` |
