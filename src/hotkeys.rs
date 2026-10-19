@@ -1,6 +1,7 @@
 use crate::canvas::CanvasMode;
+use crate::document::DocContext;
 use crate::edit_ops::{self, Clipboard};
-use crate::model::{Alignment, Distribution, ElementId, Point, Scene};
+use crate::model::{Alignment, Distribution, Point};
 use crate::ui::dock::Tool;
 use crate::ui::{file_ops, icon};
 use leptos::ev;
@@ -51,11 +52,9 @@ pub struct HotkeysContext {
     pub canvas_mode: RwSignal<CanvasMode>,
     pub selected_tool: RwSignal<Tool>,
     pub eraser_active: RwSignal<bool>,
-    pub scene: RwSignal<Scene>,
-    pub selected_ids: RwSignal<Vec<ElementId>>,
+    pub doc: DocContext,
     pub clipboard: RwSignal<Clipboard>,
     pub cursor_world: RwSignal<Point>,
-    pub saved_path: RwSignal<Option<String>>,
     pub shortcuts_open: RwSignal<bool>,
     pub push_snapshot: Rc<dyn Fn()>,
     pub do_undo: Rc<dyn Fn()>,
@@ -103,62 +102,62 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
         (false, "s") => ctx.canvas_mode.set(CanvasMode::Select),
         (false, "a") => ctx.canvas_mode.set(CanvasMode::Pan),
         (true, "d") | (true, "D") => {
-            edit_ops::duplicate_selection(ctx.scene, ctx.selected_ids, &ctx.push_snapshot)
+            edit_ops::duplicate_selection(ctx.doc.scene, ctx.doc.selected_ids, &ctx.push_snapshot)
         }
         (true, "g") | (true, "G") => {
             if shift {
-                edit_ops::ungroup_selection(ctx.scene, ctx.selected_ids, &ctx.push_snapshot);
+                edit_ops::ungroup_selection(
+                    ctx.doc.scene,
+                    ctx.doc.selected_ids,
+                    &ctx.push_snapshot,
+                );
             } else {
-                edit_ops::group_selection(ctx.scene, ctx.selected_ids, &ctx.push_snapshot);
+                edit_ops::group_selection(ctx.doc.scene, ctx.doc.selected_ids, &ctx.push_snapshot);
             }
         }
         (true, "ArrowLeft") if alt && shift => edit_ops::distribute_selection(
-            ctx.scene,
-            ctx.selected_ids,
+            ctx.doc.scene,
+            ctx.doc.selected_ids,
             Distribution::Horizontal,
             &ctx.push_snapshot,
         ),
         (true, "ArrowUp") if alt && shift => edit_ops::distribute_selection(
-            ctx.scene,
-            ctx.selected_ids,
+            ctx.doc.scene,
+            ctx.doc.selected_ids,
             Distribution::Vertical,
             &ctx.push_snapshot,
         ),
         (true, "ArrowLeft") if alt => edit_ops::align_selection(
-            ctx.scene,
-            ctx.selected_ids,
+            ctx.doc.scene,
+            ctx.doc.selected_ids,
             Alignment::Left,
             &ctx.push_snapshot,
         ),
         (true, "ArrowRight") if alt => edit_ops::align_selection(
-            ctx.scene,
-            ctx.selected_ids,
+            ctx.doc.scene,
+            ctx.doc.selected_ids,
             Alignment::Right,
             &ctx.push_snapshot,
         ),
         (true, "ArrowUp") if alt => edit_ops::align_selection(
-            ctx.scene,
-            ctx.selected_ids,
+            ctx.doc.scene,
+            ctx.doc.selected_ids,
             Alignment::Top,
             &ctx.push_snapshot,
         ),
         (true, "ArrowDown") if alt => edit_ops::align_selection(
-            ctx.scene,
-            ctx.selected_ids,
+            ctx.doc.scene,
+            ctx.doc.selected_ids,
             Alignment::Bottom,
             &ctx.push_snapshot,
         ),
-        (true, "n") | (true, "N") => {
-            file_ops::file_new(ctx.scene, ctx.saved_path, ctx.selected_ids)
-        }
-        (true, "o") | (true, "O") => {
-            file_ops::file_open(ctx.scene, ctx.saved_path, ctx.selected_ids)
-        }
+        (true, "n") | (true, "N") => file_ops::file_new(ctx.doc.clone()),
+        (true, "o") | (true, "O") => file_ops::file_open(ctx.doc.clone()),
         (true, "s") | (true, "S") => {
             if shift {
-                file_ops::file_save_as(ctx.scene, ctx.saved_path);
+                file_ops::file_save_as(ctx.doc.clone());
             } else {
-                file_ops::file_save(ctx.scene, ctx.saved_path);
+                file_ops::file_save(ctx.doc.clone());
             }
         }
         (false, "?") => ctx.shortcuts_open.update(|v| *v = !*v),
@@ -191,26 +190,26 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
         // Escape is handled by the canvas, which owns the interaction state.
         (false, "Escape") => {}
         (true, "c") | (true, "C") => {
-            edit_ops::copy_selection(ctx.scene, ctx.selected_ids, ctx.clipboard);
+            edit_ops::copy_selection(ctx.doc.scene, ctx.doc.selected_ids, ctx.clipboard);
             web_sys::console::log_1(&"Copied".into());
         }
         (true, "v") | (true, "V") => edit_ops::paste_clipboard(
-            ctx.scene,
+            ctx.doc.scene,
             ctx.clipboard,
-            ctx.selected_ids,
+            ctx.doc.selected_ids,
             &ctx.push_snapshot,
             ctx.cursor_world,
         ),
         (false, "Delete") | (false, "Backspace") => {
-            let ids = ctx.selected_ids.get();
+            let ids = ctx.doc.selected_ids.get();
             if !ids.is_empty() {
                 (ctx.push_snapshot)();
-                ctx.scene.update(|s| {
+                ctx.doc.scene.update(|s| {
                     for id in &ids {
                         s.remove_by_id(*id);
                     }
                 });
-                ctx.selected_ids.set(Vec::new());
+                ctx.doc.selected_ids.set(Vec::new());
             }
         }
         _ => {}

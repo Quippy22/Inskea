@@ -1,6 +1,7 @@
 #![allow(clippy::redundant_locals)]
 use crate::canvas::{CanvasMode, CropExportCallback, Viewport};
-use crate::model::{ElementId, Rect, Scene};
+use crate::document::DocContext;
+use crate::model::Rect;
 use crate::skea;
 use crate::tauri_bridge;
 use crate::ui::components::{Dropdown, DropdownItem, IconButton};
@@ -15,7 +16,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
-fn browser_import(scene: RwSignal<Scene>, selected_ids: RwSignal<Vec<ElementId>>) {
+fn browser_import(doc: DocContext) {
     let document = web_sys::window().unwrap().document().unwrap();
     let input = document
         .create_element("input")
@@ -30,24 +31,20 @@ fn browser_import(scene: RwSignal<Scene>, selected_ids: RwSignal<Vec<ElementId>>
         .expect("input is not HtmlInputElement")
         .clone();
     let input_el2 = input_el.clone();
-    let doc = document.clone();
+    let document_for_cleanup = document.clone();
+    let doc_for_load = doc.clone();
 
     let on_change = Closure::wrap(Box::new(move || {
         let input_el = input_el.clone();
-        let doc = doc.clone();
         if let Some(file) = input_el.files().and_then(|f| f.item(0)) {
             let reader = web_sys::FileReader::new().expect("failed to create FileReader");
             let reader_c = reader.clone();
-            let scene_c = scene;
-            let sid = selected_ids;
+            let doc = doc_for_load.clone();
             let on_load = Closure::wrap(Box::new(move || {
                 if let Ok(val) = reader_c.result() {
                     if let Some(text) = val.as_string() {
                         match skea::load_from_str(&text) {
-                            Ok(loaded) => {
-                                sid.set(Vec::new());
-                                scene_c.set(loaded);
-                            }
+                            Ok(loaded) => doc.adopt(loaded, None),
                             Err(e) => {
                                 web_sys::console::error_1(&format!("parse error: {e}").into());
                             }
@@ -59,7 +56,11 @@ fn browser_import(scene: RwSignal<Scene>, selected_ids: RwSignal<Vec<ElementId>>
             on_load.forget();
             let _ = reader.read_as_text(&file);
         }
-        doc.body().unwrap().remove_child(&input_el).ok();
+        document_for_cleanup
+            .body()
+            .unwrap()
+            .remove_child(&input_el)
+            .ok();
     }) as Box<dyn FnMut()>);
 
     input_el2.set_onchange(Some(on_change.as_ref().unchecked_ref()));
@@ -71,7 +72,7 @@ fn browser_import(scene: RwSignal<Scene>, selected_ids: RwSignal<Vec<ElementId>>
 
 #[component]
 pub fn ToolBar<F1, F2>(
-    scene: RwSignal<Scene>,
+    doc: DocContext,
     viewport: RwSignal<Viewport>,
     canvas_mode: RwSignal<CanvasMode>,
     on_undo: F1,
@@ -81,8 +82,6 @@ pub fn ToolBar<F1, F2>(
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<CropExportCallback>>,
     shortcuts_open: RwSignal<bool>,
-    saved_path: RwSignal<Option<String>>,
-    selected_ids: RwSignal<Vec<ElementId>>,
 ) -> impl IntoView
 where
     F1: Fn() + 'static,
@@ -114,47 +113,49 @@ where
 
     let on_new = {
         let close_menu = close_menu;
+        let doc = doc.clone();
         move || {
             close_menu();
-            file_ops::file_new(scene, saved_path, selected_ids);
+            file_ops::file_new(doc.clone());
         }
     };
     let on_save_as = {
         let close_menu = close_menu;
+        let doc = doc.clone();
         move || {
             close_menu();
-            file_ops::file_save_as(scene, saved_path);
+            file_ops::file_save_as(doc.clone());
         }
     };
     let on_save = {
         let close_menu = close_menu;
+        let doc = doc.clone();
         move || {
             close_menu();
-            file_ops::file_save(scene, saved_path);
+            file_ops::file_save(doc.clone());
         }
     };
     let on_open = {
         let close_menu = close_menu;
+        let doc = doc.clone();
         move || {
             close_menu();
-            file_ops::file_open(scene, saved_path, selected_ids);
+            file_ops::file_open(doc.clone());
         }
     };
     let on_import = {
         let close_menu = close_menu;
+        let doc = doc.clone();
         move || {
             close_menu();
             if tauri {
+                let doc = doc.clone();
                 spawn_local(async move {
                     let path = tauri_bridge::pick_open_path(None).await;
                     if let Some(path) = path {
-                        saved_path.set(Some(path.clone()));
                         match tauri_bridge::load_skea(&path).await {
                             Ok(c) => match skea::load_from_str(&c) {
-                                Ok(loaded) => {
-                                    selected_ids.set(Vec::new());
-                                    scene.set(loaded);
-                                }
+                                Ok(loaded) => doc.adopt(loaded, Some(path)),
                                 Err(e) => web_sys::console::error_1(&format!("parse: {e}").into()),
                             },
                             Err(e) => web_sys::console::error_1(&format!("load: {e}").into()),
@@ -162,7 +163,7 @@ where
                     }
                 });
             } else {
-                browser_import(scene, selected_ids);
+                browser_import(doc.clone());
             }
         }
     };
@@ -171,9 +172,10 @@ where
 
     let on_export_skea = {
         let close_menu = close_menu;
+        let doc = doc.clone();
         move || {
             close_menu();
-            let s = scene.get();
+            let s = doc.scene.get_untracked();
             if tauri {
                 spawn_local(async move {
                     let dir = tauri_bridge::get_documents_dir().await.ok();
@@ -199,11 +201,11 @@ where
         let _close_menu = close_menu;
         let _export_crop_active = export_crop_active;
         let _on_crop_export = on_crop_export;
-        let _scene = scene;
+        let _doc = doc.clone();
         move |fmt: ExportFormat, selection: bool| {
             _close_menu();
             if selection {
-                let scene = _scene;
+                let scene = _doc.scene;
                 let on_crop_export = _on_crop_export;
                 let export_crop_active = _export_crop_active;
                 let close_menu = _close_menu;
@@ -232,7 +234,9 @@ where
             }
             let vp = viewport.get();
             let size = window_size();
-            let svg = _scene.with(|s| export::scene_to_svg(s, &vp, size, None));
+            let svg = _doc
+                .scene
+                .with(|s| export::scene_to_svg(s, &vp, size, None));
             match fmt {
                 ExportFormat::Svg => {
                     if tauri {

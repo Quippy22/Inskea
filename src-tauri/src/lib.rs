@@ -108,6 +108,11 @@ mod tests {
 }
 
 #[tauri::command]
+fn set_window_title(window: tauri::Window, title: String) {
+    let _ = window.set_title(&title);
+}
+
+#[tauri::command]
 fn get_documents_dir(app_handle: tauri::AppHandle) -> Result<String, String> {
     setup::documents_dir(&app_handle).map(|p| p.to_string_lossy().to_string())
 }
@@ -146,6 +151,7 @@ pub fn run() {
             save_file_binary,
             save_skea,
             load_skea,
+            set_window_title,
             get_documents_dir,
             save_settings,
             load_settings,

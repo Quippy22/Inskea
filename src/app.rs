@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
 use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
+use crate::document::DocContext;
 use crate::edit_ops::Clipboard;
 use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
 use crate::model::{Color, ElementId, ElementStyle, LineStyle, Point, Scene};
@@ -15,6 +16,17 @@ use crate::ui::{SettingsPanel, ToolBar};
 use leptos::*;
 use std::time::Duration;
 use wasm_bindgen_futures::spawn_local;
+
+/// Update the window title on both targets: `document.title` for the browser,
+/// and the native window through Tauri (which does not track document.title).
+fn update_window_title(title: &str) {
+    if let Some(document) = web_sys::window().and_then(|window| window.document()) {
+        document.set_title(title);
+    }
+    if tauri_bridge::is_tauri() {
+        tauri_bridge::set_window_title(title);
+    }
+}
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -108,15 +120,73 @@ pub fn App() -> impl IntoView {
 
     let saved_path = create_rw_signal::<Option<String>>(None);
 
+    let reset_history = {
+        let undo_stack = undo_stack;
+        let redo_stack = redo_stack;
+        Rc::new(move || {
+            undo_stack.set(Vec::new());
+            redo_stack.set(Vec::new());
+        })
+    };
+
+    let baseline = create_rw_signal(Scene::new());
+    let dirty = create_rw_signal(false);
+
+    let doc = DocContext {
+        scene,
+        saved_path,
+        selected_ids,
+        baseline,
+        dirty,
+        reset_history: reset_history.clone(),
+    };
+
+    // Window title: the file name plus a `*` while the scene differs from
+    // what was last written to disk.
+    {
+        let saved_path = saved_path;
+        create_effect(move |_| {
+            let is_dirty = dirty.get();
+            let name = saved_path
+                .get()
+                .as_deref()
+                .and_then(|path| std::path::Path::new(path).file_name())
+                .and_then(|name| name.to_str())
+                .unwrap_or("Untitled")
+                .to_string();
+            let title = format!("{name}{} - Inskea", if is_dirty { " *" } else { "" });
+            update_window_title(&title);
+        });
+    }
+
+    // Re-derive the dirty flag shortly after edits settle. Comparing the
+    // whole scene is too heavy for drag frames, but cheap at this cadence.
+    {
+        let doc = doc.clone();
+        let dirty_generation = create_rw_signal(0_u64);
+        create_effect(move |_| {
+            scene.with(|_| ());
+            let generation = dirty_generation.get_untracked().wrapping_add(1);
+            dirty_generation.set(generation);
+            let doc = doc.clone();
+            set_timeout(
+                move || {
+                    if dirty_generation.get_untracked() == generation {
+                        dirty.set(doc.is_dirty_now());
+                    }
+                },
+                Duration::from_millis(250),
+            );
+        });
+    }
+
     let ctx = HotkeysContext {
         canvas_mode,
         selected_tool,
         eraser_active,
-        scene,
-        selected_ids,
+        doc: doc.clone(),
         clipboard,
         cursor_world,
-        saved_path,
         shortcuts_open,
         push_snapshot: push_snapshot.clone(),
         do_undo: Rc::new(do_undo),
@@ -245,7 +315,7 @@ pub fn App() -> impl IntoView {
                 default_line_style=default_line_style
             />
             <ToolBar
-                scene=scene
+                doc=doc.clone()
                 viewport=viewport
                 canvas_mode=canvas_mode
                 on_undo=do_undo
@@ -255,8 +325,6 @@ pub fn App() -> impl IntoView {
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
                 shortcuts_open=shortcuts_open
-                saved_path=saved_path
-                selected_ids=selected_ids
             />
             <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />
             <SettingsPanel settings=settings />

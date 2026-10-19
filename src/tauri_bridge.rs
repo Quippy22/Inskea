@@ -126,6 +126,18 @@ pub async fn save_skea(path: &str, content: &str) -> Result<(), String> {
     save_file(&path, content).await
 }
 
+/// Set the native window title. Tauri windows do not follow `document.title`,
+/// so the app calls this whenever the document or dirty state changes.
+pub fn set_window_title(title: &str) {
+    let args = match serde_wasm_bindgen::to_value(&serde_json::json!({ "title": title })) {
+        Ok(args) => args,
+        Err(_) => return,
+    };
+    wasm_bindgen_futures::spawn_local(async move {
+        let _ = invoke("set_window_title", args).await;
+    });
+}
+
 /// Save settings (TOML string) to the app data directory.
 pub async fn save_settings(content: &str) -> Result<(), String> {
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
