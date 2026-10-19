@@ -206,6 +206,7 @@ pub fn App() -> impl IntoView {
                 discard_snapshot=discard_snapshot.clone()
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
+                shortcuts_open=shortcuts_open
                 selected_ids=selected_ids
                 default_style=default_style
                 default_line_style=default_line_style

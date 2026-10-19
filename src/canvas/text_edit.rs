@@ -379,6 +379,9 @@ pub fn text_edit_overlay(
                     }
                     on:keydown=move |ev: ev::KeyboardEvent| {
                         if ev.key() == "Escape" {
+                            // The canvas Escape handler must not also treat
+                            // this as a deselect/cancel: the edit owns it.
+                            ev.stop_propagation();
                             ce_esc();
                         }
                         if ev.key() == "Enter" && ev.shift_key() {

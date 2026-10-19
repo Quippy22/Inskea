@@ -57,6 +57,7 @@ fn handle_path_point_hit(
         let d = ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt();
         if d <= HANDLE_RESIZE_RADIUS {
             (props.push_snapshot)();
+            st.drag.drag_originals.set(vec![el.clone()]);
             st.drag.drag_action.set(Some(DragOperation::PathPoint(i)));
             st.drag.moving_anchor.set(Some(world));
             st.drag.last_world.set(Some(world));
@@ -70,6 +71,7 @@ fn handle_path_point_hit(
         };
         let d = ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt();
         if d <= HANDLE_RESIZE_RADIUS {
+            st.drag.drag_originals.set(vec![el.clone()]);
             st.drag
                 .drag_action
                 .set(Some(DragOperation::PathMidpoint(i)));
@@ -727,6 +729,29 @@ pub(crate) fn clear_drag_state(st: &mut CanvasState) {
     st.drag.smart_guide_frame.set(None);
     st.drag.pending_shift_toggle.set(None);
     st.select_anchor.set(None);
+}
+
+/// Abort an in-progress selection drag (move / resize / rotate / path point)
+/// or marquee: restore the captured originals, drop the drag's undo snapshot,
+/// and clear all drag state so pointer-up cannot re-apply anything.
+pub(crate) fn cancel_drag(st: &mut CanvasState, props: &mut CanvasInputs) {
+    let action = st.drag.drag_action.get_untracked();
+    let originals = st.drag.drag_originals.get_untracked();
+    if !originals.is_empty() {
+        props.scene.update(|s| {
+            for orig in &originals {
+                if let Some(el) = s.element_by_id_mut(orig.id()) {
+                    *el = orig.clone();
+                }
+            }
+        });
+    }
+    // A still-pending PathMidpoint has not pushed a snapshot yet; every other
+    // action pushed exactly one when the drag began.
+    if !matches!(action, None | Some(DragOperation::PathMidpoint(_))) {
+        (props.discard_snapshot)();
+    }
+    clear_drag_state(st);
 }
 
 /// Finish a marquee drag-select: select all elements fully inside the dragged rect.

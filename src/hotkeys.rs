@@ -13,7 +13,7 @@ pub(crate) const MODE_SHORTCUTS: &[(&str, &str)] = &[
     ("a", "Pan mode"),
     ("d", "Draw mode"),
     ("e", "Erase mode"),
-    ("Esc", "Deselect / cancel"),
+    ("Esc", "Cancel / pan mode"),
     ("Delete", "Delete selection"),
 ];
 
@@ -186,6 +186,7 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
             ctx.canvas_mode.set(CanvasMode::Draw);
         }
         (false, "d") => ctx.canvas_mode.set(CanvasMode::Draw),
+        // Escape is handled by the canvas, which owns the interaction state.
         (false, "Escape") => {}
         (true, "c") | (true, "C") => {
             edit_ops::copy_selection(ctx.scene, ctx.selected_ids, ctx.clipboard);

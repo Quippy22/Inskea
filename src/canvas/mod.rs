@@ -12,7 +12,7 @@ mod text_edit;
 
 pub use crate::model::interaction::combined_bounds;
 use modes::{cancel_drawing, draw_pointer_down, draw_pointer_up, finish_freehand};
-use selection::{select_pointer_down, select_pointer_move, select_pointer_up};
+use selection::{cancel_drag, select_pointer_down, select_pointer_move, select_pointer_up};
 pub use state::CanvasMode;
 pub use state::CropExportCallback;
 pub use state::DragOperation;
@@ -107,6 +107,7 @@ fn route_pointer_down(
 /// | `selected_color` | Stroke / fill colour for newly created elements |
 /// | `scene`         | The document model – all elements live here |
 /// | `eraser_active` | Whether the eraser toggle is pressed |
+/// | `shortcuts_open` | Whether the shortcuts modal is open (Esc closes it first) |
 /// | `push_snapshot` | Callback: saves an undo snapshot before mutating the scene |
 ///
 /// Internal state (drag tracking, selection, text editing, grid) lives in
@@ -127,6 +128,7 @@ pub fn Canvas(
     discard_snapshot: Rc<dyn Fn()>,
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<CropExportCallback>>,
+    shortcuts_open: RwSignal<bool>,
     selected_ids: RwSignal<Vec<ElementId>>,
     default_style: RwSignal<ElementStyle>,
     default_line_style: RwSignal<LineStyle>,
@@ -181,10 +183,10 @@ pub fn Canvas(
         }
     });
 
-    // Esc: deselect / cancel draw / exit text edit
-    // Priority: (a) textarea handles its own Esc → do nothing,
-    //            (b) cancel in-progress draw, (c) clear selection.
-    // Never changes canvas_mode or selected_tool.
+    // Esc: cancel the most recent interaction, in priority order: open
+    // shortcuts modal, crop export, text edit (the textarea commits it),
+    // in-progress draw, selection drag / marquee, group edit, selection.
+    // With nothing left to cancel it returns to the neutral Pan mode.
     {
         let mut _st = st;
         let mut _props = props.clone();
@@ -192,21 +194,44 @@ pub fn Canvas(
             if ev.key() != "Escape" {
                 return;
             }
-            // (a) If a text element is being edited, the textarea's own
-            // keydown handler will have already committed it. Do nothing.
-            if _st.text_edit.editing_id.get().is_some() {
+            if shortcuts_open.get_untracked() {
+                shortcuts_open.set(false);
                 return;
             }
-            // (b) Cancel an in-progress draw. For Freehand the element was
+            // (a) If a text element is being edited, the textarea's own
+            // keydown handler commits it and stops the event.
+            if _st.text_edit.editing_id.get_untracked().is_some() {
+                return;
+            }
+            // (b) Cancel an active crop-export drag.
+            if _props.export_crop_active.get_untracked() {
+                _props.export_crop_active.set(false);
+                _props.on_crop_export.set(None);
+                _st.select_anchor.set(None);
+                _st.drag.last_world.set(None);
+                return;
+            }
+            // (c) Cancel an in-progress draw. For Freehand the element was
             // added to the scene on pointer_down, so it is removed together
             // with its undo snapshot.
-            if _st.drawing.get().is_some() {
+            if _st.drawing.get_untracked().is_some() {
                 let mut st = _st;
                 let mut props = _props.clone();
                 cancel_drawing(&mut st, &mut props);
                 return;
             }
-            // (c) Exit group-edit mode before clearing the selection.
+            // (d) Abort a selection drag or marquee before it commits.
+            if _st.drag.drag_action.get_untracked().is_some()
+                || _st.drag.moving_anchor.get_untracked().is_some()
+                || _st.drag.pending_shift_toggle.get_untracked().is_some()
+                || _st.select_anchor.get_untracked().is_some()
+            {
+                let mut st = _st;
+                let mut props = _props.clone();
+                cancel_drag(&mut st, &mut props);
+                return;
+            }
+            // (e) Exit group-edit mode before clearing the selection.
             if let Some(group_id) = _st.group_editing.get_untracked() {
                 let group_members = _props.scene.with_untracked(|scene| {
                     scene
@@ -221,10 +246,14 @@ pub fn Canvas(
                 }
                 return;
             }
-            // (d) Clear the current selection.
+            // (f) Clear the current selection.
             if !_st.selected_ids.get_untracked().is_empty() {
                 _st.selected_ids.set(Vec::new());
+                return;
             }
+            // (g) Nothing to cancel: default back to panning.
+            _props.eraser_active.set(false);
+            _props.canvas_mode.set(CanvasMode::Pan);
         });
     }
 
