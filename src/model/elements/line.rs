@@ -1,5 +1,5 @@
 use crate::model::elements::path::{
-    bounds_of_points, hit_test_path, offset_points, path_d, rotate_points, snap_points_to_grid,
+    bounds_of_points, hit_test_path, offset_points, path_d, rotate_points,
 };
 use crate::model::elements::utils::{arrowhead_polyline, line_endpoints, scale_points};
 use crate::model::resize::ResizeContext;
@@ -150,12 +150,6 @@ impl Offset for Line {
     fn offset(&mut self, dx: f64, dy: f64) {
         self.data.world_point.offset(dx, dy);
         offset_points(&mut self.points, dx, dy);
-    }
-}
-
-impl SnapToGrid for Line {
-    fn snap_to_grid(&mut self, grid: f64) {
-        snap_points_to_grid(&mut self.points, grid);
     }
 }
 

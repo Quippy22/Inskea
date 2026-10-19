@@ -221,18 +221,6 @@ impl Offset for Freehand {
     }
 }
 
-impl SnapToGrid for Freehand {
-    fn snap_to_grid(&mut self, grid: f64) {
-        // Translate the whole stroke so its bounding box lands on the grid.
-        // Snapping every sample individually would shear the stroke's shape.
-        let b = self.bounds();
-        self.offset(
-            (b.x / grid).round() * grid - b.x,
-            (b.y / grid).round() * grid - b.y,
-        );
-    }
-}
-
 impl Rotate for Freehand {
     fn rotate_around(&mut self, point: Point, delta: f64) {
         crate::model::elements::path::rotate_points(&mut self.points, point.x, point.y, delta);
@@ -289,13 +277,5 @@ mod tests {
         zoomed_out.finish(0.1);
         assert_eq!(zoomed_in.points.len(), 3);
         assert_eq!(zoomed_out.points.len(), 2);
-    }
-
-    #[test]
-    fn snap_to_grid_translates_the_whole_stroke() {
-        let mut fh = stroke(&[(3.0, 4.0), (23.0, 14.0)]);
-        fh.snap_to_grid(20.0);
-        assert_eq!(fh.points[0], Point { x: 0.0, y: 0.0 });
-        assert_eq!(fh.points[1], Point { x: 20.0, y: 10.0 });
     }
 }

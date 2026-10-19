@@ -25,14 +25,6 @@ impl Point {
         self.y += dy;
     }
 
-    /// Snap this point to the nearest grid line with the given `grid` spacing.
-    pub fn snap_to_grid(&mut self, grid: f64) {
-        self.set(
-            (self.x / grid).round() * grid,
-            (self.y / grid).round() * grid,
-        );
-    }
-
     /// Rotate this point around `other` by `delta` radians.
     pub fn rotate_around(&mut self, other: Self, delta: f64) {
         let dx = self.x - other.x;

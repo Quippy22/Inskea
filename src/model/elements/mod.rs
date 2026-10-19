@@ -245,12 +245,6 @@ pub trait Offset {
     fn offset(&mut self, dx: f64, dy: f64);
 }
 
-/// Snap all position data to a grid of the given spacing.
-pub trait SnapToGrid {
-    /// Round position values to the nearest multiple of `grid`.
-    fn snap_to_grid(&mut self, grid: f64);
-}
-
 /// Rotate the element around a pivot point.
 ///
 /// # Conventions
@@ -395,7 +389,6 @@ dispatch_element!(Render, render(&self, zoom: f64) -> leptos::View);
 dispatch_element!(HitTest, hit_test(&self, point: Point, margin: f64) -> bool);
 dispatch_element!(Bounds, bounds(&self) -> Rect);
 dispatch_element!(Offset, offset(&mut self, dx: f64, dy: f64));
-dispatch_element!(SnapToGrid, snap_to_grid(&mut self, grid: f64));
 dispatch_element!(Rotate, rotate_around(&mut self, point: Point, delta: f64));
 dispatch_element!(Resize, resize(&mut self, ctx: &ResizeContext));
 dispatch_element!(UpdateDrag, update_drag(&mut self, current: Point, anchor: Point, shift: bool, zoom: f64));

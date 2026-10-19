@@ -2,15 +2,6 @@ use crate::model::elements::rect::MIN_DIMENSION;
 use crate::model::resize::ResizeContext;
 use crate::model::{Element, ElementData, Point};
 
-pub(crate) fn snap_bbox_to_grid(world_point: &mut Point, width: f64, height: f64, grid: f64) {
-    let cx = world_point.x + width / 2.0;
-    let cy = world_point.y + height / 2.0;
-    let snapped_cx = (cx / grid).round() * grid;
-    let snapped_cy = (cy / grid).round() * grid;
-    world_point.x += snapped_cx - cx;
-    world_point.y += snapped_cy - cy;
-}
-
 pub(crate) fn rotate_bbox(data: &mut ElementData, pivot: Point, delta: f64) {
     data.rotation += delta;
     let cx = data.world_point.x + data.width / 2.0;
@@ -102,17 +93,6 @@ pub(crate) fn rect_from_drag(anchor: Point, current: Point, shift: bool) -> (Poi
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn snap_bbox_to_grid_moves_center() {
-        let mut pt = Point::new(3.0, 7.0);
-        let w = 10.0;
-        let h = 10.0; // center at (8, 12)
-        snap_bbox_to_grid(&mut pt, w, h, 10.0);
-        // snapped center: (10, 10), so world_point shifts by (+2, -2)
-        assert!((pt.x - 5.0).abs() < 1e-10);
-        assert!((pt.y - 5.0).abs() < 1e-10);
-    }
 
     #[test]
     fn rotate_bbox_accumulates_rotation() {

@@ -1,4 +1,4 @@
-use crate::model::elements::utils::{rect_from_drag, rotate_bbox, snap_bbox_to_grid};
+use crate::model::elements::utils::{rect_from_drag, rotate_bbox};
 use crate::model::resize::{resize_bbox, resize_from_handle, resize_scale_element, ResizeContext};
 use crate::model::*;
 use leptos::IntoView;
@@ -138,17 +138,6 @@ impl Bounds for Ellipse {
 impl Offset for Ellipse {
     fn offset(&mut self, dx: f64, dy: f64) {
         self.data.world_point.offset(dx, dy);
-    }
-}
-
-impl SnapToGrid for Ellipse {
-    fn snap_to_grid(&mut self, grid: f64) {
-        snap_bbox_to_grid(
-            &mut self.data.world_point,
-            self.data.width,
-            self.data.height,
-            grid,
-        );
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::model::elements::utils::{rotate_bbox, snap_bbox_to_grid};
+use crate::model::elements::utils::rotate_bbox;
 use crate::model::resize::{
     resize_bbox, resize_scale_element, rotate_point_around, ResizeContext, ResizeHandle,
     MIN_ELEMENT_SIZE,
@@ -146,7 +146,7 @@ fn measure_text_width(text: &str, font_size: f64, font_family: &str) -> f64 {
     #[cfg(target_arch = "wasm32")]
     {
         if let Some(ctx) = canvas_context() {
-            let _ = ctx.set_font(&format!("{font_size}px {font_family}, sans-serif"));
+            ctx.set_font(&format!("{font_size}px {font_family}, sans-serif"));
             if let Ok(metrics) = ctx.measure_text(text) {
                 return metrics.width();
             }
@@ -167,7 +167,7 @@ fn measure_text_extent(text: &str, font_size: f64, font_family: &str) -> (f64, f
     #[cfg(target_arch = "wasm32")]
     {
         if let Some(ctx) = canvas_context() {
-            let _ = ctx.set_font(&format!("{font_size}px {font_family}, sans-serif"));
+            ctx.set_font(&format!("{font_size}px {font_family}, sans-serif"));
             if let Ok(metrics) = ctx.measure_text(text) {
                 let asc = metrics.actual_bounding_box_ascent();
                 let desc = metrics.actual_bounding_box_descent();
@@ -189,7 +189,7 @@ thread_local! {
     /// fresh `<canvas>` per measurement allocated a DOM element on every
     /// text render and hit test.
     static MEASURE_CTX: std::cell::OnceCell<web_sys::CanvasRenderingContext2d> =
-        std::cell::OnceCell::new();
+        const { std::cell::OnceCell::new() };
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -442,17 +442,6 @@ impl Bounds for Text {
 impl Offset for Text {
     fn offset(&mut self, dx: f64, dy: f64) {
         self.data.world_point.offset(dx, dy);
-    }
-}
-
-impl SnapToGrid for Text {
-    fn snap_to_grid(&mut self, grid: f64) {
-        snap_bbox_to_grid(
-            &mut self.data.world_point,
-            self.data.width,
-            self.data.height,
-            grid,
-        );
     }
 }
 

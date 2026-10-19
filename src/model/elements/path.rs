@@ -230,13 +230,6 @@ pub fn offset_points(points: &mut [Point], dx: f64, dy: f64) {
     }
 }
 
-/// Snap every point to the nearest grid line.
-pub fn snap_points_to_grid(points: &mut [Point], grid: f64) {
-    for p in points {
-        p.snap_to_grid(grid);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,13 +335,5 @@ mod tests {
         assert!((pts[0].y - 1.0).abs() < 1e-10);
         assert!((pts[1].x + 1.0).abs() < 1e-10);
         assert!((pts[1].y - 0.0).abs() < 1e-10);
-    }
-
-    #[test]
-    fn snap_points_to_grid_works() {
-        let mut pts = [Point { x: 13.0, y: 27.0 }];
-        snap_points_to_grid(&mut pts, 20.0);
-        assert_eq!(pts[0].x, 20.0);
-        assert_eq!(pts[0].y, 20.0);
     }
 }
