@@ -57,10 +57,12 @@ pub fn NumberSlider(
         update_from_event(&local, &snap, min, max, &track_ref, &ev);
     };
 
+    // These window listeners outlive the component (the settings panel is
+    // rebuilt each time it opens), so they must not touch disposed signals.
     let _ = window_event_listener(ev::mousemove, {
         let local = local;
         move |ev| {
-            if dragging.get() {
+            if dragging.try_get().unwrap_or(false) {
                 update_from_event(&local, &snap, min, max, &track_ref, &ev);
             }
         }
@@ -69,8 +71,8 @@ pub fn NumberSlider(
     {
         let commit = Rc::clone(&commit);
         let _ = window_event_listener(ev::mouseup, move |_| {
-            if dragging.get() {
-                dragging.set(false);
+            if dragging.try_get().unwrap_or(false) {
+                dragging.try_set(false);
                 commit();
             }
         });
