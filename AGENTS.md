@@ -78,4 +78,4 @@ For UI, canvas, file, or desktop changes, also manually verify in both `trunk se
 
 ## Generated and local files
 
-Do not commit build or local environment output: `target/`, `dist/`, `src-tauri/gen/`, `node_modules/`, or `output.css`. The root `Cargo.lock` is tracked; `src-tauri/Cargo.lock` is intentionally ignored. `.env` and the local launcher files are also ignored.
+Do not commit build or local environment output: `target/`, `dist/`, `src-tauri/gen/`, `node_modules/`, or `output.css`. Both `Cargo.lock` files are tracked. `.env` and the local launcher files are also ignored.

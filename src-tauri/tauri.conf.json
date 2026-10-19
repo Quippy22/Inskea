@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Inskea",
   "version": "0.10.0",
-  "identifier": "inskea",
+  "identifier": "io.github.quippy22.inskea",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:8080",
@@ -16,6 +16,8 @@
         "title": "Inskea",
         "width": 800,
         "height": 600,
+        "minWidth": 480,
+        "minHeight": 360,
         "resizable": true,
         "fullscreen": false
       }
@@ -31,11 +33,32 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Quippy22",
+    "homepage": "https://github.com/Quippy22/Inskea",
+    "license": "MIT",
+    "category": "GraphicsAndDesign",
+    "shortDescription": "Infinite-canvas drawing app",
+    "longDescription": "Inskea is an infinite-canvas drawing application for sketching shapes, freehand strokes, and text.",
+    "linux": {
+      "deb": {
+        "desktopTemplate": "linux/inskea.desktop"
+      },
+      "rpm": {
+        "desktopTemplate": "linux/inskea.desktop"
+      }
+    },
     "fileAssociations": [
       {
         "description": "Inskea Drawing",
         "ext": ["skea"],
-        "name": "inskea-drawing"
+        "mimeType": "application/x-inskea",
+        "name": "Inskea Drawing",
+        "role": "Editor",
+        "rank": "Owner",
+        "exportedType": {
+          "identifier": "io.github.quippy22.inskea.drawing",
+          "conformsTo": ["public.data"]
+        }
       }
     ],
     "icon": [
