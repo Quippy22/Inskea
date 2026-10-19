@@ -10,7 +10,7 @@ use crate::skea;
 use crate::tauri_bridge;
 use crate::ui::components::StylingPanel;
 use crate::ui::dock::{Dock, Tool};
-use crate::ui::notify::Toasts;
+use crate::ui::notify::{self, Toasts};
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{file_ops, SettingsPanel, ToolBar, UnsavedChangesDialog};
@@ -305,30 +305,62 @@ pub fn App() -> impl IntoView {
     });
 
     // ── Autosave ───────────────────────────────────────────────────────────
-    // Native only: with a real document path, write the scene back a moment
-    // after the last change so a burst of edits collapses into one save.
+    // Native only for now. With a document path, write the scene back a moment
+    // after the last change so a burst of edits collapses into one save. With
+    // no path, ask for one once so autosave has somewhere to write.
     let autosave_generation = create_rw_signal(0_u64);
+    let autosave_prompted = create_rw_signal(false);
+    let autosave_doc = doc.clone();
     create_effect(move |_| {
         // Track the inputs without cloning the scene on every drag frame;
         // the deep clone only happens once per debounced save.
         scene.with(|_| ());
         saved_path.with(|_| ());
-        if !is_tauri || !settings.get().autosave || saved_path.get_untracked().is_none() {
+        if saved_path.get_untracked().is_some() {
+            autosave_prompted.set(false);
+        }
+        if !is_tauri || !settings.get().autosave {
             return;
         }
         let generation = autosave_generation.get_untracked().wrapping_add(1);
         autosave_generation.set(generation);
+        let doc = autosave_doc.clone();
         set_timeout(
             move || {
                 if autosave_generation.get_untracked() != generation {
                     return;
                 }
+                if !doc.is_dirty_now() {
+                    return;
+                }
                 let Some(path) = saved_path.get_untracked() else {
+                    if !autosave_prompted.get_untracked() {
+                        autosave_prompted.set(true);
+                        let settings = settings;
+                        let notifications = doc.notifications;
+                        file_ops::file_save_with(
+                            doc.clone(),
+                            Rc::new(move |saved| {
+                                if !saved {
+                                    settings.update(|s| s.autosave = false);
+                                    notify::error(
+                                        notifications,
+                                        "Autosave could not save this drawing.",
+                                    );
+                                }
+                            }),
+                        );
+                    }
                     return;
                 };
-                let content = skea::save_to_string(&scene.get_untracked());
+                let saved = doc.scene.get_untracked();
+                let content = skea::save_to_string(&saved);
+                let notifications = doc.notifications;
                 spawn_local(async move {
-                    let _ = tauri_bridge::save_skea(&path, &content).await;
+                    match tauri_bridge::save_skea(&path, &content).await {
+                        Ok(()) => doc.mark_saved(Some(path), saved),
+                        Err(e) => notify::error(notifications, format!("Could not autosave: {e}")),
+                    }
                 });
             },
             Duration::from_millis(800),

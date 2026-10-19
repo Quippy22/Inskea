@@ -48,6 +48,7 @@ fn save_as(doc: DocContext, on_done: Option<SaveCallback>) {
 fn save_to_path(doc: DocContext, path: String, on_done: Option<SaveCallback>) {
     let notifications = doc.notifications;
     spawn_local(async move {
+        let path = tauri_bridge::with_skea_extension(&path);
         let saved = doc.scene.get_untracked();
         let content = skea::save_to_string(&saved);
         match tauri_bridge::save_skea(&path, &content).await {

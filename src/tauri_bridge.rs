@@ -118,15 +118,19 @@ pub async fn save_file_binary(path: &str, data: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// Save scene content to a file at the given path.
-/// Auto-appends `.skea` extension if missing.
-pub async fn save_skea(path: &str, content: &str) -> Result<(), String> {
-    let path = if path.ends_with(".skea") {
+/// Append the `.skea` extension unless the path already has it.
+pub fn with_skea_extension(path: &str) -> String {
+    if path.to_ascii_lowercase().ends_with(".skea") {
         path.to_string()
     } else {
         format!("{path}.skea")
-    };
-    save_file(&path, content).await
+    }
+}
+
+/// Save scene content to a file at the given path.
+/// Auto-appends `.skea` extension if missing.
+pub async fn save_skea(path: &str, content: &str) -> Result<(), String> {
+    save_file(&with_skea_extension(path), content).await
 }
 
 /// Set the native window title. Tauri windows do not follow `document.title`,
