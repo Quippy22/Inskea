@@ -1,5 +1,5 @@
 use crate::canvas::CanvasMode;
-use crate::document::DocContext;
+use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::edit_ops::{self, Clipboard};
 use crate::model::{Alignment, Distribution, Point};
 use crate::ui::dock::Tool;
@@ -53,6 +53,7 @@ pub struct HotkeysContext {
     pub selected_tool: RwSignal<Tool>,
     pub eraser_active: RwSignal<bool>,
     pub doc: DocContext,
+    pub request_action: RequestAction,
     pub clipboard: RwSignal<Clipboard>,
     pub cursor_world: RwSignal<Point>,
     pub shortcuts_open: RwSignal<bool>,
@@ -151,8 +152,20 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
             Alignment::Bottom,
             &ctx.push_snapshot,
         ),
-        (true, "n") | (true, "N") => file_ops::file_new(ctx.doc.clone()),
-        (true, "o") | (true, "O") => file_ops::file_open(ctx.doc.clone()),
+        (true, "n") | (true, "N") => {
+            let doc = ctx.doc.clone();
+            (ctx.request_action)(PendingAction {
+                label: "start a new drawing",
+                run: Rc::new(move || file_ops::file_new(doc.clone())),
+            });
+        }
+        (true, "o") | (true, "O") => {
+            let doc = ctx.doc.clone();
+            (ctx.request_action)(PendingAction {
+                label: "open another drawing",
+                run: Rc::new(move || file_ops::file_open(doc.clone())),
+            });
+        }
         (true, "s") | (true, "S") => {
             if shift {
                 file_ops::file_save_as(ctx.doc.clone());

@@ -1,10 +1,15 @@
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+use tauri::{Emitter, Manager};
 
 mod setup;
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Set once the frontend has answered a close request.
+struct CloseConfirmed(AtomicBool);
 
 /// Write a file through a sibling temp file so an interrupted save cannot
 /// truncate the previous contents.
@@ -112,6 +117,15 @@ fn set_window_title(window: tauri::Window, title: String) {
     let _ = window.set_title(&title);
 }
 
+/// Close the window after the frontend has resolved the unsaved-changes
+/// prompt. The close request event handler checks this flag so the second
+/// close attempt goes through.
+#[tauri::command]
+fn close_window(window: tauri::Window, state: tauri::State<CloseConfirmed>) {
+    state.0.store(true, Ordering::SeqCst);
+    let _ = window.close();
+}
+
 #[tauri::command]
 fn get_documents_dir(app_handle: tauri::AppHandle) -> Result<String, String> {
     setup::documents_dir(&app_handle).map(|p| p.to_string_lossy().to_string())
@@ -146,17 +160,28 @@ fn get_font_paths(app_handle: tauri::AppHandle) -> Result<Vec<String>, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(CloseConfirmed(AtomicBool::new(false)))
         .invoke_handler(tauri::generate_handler![
             save_file,
             save_file_binary,
             save_skea,
             load_skea,
             set_window_title,
+            close_window,
             get_documents_dir,
             save_settings,
             load_settings,
             get_font_paths
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let confirmed = window.app_handle().state::<CloseConfirmed>();
+                if !confirmed.0.load(Ordering::SeqCst) {
+                    api.prevent_close();
+                    let _ = window.emit("inskea-close-requested", ());
+                }
+            }
+        })
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

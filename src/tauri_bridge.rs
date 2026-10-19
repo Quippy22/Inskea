@@ -13,6 +13,9 @@ extern "C" {
 
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "dialog"])]
     pub async fn open(options: JsValue) -> JsValue;
+
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "event"], catch)]
+    async fn listen(event: &str, handler: &JsValue) -> Result<JsValue, JsValue>;
 }
 
 fn invoke_error(e: JsValue) -> String {
@@ -184,4 +187,24 @@ pub async fn get_font_paths() -> Result<Vec<String>, String> {
 /// Turn an absolute file path into an `asset://` URL the webview can load.
 pub fn asset_url(path: &str) -> String {
     convert_file_src(path)
+}
+
+/// Close the native window, bypassing the unsaved-changes intercept.
+pub fn close_window() {
+    wasm_bindgen_futures::spawn_local(async move {
+        let args = JsValue::from(js_sys::Object::new());
+        let _ = invoke("close_window", args).await;
+    });
+}
+
+/// Register a listener for the native window close request. The Rust side
+/// intercepts the OS close button and asks the frontend whether it may close.
+pub fn on_close_requested(callback: impl Fn() + 'static) {
+    wasm_bindgen_futures::spawn_local(async move {
+        let handler = wasm_bindgen::closure::Closure::wrap(Box::new(move |_event: JsValue| {
+            callback();
+        }) as Box<dyn FnMut(JsValue)>);
+        let _ = listen("inskea-close-requested", handler.as_ref()).await;
+        handler.forget();
+    });
 }

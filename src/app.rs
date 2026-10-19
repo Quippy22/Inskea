@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
 use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
-use crate::document::DocContext;
+use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::edit_ops::Clipboard;
 use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
 use crate::model::{Color, ElementId, ElementStyle, LineStyle, Point, Scene};
@@ -13,9 +13,10 @@ use crate::ui::dock::{Dock, Tool};
 use crate::ui::notify::Toasts;
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
-use crate::ui::{SettingsPanel, ToolBar};
+use crate::ui::{file_ops, SettingsPanel, ToolBar, UnsavedChangesDialog};
 use leptos::*;
 use std::time::Duration;
+use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 /// Update the window title on both targets: `document.title` for the browser,
@@ -144,6 +145,71 @@ pub fn App() -> impl IntoView {
         reset_history: reset_history.clone(),
     };
 
+    let is_tauri = tauri_bridge::is_tauri();
+
+    // Actions that replace or discard the document ask for confirmation when
+    // there are unsaved edits. The action itself is stored so it can run after
+    // the dialog resolves.
+    let pending_action = create_rw_signal::<Option<PendingAction>>(None);
+    let request_action: RequestAction = {
+        let doc = doc.clone();
+        Rc::new(move |action: PendingAction| {
+            if doc.is_dirty_now() {
+                pending_action.set(Some(action));
+            } else {
+                (action.run)();
+            }
+        })
+    };
+
+    if is_tauri {
+        let request = request_action.clone();
+        tauri_bridge::on_close_requested(move || {
+            request(PendingAction {
+                label: "close Inskea",
+                run: Rc::new(tauri_bridge::close_window),
+            });
+        });
+    } else if let Some(window) = web_sys::window() {
+        let doc = doc.clone();
+        let handler = wasm_bindgen::closure::Closure::wrap(Box::new(
+            move |event: web_sys::BeforeUnloadEvent| {
+                if doc.is_dirty_now() {
+                    event.prevent_default();
+                    event.set_return_value("You have unsaved changes.");
+                }
+            },
+        ) as Box<dyn FnMut(_)>);
+        let _ = window
+            .add_event_listener_with_callback("beforeunload", handler.as_ref().unchecked_ref());
+        handler.forget();
+    }
+
+    let dialog_save = {
+        let doc = doc.clone();
+        Callback::new(move |_: ()| {
+            let doc = doc.clone();
+            file_ops::file_save_with(
+                doc,
+                Rc::new(move |saved| {
+                    if let Some(action) = pending_action.get_untracked() {
+                        if saved {
+                            pending_action.set(None);
+                            (action.run)();
+                        }
+                    }
+                }),
+            );
+        })
+    };
+    let dialog_discard = Callback::new(move |_: ()| {
+        if let Some(action) = pending_action.get_untracked() {
+            pending_action.set(None);
+            (action.run)();
+        }
+    });
+    let dialog_cancel = Callback::new(move |_: ()| pending_action.set(None));
+
     // Window title: the file name plus a `*` while the scene differs from
     // what was last written to disk.
     {
@@ -188,6 +254,7 @@ pub fn App() -> impl IntoView {
         selected_tool,
         eraser_active,
         doc: doc.clone(),
+        request_action: request_action.clone(),
         clipboard,
         cursor_world,
         shortcuts_open,
@@ -199,7 +266,6 @@ pub fn App() -> impl IntoView {
     register_hotkeys(ctx);
 
     let initialized = create_rw_signal(false);
-    let is_tauri = tauri_bridge::is_tauri();
 
     if is_tauri {
         crate::fonts::ensure_fonts_installed();
@@ -319,6 +385,7 @@ pub fn App() -> impl IntoView {
             />
             <ToolBar
                 doc=doc.clone()
+                request_action=request_action.clone()
                 viewport=viewport
                 canvas_mode=canvas_mode
                 on_undo=do_undo
@@ -332,6 +399,12 @@ pub fn App() -> impl IntoView {
             <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />
             <SettingsPanel settings=settings />
             <ShortcutsModal shortcuts_open=shortcuts_open />
+            <UnsavedChangesDialog
+                pending=pending_action
+                on_save=dialog_save
+                on_discard=dialog_discard
+                on_cancel=dialog_cancel
+            />
             <Toasts notifications=notifications />
 
             <div

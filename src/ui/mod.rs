@@ -10,6 +10,8 @@ pub(crate) mod settings;
 /// and reusable UI building blocks.
 pub(crate) mod styles;
 mod toolbar;
+pub(crate) mod unsaved_dialog;
 
 pub use settings::SettingsPanel;
 pub use toolbar::ToolBar;
+pub use unsaved_dialog::UnsavedChangesDialog;

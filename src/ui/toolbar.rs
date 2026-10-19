@@ -1,6 +1,6 @@
 #![allow(clippy::redundant_locals)]
 use crate::canvas::{CanvasMode, CropExportCallback, Viewport};
-use crate::document::DocContext;
+use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::model::Rect;
 use crate::skea;
 use crate::tauri_bridge;
@@ -74,6 +74,7 @@ fn browser_import(doc: DocContext) {
 #[component]
 pub fn ToolBar<F1, F2>(
     doc: DocContext,
+    request_action: RequestAction,
     viewport: RwSignal<Viewport>,
     canvas_mode: RwSignal<CanvasMode>,
     on_undo: F1,
@@ -115,9 +116,14 @@ where
     let on_new = {
         let close_menu = close_menu;
         let doc = doc.clone();
+        let request_action = request_action.clone();
         move || {
             close_menu();
-            file_ops::file_new(doc.clone());
+            let doc = doc.clone();
+            request_action(PendingAction {
+                label: "start a new drawing",
+                run: Rc::new(move || file_ops::file_new(doc.clone())),
+            });
         }
     };
     let on_save_as = {
@@ -139,39 +145,52 @@ where
     let on_open = {
         let close_menu = close_menu;
         let doc = doc.clone();
+        let request_action = request_action.clone();
         move || {
             close_menu();
-            file_ops::file_open(doc.clone());
+            let doc = doc.clone();
+            request_action(PendingAction {
+                label: "open another drawing",
+                run: Rc::new(move || file_ops::file_open(doc.clone())),
+            });
         }
     };
     let on_import = {
         let close_menu = close_menu;
         let doc = doc.clone();
+        let request_action = request_action.clone();
         move || {
             close_menu();
-            if tauri {
-                let doc = doc.clone();
-                spawn_local(async move {
-                    let path = tauri_bridge::pick_open_path(None).await;
-                    if let Some(path) = path {
-                        match tauri_bridge::load_skea(&path).await {
-                            Ok(c) => match skea::load_from_str(&c) {
-                                Ok(loaded) => doc.adopt(loaded, Some(path)),
+            let doc = doc.clone();
+            let run = Rc::new(move || {
+                if tauri {
+                    let doc = doc.clone();
+                    spawn_local(async move {
+                        let path = tauri_bridge::pick_open_path(None).await;
+                        if let Some(path) = path {
+                            match tauri_bridge::load_skea(&path).await {
+                                Ok(c) => match skea::load_from_str(&c) {
+                                    Ok(loaded) => doc.adopt(loaded, Some(path)),
+                                    Err(e) => crate::ui::notify::error(
+                                        doc.notifications,
+                                        format!("That file is not a valid Inskea drawing: {e}"),
+                                    ),
+                                },
                                 Err(e) => crate::ui::notify::error(
                                     doc.notifications,
-                                    format!("That file is not a valid Inskea drawing: {e}"),
+                                    format!("Could not open the file: {e}"),
                                 ),
-                            },
-                            Err(e) => crate::ui::notify::error(
-                                doc.notifications,
-                                format!("Could not open the file: {e}"),
-                            ),
+                            }
                         }
-                    }
-                });
-            } else {
-                browser_import(doc.clone());
-            }
+                    });
+                } else {
+                    browser_import(doc.clone());
+                }
+            });
+            request_action(PendingAction {
+                label: "import another drawing",
+                run,
+            });
         }
     };
 

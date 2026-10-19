@@ -3,6 +3,17 @@ use crate::ui::notify::Notifications;
 use leptos::*;
 use std::rc::Rc;
 
+/// A document action that may need the user's confirmation first.
+#[derive(Clone)]
+pub struct PendingAction {
+    /// Completes the sentence "Save your drawing before you ...".
+    pub label: &'static str,
+    pub run: Rc<dyn Fn()>,
+}
+
+/// Ask to run an action, prompting first when the document has unsaved edits.
+pub type RequestAction = Rc<dyn Fn(PendingAction)>;
+
 /// Shared state for the open document: its scene, file path, selection, the
 /// last saved contents, and the undo-history reset hook.
 #[derive(Clone)]
