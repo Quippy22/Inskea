@@ -39,6 +39,7 @@
     "category": "GraphicsAndDesign",
     "shortDescription": "Infinite-canvas drawing app",
     "longDescription": "Inskea is an infinite-canvas drawing application for sketching shapes, freehand strokes, and text.",
+    "resources": ["fonts/*"],
     "linux": {
       "deb": {
         "desktopTemplate": "linux/inskea.desktop"

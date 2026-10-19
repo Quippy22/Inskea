@@ -86,13 +86,26 @@ fn download(url: &str, file: &Path) -> Result<(), String> {
     })
 }
 
-/// Download any missing font files into the app-data fonts dir. Idempotent.
-/// Returns the installed font file paths (regular + italic, in that order).
+/// Locate a font shipped in the app's resource directory.
+fn bundled_font(handle: &AppHandle, name: &str) -> Option<PathBuf> {
+    let path = handle.path().resource_dir().ok()?.join("fonts").join(name);
+    path.is_file().then_some(path)
+}
+
+/// Install the fonts into app-data, preferring the copies bundled with the
+/// app (so the first launch works offline) and falling back to a download.
+/// Idempotent. Returns the installed font file paths (regular + italic).
 pub fn install_fonts(handle: &AppHandle) -> Result<Vec<PathBuf>, String> {
     let dir = fonts_dir(handle)?;
     for (name, url) in FONTS {
         let file = dir.join(name);
-        if !file.exists() {
+        if file.exists() {
+            continue;
+        }
+        if let Some(bundled) = bundled_font(handle, name) {
+            fs::copy(&bundled, &file)
+                .map_err(|e| format!("failed to install the bundled font: {e}"))?;
+        } else {
             download(url, &file)?;
         }
     }
