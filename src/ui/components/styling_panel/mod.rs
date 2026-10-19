@@ -121,7 +121,9 @@ pub fn StylingPanel(
 
     create_effect(move |_| {
         let _ids = selected_ids.get();
-        let _s = scene.get();
+        // Track scene changes without cloning the document (this effect
+        // re-runs on every drag step).
+        let _ = scene.with(|_| ());
         let _dls = default_line_style.get();
         let (new_style, new_line_style) = leptos::untrack(|| {
             read_panel_state(

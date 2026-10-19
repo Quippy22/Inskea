@@ -99,8 +99,10 @@ pub fn App() -> impl IntoView {
         }
     };
 
-    let can_undo = Signal::derive(move || !undo_stack.get().is_empty());
-    let can_redo = Signal::derive(move || !redo_stack.get().is_empty());
+    // `with` instead of `get`: these memos run whenever the history changes
+    // and must not deep-clone the (up to 100-scene) stacks.
+    let can_undo = Signal::derive(move || undo_stack.with(|s| !s.is_empty()));
+    let can_redo = Signal::derive(move || redo_stack.with(|s| !s.is_empty()));
 
     let saved_path = create_rw_signal::<Option<String>>(None);
 

@@ -733,22 +733,25 @@ pub fn Canvas(
                 let editing_id = st.text_edit.editing_id;
                 move || {
                     let editing = editing_id.get();
-                    props
-                        .scene
-                        .get()
-                        .elements()
-                        .iter()
-                        .filter(|el| Some(el.id()) != editing)
-                        .map(|el| {
-                            // Elements render in world coordinates: the SVG
-                            // `viewBox` applies the pan/zoom, so `render` ignores
-                            // the zoom argument. Reading the viewport here would
-                            // rebuild the whole scene on every pan (e.g. while the
-                            // text follow-pan is typing), so stay untracked.
-                            view! { <g pointer-events="none">{el.render(1.0)}</g> }
-                                .into_view()
-                        })
-                        .collect_view()
+                    // The scene is read with `with` (not `get`) so this
+                    // closure does not deep-clone the whole document on
+                    // every drag step.
+                    props.scene.with(|scene| {
+                        scene
+                            .elements()
+                            .iter()
+                            .filter(|el| Some(el.id()) != editing)
+                            .map(|el| {
+                                // Elements render in world coordinates: the SVG
+                                // `viewBox` applies the pan/zoom, so `render` ignores
+                                // the zoom argument. Reading the viewport here would
+                                // rebuild the whole scene on every pan (e.g. while the
+                                // text follow-pan is typing), so stay untracked.
+                                view! { <g pointer-events="none">{el.render(1.0)}</g> }
+                                    .into_view()
+                            })
+                            .collect_view()
+                    })
                 }
             }
 

@@ -299,46 +299,50 @@ pub fn selection_handle_overlay(
         if ids.is_empty() {
             return None;
         }
-        let els = scene.get().elements().to_vec();
-        let hex = Color::BLUE;
+        // `with` instead of `get`: the overlay re-runs on every scene change
+        // (including each drag step) and must not clone the document.
+        scene.with(|s| {
+            let els = s.elements();
+            let hex = Color::BLUE;
 
-        if ids.len() == 1 {
-            if let Some(el) = els.iter().find(|el| el.id() == ids[0]) {
-                if let Some(view) = render_path_element_overlay(el, hex) {
-                    return Some(view);
+            if ids.len() == 1 {
+                if let Some(el) = els.iter().find(|el| el.id() == ids[0]) {
+                    if let Some(view) = render_path_element_overlay(el, hex) {
+                        return Some(view);
+                    }
                 }
             }
-        }
 
-        let b = compute_padded_bounds(&ids, &els, overlay_freeze);
-        let hr = 3.5;
-        let cx = b.center().x;
-        let cy = b.center().y;
-        let rx = cx;
-        let ry = b.y - ROTATE_HANDLE_OFFSET;
+            let b = compute_padded_bounds(&ids, els, overlay_freeze);
+            let hr = 3.5;
+            let cx = b.center().x;
+            let cy = b.center().y;
+            let rx = cx;
+            let ry = b.y - ROTATE_HANDLE_OFFSET;
 
-        let rot = compute_rotation(&ids, &els, rotation_delta);
-        let individual_boxes = render_multi_select_boxes(&ids, &els, hex);
-        let inner = render_bbox_overlay(b.x, b.y, b.w, b.h, hr, hex);
-        let icons = render_move_rotate_icons(hex, cx, cy, rx, ry);
+            let rot = compute_rotation(&ids, els, rotation_delta);
+            let individual_boxes = render_multi_select_boxes(&ids, els, hex);
+            let inner = render_bbox_overlay(b.x, b.y, b.w, b.h, hr, hex);
+            let icons = render_move_rotate_icons(hex, cx, cy, rx, ry);
 
-        let content = if rot != 0.0 {
-            let deg = rot.to_degrees();
-            view! {
-                {individual_boxes}
-                <g transform=format!("rotate({} {} {})", deg, cx, cy)>{inner}{icons}</g>
-            }
-            .into_view()
-        } else {
-            view! {
-                {individual_boxes}
-                {inner}
-                {icons}
-            }
-            .into_view()
-        };
+            let content = if rot != 0.0 {
+                let deg = rot.to_degrees();
+                view! {
+                    {individual_boxes}
+                    <g transform=format!("rotate({} {} {})", deg, cx, cy)>{inner}{icons}</g>
+                }
+                .into_view()
+            } else {
+                view! {
+                    {individual_boxes}
+                    {inner}
+                    {icons}
+                }
+                .into_view()
+            };
 
-        Some(content)
+            Some(content)
+        })
     }
 }
 

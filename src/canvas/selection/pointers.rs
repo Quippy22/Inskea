@@ -408,50 +408,58 @@ fn detect_hovered_handle(
     if ids.is_empty() {
         return None;
     }
-    let els = props.scene.get().elements().to_vec();
+    // `with` instead of `get`: hover runs on every pointer move and must
+    // not deep-clone the whole scene.
+    props.scene.with(|s| {
+        let els = s.elements();
 
-    if ids.len() == 1 {
-        if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
-            if let Some(points) = el.path_points() {
-                for (i, p) in points.iter().enumerate() {
-                    if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt()
-                        <= HANDLE_RESIZE_RADIUS
+        if ids.len() == 1 {
+            if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
+                if let Some(points) = el.path_points() {
+                    for (i, p) in points.iter().enumerate() {
+                        if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt()
+                            <= HANDLE_RESIZE_RADIUS
+                        {
+                            return Some(DragOperation::PathPoint(i));
+                        }
+                    }
+                    let b = el.bounds();
+                    let mx = b.x + b.w / 2.0;
+                    let my = b.y - 25.0;
+                    if ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt()
+                        <= HANDLE_MOVE_RADIUS
                     {
-                        return Some(DragOperation::PathPoint(i));
+                        return Some(DragOperation::Move);
                     }
                 }
-                let b = el.bounds();
-                let mx = b.x + b.w / 2.0;
-                let my = b.y - 25.0;
-                if ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
-                    return Some(DragOperation::Move);
+            }
+        }
+
+        if let Some(mut b) = selection_bounds(&ids, els) {
+            b = b.padded(SELECT_PADDING);
+            let hpos = handle_positions(b.x, b.y, b.w, b.h);
+
+            for (i, &p) in hpos[..8].iter().enumerate() {
+                if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt()
+                    <= HANDLE_RESIZE_RADIUS
+                {
+                    return Some(DragOperation::Resize(ResizeHandle::from(i)));
                 }
             }
-        }
-    }
 
-    if let Some(mut b) = selection_bounds(&ids, &els) {
-        b = b.padded(SELECT_PADDING);
-        let hpos = handle_positions(b.x, b.y, b.w, b.h);
+            let p = hpos[8];
+            if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+                return Some(DragOperation::Move);
+            }
 
-        for (i, &p) in hpos[..8].iter().enumerate() {
-            if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
-                return Some(DragOperation::Resize(ResizeHandle::from(i)));
+            let p = hpos[9];
+            if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
+                return Some(DragOperation::Rotate);
             }
         }
 
-        let p = hpos[8];
-        if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
-            return Some(DragOperation::Move);
-        }
-
-        let p = hpos[9];
-        if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
-            return Some(DragOperation::Rotate);
-        }
-    }
-
-    None
+        None
+    })
 }
 
 /// Apply a resize drag to all selected elements, restoring from originals each frame.
@@ -802,7 +810,11 @@ pub fn select_pointer_move(
 ) {
     if st.drag.moving_anchor.get().is_none() {
         let hovered = detect_hovered_handle(world, st, props);
-        st.drag.hovered_handle.set(hovered);
+        // Only notify when it actually changed: setting the signal on every
+        // move re-runs the cursor effect and downstream work for nothing.
+        if st.drag.hovered_handle.with(|h| *h != hovered) {
+            st.drag.hovered_handle.set(hovered);
+        }
     }
 
     if let Some(anchor) = st.drag.moving_anchor.get() {

@@ -209,8 +209,7 @@ where
                 let close_menu = _close_menu;
                 on_crop_export.set(Some(Rc::new(move |rect: Rect| {
                     close_menu();
-                    let s = scene.get();
-                    let svg = export::scene_to_svg_crop(&s, rect);
+                    let svg = scene.with(|s| export::scene_to_svg_crop(s, rect));
                     match fmt {
                         ExportFormat::Svg => {
                             if tauri {
@@ -231,10 +230,9 @@ where
                 export_crop_active.set(true);
                 return;
             }
-            let s = _scene.get();
             let vp = viewport.get();
             let size = window_size();
-            let svg = export::scene_to_svg(&s, &vp, size, None);
+            let svg = _scene.with(|s| export::scene_to_svg(s, &vp, size, None));
             match fmt {
                 ExportFormat::Svg => {
                     if tauri {
