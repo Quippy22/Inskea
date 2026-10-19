@@ -568,28 +568,43 @@ impl Text {
             orig.world_point.x + orig.width / 2.0,
             orig.world_point.y + orig.height / 2.0,
         );
-        let (free_x, _) = ctx.handle.free_axes();
-        let divider = if free_x { orig.width } else { orig.height };
-        if divider <= 0.0 {
+        let (free_x, free_y) = ctx.handle.free_axes();
+        if orig.width <= 0.0 || orig.height <= 0.0 {
             return;
         }
         let anchor = ctx.handle.opposite_anchor(orig);
         let local_pointer = rotate_point_around(ctx.pointer_world, center, -rotation);
-        let distance = if ctx.alt {
-            if free_x {
+        let scale = if ctx.alt {
+            let distance = if free_x {
                 2.0 * (local_pointer.x - center.x).abs()
             } else {
                 2.0 * (local_pointer.y - center.y).abs()
+            };
+            distance / if free_x { orig.width } else { orig.height }
+        } else if free_x && free_y {
+            // Corner: measure both axes against the grab point. The scale
+            // starts at exactly 1 (the handle sits outside the layout box, so
+            // an absolute measure would jump on pointer-down) and a drag that
+            // leans vertical still scales, instead of only hearing the
+            // horizontal travel and appearing to lock.
+            let start = rotate_point_around(ctx.start_world, center, -rotation);
+            let sx = 1.0
+                + ((local_pointer.x - anchor.x).abs() - (start.x - anchor.x).abs()) / orig.width;
+            let sy = 1.0
+                + ((local_pointer.y - anchor.y).abs() - (start.y - anchor.y).abs()) / orig.height;
+            // Follow whichever axis the pointer actually moved along; taking
+            // the larger factor would block shrinking drags on the other axis.
+            if (sx - 1.0).abs() >= (sy - 1.0).abs() {
+                sx
+            } else {
+                sy
             }
-        } else if free_x {
-            (local_pointer.x - anchor.x).abs()
         } else {
-            (local_pointer.y - anchor.y).abs()
+            (local_pointer.y - anchor.y).abs() / orig.height
         };
-        let mut scale = distance / divider;
         // Never shrink below the minimum font size.
         let min_scale = MIN_FONT_SIZE / orig.style.font_size.max(MIN_FONT_SIZE);
-        scale = scale.max(min_scale);
+        let scale = scale.max(min_scale);
 
         let new_w = orig.width * scale;
         let new_h = orig.height * scale;
@@ -674,6 +689,7 @@ mod tests {
     fn ctx<'a>(
         orig: &'a Element,
         handle: ResizeHandle,
+        start: Point,
         pointer: Point,
         alt: bool,
     ) -> ResizeContext<'a> {
@@ -681,6 +697,7 @@ mod tests {
             orig,
             handle,
             pointer_world: pointer,
+            start_world: start,
             shift: false,
             alt,
             multi: false,
@@ -722,7 +739,13 @@ mod tests {
         let orig = Element::Text(t.clone());
         // W drag: pointer 6px from the right edge → 22-wide box clamped to the
         // longest word ("aa"/"bb"/"cc"). The right edge stays fixed at x=56.
-        t.resize(&ctx(&orig, ResizeHandle::W, Point::new(50.0, 10.0), false));
+        t.resize(&ctx(
+            &orig,
+            ResizeHandle::W,
+            Point::new(56.0, 10.0),
+            Point::new(50.0, 10.0),
+            false,
+        ));
         assert!((t.data.width - 22.0).abs() < 0.001);
         assert!((t.data.world_point.x - 34.0).abs() < 0.001);
         assert_eq!(t.wrapped.lines, vec!["aa", "bb", "cc"]);
@@ -735,13 +758,44 @@ mod tests {
         t.recalc();
         assert_eq!(t.wrapped.lines, vec!["aa bb", "cc"]);
         let orig = Element::Text(t.clone());
-        // SE drag to 1.5× the width → font, width and height all scale 1.5×.
+        // SE drag from the box corner to 1.5× the size → font, width and
+        // height all scale 1.5×.
         let fs_before = t.data.style.font_size;
-        t.resize(&ctx(&orig, ResizeHandle::Se, Point::new(84.0, 72.0), false));
+        t.resize(&ctx(
+            &orig,
+            ResizeHandle::Se,
+            Point::new(56.0, 48.0),
+            Point::new(84.0, 72.0),
+            false,
+        ));
         assert_eq!(t.data.style.font_size, fs_before * 1.5);
         assert!((t.data.width - 84.0).abs() < 0.001);
         assert!((t.data.height - 72.0).abs() < 0.001);
         assert_eq!(t.wrapped.lines, vec!["aa bb", "cc"]);
+    }
+
+    #[test]
+    fn corner_resize_starts_at_one_and_follows_vertical_drags() {
+        let mut t = text_elem("aa bb cc", 56.0, 20.0);
+        t.recalc();
+        let orig = Element::Text(t.clone());
+        // The handle is drawn outside the layout box (tight glyph box + padding).
+        let grab = Point::new(58.5, 29.0);
+        // Grabbing the handle must not resize anything.
+        t.resize(&ctx(&orig, ResizeHandle::Se, grab, grab, false));
+        assert_eq!(t.data.style.font_size, 20.0);
+        assert!((t.data.width - 56.0).abs() < 0.001);
+        // Pulling straight down scales from the vertical travel alone.
+        t.resize(&ctx(
+            &orig,
+            ResizeHandle::Se,
+            grab,
+            Point::new(58.5, 77.0),
+            false,
+        ));
+        assert_eq!(t.data.style.font_size, 40.0);
+        assert!((t.data.width - 112.0).abs() < 0.001);
+        assert!((t.data.height - 96.0).abs() < 0.001);
     }
 
     #[test]

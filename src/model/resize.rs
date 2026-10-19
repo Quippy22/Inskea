@@ -200,6 +200,10 @@ pub struct ResizeContext<'a> {
     pub orig: &'a Element,
     pub handle: ResizeHandle,
     pub pointer_world: Point,
+    /// World point where the resize drag started (the grab point). Deltas
+    /// against it keep the size from jumping on pointer-down when the handle
+    /// sits outside the element's layout box (text handles do).
+    pub start_world: Point,
     pub shift: bool,
     pub alt: bool,
     pub multi: bool,

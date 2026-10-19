@@ -466,6 +466,9 @@ fn detect_hovered_handle(
 #[inline]
 fn do_resize(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
     if let Some(b) = st.drag.drag_bounds.get() {
+        let Some(start_world) = st.drag.moving_anchor.get() else {
+            return;
+        };
         st.drag.last_world.set(Some(world));
         let ids = st.selected_ids.get();
         let multi = ids.len() > 1;
@@ -484,6 +487,7 @@ fn do_resize(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
                             orig,
                             handle,
                             pointer_world: world,
+                            start_world,
                             shift,
                             alt,
                             multi,
