@@ -371,7 +371,7 @@ where
                 </button>
                 <button
                     class="flex items-center justify-center h-8 rounded-md text-xs text-subtle hover:text-fg transition-colors tabular-nums min-w-[2.5rem]"
-                    on:click=move |_| viewport.set(Viewport::default())
+                    on:click=move |_| viewport.update(|vp| vp.zoom = 1.0)
                     title="Reset zoom to 100%"
                 >
                     {move || {
