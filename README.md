@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/version-0.9.0-blue?style=flat-square" alt="Version 0.9.0">
+  <img src="https://img.shields.io/badge/version-0.10.0-blue?style=flat-square" alt="Version 0.10.0">
   <img src="https://img.shields.io/badge/platform-desktop%20%7C%20browser-blueviolet?style=flat-square" alt="Platform: desktop and browser">
 </p>
 
@@ -30,7 +30,7 @@ It runs as a native desktop app and in the browser, with the same tools and the 
 ### Arrange
 
 - **Selection.** Click an element, Shift-click to add or drop items, or drag a box to select everything inside.
-- **Move, resize, rotate.** Drag elements directly, resize from eight handles, and rotate from the top handle. Hold Shift to keep proportions or snap rotation to 15 degree steps, and Alt to resize around the center. Release a drag with Alt held to snap to the grid.
+- **Move, resize, rotate.** Drag elements directly, resize from eight handles, and rotate from the top handle. Hold Shift to keep proportions or snap rotation to 15 degree steps, and Alt to resize around the center. While moving, hold Alt to snap the selection to the grid live, even with the grid hidden.
 - **Smart guides.** Hold Shift while moving elements and guides appear, snapping your selection to shared edges, centers, and even spacing.
 - **Groups.** Combine elements into a single unit, then double-click to step inside and edit one part.
 - **Alignment.** Align elements six ways, or distribute spacing evenly along either axis.
