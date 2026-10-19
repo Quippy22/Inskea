@@ -2,6 +2,7 @@ use super::utils::{selection_bounds, ROTATE_HANDLE_OFFSET, SELECT_PADDING};
 use super::DASH_PREVIEW;
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{Bounds, PathPoints};
+use crate::model::interaction::layout_bounds;
 use crate::model::{Color, Element, ElementId, Point, Rect, Scene};
 use leptos::*;
 
@@ -132,6 +133,24 @@ fn compute_padded_bounds(
     b
 }
 
+/// Centre the handle assembly rotates about. While a rotation drag freezes the
+/// frame, the pivot stays where the drag started; otherwise a single selection
+/// spins around its element's layout centre, the point the element itself
+/// rotates around. (A Text's tight glyph box is not centred on that layout
+/// box, so using the drawn box centre would swing the handles off the glyphs.)
+#[inline]
+fn selection_pivot(ids: &[ElementId], els: &[Element], b: Rect, frozen: Option<Rect>) -> Point {
+    if let Some(fb) = frozen {
+        return fb.center();
+    }
+    if ids.len() == 1 {
+        if let Some(el) = els.iter().find(|el| el.id() == ids[0]) {
+            return layout_bounds(el).center();
+        }
+    }
+    b.center()
+}
+
 /// Determine the rotation angle to apply to the selection handle assembly.
 /// Single-select uses the element's own rotation (plus drag delta during rotate);
 /// multi-select only uses the drag delta.
@@ -172,8 +191,12 @@ fn render_multi_select_boxes(ids: &[ElementId], els: &[Element], hex: &'static s
             };
             let rot = el.data().rotation;
             if rot != 0.0 {
-                let cx = b.x + b.w / 2.0;
-                let cy = b.y + b.h / 2.0;
+                // Spin around the element's own render pivot: a Text's tight
+                // glyph box is not centred on the layout box its glyphs turn
+                // around, so the drawn box centre would drift off the glyphs.
+                let pivot = layout_bounds(el).center();
+                let cx = pivot.x;
+                let cy = pivot.y;
                 let deg = rot.to_degrees();
                 view! {
                     <g transform=format!("rotate({} {} {})", deg, cx, cy)>
@@ -315,8 +338,9 @@ pub fn selection_handle_overlay(
 
             let b = compute_padded_bounds(&ids, els, overlay_freeze);
             let hr = 3.5;
-            let cx = b.center().x;
-            let cy = b.center().y;
+            let pivot = selection_pivot(&ids, els, b, overlay_freeze.get());
+            let cx = pivot.x;
+            let cy = pivot.y;
             let rx = cx;
             let ry = b.y - ROTATE_HANDLE_OFFSET;
 
@@ -382,4 +406,37 @@ fn render_move_rotate_icons(hex: &'static str, cx: f64, cy: f64, rx: f64, ry: f6
         {rotate_icon}
     }
     .into_view()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::elements::text::WrappedText;
+    use crate::model::{ElementData, Text, TextAlign};
+
+    #[test]
+    fn text_handles_pivot_on_the_layout_centre() {
+        let mut text = Text {
+            data: ElementData::new(1),
+            wrapped: WrappedText::new("hi"),
+            align: TextAlign::Left,
+        };
+        text.data.width = 200.0;
+        text.data.height = 24.0;
+        let els = vec![Element::Text(text)];
+        let box_bounds = Rect::new(0.0, 6.0, 40.0, 12.0);
+
+        // The drawn box is the tight glyph box, not centred on the layout box
+        // the glyphs actually rotate around.
+        assert_eq!(
+            selection_pivot(&[1], &els, box_bounds, None),
+            Point::new(100.0, 12.0)
+        );
+        // A frozen frame (rotation drag in progress) keeps its own centre.
+        let frozen = Rect::new(0.0, 0.0, 50.0, 50.0);
+        assert_eq!(
+            selection_pivot(&[1], &els, box_bounds, Some(frozen)),
+            Point::new(25.0, 25.0)
+        );
+    }
 }
