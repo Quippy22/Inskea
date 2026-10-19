@@ -5,6 +5,7 @@ use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
 use crate::edit_ops::Clipboard;
 use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
 use crate::model::{Color, ElementId, ElementStyle, LineStyle, Point, Scene};
+use crate::skea;
 use crate::tauri_bridge;
 use crate::ui::components::StylingPanel;
 use crate::ui::dock::{Dock, Tool};
@@ -12,6 +13,7 @@ use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{SettingsPanel, ToolBar};
 use leptos::*;
+use std::time::Duration;
 use wasm_bindgen_futures::spawn_local;
 
 #[component]
@@ -163,6 +165,37 @@ pub fn App() -> impl IntoView {
         }
     });
 
+    // ── Autosave ───────────────────────────────────────────────────────────
+    // Native only: with a real document path, write the scene back a moment
+    // after the last change so a burst of edits collapses into one save.
+    let autosave_generation = create_rw_signal(0_u64);
+    create_effect(move |_| {
+        // Track the inputs without cloning the scene on every drag frame;
+        // the deep clone only happens once per debounced save.
+        scene.with(|_| ());
+        saved_path.with(|_| ());
+        if !is_tauri || !settings.get().autosave || saved_path.get_untracked().is_none() {
+            return;
+        }
+        let generation = autosave_generation.get_untracked().wrapping_add(1);
+        autosave_generation.set(generation);
+        set_timeout(
+            move || {
+                if autosave_generation.get_untracked() != generation {
+                    return;
+                }
+                let Some(path) = saved_path.get_untracked() else {
+                    return;
+                };
+                let content = skea::save_to_string(&scene.get_untracked());
+                spawn_local(async move {
+                    let _ = tauri_bridge::save_skea(&path, &content).await;
+                });
+            },
+            Duration::from_millis(800),
+        );
+    });
+
     // ── Default style for new shapes (draw-mode panel changes) ────────────
     let default_style = create_rw_signal(ElementStyle {
         stroke_color: selected_color.get_untracked(),
@@ -222,6 +255,7 @@ pub fn App() -> impl IntoView {
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
                 shortcuts_open=shortcuts_open
+                saved_path=saved_path
                 selected_ids=selected_ids
             />
             <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />

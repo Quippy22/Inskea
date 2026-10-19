@@ -81,6 +81,7 @@ pub fn ToolBar<F1, F2>(
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<CropExportCallback>>,
     shortcuts_open: RwSignal<bool>,
+    saved_path: RwSignal<Option<String>>,
     selected_ids: RwSignal<Vec<ElementId>>,
 ) -> impl IntoView
 where
@@ -88,7 +89,6 @@ where
     F2: Fn() + 'static,
 {
     let menu_open = create_rw_signal(false);
-    let saved_path = create_rw_signal::<Option<String>>(None);
     let tauri = tauri_bridge::is_tauri();
 
     // Submenu hover tracking — one pair per fly-out panel
