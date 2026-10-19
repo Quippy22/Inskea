@@ -1,6 +1,13 @@
 @import "tailwindcss";
 @source "./src/**/*.rs";
 
+/* Scale the whole UI with the viewport: every rem-based Tailwind utility
+   (panels, menus, dock, toolbar) follows the root font size, so the chrome
+   stays proportional instead of oversized on smaller screens. */
+html {
+  font-size: clamp(11px, 0.5vmin + 8.5px, 18px);
+}
+
 @theme {
   /* Tokyo Night */
   --color-bg: #1a1b26;

@@ -22,7 +22,8 @@ pub fn float_picker(
                             LpcColor::from_html("#3b4261").unwrap(),
                             "8px".to_string(),
                             "0 4px 12px rgba(0,0,0,0.3)".to_string(),
-                            "280px".to_string(),
+                            // rem so the picker tracks the responsive UI scale.
+                            "17.5rem".to_string(),
                         );
                         view! {
                             <LpcCp
