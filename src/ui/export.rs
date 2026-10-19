@@ -3,6 +3,8 @@ use crate::canvas::Viewport;
 use crate::model::{Element, ElementId, Point, Rect, Scene};
 use crate::skea;
 use crate::ui::notify::{self, Notifications};
+use leptos::set_timeout;
+use std::time::Duration;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
@@ -39,7 +41,13 @@ pub fn download_string(content: &str, filename: &str) {
         .dyn_ref::<web_sys::HtmlElement>()
         .map(|el| el.click());
     document.body().unwrap().remove_child(&anchor).ok();
-    web_sys::Url::revoke_object_url(&url).ok();
+    // Revoke after a beat: some browsers read the URL lazily.
+    set_timeout(
+        move || {
+            web_sys::Url::revoke_object_url(&url).ok();
+        },
+        Duration::from_secs(1),
+    );
 }
 
 /// SVG export: walks elements and builds a minimal SVG string.
@@ -324,10 +332,13 @@ fn image_load_promise(img: &web_sys::HtmlImageElement, url: &str) -> js_sys::Pro
 }
 
 /// Create a JS Promise that resolves with the blob from canvas.to_blob().
+/// Resolves with `null` when the canvas cannot be encoded, so callers get an
+/// error instead of awaiting forever.
 fn canvas_to_blob_promise(canvas: &web_sys::HtmlCanvasElement) -> js_sys::Promise {
     let c = canvas.clone();
     js_sys::Promise::new(
         &mut move |resolve: js_sys::Function, _reject: js_sys::Function| {
+            let resolve_err = resolve.clone();
             let cb = wasm_bindgen::closure::Closure::once(move |blob: Option<web_sys::Blob>| {
                 let val = match blob {
                     Some(b) => JsValue::from(b),
@@ -335,7 +346,9 @@ fn canvas_to_blob_promise(canvas: &web_sys::HtmlCanvasElement) -> js_sys::Promis
                 };
                 let _ = resolve.call1(&JsValue::null(), &val);
             });
-            let _ = c.to_blob(cb.as_ref().unchecked_ref());
+            if c.to_blob(cb.as_ref().unchecked_ref()).is_err() {
+                let _ = resolve_err.call1(&JsValue::null(), &JsValue::null());
+            }
             cb.forget();
         },
     )
@@ -415,7 +428,13 @@ pub fn download_png_from_svg(svg: String, filename: String, notifications: Notif
                 .map(|element| element.click());
             body.remove_child(&anchor).ok();
         }
-        web_sys::Url::revoke_object_url(&url).ok();
+        // Revoke after a beat: some browsers read the URL lazily.
+        set_timeout(
+            move || {
+                web_sys::Url::revoke_object_url(&url).ok();
+            },
+            Duration::from_secs(1),
+        );
     });
 }
 
