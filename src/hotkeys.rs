@@ -2,7 +2,7 @@ use crate::canvas::CanvasMode;
 use crate::edit_ops::{self, Clipboard};
 use crate::model::{Alignment, Distribution, ElementId, Point, Scene};
 use crate::ui::dock::Tool;
-use crate::ui::file_ops;
+use crate::ui::{file_ops, icon};
 use leptos::ev;
 use leptos::*;
 use std::rc::Rc;
@@ -272,19 +272,7 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                                 on:click=move |_| shortcuts_open.set(false)
                                 title="Close"
                             >
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    class="w-5 h-5"
-                                >
-                                    <line x1="18" y1="6" x2="6" y2="18" />
-                                    <line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
+                                {icon::close()}
                             </button>
                             <h2 class="text-lg font-semibold mb-4">"Keyboard Shortcuts"</h2>
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-6">

@@ -1,4 +1,4 @@
-use crate::ui::styles;
+use crate::ui::{icon, styles};
 use leptos::ev;
 use leptos::*;
 use std::rc::Rc;
@@ -104,33 +104,11 @@ pub fn NumberSlider(
 
                 <div class=styles::SLIDER_STEPPER>
                     <button class=styles::SLIDER_STEP_BTN on:click=inc title="Increase">
-                        <svg
-                            width="8"
-                            height="5"
-                            viewBox="0 0 8 5"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        >
-                            <path d="M1 4 L4 1 L7 4" />
-                        </svg>
+                        {icon::chevron_up()}
                     </button>
                     <div class="border-t border-border" />
                     <button class=styles::SLIDER_STEP_BTN on:click=dec title="Decrease">
-                        <svg
-                            width="8"
-                            height="5"
-                            viewBox="0 0 8 5"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        >
-                            <path d="M1 1 L4 4 L7 1" />
-                        </svg>
+                        {icon::chevron_down()}
                     </button>
                 </div>
             </div>

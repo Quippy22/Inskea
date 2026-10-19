@@ -1,7 +1,7 @@
 use crate::canvas::CanvasMode;
 use crate::edit_ops;
 use crate::model::{selection_item_count, Alignment, Distribution, ElementId, Scene};
-use crate::ui::styles;
+use crate::ui::{icon, styles};
 use leptos::*;
 use std::rc::Rc;
 
@@ -84,8 +84,9 @@ pub fn alignment_section(
                     class:cursor-not-allowed=move || !can_align.get()
                     on:click=move |_| align_left()
                     title="Align left edges"
+                    aria-label="Align left edges"
                 >
-                    "Left"
+                    {icon::align_left()}
                 </button>
                 <button
                     class=styles::BTN_TEXT
@@ -93,8 +94,9 @@ pub fn alignment_section(
                     class:cursor-not-allowed=move || !can_align.get()
                     on:click=move |_| align_center()
                     title="Align horizontal centers"
+                    aria-label="Align horizontal centers"
                 >
-                    "Center"
+                    {icon::align_center_h()}
                 </button>
                 <button
                     class=styles::BTN_TEXT
@@ -102,8 +104,9 @@ pub fn alignment_section(
                     class:cursor-not-allowed=move || !can_align.get()
                     on:click=move |_| align_right()
                     title="Align right edges"
+                    aria-label="Align right edges"
                 >
-                    "Right"
+                    {icon::align_right()}
                 </button>
                 <button
                     class=styles::BTN_TEXT
@@ -111,8 +114,9 @@ pub fn alignment_section(
                     class:cursor-not-allowed=move || !can_align.get()
                     on:click=move |_| align_top()
                     title="Align top edges"
+                    aria-label="Align top edges"
                 >
-                    "Top"
+                    {icon::align_top()}
                 </button>
                 <button
                     class=styles::BTN_TEXT
@@ -120,8 +124,9 @@ pub fn alignment_section(
                     class:cursor-not-allowed=move || !can_align.get()
                     on:click=move |_| align_middle()
                     title="Align vertical centers"
+                    aria-label="Align vertical centers"
                 >
-                    "Middle"
+                    {icon::align_center_v()}
                 </button>
                 <button
                     class=styles::BTN_TEXT
@@ -129,19 +134,21 @@ pub fn alignment_section(
                     class:cursor-not-allowed=move || !can_align.get()
                     on:click=move |_| align_bottom()
                     title="Align bottom edges"
+                    aria-label="Align bottom edges"
                 >
-                    "Bottom"
+                    {icon::align_bottom()}
                 </button>
             </div>
-            <div class="flex gap-1 mt-1">
+            <div class="grid grid-cols-2 gap-1 mt-1">
                 <button
                     class=styles::BTN_TEXT
                     class:opacity-40=move || !can_distribute.get()
                     class:cursor-not-allowed=move || !can_distribute.get()
                     on:click=move |_| distribute_horizontal()
                     title="Distribute horizontally"
+                    aria-label="Distribute horizontally"
                 >
-                    "Distribute H"
+                    {icon::distribute_horizontal()}
                 </button>
                 <button
                     class=styles::BTN_TEXT
@@ -149,8 +156,9 @@ pub fn alignment_section(
                     class:cursor-not-allowed=move || !can_distribute.get()
                     on:click=move |_| distribute_vertical()
                     title="Distribute vertically"
+                    aria-label="Distribute vertically"
                 >
-                    "Distribute V"
+                    {icon::distribute_vertical()}
                 </button>
             </div>
         </div>

@@ -1,11 +1,27 @@
-/// SVG icon components used throughout the UI.
-///
-/// Each function returns a small inline SVG element (20×20 px) styled with
-/// `currentColor` so they inherit the text colour of their parent.
+//! SVG icon components used throughout the UI.
+//!
+/// The source files live in `src/ui/icons/` and come from Lucide 1.59.0
+/// (ISC, see `src/ui/icons/LICENSE`). They are inlined at compile time and
+/// rendered as outline-only SVGs that inherit the parent text colour.
 use leptos::*;
 
-/// Pencil / drawing icon.
-pub fn pencil() -> impl IntoView {
+const DEFAULT_CLASS: &str = "w-5 h-5";
+
+/// Extract the markup inside the downloaded `<svg>` wrapper. The files carry
+/// a leading license comment, so the opening tag must be located first.
+fn inner(markup: &'static str) -> &'static str {
+    let Some(svg) = markup.find("<svg") else {
+        return "";
+    };
+    let Some(tag_end) = markup[svg..].find('>') else {
+        return "";
+    };
+    let start = svg + tag_end + 1;
+    let end = markup.rfind("</svg>").unwrap_or(markup.len());
+    markup.get(start..end).unwrap_or("")
+}
+
+fn svg(markup: &'static str, class_name: &'static str) -> impl IntoView {
     view! {
         <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -15,452 +31,90 @@ pub fn pencil() -> impl IntoView {
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-            <path d="m15 5 4 4" />
-        </svg>
+            class=class_name
+            aria-hidden="true"
+            focusable="false"
+            inner_html=inner(markup)
+        ></svg>
     }
 }
 
-/// Chevron pointing right (expand).
-pub fn chevron_right() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <polyline points="9 18 15 12 9 6" />
-        </svg>
-    }
+macro_rules! lucide_icons {
+    ($($name:ident => $file:literal),* $(,)?) => {
+        $(
+            pub fn $name() -> impl IntoView {
+                svg(include_str!(concat!("icons/", $file)), DEFAULT_CLASS)
+            }
+        )*
+    };
 }
 
-/// Rectangle shape icon.
-pub fn rect() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-        </svg>
-    }
+lucide_icons! {
+    // Tools and canvas modes.
+    pencil => "pencil.svg",
+    cursor => "mouse-pointer-2.svg",
+    hand => "hand.svg",
+    eraser => "eraser.svg",
+    rect => "square.svg",
+    ellipse => "ellipse.svg",
+    line => "slash.svg",
+    arrow => "arrow-up-right.svg",
+    text => "type.svg",
+    freehand => "line-squiggle.svg",
+
+    // Toolbar and menu.
+    home => "house.svg",
+    pages => "book-open.svg",
+    undo => "undo-2.svg",
+    redo => "redo-2.svg",
+    gear => "settings.svg",
+    menu => "menu.svg",
+    close => "x.svg",
+    chevron_right => "chevron-right.svg",
+
+    // Edit, clipboard, and layers.
+    copy => "copy.svg",
+    duplicate => "copy-plus.svg",
+    paste => "clipboard.svg",
+    send_to_back => "send-to-back.svg",
+    send_backward => "arrow-down.svg",
+    bring_forward => "arrow-up.svg",
+    bring_to_front => "bring-to-front.svg",
+
+    // Element alignment.
+    align_left => "align-horizontal-justify-start.svg",
+    align_center_h => "align-horizontal-justify-center.svg",
+    align_right => "align-horizontal-justify-end.svg",
+    align_top => "align-vertical-justify-start.svg",
+    align_center_v => "align-vertical-justify-center.svg",
+    align_bottom => "align-vertical-justify-end.svg",
+    distribute_horizontal => "align-horizontal-distribute-center.svg",
+    distribute_vertical => "align-vertical-distribute-center.svg",
+
+    // Text alignment.
+    text_align_left => "align-left.svg",
+    text_align_center => "align-center.svg",
+    text_align_right => "align-right.svg",
 }
 
-/// Ellipse / circle shape icon.
-pub fn ellipse() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <ellipse cx="12" cy="12" rx="10" ry="8" />
-        </svg>
-    }
+/// Small chevrons for the number-slider stepper.
+pub fn chevron_up() -> impl IntoView {
+    svg(include_str!("icons/chevron-up.svg"), "w-3 h-3")
 }
 
-/// Diagonal line shape icon.
-pub fn line() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <line x1="3" y1="21" x2="21" y2="3" />
-        </svg>
-    }
+pub fn chevron_down() -> impl IntoView {
+    svg(include_str!("icons/chevron-down.svg"), "w-3 h-3")
 }
 
-/// Arrow shape icon.
-pub fn arrow() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <line x1="7" y1="17" x2="17" y2="7" />
-            <polyline points="7 7 17 7 17 17" />
-        </svg>
-    }
-}
+#[cfg(test)]
+mod tests {
+    use super::inner;
 
-/// Text / type tool icon.
-pub fn text() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <polyline points="4 6 4 3 20 3 20 6" />
-            <line x1="12" y1="3" x2="12" y2="21" />
-            <line x1="7" y1="21" x2="17" y2="21" />
-        </svg>
-    }
-}
-
-/// Freehand / scribble shape icon.
-pub fn freehand() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <path d="M3 19c4-4 6-2 8 0s4-4 6-6 4 2 5 0" />
-        </svg>
-    }
-}
-
-/// Pages / multi-page icon.
-pub fn pages() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-            <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15" />
-            <line x1="8" y1="7" x2="16" y2="7" />
-            <line x1="8" y1="11" x2="14" y2="11" />
-        </svg>
-    }
-}
-
-/// Eraser tool icon.
-pub fn eraser() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <path d="M20 20H7L3 16c-.8-.8-.8-2 0-2.8L14.6 1.6a2 2 0 0 1 2.8 0L21 5.2a2 2 0 0 1 0 2.8L12 17" />
-            <path d="m6 11 4 4" />
-        </svg>
-    }
-}
-
-/// Hand / grab / pan icon.
-pub fn hand() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
-            <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
-            <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
-            <path d="M18 8a2 2 0 0 1 2 2v4a6 6 0 0 1-6 6h-4a4 4 0 0 1-4-4v-2" />
-        </svg>
-    }
-}
-
-/// Cursor / select icon.
-pub fn cursor() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
-            <path d="m13 13 6 6" />
-        </svg>
-    }
-}
-
-/// Home / center reset icon.
-pub fn home() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-            <polyline points="9 22 9 12 15 12 15 22" />
-        </svg>
-    }
-}
-
-/// Undo icon.
-pub fn undo() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <path d="M7 6l-4 6 4 6" />
-            <path d="M3 12h10a4 4 0 0 1 4 4v2" />
-        </svg>
-    }
-}
-
-/// Redo icon.
-pub fn redo() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <path d="M17 6l4 6-4 6" />
-            <path d="M21 12H11a4 4 0 0 0-4 4v2" />
-        </svg>
-    }
-}
-
-/// Gear / settings icon.
-pub fn gear() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
-    }
-}
-
-/// Hamburger menu icon.
-pub fn menu() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <line x1="4" y1="6" x2="20" y2="6" />
-            <line x1="4" y1="12" x2="20" y2="12" />
-            <line x1="4" y1="18" x2="20" y2="18" />
-        </svg>
-    }
-}
-
-/// Copy icon: two overlapping rectangles.
-pub fn copy() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-        </svg>
-    }
-}
-
-/// Duplicate icon: copy plus a plus sign.
-pub fn duplicate() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-            <line x1="12" y1="11" x2="12" y2="17" />
-            <line x1="9" y1="14" x2="15" y2="14" />
-        </svg>
-    }
-}
-
-/// Paste icon: clipboard.
-pub fn paste() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
-            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-        </svg>
-    }
-}
-
-/// Send to back: arrow pointing down with a horizontal line under it.
-pub fn send_to_back() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <line x1="4" y1="20" x2="20" y2="20" />
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <polyline points="5 12 12 19 19 12" />
-        </svg>
-    }
-}
-
-/// Send backward (one layer): arrow pointing down, no line.
-pub fn send_backward() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <polyline points="5 12 12 19 19 12" />
-        </svg>
-    }
-}
-
-/// Bring forward (one layer): arrow pointing up, no line.
-pub fn bring_forward() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <line x1="12" y1="19" x2="12" y2="5" />
-            <polyline points="5 12 12 5 19 12" />
-        </svg>
-    }
-}
-
-/// Bring to front: arrow pointing up with a horizontal line above it.
-pub fn bring_to_front() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="w-5 h-5"
-        >
-            <line x1="4" y1="4" x2="20" y2="4" />
-            <line x1="12" y1="19" x2="12" y2="5" />
-            <polyline points="5 12 12 5 19 12" />
-        </svg>
+    #[test]
+    fn extracts_paths_without_the_svg_wrapper() {
+        let inner = inner(include_str!("icons/pencil.svg"));
+        assert!(inner.contains("<path"));
+        assert!(!inner.contains("<svg"));
+        assert!(!inner.contains("</svg>"));
     }
 }

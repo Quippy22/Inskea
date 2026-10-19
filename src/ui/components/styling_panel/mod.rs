@@ -20,7 +20,9 @@ use self::group::group_section;
 use self::layers::layers_section;
 use self::sliders::sliders_section;
 use self::style::style_section;
-use self::utils::{read_panel_state, selected_text_align, single_selected_element, uniform_seg};
+use self::utils::{
+    read_panel_state, selected_text_align, single_selected_element, uniform_icon_seg,
+};
 use crate::canvas::CanvasMode;
 use crate::edit_ops;
 use crate::edit_ops::Clipboard;
@@ -29,17 +31,25 @@ use crate::model::{
     StrokeStyle, StylingKind, TextAlign,
 };
 use crate::ui::dock::Tool;
-use crate::ui::styles;
+use crate::ui::{icon, styles};
 use leptos::*;
 use leptos_color::Color as LpcColor;
 use std::rc::Rc;
 use wasm_bindgen::JsCast;
 
 const ALIGN_OPTS: &[(TextAlign, &str)] = &[
-    (TextAlign::Left, "Left"),
-    (TextAlign::Center, "Center"),
-    (TextAlign::Right, "Right"),
+    (TextAlign::Left, "Align left"),
+    (TextAlign::Center, "Align center"),
+    (TextAlign::Right, "Align right"),
 ];
+
+fn text_align_icon(align: TextAlign) -> View {
+    match align {
+        TextAlign::Left => icon::text_align_left().into_view(),
+        TextAlign::Center => icon::text_align_center().into_view(),
+        TextAlign::Right => icon::text_align_right().into_view(),
+    }
+}
 
 /// Style mutation applied to the selected elements, or to the default style
 /// when the selection is empty.
@@ -408,7 +418,12 @@ pub fn StylingPanel(
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     Alignment
                 </div>
-                {uniform_seg(ALIGN_OPTS, Signal::derive(move || text_align.get()), set_text_align)}
+                {uniform_icon_seg(
+                    ALIGN_OPTS,
+                    Signal::derive(move || text_align.get()),
+                    set_text_align,
+                    text_align_icon,
+                )}
             </div>
             {style_section(
                 local_style,

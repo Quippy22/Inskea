@@ -81,10 +81,11 @@ pub fn arrowhead_icon(on: bool, is_end: bool) -> impl IntoView {
     }
 }
 
-pub fn uniform_seg<T: PartialEq + Copy + 'static>(
+fn seg_control<T: PartialEq + Copy + 'static>(
     options: &'static [(T, &'static str)],
     active: Signal<T>,
     on_change: Rc<dyn Fn(T)>,
+    content: Rc<dyn Fn(T, &'static str) -> View>,
 ) -> impl IntoView {
     let last = options.len() - 1;
     view! {
@@ -95,7 +96,9 @@ pub fn uniform_seg<T: PartialEq + Copy + 'static>(
                 .map(|(i, (val, label))| {
                     let is_last = i == last;
                     let val = *val;
+                    let label = *label;
                     let on_change = on_change.clone();
+                    let content = content.clone();
                     view! {
                         <button
                             class=move || {
@@ -104,19 +107,43 @@ pub fn uniform_seg<T: PartialEq + Copy + 'static>(
                                 } else {
                                     styles::SEG_BTN_INACTIVE
                                 };
-                                format!("{} flex-1 justify-center", base)
+                                format!("{} flex flex-1 items-center justify-center", base)
                             }
                             class:border-r=move || !is_last
                             class:border-border=move || !is_last
+                            title=label
+                            aria-label=label
                             on:click=move |_| on_change(val)
                         >
-                            {*label}
+                            {content(val, label)}
                         </button>
                     }
                 })
                 .collect_view()}
         </div>
     }
+}
+
+pub fn uniform_seg<T: PartialEq + Copy + 'static>(
+    options: &'static [(T, &'static str)],
+    active: Signal<T>,
+    on_change: Rc<dyn Fn(T)>,
+) -> impl IntoView {
+    seg_control(
+        options,
+        active,
+        on_change,
+        Rc::new(|_, label| label.into_view()),
+    )
+}
+
+pub fn uniform_icon_seg<T: PartialEq + Copy + 'static>(
+    options: &'static [(T, &'static str)],
+    active: Signal<T>,
+    on_change: Rc<dyn Fn(T)>,
+    icon: fn(T) -> View,
+) -> impl IntoView {
+    seg_control(options, active, on_change, Rc::new(move |val, _| icon(val)))
 }
 
 pub fn swatch_row(
