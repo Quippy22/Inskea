@@ -424,48 +424,6 @@ pub fn browser_export_skea(scene: Scene) {
     download_string(&content, "untitled.skea");
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::model::elements::rect::Rectangle;
-    use crate::model::ElementData;
-
-    #[test]
-    fn full_export_uses_the_screen_pixel_size() {
-        let scene = Scene::new();
-        let svg = scene_to_svg(&scene, &Viewport::default(), Point::new(800.0, 600.0), None);
-        assert!(svg.contains(r#"width="800""#));
-        assert!(svg.contains(r#"height="600""#));
-        assert!(svg.contains("viewBox="));
-    }
-
-    #[test]
-    fn selection_export_is_sized_to_the_selection_bounds() {
-        let mut scene = Scene::new();
-        let mut rect = Rectangle {
-            data: ElementData::new(0),
-        };
-        rect.data.world_point = Point::new(10.0, 20.0);
-        rect.data.width = 100.0;
-        rect.data.height = 50.0;
-        scene.add_element(Element::Rectangle(rect));
-
-        let svg = scene_to_svg(
-            &scene,
-            &Viewport::default(),
-            Point::new(800.0, 600.0),
-            Some(&[1]),
-        );
-        assert!(svg.contains(r#"width="120""#));
-        assert!(svg.contains(r#"height="70""#));
-    }
-
-    #[test]
-    fn text_content_is_escaped() {
-        assert_eq!(escape_xml_text("a & <b>"), "a &amp; &lt;b&gt;");
-    }
-}
-
 /// Tauri-native SVG export: shows a save dialog, writes the SVG string to disk.
 pub fn tauri_export_svg(svg: String, selection: bool, notifications: Notifications) {
     spawn_local(async move {
@@ -528,4 +486,46 @@ pub fn tauri_export_png(svg: String, selection: bool, notifications: Notificatio
             notify::error(notifications, "Could not render the PNG export.");
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::elements::rect::Rectangle;
+    use crate::model::ElementData;
+
+    #[test]
+    fn full_export_uses_the_screen_pixel_size() {
+        let scene = Scene::new();
+        let svg = scene_to_svg(&scene, &Viewport::default(), Point::new(800.0, 600.0), None);
+        assert!(svg.contains(r#"width="800""#));
+        assert!(svg.contains(r#"height="600""#));
+        assert!(svg.contains("viewBox="));
+    }
+
+    #[test]
+    fn selection_export_is_sized_to_the_selection_bounds() {
+        let mut scene = Scene::new();
+        let mut rect = Rectangle {
+            data: ElementData::new(0),
+        };
+        rect.data.world_point = Point::new(10.0, 20.0);
+        rect.data.width = 100.0;
+        rect.data.height = 50.0;
+        scene.add_element(Element::Rectangle(rect));
+
+        let svg = scene_to_svg(
+            &scene,
+            &Viewport::default(),
+            Point::new(800.0, 600.0),
+            Some(&[1]),
+        );
+        assert!(svg.contains(r#"width="120""#));
+        assert!(svg.contains(r#"height="70""#));
+    }
+
+    #[test]
+    fn text_content_is_escaped() {
+        assert_eq!(escape_xml_text("a & <b>"), "a &amp; &lt;b&gt;");
+    }
 }
