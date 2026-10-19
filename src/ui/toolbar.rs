@@ -349,12 +349,6 @@ where
                     {icon::home()}
                 </IconButton>
                 <button
-                    class="flex items-center justify-center h-8 w-8 rounded-md opacity-40 cursor-default"
-                    title="Pages"
-                >
-                    {icon::pages()}
-                </button>
-                <button
                     class=styles::BTN_GHOST
                     class:opacity-40=move || !can_undo.get()
                     class:cursor-not-allowed=move || !can_undo.get()

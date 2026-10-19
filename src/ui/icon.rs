@@ -64,7 +64,6 @@ lucide_icons! {
 
     // Toolbar and menu.
     home => "house.svg",
-    pages => "book-open.svg",
     undo => "undo-2.svg",
     redo => "redo-2.svg",
     gear => "settings.svg",
