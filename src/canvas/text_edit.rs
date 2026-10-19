@@ -1,5 +1,5 @@
 use super::viewport::Viewport;
-use crate::model::elements::text::{natural_line_width, FONT_FAMILY, MIN_FONT_SIZE};
+use crate::model::elements::text::{natural_line_width, FONT_FAMILY, FONT_STACK, MIN_FONT_SIZE};
 use crate::model::{Element, ElementId, Point, Scene};
 use leptos::*;
 use std::rc::Rc;
@@ -362,7 +362,7 @@ pub fn text_edit_overlay(
                         ta_w,
                         ta_h,
                         font_size * vp.zoom,
-                        FONT_FAMILY,
+                        FONT_STACK,
                         fill,
                         white_space,
                         text_elem.align.css(),

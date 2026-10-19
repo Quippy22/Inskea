@@ -11,6 +11,11 @@ pub(crate) const TEXT_ASCENT_RATIO: f64 = 0.85;
 /// Font family used for all text rendering and editing.
 pub(crate) const FONT_FAMILY: &str = "Cabin";
 
+/// Font stack for rendered and exported text: the bundled font when it is
+/// available, and the generic sans-serif fallback otherwise. `@font-face`
+/// registration uses `FONT_FAMILY` alone.
+pub(crate) const FONT_STACK: &str = "Cabin, sans-serif";
+
 /// Horizontal alignment of the text within its box. Left is the default;
 /// Center and Right only show a difference once the box is wider than a line
 /// (i.e. after a side-resize wraps written text into a column).
@@ -332,7 +337,7 @@ impl UpdateDrag for Text {
 impl Render for Text {
     fn render(&self, _zoom: f64) -> leptos::View {
         let font_size = self.data.style.font_size.max(MIN_FONT_SIZE);
-        let font_family = FONT_FAMILY;
+        let font_family = FONT_STACK;
         let lines = &self.wrapped.lines;
         let x = self.data.world_point.x;
         let baseline = self.data.world_point.y + font_size * TEXT_ASCENT_RATIO;

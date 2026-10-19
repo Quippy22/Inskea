@@ -51,7 +51,7 @@ pub fn scene_to_svg(
     screen: Point,
     selected: Option<&[ElementId]>,
 ) -> String {
-    let (vb, elements): (String, &[Element]) = match selected {
+    let (view_box, width, height, elements): (String, f64, f64, &[Element]) = match selected {
         Some(ids) if !ids.is_empty() => {
             let bounds = combined_bounds(ids, scene.elements());
             if let Some(b) = bounds {
@@ -64,22 +64,46 @@ pub fn scene_to_svg(
                         b.w + pad * 2.0,
                         b.h + pad * 2.0
                     ),
+                    b.w + pad * 2.0,
+                    b.h + pad * 2.0,
                     scene.elements(),
                 )
             } else {
                 return String::new();
             }
         }
-        _ => (viewport.to_view_box(screen.x, screen.y), scene.elements()),
+        _ => (
+            viewport.to_view_box(screen.x, screen.y),
+            screen.x,
+            screen.y,
+            scene.elements(),
+        ),
     };
     let element_body = svg_body(elements, selected);
-    format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">{element_body}</svg>"#)
+    svg_document(&view_box, width, height, &element_body)
 }
 
 pub fn scene_to_svg_crop(scene: &Scene, crop: Rect) -> String {
-    let vb = format!("{} {} {} {}", crop.x, crop.y, crop.w, crop.h);
+    let view_box = format!("{} {} {} {}", crop.x, crop.y, crop.w, crop.h);
     let element_body = svg_body(scene.elements(), None);
-    format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">{element_body}</svg>"#)
+    svg_document(&view_box, crop.w, crop.h, &element_body)
+}
+
+/// `width`/`height` give the SVG an intrinsic pixel size. Without them an SVG
+/// loaded into an `<img>` falls back to a default 300×150 raster for PNG
+/// export, regardless of the drawing's size.
+fn svg_document(view_box: &str, width: f64, height: f64, body: &str) -> String {
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="{view_box}">{body}</svg>"#
+    )
+}
+
+/// Escape text content for XML. Attribute values in this exporter are numeric
+/// or palette-derived, so only text content needs this.
+fn escape_xml_text(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 fn svg_body(elements: &[Element], selected: Option<&[ElementId]>) -> String {
@@ -231,15 +255,12 @@ fn el_svg(el: &Element) -> String {
                 t.data.world_point.y + fs * crate::model::elements::text::TEXT_ASCENT_RATIO,
                 anchor,
                 fs,
-                crate::model::elements::text::FONT_FAMILY,
+                crate::model::elements::text::FONT_STACK,
                 t.data.style.stroke_color.to_hex(),
                 t.data.style.opacity,
             );
             for (i, line) in t.wrapped.lines.iter().enumerate() {
-                let esc = line
-                    .replace('&', "&amp;")
-                    .replace('<', "&lt;")
-                    .replace('>', "&gt;");
+                let esc = escape_xml_text(line);
                 let dy = if i == 0 { 0.0 } else { fs * 1.2 };
                 let _ = write!(
                     out,
@@ -401,6 +422,48 @@ pub fn download_png_from_svg(svg: String, filename: String, notifications: Notif
 pub fn browser_export_skea(scene: Scene) {
     let content = skea::save_to_string(&scene);
     download_string(&content, "untitled.skea");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::elements::rect::Rectangle;
+    use crate::model::ElementData;
+
+    #[test]
+    fn full_export_uses_the_screen_pixel_size() {
+        let scene = Scene::new();
+        let svg = scene_to_svg(&scene, &Viewport::default(), Point::new(800.0, 600.0), None);
+        assert!(svg.contains(r#"width="800""#));
+        assert!(svg.contains(r#"height="600""#));
+        assert!(svg.contains("viewBox="));
+    }
+
+    #[test]
+    fn selection_export_is_sized_to_the_selection_bounds() {
+        let mut scene = Scene::new();
+        let mut rect = Rectangle {
+            data: ElementData::new(0),
+        };
+        rect.data.world_point = Point::new(10.0, 20.0);
+        rect.data.width = 100.0;
+        rect.data.height = 50.0;
+        scene.add_element(Element::Rectangle(rect));
+
+        let svg = scene_to_svg(
+            &scene,
+            &Viewport::default(),
+            Point::new(800.0, 600.0),
+            Some(&[1]),
+        );
+        assert!(svg.contains(r#"width="120""#));
+        assert!(svg.contains(r#"height="70""#));
+    }
+
+    #[test]
+    fn text_content_is_escaped() {
+        assert_eq!(escape_xml_text("a & <b>"), "a &amp; &lt;b&gt;");
+    }
 }
 
 /// Tauri-native SVG export: shows a save dialog, writes the SVG string to disk.
