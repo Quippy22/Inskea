@@ -2,9 +2,25 @@ use crate::canvas::combined_bounds;
 use crate::canvas::Viewport;
 use crate::model::{Element, ElementId, Point, Rect, Scene};
 use crate::skea;
+use crate::ui::notify::{self, Notifications};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
+
+fn with_extension(path: String, extension: &str) -> String {
+    if path
+        .to_ascii_lowercase()
+        .ends_with(&format!(".{extension}"))
+    {
+        path
+    } else {
+        format!("{path}.{extension}")
+    }
+}
+
+fn file_name(path: &str) -> &str {
+    path.rsplit(['/', '\\']).next().unwrap_or(path)
+}
 
 // ── Browser download helpers ──────────────────────────────────────────
 
@@ -304,40 +320,45 @@ fn canvas_to_blob_promise(canvas: &web_sys::HtmlCanvasElement) -> js_sys::Promis
     )
 }
 
-fn svg_blob(svg: &str) -> web_sys::Blob {
+fn svg_blob(svg: &str) -> Option<web_sys::Blob> {
     let parts = js_sys::Array::new();
     parts.push(&JsValue::from_str(svg));
     let opts = web_sys::BlobPropertyBag::new();
     opts.set_type("image/svg+xml");
-    web_sys::Blob::new_with_str_sequence_and_options(&parts, &opts).expect("blob")
+    web_sys::Blob::new_with_str_sequence_and_options(&parts, &opts).ok()
 }
 
 /// Shared SVG→canvas→blob pipeline used by both browser and Tauri PNG export.
 async fn svg_to_png_blob(svg: &str) -> Option<web_sys::Blob> {
-    let document = web_sys::window().unwrap().document().unwrap();
-    let blob = svg_blob(svg);
-    let url = web_sys::Url::create_object_url_with_blob(&blob).expect("url");
+    let document = web_sys::window()?.document()?;
+    let blob = svg_blob(svg)?;
+    let url = web_sys::Url::create_object_url_with_blob(&blob).ok()?;
     let img = document
         .create_element("img")
-        .unwrap()
+        .ok()?
         .dyn_into::<web_sys::HtmlImageElement>()
-        .unwrap();
-    let _ = wasm_bindgen_futures::JsFuture::from(image_load_promise(&img, &url)).await;
+        .ok()?;
+    if wasm_bindgen_futures::JsFuture::from(image_load_promise(&img, &url))
+        .await
+        .is_err()
+    {
+        web_sys::Url::revoke_object_url(&url).ok();
+        return None;
+    }
     let canvas = document
         .create_element("canvas")
-        .unwrap()
+        .ok()?
         .dyn_into::<web_sys::HtmlCanvasElement>()
-        .unwrap();
+        .ok()?;
     let (w, h) = (img.natural_width() as u32, img.natural_height() as u32);
     canvas.set_width(w.max(1));
     canvas.set_height(h.max(1));
     let ctx = canvas
         .get_context("2d")
         .ok()
-        .flatten()
-        .unwrap()
+        .flatten()?
         .dyn_into::<web_sys::CanvasRenderingContext2d>()
-        .unwrap();
+        .ok()?;
     let _ = ctx.draw_image_with_html_image_element(&img, 0.0, 0.0);
     let png = wasm_bindgen_futures::JsFuture::from(canvas_to_blob_promise(&canvas))
         .await
@@ -347,20 +368,33 @@ async fn svg_to_png_blob(svg: &str) -> Option<web_sys::Blob> {
     png
 }
 
-pub fn download_png_from_svg(svg: String, filename: String) {
+pub fn download_png_from_svg(svg: String, filename: String, notifications: Notifications) {
     spawn_local(async move {
-        let document = web_sys::window().unwrap().document().unwrap();
-        if let Some(blob) = svg_to_png_blob(&svg).await {
-            let url2 = web_sys::Url::create_object_url_with_blob(&blob).expect("url2");
-            let a = document.create_element("a").unwrap();
-            a.set_attribute("href", &url2).ok();
-            a.set_attribute("download", &filename).ok();
-            a.set_attribute("style", "display:none").ok();
-            document.body().unwrap().append_child(&a).ok();
-            let _ = a.dyn_ref::<web_sys::HtmlElement>().map(|e| e.click());
-            document.body().unwrap().remove_child(&a).ok();
-            web_sys::Url::revoke_object_url(&url2).ok();
+        let Some(blob) = svg_to_png_blob(&svg).await else {
+            notify::error(notifications, "Could not render the PNG export.");
+            return;
+        };
+        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+            return;
+        };
+        let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) else {
+            notify::error(notifications, "Could not render the PNG export.");
+            return;
+        };
+        let Ok(anchor) = document.create_element("a") else {
+            return;
+        };
+        anchor.set_attribute("href", &url).ok();
+        anchor.set_attribute("download", &filename).ok();
+        anchor.set_attribute("style", "display:none").ok();
+        if let Some(body) = document.body() {
+            body.append_child(&anchor).ok();
+            let _ = anchor
+                .dyn_ref::<web_sys::HtmlElement>()
+                .map(|element| element.click());
+            body.remove_child(&anchor).ok();
         }
+        web_sys::Url::revoke_object_url(&url).ok();
     });
 }
 
@@ -370,7 +404,7 @@ pub fn browser_export_skea(scene: Scene) {
 }
 
 /// Tauri-native SVG export: shows a save dialog, writes the SVG string to disk.
-pub fn tauri_export_svg(svg: String, selection: bool) {
+pub fn tauri_export_svg(svg: String, selection: bool, notifications: Notifications) {
     spawn_local(async move {
         let dir = crate::tauri_bridge::get_documents_dir().await.ok();
         let name = if selection {
@@ -378,45 +412,57 @@ pub fn tauri_export_svg(svg: String, selection: bool) {
         } else {
             "canvas.svg"
         };
-        let path = crate::tauri_bridge::pick_save_path_svg(name, dir.as_deref()).await;
-        if let Some(path) = path {
-            let _ = crate::tauri_bridge::save_file(&path, &svg).await;
+        let Some(path) = crate::tauri_bridge::pick_save_path_svg(name, dir.as_deref()).await else {
+            return;
+        };
+        let path = with_extension(path, "svg");
+        match crate::tauri_bridge::save_file(&path, &svg).await {
+            Ok(()) => notify::info(notifications, format!("Exported {}", file_name(&path))),
+            Err(e) => notify::error(notifications, format!("Could not export the image: {e}")),
         }
     });
 }
 
 /// Tauri-native PNG export: renders SVG to canvas, converts to blob, saves as PNG.
-pub fn tauri_export_png(svg: String, selection: bool) {
+pub fn tauri_export_png(svg: String, selection: bool, notifications: Notifications) {
     spawn_local(async move {
-        if let Some(blob) = svg_to_png_blob(&svg).await {
-            let name = if selection {
-                "selection.png"
-            } else {
-                "canvas.png"
-            };
-            let dir = crate::tauri_bridge::get_documents_dir().await.ok();
-            let path = crate::tauri_bridge::pick_save_path_png(name, dir.as_deref()).await;
-            if let Some(path) = path {
-                let ab_promise = js_sys::Promise::new(&mut {
-                    let blob2 = blob.clone();
-                    move |resolve: js_sys::Function, _reject: js_sys::Function| {
-                        let reader = web_sys::FileReader::new().expect("FileReader");
-                        let reader_c = reader.clone();
-                        let cb = wasm_bindgen::closure::Closure::once(move || {
-                            let val = reader_c.result().unwrap_or(JsValue::null());
-                            let _ = resolve.call1(&JsValue::null(), &val);
-                        });
-                        reader.set_onload(Some(cb.as_ref().unchecked_ref()));
-                        cb.forget();
-                        let _ = reader.read_as_array_buffer(&blob2);
-                    }
+        let Some(blob) = svg_to_png_blob(&svg).await else {
+            notify::error(notifications, "Could not render the PNG export.");
+            return;
+        };
+        let name = if selection {
+            "selection.png"
+        } else {
+            "canvas.png"
+        };
+        let dir = crate::tauri_bridge::get_documents_dir().await.ok();
+        let Some(path) = crate::tauri_bridge::pick_save_path_png(name, dir.as_deref()).await else {
+            return;
+        };
+        let path = with_extension(path, "png");
+        let ab_promise = js_sys::Promise::new(&mut {
+            let blob2 = blob.clone();
+            move |resolve: js_sys::Function, _reject: js_sys::Function| {
+                let reader = web_sys::FileReader::new().expect("FileReader");
+                let reader_c = reader.clone();
+                let cb = wasm_bindgen::closure::Closure::once(move || {
+                    let val = reader_c.result().unwrap_or(JsValue::null());
+                    let _ = resolve.call1(&JsValue::null(), &val);
                 });
-                if let Ok(val) = wasm_bindgen_futures::JsFuture::from(ab_promise).await {
-                    let uint8 = js_sys::Uint8Array::new(&val);
-                    let bytes = uint8.to_vec();
-                    let _ = crate::tauri_bridge::save_file_binary(&path, &bytes).await;
-                }
+                reader.set_onload(Some(cb.as_ref().unchecked_ref()));
+                cb.forget();
+                let _ = reader.read_as_array_buffer(&blob2);
             }
+        });
+        if let Ok(val) = wasm_bindgen_futures::JsFuture::from(ab_promise).await {
+            let uint8 = js_sys::Uint8Array::new(&val);
+            let bytes = uint8.to_vec();
+            match crate::tauri_bridge::save_file_binary(&path, &bytes).await {
+                Ok(()) => notify::info(notifications, format!("Exported {}", file_name(&path))),
+                Err(e) => notify::error(notifications, format!("Could not export the image: {e}")),
+            }
+        } else {
+            notify::error(notifications, "Could not render the PNG export.");
         }
     });
 }

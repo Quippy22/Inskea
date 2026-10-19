@@ -2,6 +2,7 @@ use crate::document::DocContext;
 use crate::model::Scene;
 use crate::skea;
 use crate::tauri_bridge;
+use crate::ui::notify;
 use leptos::*;
 use wasm_bindgen_futures::spawn_local;
 
@@ -27,17 +28,19 @@ pub fn file_save_as(doc: DocContext) {
 }
 
 fn save_to_path(doc: DocContext, path: String) {
+    let notifications = doc.notifications;
     spawn_local(async move {
         let saved = doc.scene.get_untracked();
         let content = skea::save_to_string(&saved);
         match tauri_bridge::save_skea(&path, &content).await {
             Ok(()) => doc.mark_saved(Some(path), saved),
-            Err(e) => web_sys::console::error_1(&format!("save: {e}").into()),
+            Err(e) => notify::error(notifications, format!("Could not save the file: {e}")),
         }
     });
 }
 
 pub fn file_open(doc: DocContext) {
+    let notifications = doc.notifications;
     spawn_local(async move {
         let dir = tauri_bridge::get_documents_dir().await.ok();
         let path = tauri_bridge::pick_open_path(dir.as_deref()).await;
@@ -47,9 +50,12 @@ pub fn file_open(doc: DocContext) {
         match tauri_bridge::load_skea(&path).await {
             Ok(content) => match skea::load_from_str(&content) {
                 Ok(loaded) => doc.adopt(loaded, Some(path)),
-                Err(e) => web_sys::console::error_1(&format!("parse: {e}").into()),
+                Err(e) => notify::error(
+                    notifications,
+                    format!("That file is not a valid Inskea drawing: {e}"),
+                ),
             },
-            Err(e) => web_sys::console::error_1(&format!("load: {e}").into()),
+            Err(e) => notify::error(notifications, format!("Could not open the file: {e}")),
         }
     });
 }

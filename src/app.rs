@@ -10,6 +10,7 @@ use crate::skea;
 use crate::tauri_bridge;
 use crate::ui::components::StylingPanel;
 use crate::ui::dock::{Dock, Tool};
+use crate::ui::notify::Toasts;
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{SettingsPanel, ToolBar};
@@ -131,6 +132,7 @@ pub fn App() -> impl IntoView {
 
     let baseline = create_rw_signal(Scene::new());
     let dirty = create_rw_signal(false);
+    let notifications = create_rw_signal(Vec::new());
 
     let doc = DocContext {
         scene,
@@ -138,6 +140,7 @@ pub fn App() -> impl IntoView {
         selected_ids,
         baseline,
         dirty,
+        notifications,
         reset_history: reset_history.clone(),
     };
 
@@ -329,6 +332,7 @@ pub fn App() -> impl IntoView {
             <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />
             <SettingsPanel settings=settings />
             <ShortcutsModal shortcuts_open=shortcuts_open />
+            <Toasts notifications=notifications />
 
             <div
                 class="fixed left-[4.5rem] top-1/2 -translate-y-1/2 z-50"

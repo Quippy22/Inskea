@@ -3,7 +3,7 @@ use crate::document::DocContext;
 use crate::edit_ops::{self, Clipboard};
 use crate::model::{Alignment, Distribution, Point};
 use crate::ui::dock::Tool;
-use crate::ui::{file_ops, icon};
+use crate::ui::{file_ops, icon, notify};
 use leptos::ev;
 use leptos::*;
 use std::rc::Rc;
@@ -191,7 +191,7 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
         (false, "Escape") => {}
         (true, "c") | (true, "C") => {
             edit_ops::copy_selection(ctx.doc.scene, ctx.doc.selected_ids, ctx.clipboard);
-            web_sys::console::log_1(&"Copied".into());
+            notify::info(ctx.doc.notifications, "Copied");
         }
         (true, "v") | (true, "V") => edit_ops::paste_clipboard(
             ctx.doc.scene,

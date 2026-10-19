@@ -1,4 +1,5 @@
 use crate::model::{ElementId, Scene};
+use crate::ui::notify::Notifications;
 use leptos::*;
 use std::rc::Rc;
 
@@ -13,6 +14,7 @@ pub struct DocContext {
     /// first save). Compared against `scene` to derive the dirty flag.
     pub baseline: RwSignal<Scene>,
     pub dirty: RwSignal<bool>,
+    pub notifications: Notifications,
     pub reset_history: Rc<dyn Fn()>,
 }
 

@@ -45,9 +45,10 @@ fn browser_import(doc: DocContext) {
                     if let Some(text) = val.as_string() {
                         match skea::load_from_str(&text) {
                             Ok(loaded) => doc.adopt(loaded, None),
-                            Err(e) => {
-                                web_sys::console::error_1(&format!("parse error: {e}").into());
-                            }
+                            Err(e) => crate::ui::notify::error(
+                                doc.notifications,
+                                format!("That file is not a valid Inskea drawing: {e}"),
+                            ),
                         }
                     }
                 }
@@ -156,9 +157,15 @@ where
                         match tauri_bridge::load_skea(&path).await {
                             Ok(c) => match skea::load_from_str(&c) {
                                 Ok(loaded) => doc.adopt(loaded, Some(path)),
-                                Err(e) => web_sys::console::error_1(&format!("parse: {e}").into()),
+                                Err(e) => crate::ui::notify::error(
+                                    doc.notifications,
+                                    format!("That file is not a valid Inskea drawing: {e}"),
+                                ),
                             },
-                            Err(e) => web_sys::console::error_1(&format!("load: {e}").into()),
+                            Err(e) => crate::ui::notify::error(
+                                doc.notifications,
+                                format!("Could not open the file: {e}"),
+                            ),
                         }
                     }
                 });
@@ -176,13 +183,26 @@ where
         move || {
             close_menu();
             let s = doc.scene.get_untracked();
+            let notifications = doc.notifications;
             if tauri {
                 spawn_local(async move {
                     let dir = tauri_bridge::get_documents_dir().await.ok();
                     let path = tauri_bridge::pick_save_path("untitled.skea", dir.as_deref()).await;
                     if let Some(path) = path {
                         let c = skea::save_to_string(&s);
-                        let _ = tauri_bridge::save_skea(&path, &c).await;
+                        match tauri_bridge::save_skea(&path, &c).await {
+                            Ok(()) => crate::ui::notify::info(
+                                notifications,
+                                format!(
+                                    "Exported {}",
+                                    path.rsplit(['/', '\\']).next().unwrap_or(&path)
+                                ),
+                            ),
+                            Err(e) => crate::ui::notify::error(
+                                notifications,
+                                format!("Could not export the drawing: {e}"),
+                            ),
+                        }
                     }
                 });
             } else {
@@ -206,6 +226,7 @@ where
             _close_menu();
             if selection {
                 let scene = _doc.scene;
+                let notifications = _doc.notifications;
                 let on_crop_export = _on_crop_export;
                 let export_crop_active = _export_crop_active;
                 let close_menu = _close_menu;
@@ -215,16 +236,20 @@ where
                     match fmt {
                         ExportFormat::Svg => {
                             if tauri {
-                                export::tauri_export_svg(svg, true);
+                                export::tauri_export_svg(svg, true, notifications);
                             } else {
                                 export::download_string(&svg, "selection.svg");
                             }
                         }
                         ExportFormat::Png => {
                             if tauri {
-                                export::tauri_export_png(svg, true);
+                                export::tauri_export_png(svg, true, notifications);
                             } else {
-                                export::download_png_from_svg(svg, "selection.png".to_string());
+                                export::download_png_from_svg(
+                                    svg,
+                                    "selection.png".to_string(),
+                                    notifications,
+                                );
                             }
                         }
                     }
@@ -237,19 +262,20 @@ where
             let svg = _doc
                 .scene
                 .with(|s| export::scene_to_svg(s, &vp, size, None));
+            let notifications = _doc.notifications;
             match fmt {
                 ExportFormat::Svg => {
                     if tauri {
-                        export::tauri_export_svg(svg, false);
+                        export::tauri_export_svg(svg, false, notifications);
                     } else {
                         export::download_string(&svg, "canvas.svg");
                     }
                 }
                 ExportFormat::Png => {
                     if tauri {
-                        export::tauri_export_png(svg, false);
+                        export::tauri_export_png(svg, false, notifications);
                     } else {
-                        export::download_png_from_svg(svg, "canvas.png".to_string());
+                        export::download_png_from_svg(svg, "canvas.png".to_string(), notifications);
                     }
                 }
             }
