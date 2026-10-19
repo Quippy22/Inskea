@@ -57,6 +57,8 @@ pub struct HotkeysContext {
     pub clipboard: RwSignal<Clipboard>,
     pub cursor_world: RwSignal<Point>,
     pub shortcuts_open: RwSignal<bool>,
+    /// A blocking dialog is open; canvas shortcuts stay quiet.
+    pub modal_open: Signal<bool>,
     pub push_snapshot: Rc<dyn Fn()>,
     pub do_undo: Rc<dyn Fn()>,
     pub do_redo: Rc<dyn Fn()>,
@@ -247,6 +249,9 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
     };
 
     let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
+        if ctx.modal_open.get_untracked() {
+            return;
+        }
         if ev.key() == "Tab" {
             ev.prevent_default();
             if let Some(target) = ev.target() {

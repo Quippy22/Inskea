@@ -19,8 +19,8 @@ pub fn UnsavedChangesDialog(
 
     view! {
         <Show when=move || pending.get().is_some()>
-            <div class="fixed inset-0 z-[80] bg-black/40"></div>
-            <div class="fixed inset-0 z-[81] grid place-items-center">
+            <div class="fixed inset-0 z-[60] bg-black/40"></div>
+            <div class="fixed inset-0 z-[61] grid place-items-center">
                 <div
                     class=format!("{} w-80 p-5", styles::PANEL)
                     role="dialog"
@@ -37,7 +37,7 @@ pub fn UnsavedChangesDialog(
                         <button class=styles::BTN_TEXT on:click=move |_| on_discard.call(())>
                             "Discard"
                         </button>
-                        <button class=styles::BTN_TEXT_ACTIVE on:click=move |_| on_save.call(())>
+                        <button class=styles::BTN_TEXT_ACTIVE autofocus=true on:click=move |_| on_save.call(())>
                             "Save"
                         </button>
                     </div>

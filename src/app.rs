@@ -238,6 +238,18 @@ pub fn App() -> impl IntoView {
     });
     let dialog_cancel = Callback::new(move |_: ()| pending_action.set(None));
 
+    // Escape dismisses the unsaved-changes dialog. Shortcuts are blocked while
+    // it is open, so this is the only key it listens for.
+    let modal_open = Signal::derive(move || pending_action.get().is_some());
+    {
+        let _ = window_event_listener(leptos::ev::keydown, move |ev: leptos::ev::KeyboardEvent| {
+            if ev.key() == "Escape" && pending_action.get_untracked().is_some() {
+                ev.prevent_default();
+                dialog_cancel.call(());
+            }
+        });
+    }
+
     // Window title: the file name plus a `*` while the scene differs from
     // what was last written to disk.
     {
@@ -286,6 +298,7 @@ pub fn App() -> impl IntoView {
         clipboard,
         cursor_world,
         shortcuts_open,
+        modal_open,
         push_snapshot: push_snapshot.clone(),
         do_undo: Rc::new(do_undo),
         do_redo: Rc::new(do_redo),
