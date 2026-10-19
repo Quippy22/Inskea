@@ -4,11 +4,11 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/version-0.10.0-blue?style=flat-square" alt="Version 0.10.0">
+  <img src="https://img.shields.io/badge/version-1.0.0-blue?style=flat-square" alt="Version 1.0.0">
   <img src="https://img.shields.io/badge/platform-desktop%20%7C%20browser-blueviolet?style=flat-square" alt="Platform: desktop and browser">
 </p>
 
---- 
+---
 Inskea is a drawing app without edges. One canvas that never runs out of room, for sketching diagrams, drafting ideas, and drawing by hand. When you finish, save your work to a real file and pick it back up later.
 
 It runs as a native desktop app and in the browser, with the same tools and the same files either way.
@@ -42,14 +42,17 @@ It runs as a native desktop app and in the browser, with the same tools and the 
 
 - **Infinite pan and zoom.** Zoom with the scroll wheel from 10% up to 2000%, centered on your pointer, and drag with the Hand tool to move around.
 - **Reset view.** Click the zoom readout to jump back to 100%, centered.
-- **Grid.** Dots, lines, or off, with adjustable spacing.
+- **Grid.** Dots, lines, or off, with adjustable spacing. Alt-snapping follows the spacing you set.
 - **Center marker.** A crosshair or dot at the origin, so you can find your way back.
 - **Background.** Dark or light canvas.
 
 ### Files and export
 
 - **`.skea` files.** Inskea's own format. Reopen your work at any time and keep editing; nothing gets flattened to a picture.
-- **Native file dialogs on the desktop.** Open, Save, and Save As work like any other desktop app. In the browser, you can import a `.skea` file or download one instead.
+- **Save and open anywhere.** On the desktop, Open, Save, and Save As use native dialogs. In the browser, Save and Save As download a copy of the drawing, and Open reads one back from disk.
+- **Autosave.** Turn it on in the settings and Inskea writes changes back a moment after you stop editing: to the open file on the desktop, or to browser storage so a reload restores the drawing. With no file yet, it asks for one.
+- **No surprise losses.** Unsaved work prompts before you start a new drawing, open another one, or close the app, and failed saves, loads, and exports tell you what went wrong.
+- **Opens from your file manager.** On the desktop, `.skea` files are associated with Inskea: double-click one to open it, and launching a second copy hands the file to the running window.
 - **PNG and SVG export.** Save the current view, or drag a rectangle to pick exactly what to export. PNG for sharing, SVG for editing elsewhere.
 
 ## Keyboard shortcuts
@@ -68,3 +71,42 @@ The shortcuts are chosen for one-handed use, so your other hand can stay on the 
 | New / open / save / save as | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` |
 | Cancel, deselect, or leave a group | `Esc` |
 | Shortcut help | `?` |
+
+## Build and run
+
+You need a Rust toolchain with the `wasm32-unknown-unknown` target, [Trunk](https://trunkrs.dev), Node.js with npm, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for desktop builds. Install the CSS tooling once:
+
+```sh
+npm install
+```
+
+Run the browser app:
+
+```sh
+trunk serve
+```
+
+Run the desktop app (the Tauri dev server starts Trunk for you):
+
+```sh
+cargo tauri dev
+```
+
+Build release bundles:
+
+```sh
+cargo tauri build
+```
+
+## Tests
+
+```sh
+cargo test
+cargo test --manifest-path src-tauri/Cargo.toml
+```
+
+`cargo test` covers the model, geometry, editing operations, and `.skea` round trips. The desktop crate tests cover file writing and argument handling. Browser and native UI behavior is verified by hand.
+
+## License
+
+Inskea is released under the MIT License; see [LICENSE](LICENSE). The bundled Cabin typeface is licensed under the SIL Open Font License; see [src-tauri/fonts/OFL.txt](src-tauri/fonts/OFL.txt).
