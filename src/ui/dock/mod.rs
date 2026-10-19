@@ -24,12 +24,13 @@ pub fn Dock(
         eraser_active.set(false);
     };
 
+    let eraser_on =
+        Signal::derive(move || eraser_active.get() || canvas_mode.get() == CanvasMode::Erase);
+
     let toggle_eraser = move |_| {
-        let new = !eraser_active.get();
-        eraser_active.set(new);
-        if new {
-            canvas_mode.set(CanvasMode::Draw);
-        }
+        let on = eraser_on.get_untracked();
+        eraser_active.set(!on);
+        canvas_mode.set(CanvasMode::Draw);
     };
 
     let tool_class = move |tool: Tool| -> &'static str {
@@ -93,7 +94,7 @@ pub fn Dock(
                     .collect::<Vec<_>>()}
                 <button
                     class=move || {
-                        if eraser_active.get() {
+                        if eraser_on.get() {
                             styles::BTN_TBAR_ACTIVE
                         } else {
                             styles::BTN_TBAR_INACTIVE
