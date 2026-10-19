@@ -12,62 +12,7 @@ use crate::ui::styles;
 use crate::util::window_size;
 use leptos::*;
 use std::rc::Rc;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
-
-fn browser_import(doc: DocContext) {
-    let document = web_sys::window().unwrap().document().unwrap();
-    let input = document
-        .create_element("input")
-        .expect("failed to create input");
-    input.set_attribute("type", "file").ok();
-    input.set_attribute("accept", ".skea").ok();
-    input.set_attribute("style", "display:none").ok();
-    document.body().unwrap().append_child(&input).ok();
-
-    let input_el = input
-        .dyn_ref::<web_sys::HtmlInputElement>()
-        .expect("input is not HtmlInputElement")
-        .clone();
-    let input_el2 = input_el.clone();
-    let document_for_cleanup = document.clone();
-    let doc_for_load = doc.clone();
-
-    let on_change = Closure::wrap(Box::new(move || {
-        let input_el = input_el.clone();
-        if let Some(file) = input_el.files().and_then(|f| f.item(0)) {
-            let reader = web_sys::FileReader::new().expect("failed to create FileReader");
-            let reader_c = reader.clone();
-            let doc = doc_for_load.clone();
-            let on_load = Closure::wrap(Box::new(move || {
-                if let Ok(val) = reader_c.result() {
-                    if let Some(text) = val.as_string() {
-                        match skea::load_from_str(&text) {
-                            Ok(loaded) => doc.adopt(loaded, None),
-                            Err(e) => crate::ui::notify::error(
-                                doc.notifications,
-                                format!("That file is not a valid Inskea drawing: {e}"),
-                            ),
-                        }
-                    }
-                }
-            }) as Box<dyn FnMut()>);
-            reader.set_onload(Some(on_load.as_ref().unchecked_ref()));
-            on_load.forget();
-            let _ = reader.read_as_text(&file);
-        }
-        document_for_cleanup
-            .body()
-            .unwrap()
-            .remove_child(&input_el)
-            .ok();
-    }) as Box<dyn FnMut()>);
-
-    input_el2.set_onchange(Some(on_change.as_ref().unchecked_ref()));
-    on_change.forget();
-    input_el2.click();
-}
 
 // ── ToolBar component ─────────────────────────────────────────────────
 
@@ -184,7 +129,7 @@ where
                         }
                     });
                 } else {
-                    browser_import(doc.clone());
+                    file_ops::browser_open(doc.clone());
                 }
             });
             request_action(PendingAction {
