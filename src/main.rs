@@ -7,6 +7,7 @@ mod fonts;
 mod hotkeys;
 mod model;
 mod skea;
+mod storage;
 mod tauri_bridge;
 mod ui;
 mod util;

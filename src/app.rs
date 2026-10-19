@@ -135,6 +135,12 @@ pub fn App() -> impl IntoView {
     let dirty = create_rw_signal(false);
     let notifications = create_rw_signal(Vec::new());
 
+    let clear_autosave = Rc::new(|| {
+        if !tauri_bridge::is_tauri() {
+            crate::storage::clear_autosave();
+        }
+    });
+
     let doc = DocContext {
         scene,
         saved_path,
@@ -143,6 +149,7 @@ pub fn App() -> impl IntoView {
         dirty,
         notifications,
         reset_history: reset_history.clone(),
+        clear_autosave,
     };
 
     let is_tauri = tauri_bridge::is_tauri();
@@ -284,13 +291,35 @@ pub fn App() -> impl IntoView {
             initialized.set(true);
         });
     } else {
+        if let Some(content) = crate::storage::load_settings() {
+            if let Some((cs, gs, gz, auto, bg)) = from_toml(&content) {
+                settings.set(CanvasSettings {
+                    center_style: cs,
+                    grid_style: gs,
+                    grid_size: gz,
+                    autosave: auto,
+                    canvas_bg: bg,
+                });
+            }
+        }
         initialized.set(true);
+    }
+
+    // Recover the browser autosave, if one exists and autosave is enabled.
+    if !is_tauri && settings.get_untracked().autosave {
+        if let Some(content) = crate::storage::load_autosave() {
+            if let Ok(restored) = skea::load_from_str(&content) {
+                if !restored.elements().is_empty() {
+                    doc.restore(restored);
+                    notify::info(doc.notifications, "Restored the autosaved drawing.");
+                }
+            }
+        }
     }
 
     create_effect(move |_| {
         let s = settings.get();
-        let _ = s;
-        if initialized.get() && is_tauri {
+        if initialized.get() {
             let content = to_toml(
                 s.center_style,
                 s.grid_style,
@@ -298,16 +327,21 @@ pub fn App() -> impl IntoView {
                 s.autosave,
                 s.canvas_bg,
             );
-            spawn_local(async move {
-                let _ = tauri_bridge::save_settings(&content).await;
-            });
+            if is_tauri {
+                spawn_local(async move {
+                    let _ = tauri_bridge::save_settings(&content).await;
+                });
+            } else {
+                crate::storage::save_settings(&content);
+            }
         }
     });
 
     // ── Autosave ───────────────────────────────────────────────────────────
-    // Native only for now. With a document path, write the scene back a moment
-    // after the last change so a burst of edits collapses into one save. With
-    // no path, ask for one once so autosave has somewhere to write.
+    // Writes the scene back a moment after the last change so a burst of edits
+    // collapses into one save. On desktop it targets the document path (and
+    // asks for one once if there is none); in the browser it targets
+    // localStorage so a reload restores the drawing.
     let autosave_generation = create_rw_signal(0_u64);
     let autosave_prompted = create_rw_signal(false);
     let autosave_doc = doc.clone();
@@ -319,7 +353,7 @@ pub fn App() -> impl IntoView {
         if saved_path.get_untracked().is_some() {
             autosave_prompted.set(false);
         }
-        if !is_tauri || !settings.get().autosave {
+        if !settings.get().autosave {
             return;
         }
         let generation = autosave_generation.get_untracked().wrapping_add(1);
@@ -331,6 +365,13 @@ pub fn App() -> impl IntoView {
                     return;
                 }
                 if !doc.is_dirty_now() {
+                    return;
+                }
+                let saved = doc.scene.get_untracked();
+                let content = skea::save_to_string(&saved);
+                if !is_tauri {
+                    crate::storage::save_autosave(&content);
+                    doc.mark_saved(None, saved);
                     return;
                 }
                 let Some(path) = saved_path.get_untracked() else {
@@ -353,8 +394,6 @@ pub fn App() -> impl IntoView {
                     }
                     return;
                 };
-                let saved = doc.scene.get_untracked();
-                let content = skea::save_to_string(&saved);
                 let notifications = doc.notifications;
                 spawn_local(async move {
                     match tauri_bridge::save_skea(&path, &content).await {

@@ -27,6 +27,8 @@ pub struct DocContext {
     pub dirty: RwSignal<bool>,
     pub notifications: Notifications,
     pub reset_history: Rc<dyn Fn()>,
+    /// Drop any browser-side autosaved copy (no-op on desktop).
+    pub clear_autosave: Rc<dyn Fn()>,
 }
 
 impl DocContext {
@@ -39,12 +41,25 @@ impl DocContext {
 
     /// Replace the document with a freshly created or loaded scene.
     pub fn adopt(&self, scene: Scene, path: Option<String>) {
+        self.replace(scene, path, true);
+    }
+
+    /// Replace the document with a recovered autosave. Keeps the stored copy
+    /// so another reload can restore it again before the next edit.
+    pub fn restore(&self, scene: Scene) {
+        self.replace(scene, None, false);
+    }
+
+    fn replace(&self, scene: Scene, path: Option<String>, clear_autosave: bool) {
         self.selected_ids.set(Vec::new());
         self.baseline.set(scene.clone());
         self.scene.set(scene);
         self.saved_path.set(path);
         self.dirty.set(false);
         (self.reset_history)();
+        if clear_autosave {
+            (self.clear_autosave)();
+        }
     }
 
     /// Record a successful write of `saved` to `path`.
