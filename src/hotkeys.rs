@@ -92,140 +92,158 @@ fn is_text_input(target: &web_sys::EventTarget) -> bool {
 }
 
 pub fn register_hotkeys(ctx: HotkeysContext) {
-    let handle_shortcut = move |key: &str, ctrl: bool, shift: bool, alt: bool| match (ctrl, key) {
-        (true, "z") | (true, "Z") => {
-            if shift {
-                (ctx.do_redo)();
-            } else {
-                (ctx.do_undo)();
+    let handle_shortcut = move |key: &str, ctrl: bool, shift: bool, alt: bool| {
+        // Any plain mode or tool shortcut leaves the dock's eraser toggle.
+        if !ctrl
+            && !shift
+            && matches!(
+                key,
+                "s" | "a" | "d" | "e" | "1" | "2" | "3" | "4" | "5" | "f"
+            )
+        {
+            ctx.eraser_active.set(false);
+        }
+        match (ctrl, key) {
+            (true, "z") | (true, "Z") => {
+                if shift {
+                    (ctx.do_redo)();
+                } else {
+                    (ctx.do_undo)();
+                }
             }
-        }
-        (false, "s") => ctx.canvas_mode.set(CanvasMode::Select),
-        (false, "a") => ctx.canvas_mode.set(CanvasMode::Pan),
-        (true, "d") | (true, "D") => {
-            edit_ops::duplicate_selection(ctx.doc.scene, ctx.doc.selected_ids, &ctx.push_snapshot)
-        }
-        (true, "g") | (true, "G") => {
-            if shift {
-                edit_ops::ungroup_selection(
-                    ctx.doc.scene,
-                    ctx.doc.selected_ids,
-                    &ctx.push_snapshot,
-                );
-            } else {
-                edit_ops::group_selection(ctx.doc.scene, ctx.doc.selected_ids, &ctx.push_snapshot);
+            (false, "s") => ctx.canvas_mode.set(CanvasMode::Select),
+            (false, "a") => ctx.canvas_mode.set(CanvasMode::Pan),
+            (true, "d") | (true, "D") => edit_ops::duplicate_selection(
+                ctx.doc.scene,
+                ctx.doc.selected_ids,
+                &ctx.push_snapshot,
+            ),
+            (true, "g") | (true, "G") => {
+                if shift {
+                    edit_ops::ungroup_selection(
+                        ctx.doc.scene,
+                        ctx.doc.selected_ids,
+                        &ctx.push_snapshot,
+                    );
+                } else {
+                    edit_ops::group_selection(
+                        ctx.doc.scene,
+                        ctx.doc.selected_ids,
+                        &ctx.push_snapshot,
+                    );
+                }
             }
-        }
-        (true, "ArrowLeft") if alt && shift => edit_ops::distribute_selection(
-            ctx.doc.scene,
-            ctx.doc.selected_ids,
-            Distribution::Horizontal,
-            &ctx.push_snapshot,
-        ),
-        (true, "ArrowUp") if alt && shift => edit_ops::distribute_selection(
-            ctx.doc.scene,
-            ctx.doc.selected_ids,
-            Distribution::Vertical,
-            &ctx.push_snapshot,
-        ),
-        (true, "ArrowLeft") if alt => edit_ops::align_selection(
-            ctx.doc.scene,
-            ctx.doc.selected_ids,
-            Alignment::Left,
-            &ctx.push_snapshot,
-        ),
-        (true, "ArrowRight") if alt => edit_ops::align_selection(
-            ctx.doc.scene,
-            ctx.doc.selected_ids,
-            Alignment::Right,
-            &ctx.push_snapshot,
-        ),
-        (true, "ArrowUp") if alt => edit_ops::align_selection(
-            ctx.doc.scene,
-            ctx.doc.selected_ids,
-            Alignment::Top,
-            &ctx.push_snapshot,
-        ),
-        (true, "ArrowDown") if alt => edit_ops::align_selection(
-            ctx.doc.scene,
-            ctx.doc.selected_ids,
-            Alignment::Bottom,
-            &ctx.push_snapshot,
-        ),
-        (true, "n") | (true, "N") => {
-            let doc = ctx.doc.clone();
-            (ctx.request_action)(PendingAction {
-                label: "start a new drawing",
-                run: Rc::new(move || file_ops::file_new(doc.clone())),
-            });
-        }
-        (true, "o") | (true, "O") => {
-            let doc = ctx.doc.clone();
-            (ctx.request_action)(PendingAction {
-                label: "open another drawing",
-                run: Rc::new(move || file_ops::file_open(doc.clone())),
-            });
-        }
-        (true, "s") | (true, "S") => {
-            if shift {
-                file_ops::file_save_as(ctx.doc.clone());
-            } else {
-                file_ops::file_save(ctx.doc.clone());
-            }
-        }
-        (false, "?") => ctx.shortcuts_open.update(|v| *v = !*v),
-        (false, "e") => ctx.canvas_mode.set(CanvasMode::Erase),
-        (false, "1") => {
-            ctx.selected_tool.set(Tool::Rectangle);
-            ctx.canvas_mode.set(CanvasMode::Draw);
-        }
-        (false, "2") => {
-            ctx.selected_tool.set(Tool::Ellipse);
-            ctx.canvas_mode.set(CanvasMode::Draw);
-        }
-        (false, "3") => {
-            ctx.selected_tool.set(Tool::Line);
-            ctx.canvas_mode.set(CanvasMode::Draw);
-        }
-        (false, "4") => {
-            ctx.selected_tool.set(Tool::Arrow);
-            ctx.canvas_mode.set(CanvasMode::Draw);
-        }
-        (false, "5") => {
-            ctx.selected_tool.set(Tool::Text);
-            ctx.canvas_mode.set(CanvasMode::Draw);
-        }
-        (false, "f") => {
-            ctx.selected_tool.set(Tool::Freehand);
-            ctx.canvas_mode.set(CanvasMode::Draw);
-        }
-        (false, "d") => ctx.canvas_mode.set(CanvasMode::Draw),
-        // Escape is handled by the canvas, which owns the interaction state.
-        (false, "Escape") => {}
-        (true, "c") | (true, "C") => {
-            edit_ops::copy_selection(ctx.doc.scene, ctx.doc.selected_ids, ctx.clipboard);
-            notify::info(ctx.doc.notifications, "Copied");
-        }
-        (true, "v") | (true, "V") => edit_ops::paste_clipboard(
-            ctx.doc.scene,
-            ctx.clipboard,
-            ctx.doc.selected_ids,
-            &ctx.push_snapshot,
-            ctx.cursor_world,
-        ),
-        (false, "Delete") | (false, "Backspace") => {
-            let ids = ctx.doc.selected_ids.get();
-            if !ids.is_empty() {
-                (ctx.push_snapshot)();
-                ctx.doc.scene.update(|s| {
-                    for id in &ids {
-                        s.remove_by_id(*id);
-                    }
+            (true, "ArrowLeft") if alt && shift => edit_ops::distribute_selection(
+                ctx.doc.scene,
+                ctx.doc.selected_ids,
+                Distribution::Horizontal,
+                &ctx.push_snapshot,
+            ),
+            (true, "ArrowUp") if alt && shift => edit_ops::distribute_selection(
+                ctx.doc.scene,
+                ctx.doc.selected_ids,
+                Distribution::Vertical,
+                &ctx.push_snapshot,
+            ),
+            (true, "ArrowLeft") if alt => edit_ops::align_selection(
+                ctx.doc.scene,
+                ctx.doc.selected_ids,
+                Alignment::Left,
+                &ctx.push_snapshot,
+            ),
+            (true, "ArrowRight") if alt => edit_ops::align_selection(
+                ctx.doc.scene,
+                ctx.doc.selected_ids,
+                Alignment::Right,
+                &ctx.push_snapshot,
+            ),
+            (true, "ArrowUp") if alt => edit_ops::align_selection(
+                ctx.doc.scene,
+                ctx.doc.selected_ids,
+                Alignment::Top,
+                &ctx.push_snapshot,
+            ),
+            (true, "ArrowDown") if alt => edit_ops::align_selection(
+                ctx.doc.scene,
+                ctx.doc.selected_ids,
+                Alignment::Bottom,
+                &ctx.push_snapshot,
+            ),
+            (true, "n") | (true, "N") => {
+                let doc = ctx.doc.clone();
+                (ctx.request_action)(PendingAction {
+                    label: "start a new drawing",
+                    run: Rc::new(move || file_ops::file_new(doc.clone())),
                 });
-                ctx.doc.selected_ids.set(Vec::new());
             }
+            (true, "o") | (true, "O") => {
+                let doc = ctx.doc.clone();
+                (ctx.request_action)(PendingAction {
+                    label: "open another drawing",
+                    run: Rc::new(move || file_ops::file_open(doc.clone())),
+                });
+            }
+            (true, "s") | (true, "S") => {
+                if shift {
+                    file_ops::file_save_as(ctx.doc.clone());
+                } else {
+                    file_ops::file_save(ctx.doc.clone());
+                }
+            }
+            (false, "?") => ctx.shortcuts_open.update(|v| *v = !*v),
+            (false, "e") => ctx.canvas_mode.set(CanvasMode::Erase),
+            (false, "1") => {
+                ctx.selected_tool.set(Tool::Rectangle);
+                ctx.canvas_mode.set(CanvasMode::Draw);
+            }
+            (false, "2") => {
+                ctx.selected_tool.set(Tool::Ellipse);
+                ctx.canvas_mode.set(CanvasMode::Draw);
+            }
+            (false, "3") => {
+                ctx.selected_tool.set(Tool::Line);
+                ctx.canvas_mode.set(CanvasMode::Draw);
+            }
+            (false, "4") => {
+                ctx.selected_tool.set(Tool::Arrow);
+                ctx.canvas_mode.set(CanvasMode::Draw);
+            }
+            (false, "5") => {
+                ctx.selected_tool.set(Tool::Text);
+                ctx.canvas_mode.set(CanvasMode::Draw);
+            }
+            (false, "f") => {
+                ctx.selected_tool.set(Tool::Freehand);
+                ctx.canvas_mode.set(CanvasMode::Draw);
+            }
+            (false, "d") => ctx.canvas_mode.set(CanvasMode::Draw),
+            // Escape is handled by the canvas, which owns the interaction state.
+            (false, "Escape") => {}
+            (true, "c") | (true, "C") => {
+                edit_ops::copy_selection(ctx.doc.scene, ctx.doc.selected_ids, ctx.clipboard);
+                notify::info(ctx.doc.notifications, "Copied");
+            }
+            (true, "v") | (true, "V") => edit_ops::paste_clipboard(
+                ctx.doc.scene,
+                ctx.clipboard,
+                ctx.doc.selected_ids,
+                &ctx.push_snapshot,
+                ctx.cursor_world,
+            ),
+            (false, "Delete") | (false, "Backspace") => {
+                let ids = ctx.doc.selected_ids.get();
+                if !ids.is_empty() {
+                    (ctx.push_snapshot)();
+                    ctx.doc.scene.update(|s| {
+                        for id in &ids {
+                            s.remove_by_id(*id);
+                        }
+                    });
+                    ctx.doc.selected_ids.set(Vec::new());
+                }
+            }
+            _ => {}
         }
-        _ => {}
     };
 
     let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
