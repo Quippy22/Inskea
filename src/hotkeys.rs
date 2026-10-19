@@ -15,6 +15,8 @@ pub(crate) const MODE_SHORTCUTS: &[(&str, &str)] = &[
     ("e", "Erase mode"),
     ("Esc", "Cancel / pan mode"),
     ("Delete", "Delete selection"),
+    ("Shift + drag", "Smart guides"),
+    ("Alt + drag", "Snap to grid"),
 ];
 
 pub(crate) const TOOL_SHORTCUTS: &[(&str, &str)] = &[

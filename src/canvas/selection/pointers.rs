@@ -1,12 +1,12 @@
 use super::utils::{
-    handle_positions, selection_bounds, unrotate_for_element, GRID_SIZE, HANDLE_MOVE_RADIUS,
+    handle_positions, selection_bounds, snap_value, unrotate_for_element, HANDLE_MOVE_RADIUS,
     HANDLE_RESIZE_RADIUS, HANDLE_ROTATE_RADIUS, PATH_MERGE_DIST, SELECT_PADDING,
 };
 use super::MIN_DRAG_DIST;
 use crate::canvas::smart_guides::{self, GuideBox, SmartGuideState};
 use crate::canvas::state::{CanvasInputs, CanvasState, DragOperation};
 use crate::model::elements::path::segment_midpoint;
-use crate::model::elements::{Bounds, Offset, PathPoints, Resize, Rotate, SnapToGrid};
+use crate::model::elements::{Bounds, Offset, PathPoints, Resize, Rotate};
 use crate::model::interaction::{
     guide_bounds, guide_frame, guide_union_bounds, guide_union_frame, hit_test_topmost,
     point_inside_any_element, rect_fully_contains_element, GuideFrame, CLICK_MARGIN, HIT_MARGIN,
@@ -542,15 +542,22 @@ fn do_rotate(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
     }
 }
 
-/// Drag a single path point to the current world position.
+/// Drag a single path point to the current world position, grid-snapped
+/// live while Alt is held.
 #[inline]
 fn do_path_point_drag(world: Point, st: &mut CanvasState, props: &mut CanvasInputs, idx: usize) {
+    let target = if st.alt_pressed.get() {
+        let step = grid_step(props);
+        Point::new(snap_value(world.x, step), snap_value(world.y, step))
+    } else {
+        world
+    };
     let ids = st.selected_ids.get();
     props.scene.update(|s| {
         if let Some(el) = s.element_by_id_mut(ids[0]) {
             if let Some(pts) = el.path_points_mut() {
                 if idx < pts.len() {
-                    pts[idx] = world;
+                    pts[idx] = target;
                 }
             }
         }
@@ -593,6 +600,14 @@ fn do_path_midpoint_drag(world: Point, st: &mut CanvasState, props: &mut CanvasI
     }
 }
 
+/// Grid step (world units) for Alt snapping. Reads the grid-size setting, so
+/// snapping follows the configured grid and keeps working when the grid is
+/// hidden.
+#[inline]
+fn grid_step(props: &CanvasInputs) -> f64 {
+    props.settings.get_untracked().grid_size.px().max(1.0)
+}
+
 /// Offset all selected elements by the delta since the drag anchor.
 #[inline]
 fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
@@ -628,6 +643,18 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
                 })
             })
         })
+    } else if st.alt_pressed.get() {
+        // Alt grid-snaps live, like Shift snaps to the smart guides: the
+        // selection's top-left tracks the nearest grid intersection while the
+        // drag runs, and the raw delta resumes when Alt is released.
+        let step = grid_step(props);
+        let x = bounds.x + raw_dx;
+        let y = bounds.y + raw_dy;
+        (
+            snap_value(x, step) - x,
+            snap_value(y, step) - y,
+            SmartGuideState::default(),
+        )
     } else {
         (0.0, 0.0, SmartGuideState::default())
     };
@@ -675,41 +702,6 @@ fn finish_path_point_drag(st: &mut CanvasState, props: &mut CanvasInputs, idx: u
             }
         });
     }
-}
-
-/// Snap a single path point to the grid (Alt-release after a point drag).
-#[inline]
-fn snap_path_point_to_grid(st: &mut CanvasState, props: &mut CanvasInputs, idx: usize) {
-    let ids = st.selected_ids.get();
-    let exists = props.scene.with(|s| {
-        s.element_by_id(ids[0])
-            .and_then(|el| el.path_points())
-            .is_some_and(|pts| idx < pts.len())
-    });
-    if exists {
-        props.scene.update(|s| {
-            if let Some(el) = s.element_by_id_mut(ids[0]) {
-                if let Some(pts) = el.path_points_mut() {
-                    let sx = (pts[idx].x / GRID_SIZE).round() * GRID_SIZE;
-                    let sy = (pts[idx].y / GRID_SIZE).round() * GRID_SIZE;
-                    pts[idx].set(sx, sy);
-                }
-            }
-        });
-    }
-}
-
-/// Snap all selected elements to the grid (Alt-release after move/resize/rotate).
-#[inline]
-fn snap_elements_to_grid(st: &mut CanvasState, props: &mut CanvasInputs) {
-    let ids = st.selected_ids.get();
-    props.scene.update(|s| {
-        for el in s.elements_mut().iter_mut() {
-            if ids.contains(&el.id()) {
-                el.snap_to_grid(GRID_SIZE);
-            }
-        }
-    });
 }
 
 /// Reset all drag-tracking signals to their default (no-op) values.
@@ -878,16 +870,9 @@ pub fn select_pointer_up(
             finish_shift_click(st, props);
         }
 
-        // Alt is the grid-snap key; Shift stays reserved for smart guides.
-        let smart_guide_active = !st.drag.smart_guides.get().active.is_empty();
-        if st.alt_pressed.get() && travelled {
-            if let Some(DragOperation::PathPoint(idx)) = drag_action {
-                snap_path_point_to_grid(st, props, idx);
-            } else if !smart_guide_active {
-                snap_elements_to_grid(st, props);
-            }
-        }
-
+        // Alt grid-snapping and Shift smart guides both apply live while the
+        // pointer moves (see `do_move` / `do_path_point_drag`), so nothing is
+        // re-applied here.
         clear_drag_state(st);
         return;
     }

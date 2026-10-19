@@ -488,7 +488,8 @@ pub fn Canvas(
     //      client-space positions.
     //    - `Select` → `modes::select_pointer_move` – handles resize drag
     //      (with per-frame deltas for scale), rotation drag (angle tracking
-    //      with optional snap), and plain move (offset).
+    //      with optional snap), and plain move (offset, with live Shift
+    //      smart-guide or Alt grid snapping).
     //    - `Draw` → for `Freehand` tool, delegates to
     //      `UpdateDrag::update_drag` which appends the latest point to
     //      the stroke path. Other tools do nothing during move (the preview
@@ -566,9 +567,10 @@ pub fn Canvas(
     // 3. Dispatches by mode:
     //    - `Pan` → clears the pan anchor (stops panning).
     //    - `Select` → `modes::select_pointer_up` – if a move/resize/rotate
-    //      drag just finished, optionally snaps to grid (Alt held), then
-    //      clears all drag state. If a marquee drag just finished, selects
-    //      all elements fully inside the rectangle.
+    //      drag just finished, clears all drag state (Alt grid snapping and
+    //      Shift smart guides both apply live while dragging). If a marquee
+    //      drag just finished, selects all elements fully inside the
+    //      rectangle.
     //    - `Draw` → `modes::draw_pointer_up` – finalises the element from
     //      the drag parameters (skipped for Freehand which is built incrementally,
     //      and skipped if the drag distance is below `MIN_DRAG_DIST`).

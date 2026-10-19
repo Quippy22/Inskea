@@ -3,13 +3,22 @@ use crate::model::interaction::{layout_bounds, visual_bounds};
 use crate::model::resize::common_bounds;
 use crate::model::{Element, ElementData, ElementId, Point, Rect};
 
-pub const GRID_SIZE: f64 = 40.0;
 pub const HANDLE_RESIZE_RADIUS: f64 = 5.0;
 pub const HANDLE_MOVE_RADIUS: f64 = 6.0;
 pub const HANDLE_ROTATE_RADIUS: f64 = 7.0;
 pub const ROTATE_HANDLE_OFFSET: f64 = 25.0;
 pub const PATH_MERGE_DIST: f64 = 3.0;
 pub const SELECT_PADDING: f64 = 5.0;
+
+/// Round `value` to the nearest multiple of `step`; a non-positive step leaves
+/// the value untouched.
+pub fn snap_value(value: f64, step: f64) -> f64 {
+    if step <= 0.0 {
+        value
+    } else {
+        (value / step).round() * step
+    }
+}
 
 pub fn selection_bounds(ids: &[ElementId], els: &[Element]) -> Option<Rect> {
     if ids.len() == 1 {
@@ -88,5 +97,20 @@ mod tests {
         let un = unrotate_for_element(world, &el);
         assert!((un.x - local.x).abs() < 1e-9);
         assert!((un.y - local.y).abs() < 1e-9);
+    }
+
+    #[test]
+    fn snap_value_rounds_to_the_nearest_step() {
+        assert_eq!(snap_value(0.0, 30.0), 0.0);
+        assert_eq!(snap_value(14.9, 30.0), 0.0);
+        assert_eq!(snap_value(15.0, 30.0), 30.0);
+        assert_eq!(snap_value(44.0, 30.0), 30.0);
+        assert_eq!(snap_value(-31.0, 30.0), -30.0);
+    }
+
+    #[test]
+    fn snap_value_ignores_a_non_positive_step() {
+        assert_eq!(snap_value(17.3, 0.0), 17.3);
+        assert_eq!(snap_value(17.3, -5.0), 17.3);
     }
 }
