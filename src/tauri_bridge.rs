@@ -212,3 +212,25 @@ pub fn on_close_requested(callback: impl Fn() + 'static) {
         handler.forget();
     });
 }
+
+/// The drawing path passed on the command line at launch, if any.
+pub async fn startup_file() -> Option<String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({})).ok()?;
+    let result = invoke("startup_file", args).await.ok()?;
+    result.as_string()
+}
+
+/// Listen for a drawing path forwarded when a second instance is launched.
+pub fn on_open_file(callback: impl Fn(String) + 'static) {
+    wasm_bindgen_futures::spawn_local(async move {
+        let handler = wasm_bindgen::closure::Closure::wrap(Box::new(move |event: JsValue| {
+            if let Ok(payload) = js_sys::Reflect::get(&event, &JsValue::from_str("payload")) {
+                if let Some(path) = payload.as_string() {
+                    callback(path);
+                }
+            }
+        }) as Box<dyn FnMut(JsValue)>);
+        let _ = listen("inskea-open-file", handler.as_ref()).await;
+        handler.forget();
+    });
+}

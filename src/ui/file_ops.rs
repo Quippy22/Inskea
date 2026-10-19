@@ -103,13 +103,19 @@ pub fn file_open(doc: DocContext) {
         browser_open(doc);
         return;
     }
-    let notifications = doc.notifications;
     spawn_local(async move {
         let dir = tauri_bridge::get_documents_dir().await.ok();
         let path = tauri_bridge::pick_open_path(dir.as_deref()).await;
-        let Some(path) = path else {
-            return;
-        };
+        if let Some(path) = path {
+            open_path(doc, path);
+        }
+    });
+}
+
+/// Load a specific drawing, replacing the current document.
+pub fn open_path(doc: DocContext, path: String) {
+    let notifications = doc.notifications;
+    spawn_local(async move {
         match tauri_bridge::load_skea(&path).await {
             Ok(content) => match skea::load_from_str(&content) {
                 Ok(loaded) => doc.adopt(loaded, Some(path)),

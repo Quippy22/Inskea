@@ -87,7 +87,8 @@ fn load_skea(path: String) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_file_path, write_atomic};
+    use super::{is_skea_arg, resolve_arg, validate_file_path, write_atomic};
+    use std::path::Path;
 
     #[test]
     fn file_paths_must_be_absolute_files() {
@@ -95,6 +96,27 @@ mod tests {
         assert!(validate_file_path("/tmp/../drawing.skea").is_err());
         assert!(validate_file_path("/").is_err());
         assert!(validate_file_path("/tmp/drawing.skea").is_ok());
+    }
+
+    #[test]
+    fn command_line_drawing_arguments_are_recognized() {
+        assert!(is_skea_arg("drawing.skea"));
+        assert!(is_skea_arg("file:///tmp/drawing.skea"));
+        assert!(is_skea_arg("DRAWING.SKEA"));
+        assert!(!is_skea_arg("--autosave"));
+        assert!(!is_skea_arg("notes.txt"));
+    }
+
+    #[test]
+    fn relative_drawing_arguments_resolve_against_the_cwd() {
+        assert_eq!(
+            resolve_arg("drawing.skea", Some(Path::new("/home/user"))).as_deref(),
+            Some("/home/user/drawing.skea")
+        );
+        assert_eq!(
+            resolve_arg("file:///tmp/drawing.skea", None).as_deref(),
+            Some("/tmp/drawing.skea")
+        );
     }
 
     #[test]
@@ -124,6 +146,39 @@ fn set_window_title(window: tauri::Window, title: String) {
 fn close_window(window: tauri::Window, state: tauri::State<CloseConfirmed>) {
     state.0.store(true, Ordering::SeqCst);
     let _ = window.close();
+}
+
+#[tauri::command]
+fn startup_file() -> Option<String> {
+    let cwd = std::env::current_dir().ok();
+    std::env::args()
+        .skip(1)
+        .find(|arg| is_skea_arg(arg))
+        .and_then(|arg| resolve_arg(&arg, cwd.as_deref()))
+}
+
+/// Check whether a command-line argument names an Inskea drawing.
+fn is_skea_arg(arg: &str) -> bool {
+    if arg.starts_with('-') {
+        return false;
+    }
+    arg.strip_prefix("file://")
+        .unwrap_or(arg)
+        .to_ascii_lowercase()
+        .ends_with(".skea")
+}
+
+/// Turn an OS argument into an absolute path. File managers usually pass an
+/// absolute path, but a relative path or `file://` URI is possible.
+fn resolve_arg(arg: &str, cwd: Option<&Path>) -> Option<String> {
+    let arg = arg.strip_prefix("file://").unwrap_or(arg);
+    let path = Path::new(arg);
+    let full = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        cwd?.join(path)
+    };
+    full.to_str().map(str::to_string)
 }
 
 #[tauri::command]
@@ -160,6 +215,19 @@ fn get_font_paths(app_handle: tauri::AppHandle) -> Result<Vec<String>, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            if let Some(path) = argv
+                .iter()
+                .skip(1)
+                .find(|arg| is_skea_arg(arg))
+                .and_then(|arg| resolve_arg(arg, Some(Path::new(&cwd))))
+            {
+                let _ = app.emit("inskea-open-file", path);
+            }
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
+        }))
         .manage(CloseConfirmed(AtomicBool::new(false)))
         .invoke_handler(tauri::generate_handler![
             save_file,
@@ -168,6 +236,7 @@ pub fn run() {
             load_skea,
             set_window_title,
             close_window,
+            startup_file,
             get_documents_dir,
             save_settings,
             load_settings,

@@ -177,6 +177,27 @@ pub fn App() -> impl IntoView {
                 run: Rc::new(tauri_bridge::close_window),
             });
         });
+
+        // A drawing passed on the command line, or forwarded by a second
+        // instance, opens through the same unsaved-changes guard.
+        let open_file: Rc<dyn Fn(String)> = {
+            let doc = doc.clone();
+            let request = request_action.clone();
+            Rc::new(move |path: String| {
+                let doc = doc.clone();
+                request(PendingAction {
+                    label: "open another drawing",
+                    run: Rc::new(move || file_ops::open_path(doc.clone(), path.clone())),
+                });
+            })
+        };
+        let listener_open = open_file.clone();
+        tauri_bridge::on_open_file(move |path| listener_open(path));
+        spawn_local(async move {
+            if let Some(path) = tauri_bridge::startup_file().await {
+                open_file(path);
+            }
+        });
     } else if let Some(window) = web_sys::window() {
         let doc = doc.clone();
         let handler = wasm_bindgen::closure::Closure::wrap(Box::new(
