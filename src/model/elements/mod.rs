@@ -30,7 +30,7 @@ impl StrokeStyle {
         match self {
             StrokeStyle::Solid => "none",
             StrokeStyle::Dashed => "6 3",
-            StrokeStyle::Dotted => "2 2",
+            StrokeStyle::Dotted => "2 4",
         }
     }
 }
@@ -398,4 +398,14 @@ dispatch_element!(UpdateDrag, update_drag(&mut self, current: Point, anchor: Poi
 /// Snap an angle to the nearest `divisions`-th of a full turn.
 pub(crate) fn snap_angle(angle: f64, divisions: f64) -> f64 {
     (angle / (std::f64::consts::TAU / divisions)).round() * (std::f64::consts::TAU / divisions)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StrokeStyle;
+
+    #[test]
+    fn dotted_strokes_leave_a_clear_gap() {
+        assert_eq!(StrokeStyle::Dotted.stroke_dasharray(), "2 4");
+    }
 }
