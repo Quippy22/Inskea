@@ -1,6 +1,10 @@
 {
+  "scripts": {
+    "tauri": "tauri"
+  },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.2",
+    "@tauri-apps/cli": "2.11.5",
     "tailwindcss": "^4.3.2"
   }
 }
