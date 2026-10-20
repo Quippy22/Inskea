@@ -150,13 +150,22 @@ where
             close_menu();
             let s = doc.scene.get_untracked();
             let notifications = doc.notifications;
+            let content = match skea::save_to_string(&s) {
+                Ok(content) => content,
+                Err(e) => {
+                    crate::ui::notify::error(
+                        notifications,
+                        format!("Could not export the drawing: {e}"),
+                    );
+                    return;
+                }
+            };
             if tauri {
                 spawn_local(async move {
                     let dir = tauri_bridge::get_documents_dir().await.ok();
                     let path = tauri_bridge::pick_save_path("untitled.skea", dir.as_deref()).await;
                     if let Some(path) = path {
-                        let c = skea::save_to_string(&s);
-                        match tauri_bridge::save_skea(&path, &c).await {
+                        match tauri_bridge::save_skea(&path, &content).await {
                             Ok(()) => crate::ui::notify::info(
                                 notifications,
                                 format!(
@@ -172,7 +181,7 @@ where
                     }
                 });
             } else {
-                export::browser_export_skea(s);
+                export::download_string(&content, "untitled.skea");
             }
         }
     };

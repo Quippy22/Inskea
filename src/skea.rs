@@ -14,12 +14,12 @@ struct SkeaFile {
     scene: Scene,
 }
 
-pub fn save_to_string(scene: &Scene) -> String {
+pub fn save_to_string(scene: &Scene) -> Result<String, String> {
     let file = SkeaFile {
         format_version: FORMAT_VERSION,
         scene: scene.clone(),
     };
-    serde_json::to_string_pretty(&file).unwrap_or_else(|_| "{}".to_string())
+    serde_json::to_string_pretty(&file).map_err(|e| format!("failed to serialize the drawing: {e}"))
 }
 
 pub fn load_from_str(input: &str) -> Result<Scene, String> {
@@ -123,7 +123,7 @@ mod tests {
     #[test]
     fn round_trip_all_types() {
         let scene = make_scene();
-        let saved = save_to_string(&scene);
+        let saved = save_to_string(&scene).unwrap();
         let loaded = load_from_str(&saved).unwrap();
         assert_eq!(scene, loaded);
     }
@@ -139,7 +139,7 @@ mod tests {
             wrapped: WrappedText::new("line one\nline two\nline three"),
             align: crate::model::TextAlign::Left,
         }));
-        let saved = save_to_string(&s);
+        let saved = save_to_string(&s).unwrap();
         let loaded = load_from_str(&saved).unwrap();
         assert_eq!(s, loaded);
     }
@@ -165,7 +165,7 @@ mod tests {
             align: crate::model::TextAlign::Left,
         }));
 
-        let saved = save_to_string(&s);
+        let saved = save_to_string(&s).unwrap();
         let loaded = load_from_str(&saved).unwrap();
         assert_eq!(s, loaded);
     }
@@ -181,10 +181,10 @@ mod tests {
             wrapped: WrappedText::new("aligned"),
             align: TextAlign::Center,
         }));
-        let saved = save_to_string(&center_scene);
+        let saved = save_to_string(&center_scene).unwrap();
         let loaded = load_from_str(&saved).unwrap();
         assert_eq!(center_scene, loaded);
-        assert_eq!(save_to_string(&loaded), saved);
+        assert_eq!(save_to_string(&loaded).unwrap(), saved);
 
         // A scene saved before alignment existed has no `align` field and
         // loads with the Left default; re-saving restores the field.
@@ -195,11 +195,11 @@ mod tests {
             wrapped: WrappedText::new("aligned"),
             align: TextAlign::Left,
         }));
-        let with_field = save_to_string(&left_scene);
+        let with_field = save_to_string(&left_scene).unwrap();
         let legacy = with_field.replace(r#","align":"left""#, "");
         let loaded = load_from_str(&legacy).unwrap();
         assert_eq!(left_scene, loaded);
-        assert_eq!(save_to_string(&loaded), with_field);
+        assert_eq!(save_to_string(&loaded).unwrap(), with_field);
         let Element::Text(t) = &loaded.elements()[0] else {
             panic!("expected text element");
         };
@@ -216,7 +216,8 @@ mod tests {
         }
         scene.create_group(&[1, 2]);
 
-        let mut raw: serde_json::Value = serde_json::from_str(&save_to_string(&scene)).unwrap();
+        let mut raw: serde_json::Value =
+            serde_json::from_str(&save_to_string(&scene).unwrap()).unwrap();
         raw.pointer_mut("/scene/groups/0")
             .and_then(serde_json::Value::as_object_mut)
             .unwrap()

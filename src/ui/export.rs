@@ -1,7 +1,6 @@
 use crate::canvas::settings::CanvasBg;
 use crate::canvas::{combined_bounds, Viewport};
 use crate::model::{Element, ElementId, Point, Rect, Scene};
-use crate::skea;
 use crate::ui::notify::{self, Notifications};
 use leptos::set_timeout;
 use std::time::Duration;
@@ -498,11 +497,6 @@ pub fn download_png_from_svg(svg: String, filename: String, notifications: Notif
             Duration::from_secs(1),
         );
     });
-}
-
-pub fn browser_export_skea(scene: Scene) {
-    let content = skea::save_to_string(&scene);
-    download_string(&content, "untitled.skea");
 }
 
 /// Tauri-native SVG export: shows a save dialog, writes the SVG string to disk.

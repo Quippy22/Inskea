@@ -64,7 +64,17 @@ fn browser_save(doc: DocContext, on_done: Option<SaveCallback>) {
         .saved_path
         .get_untracked()
         .unwrap_or_else(|| BROWSER_DEFAULT_NAME.to_string());
-    let content = skea::save_to_string(&saved);
+    let content = match skea::save_to_string(&saved) {
+        Ok(content) => content,
+        Err(e) => {
+            notify::error(
+                doc.notifications,
+                format!("Could not save the drawing: {e}"),
+            );
+            report_saved(&on_done, false);
+            return;
+        }
+    };
     export::download_string(&content, &name);
     doc.mark_saved(Some(name.clone()), saved);
     notify::info(doc.notifications, format!("Downloaded {name}"));
@@ -98,7 +108,14 @@ fn save_to_path(doc: DocContext, path: String, on_done: Option<SaveCallback>) {
     spawn_local(async move {
         let path = tauri_bridge::with_skea_extension(&path);
         let saved = doc.scene.get_untracked();
-        let content = skea::save_to_string(&saved);
+        let content = match skea::save_to_string(&saved) {
+            Ok(content) => content,
+            Err(e) => {
+                notify::error(notifications, format!("Could not save the drawing: {e}"));
+                report_saved(&on_done, false);
+                return;
+            }
+        };
         match tauri_bridge::save_skea(&path, &content).await {
             Ok(()) => {
                 doc.mark_saved(Some(path), saved);

@@ -410,7 +410,13 @@ pub fn App() -> impl IntoView {
                     return;
                 }
                 let saved = doc.scene.get_untracked();
-                let content = skea::save_to_string(&saved);
+                let content = match skea::save_to_string(&saved) {
+                    Ok(content) => content,
+                    Err(e) => {
+                        notify::error(doc.notifications, format!("Could not autosave: {e}"));
+                        return;
+                    }
+                };
                 if !is_tauri {
                     crate::storage::save_autosave(&content);
                     doc.mark_saved(None, saved);
