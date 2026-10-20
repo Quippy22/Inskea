@@ -102,10 +102,21 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Linux dependencies
+        id: apt_cache
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        continue-on-error: true
+        with:
+          packages: >-
+            build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
+            librsvg2-dev libssl-dev libgtk-3-dev libxdo-dev curl wget file
+            patchelf
+          version: "1.0"
       - name: Install Linux dependencies
+        if: steps.apt_cache.outcome != 'success'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             build-essential \
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
@@ -117,34 +128,21 @@ jobs:
             wget \
             file \
             patchelf
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
           key: clippy
           workspaces: |
             . -> target
             src-tauri -> target
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: trunk@0.21.14
-      - name: Install frontend dependencies
-        run: npm ci
-      - name: Build frontend
-        run: trunk build --release
-      - name: Clippy (frontend)
+      - name: Clippy (root)
         run: cargo clippy --all-targets -- -D warnings
       - name: Clippy (desktop)
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
   build:
     name: Build ${{ matrix.name }}
-    needs: [version, clippy]
+    needs: version
     if: needs.version.outputs.should_release == 'true'
     strategy:
       fail-fast: false
@@ -163,11 +161,22 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install Linux dependencies
+      - name: Cache Linux dependencies
         if: runner.os == 'Linux'
+        id: apt_cache
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        continue-on-error: true
+        with:
+          packages: >-
+            build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
+            librsvg2-dev libssl-dev libgtk-3-dev libxdo-dev curl wget file
+            patchelf
+          version: "1.0"
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux' && steps.apt_cache.outcome != 'success'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             build-essential \
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
@@ -192,6 +201,16 @@ jobs:
           workspaces: |
             . -> target
             src-tauri -> target
+      - name: Set up sccache
+        id: sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+        continue-on-error: true
+      - name: Enable sccache
+        if: steps.sccache.outcome == 'success'
+        shell: bash
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
       - uses: taiki-e/install-action@v2
         with:
           tool: trunk@0.21.14
@@ -209,19 +228,8 @@ jobs:
           path: ${{ matrix.path }}
           if-no-files-found: error
           retention-days: 7
-
-  arch:
-    name: Build Arch Linux
-    needs: [version, build]
-    if: needs.version.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: debian
-          path: artifacts/debian
       - name: Package Arch Linux bundle
+        if: matrix.artifact == 'debian'
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
@@ -230,12 +238,12 @@ jobs:
           docker run --rm \
             -e VERSION="$VERSION" \
             -v "$PWD/packaging/arch:/pkg:ro" \
-            -v "$PWD/artifacts/debian:/artifacts:ro" \
+            -v "$PWD/src-tauri/target/release/bundle/deb:/artifacts:ro" \
             -v "$PWD/LICENSE:/LICENSE:ro" \
             -v "$PWD/arch-out:/out" \
             archlinux:base-devel bash -lc '
               set -euo pipefail
-              pacman -Syu --noconfirm --needed dpkg zstd
+              pacman -Sy --noconfirm --needed dpkg zstd
               id -u builder >/dev/null 2>&1 || useradd -m builder
               mkdir -p /tmp/inskea
               sed "s/^pkgver=.*/pkgver=${VERSION}/" /pkg/PKGBUILD > /tmp/inskea/PKGBUILD
@@ -246,6 +254,7 @@ jobs:
               cp /tmp/inskea/*.pkg.tar.zst /out/
             '
       - uses: actions/upload-artifact@v4
+        if: matrix.artifact == 'debian'
         with:
           name: arch
           path: arch-out/*.pkg.tar.zst
@@ -254,7 +263,7 @@ jobs:
 
   release:
     name: Publish release
-    needs: [version, clippy, build, arch]
+    needs: [version, clippy, build]
     if: needs.version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
