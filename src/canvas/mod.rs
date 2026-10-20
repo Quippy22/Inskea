@@ -54,15 +54,16 @@ fn route_pointer_down(
     st: &mut CanvasState,
     props: &mut CanvasInputs,
 ) {
+    // Crop export owns the pointer while armed, even if the eraser is on.
+    if props.export_crop_active.get() {
+        st.select_anchor.set(Some(world));
+        return;
+    }
+
     if props.eraser_active.get() || props.canvas_mode.get() == CanvasMode::Erase {
         (props.push_snapshot)();
         st.erasing.set(true);
         hit_and_erase(world, props.scene);
-        return;
-    }
-
-    if props.export_crop_active.get() {
-        st.select_anchor.set(Some(world));
         return;
     }
 
@@ -503,15 +504,15 @@ pub fn Canvas(
             let mode = props.canvas_mode.get();
             let world = update_world(&ev);
 
+            if props.export_crop_active.get() {
+                st.drag.last_world.set(Some(world));
+                return;
+            }
+
             if (props.eraser_active.get() || props.canvas_mode.get() == CanvasMode::Erase)
                 && st.erasing.get()
             {
                 hit_and_erase(world, props.scene);
-            }
-
-            if props.export_crop_active.get() {
-                st.drag.last_world.set(Some(world));
-                return;
             }
 
             match mode {
@@ -580,12 +581,6 @@ pub fn Canvas(
         let mut props = props.clone();
         let update_world = update_world;
         move |ev: ev::PointerEvent| {
-            if props.eraser_active.get() || props.canvas_mode.get() == CanvasMode::Erase {
-                let world = update_world(&ev);
-                hit_and_erase(world, props.scene);
-            }
-            st.erasing.set(false);
-
             if props.export_crop_active.get() {
                 if let Some(anchor) = st.select_anchor.get() {
                     let current = st.drag.last_world.get().unwrap_or(anchor);
@@ -605,8 +600,15 @@ pub fn Canvas(
                 props.export_crop_active.set(false);
                 st.select_anchor.set(None);
                 st.drag.last_world.set(None);
+                st.erasing.set(false);
                 return;
             }
+
+            if props.eraser_active.get() || props.canvas_mode.get() == CanvasMode::Erase {
+                let world = update_world(&ev);
+                hit_and_erase(world, props.scene);
+            }
+            st.erasing.set(false);
 
             let world = update_world(&ev);
             match props.canvas_mode.get() {
