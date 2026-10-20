@@ -1,5 +1,5 @@
 use super::elements::Element;
-use super::{ElementData, Point, Rect};
+use super::{ElementData, Point};
 
 pub const MIN_ELEMENT_SIZE: f64 = 5.0;
 
@@ -81,25 +81,6 @@ pub fn rotate_point_around(p: Point, center: Point, angle: f64) -> Point {
         center.x + dx * cos_a - dy * sin_a,
         center.y + dx * sin_a + dy * cos_a,
     )
-}
-
-pub fn common_bounds(elements: &[&ElementData]) -> Rect {
-    let mut min_x = f64::MAX;
-    let mut min_y = f64::MAX;
-    let mut max_x = f64::MIN;
-    let mut max_y = f64::MIN;
-    for el in elements {
-        for c in el
-            .world_point
-            .rect_corners(el.width, el.height, el.rotation)
-        {
-            min_x = min_x.min(c.x);
-            min_y = min_y.min(c.y);
-            max_x = max_x.max(c.x);
-            max_y = max_y.max(c.y);
-        }
-    }
-    Rect::new(min_x, min_y, max_x - min_x, max_y - min_y)
 }
 
 pub fn resize_from_handle(
@@ -456,37 +437,6 @@ mod tests {
         );
         assert!((p.x - 0.0).abs() < 1e-10);
         assert!((p.y - 1.0).abs() < 1e-10);
-    }
-
-    #[test]
-    fn rect_corners_rotated_90() {
-        let p = Point::new(0.0, 0.0);
-        let corners = p.rect_corners(100.0, 50.0, std::f64::consts::FRAC_PI_2);
-        // Center at (50, 25), rotate 90° CW → top-left (-25, 50), etc.
-        assert!((corners[0].x - 75.0).abs() < 0.01);
-        assert!((corners[0].y - -25.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn rotated_corners_unrotated() {
-        let el = default_data();
-        let corners = el
-            .world_point
-            .rect_corners(el.width, el.height, el.rotation);
-        assert_eq!(corners[0], Point { x: 0.0, y: 0.0 });
-        assert_eq!(corners[1], Point { x: 100.0, y: 0.0 });
-        assert_eq!(corners[2], Point { x: 100.0, y: 100.0 });
-        assert_eq!(corners[3], Point { x: 0.0, y: 100.0 });
-    }
-
-    #[test]
-    fn common_bounds_single_element() {
-        let el = default_data();
-        let rect = common_bounds(&[&el]);
-        assert!((rect.x - 0.0).abs() < 0.01);
-        assert!((rect.y - 0.0).abs() < 0.01);
-        assert!((rect.w - 100.0).abs() < 0.01);
-        assert!((rect.h - 100.0).abs() < 0.01);
     }
 
     #[test]

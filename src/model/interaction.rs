@@ -37,6 +37,12 @@ pub fn guide_corners(element: &Element) -> [Point; 4] {
     rotated_corners(bounds, layout_bounds(element).center(), rotation)
 }
 
+/// Axis-aligned envelope of the visible content after rotation. Multi-element
+/// selection frames use this so rotated elements stay inside the union box.
+pub fn visual_envelope(element: &Element) -> Rect {
+    envelope(guide_corners(element))
+}
+
 /// The shape inscribed in a frame's box: the box itself, or the ellipse.
 /// Guides end on it, so a circle's line stops on its outline rather than at
 /// the corners of the box drawn around it.

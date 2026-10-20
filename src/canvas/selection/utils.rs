@@ -1,7 +1,6 @@
 use crate::canvas::combined_bounds;
-use crate::model::interaction::{layout_bounds, visual_bounds};
-use crate::model::resize::common_bounds;
-use crate::model::{Element, ElementData, ElementId, Point, Rect};
+use crate::model::interaction::{layout_bounds, visual_bounds, visual_envelope};
+use crate::model::{Element, ElementId, Point, Rect};
 
 pub const HANDLE_RESIZE_RADIUS: f64 = 5.0;
 pub const HANDLE_MOVE_RADIUS: f64 = 6.0;
@@ -27,25 +26,10 @@ pub fn selection_bounds(ids: &[ElementId], els: &[Element]) -> Option<Rect> {
             .map(visual_bounds)
             .or_else(|| combined_bounds(ids, els))
     } else {
-        let data_refs: Vec<ElementData> = els
-            .iter()
+        els.iter()
             .filter(|el| ids.contains(&el.id()))
-            .map(|el| {
-                let b = visual_bounds(el);
-                let mut d = el.data().clone();
-                d.world_point = Point::new(b.x, b.y);
-                d.width = b.w;
-                d.height = b.h;
-                d.rotation = 0.0;
-                d
-            })
-            .collect();
-        if data_refs.is_empty() {
-            None
-        } else {
-            let refs: Vec<&ElementData> = data_refs.iter().collect();
-            Some(common_bounds(&refs))
-        }
+            .map(visual_envelope)
+            .reduce(|left, right| left.union(&right))
     }
 }
 
@@ -112,5 +96,33 @@ mod tests {
     fn snap_value_ignores_a_non_positive_step() {
         assert_eq!(snap_value(17.3, 0.0), 17.3);
         assert_eq!(snap_value(17.3, -5.0), 17.3);
+    }
+
+    #[test]
+    fn multi_selection_envelope_covers_rotated_elements() {
+        let rotated = Element::Rectangle(Rectangle {
+            data: ElementData {
+                world_point: Point::new(0.0, 0.0),
+                width: 100.0,
+                height: 100.0,
+                rotation: std::f64::consts::FRAC_PI_4,
+                ..ElementData::new(1)
+            },
+        });
+        let straight = Element::Rectangle(Rectangle {
+            data: ElementData {
+                world_point: Point::new(200.0, 0.0),
+                width: 100.0,
+                height: 100.0,
+                ..ElementData::new(2)
+            },
+        });
+
+        let bounds = selection_bounds(&[1, 2], &[rotated, straight]).unwrap();
+        let reach = 50.0 * 2.0f64.sqrt();
+        assert!((bounds.x - (50.0 - reach)).abs() < 1e-9);
+        assert!((bounds.y - (50.0 - reach)).abs() < 1e-9);
+        assert!((bounds.x + bounds.w - 300.0).abs() < 1e-9);
+        assert!((bounds.y + bounds.h - (50.0 + reach)).abs() < 1e-9);
     }
 }
