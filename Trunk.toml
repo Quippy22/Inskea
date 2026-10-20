@@ -1,4 +1,5 @@
+# Use node directly: Trunk cannot spawn the npx.cmd shim on Windows.
 [[hooks]]
 stage = "pre_build"
-command = "npx"
-command_arguments = ["@tailwindcss/cli", "-i", "./input.css", "-o", "./output.css"]
+command = "node"
+command_arguments = ["node_modules/@tailwindcss/cli/dist/index.mjs", "-i", "./input.css", "-o", "./output.css"]
