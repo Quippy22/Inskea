@@ -35,15 +35,24 @@ fn save(doc: DocContext, on_done: Option<SaveCallback>) {
     }
     match doc.saved_path.get_untracked() {
         Some(path) => save_to_path(doc, path, on_done),
-        None => save_as(doc, on_done),
+        None => save_as(doc, None, on_done),
     }
 }
 
 pub fn file_save_as(doc: DocContext) {
     if tauri_bridge::is_tauri() {
-        save_as(doc, None);
+        let current = doc.saved_path.get_untracked();
+        save_as(doc, current, None);
     } else {
         browser_save(doc, None);
+    }
+}
+
+/// Split a path into its parent directory and file name.
+fn split_path(path: &str) -> (Option<String>, String) {
+    match path.rfind(['/', '\\']) {
+        Some(i) => (Some(path[..i].to_string()), path[i + 1..].to_string()),
+        None => (None, path.to_string()),
     }
 }
 
@@ -62,10 +71,21 @@ fn browser_save(doc: DocContext, on_done: Option<SaveCallback>) {
     report_saved(&on_done, true);
 }
 
-fn save_as(doc: DocContext, on_done: Option<SaveCallback>) {
+fn save_as(doc: DocContext, current: Option<String>, on_done: Option<SaveCallback>) {
     spawn_local(async move {
-        let dir = tauri_bridge::get_documents_dir().await.ok();
-        let path = tauri_bridge::pick_save_path("untitled.skea", dir.as_deref()).await;
+        // Save As on an existing drawing starts in its folder with its name.
+        let (dir, name) = match current.as_deref() {
+            Some(path) => {
+                let (dir, name) = split_path(path);
+                (dir, name)
+            }
+            None => (None, "untitled.skea".to_string()),
+        };
+        let dir = match dir {
+            Some(dir) => Some(dir),
+            None => tauri_bridge::get_documents_dir().await.ok(),
+        };
+        let path = tauri_bridge::pick_save_path(&name, dir.as_deref()).await;
         match path {
             Some(path) => save_to_path(doc, path, on_done),
             None => report_saved(&on_done, false),
@@ -161,11 +181,15 @@ pub fn browser_open(doc: DocContext) {
             };
             let reader_c = reader.clone();
             let doc = doc_for_load.clone();
+            let name = file.name();
             let on_load = Closure::wrap(Box::new(move || {
                 if let Ok(value) = reader_c.result() {
                     if let Some(text) = value.as_string() {
                         match skea::load_from_str(&text) {
-                            Ok(loaded) => doc.adopt(loaded, None),
+                            Ok(loaded) => {
+                                let name = (!name.is_empty()).then(|| name.clone());
+                                doc.adopt(loaded, name)
+                            }
                             Err(e) => notify::error(
                                 doc.notifications,
                                 format!("That file is not a valid Inskea drawing: {e}"),
@@ -186,4 +210,25 @@ pub fn browser_open(doc: DocContext) {
     input_el.set_onchange(Some(on_change.as_ref().unchecked_ref()));
     on_change.forget();
     input_el.click();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_path;
+
+    #[test]
+    fn split_path_keeps_the_file_name_and_parent() {
+        assert_eq!(
+            split_path("/home/user/Drawings/plan.skea"),
+            (
+                Some("/home/user/Drawings".to_string()),
+                "plan.skea".to_string()
+            )
+        );
+        assert_eq!(
+            split_path("C:\\Drawings\\plan.skea"),
+            (Some("C:\\Drawings".to_string()), "plan.skea".to_string())
+        );
+        assert_eq!(split_path("plan.skea"), (None, "plan.skea".to_string()));
+    }
 }
