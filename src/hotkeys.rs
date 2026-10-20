@@ -298,7 +298,8 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
             }
         }
         let key = ev.key();
-        let ctrl = ev.ctrl_key();
+        // Cmd on macOS, Ctrl elsewhere.
+        let ctrl = ev.ctrl_key() || ev.meta_key();
         let shift = ev.shift_key();
         let alt = ev.alt_key();
         if is_browser_shortcut(&key, ctrl, alt) {

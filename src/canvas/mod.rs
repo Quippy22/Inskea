@@ -130,6 +130,9 @@ pub fn Canvas(
     discard_snapshot: Rc<dyn Fn()>,
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<CropExportCallback>>,
+    /// Set to the active text commit function so close handlers can flush a
+    /// text edit before checking for unsaved changes.
+    on_text_commit: RwSignal<Option<Rc<dyn Fn()>>>,
     shortcuts_open: RwSignal<bool>,
     selected_ids: RwSignal<Vec<ElementId>>,
     default_style: RwSignal<ElementStyle>,
@@ -266,6 +269,7 @@ pub fn Canvas(
         props.push_snapshot.clone(),
         props.discard_snapshot.clone(),
     );
+    on_text_commit.set(Some(commit_edit.clone()));
 
     // Whenever a text edit opens, focus the editing textarea so the caret is
     // visible for typing. The textarea is inserted reactively (in a later

@@ -47,6 +47,7 @@ pub fn App() -> impl IntoView {
 
     let export_crop_active = create_rw_signal(false);
     let on_crop_export = create_rw_signal::<Option<CropExportCallback>>(None);
+    let on_text_commit = create_rw_signal::<Option<Rc<dyn Fn()>>>(None);
 
     let settings = create_rw_signal(CanvasSettings {
         center_style: CenterStyle::Crosshair,
@@ -173,6 +174,11 @@ pub fn App() -> impl IntoView {
     if is_tauri {
         let request = request_action.clone();
         tauri_bridge::on_close_requested(move || {
+            // Text edits live outside the scene until committed; flush one so
+            // the dirty check below sees it.
+            if let Some(commit) = on_text_commit.get_untracked() {
+                commit();
+            }
             request(PendingAction {
                 label: "close Inskea",
                 run: Rc::new(tauri_bridge::close_window),
@@ -203,6 +209,9 @@ pub fn App() -> impl IntoView {
         let doc = doc.clone();
         let handler = wasm_bindgen::closure::Closure::wrap(Box::new(
             move |event: web_sys::BeforeUnloadEvent| {
+                if let Some(commit) = on_text_commit.get_untracked() {
+                    commit();
+                }
                 if doc.is_dirty_now() {
                     event.prevent_default();
                     event.set_return_value("You have unsaved changes.");
@@ -506,6 +515,7 @@ pub fn App() -> impl IntoView {
                 discard_snapshot=discard_snapshot.clone()
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
+                on_text_commit=on_text_commit
                 shortcuts_open=shortcuts_open
                 selected_ids=selected_ids
                 default_style=default_style
