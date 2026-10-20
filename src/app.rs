@@ -508,6 +508,7 @@ pub fn App() -> impl IntoView {
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
                 shortcuts_open=shortcuts_open
+                settings=settings
             />
             <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />
             <SettingsPanel settings=settings />

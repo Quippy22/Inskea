@@ -1,4 +1,5 @@
 #![allow(clippy::redundant_locals)]
+use crate::canvas::settings::CanvasSettings;
 use crate::canvas::{CanvasMode, CropExportCallback, Viewport};
 use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::model::Rect;
@@ -29,6 +30,7 @@ pub fn ToolBar<F1, F2>(
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<CropExportCallback>>,
     shortcuts_open: RwSignal<bool>,
+    settings: RwSignal<CanvasSettings>,
 ) -> impl IntoView
 where
     F1: Fn() + 'static,
@@ -194,9 +196,10 @@ where
                 let on_crop_export = _on_crop_export;
                 let export_crop_active = _export_crop_active;
                 let close_menu = _close_menu;
+                let bg = settings.get_untracked().canvas_bg;
                 on_crop_export.set(Some(Rc::new(move |rect: Rect| {
                     close_menu();
-                    let svg = scene.with(|s| export::scene_to_svg_crop(s, rect));
+                    let svg = scene.with(|s| export::scene_to_svg_crop(s, rect, bg));
                     match fmt {
                         ExportFormat::Svg => {
                             if tauri {
@@ -223,9 +226,10 @@ where
             }
             let vp = viewport.get();
             let size = window_size();
+            let bg = settings.get_untracked().canvas_bg;
             let svg = _doc
                 .scene
-                .with(|s| export::scene_to_svg(s, &vp, size, None));
+                .with(|s| export::scene_to_svg(s, &vp, size, None, bg));
             let notifications = _doc.notifications;
             match fmt {
                 ExportFormat::Svg => {

@@ -77,6 +77,32 @@ fn next_tab_tool(current: Tool) -> Option<Tool> {
     Some(TAB_TOOLS[(index + 1) % TAB_TOOLS.len()])
 }
 
+/// Browser defaults that would fire alongside an app shortcut (Save Page,
+/// Open File, New Window, bookmark, find-next, clipboard, history).
+fn is_browser_shortcut(key: &str, ctrl: bool, alt: bool) -> bool {
+    if ctrl {
+        return matches!(
+            key,
+            "z" | "Z"
+                | "s"
+                | "S"
+                | "d"
+                | "D"
+                | "g"
+                | "G"
+                | "n"
+                | "N"
+                | "o"
+                | "O"
+                | "c"
+                | "C"
+                | "v"
+                | "V"
+        ) || (alt && matches!(key, "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown"));
+    }
+    matches!(key, "Delete" | "Backspace")
+}
+
 fn is_text_input(target: &web_sys::EventTarget) -> bool {
     let node = target.clone().dyn_into::<web_sys::Node>();
     if let Ok(node) = node {
@@ -274,13 +300,29 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
         let key = ev.key();
         let ctrl = ev.ctrl_key();
         let shift = ev.shift_key();
-        handle_shortcut(&key, ctrl, shift, ev.alt_key());
+        let alt = ev.alt_key();
+        if is_browser_shortcut(&key, ctrl, alt) {
+            ev.prevent_default();
+        }
+        handle_shortcut(&key, ctrl, shift, alt);
     });
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{next_tab_tool, Tool};
+    use super::{is_browser_shortcut, next_tab_tool, Tool};
+
+    #[test]
+    fn browser_shortcuts_are_claimed() {
+        assert!(is_browser_shortcut("s", true, false));
+        assert!(is_browser_shortcut("S", true, false));
+        assert!(is_browser_shortcut("n", true, false));
+        assert!(is_browser_shortcut("ArrowLeft", true, true));
+        assert!(is_browser_shortcut("Backspace", false, false));
+        assert!(!is_browser_shortcut("s", false, false));
+        assert!(!is_browser_shortcut("c", false, false));
+        assert!(!is_browser_shortcut("a", true, false));
+    }
 
     #[test]
     fn tab_cycles_only_through_standard_drawing_tools() {

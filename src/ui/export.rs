@@ -1,5 +1,5 @@
-use crate::canvas::combined_bounds;
-use crate::canvas::Viewport;
+use crate::canvas::settings::CanvasBg;
+use crate::canvas::{combined_bounds, Viewport};
 use crate::model::{Element, ElementId, Point, Rect, Scene};
 use crate::skea;
 use crate::ui::notify::{self, Notifications};
@@ -58,20 +58,15 @@ pub fn scene_to_svg(
     viewport: &Viewport,
     screen: Point,
     selected: Option<&[ElementId]>,
+    bg: CanvasBg,
 ) -> String {
-    let (view_box, width, height, elements): (String, f64, f64, &[Element]) = match selected {
+    let (view, width, height, elements): (Rect, f64, f64, &[Element]) = match selected {
         Some(ids) if !ids.is_empty() => {
             let bounds = combined_bounds(ids, scene.elements());
             if let Some(b) = bounds {
                 let pad = 10.0;
                 (
-                    format!(
-                        "{} {} {} {}",
-                        b.x - pad,
-                        b.y - pad,
-                        b.w + pad * 2.0,
-                        b.h + pad * 2.0
-                    ),
+                    Rect::new(b.x - pad, b.y - pad, b.w + pad * 2.0, b.h + pad * 2.0),
                     b.w + pad * 2.0,
                     b.h + pad * 2.0,
                     scene.elements(),
@@ -81,28 +76,39 @@ pub fn scene_to_svg(
             }
         }
         _ => (
-            viewport.to_view_box(screen.x, screen.y),
+            viewport.visible_rect(screen),
             screen.x,
             screen.y,
             scene.elements(),
         ),
     };
     let element_body = svg_body(elements, selected);
-    svg_document(&view_box, width, height, &element_body)
+    svg_document(view, width, height, bg, &element_body)
 }
 
-pub fn scene_to_svg_crop(scene: &Scene, crop: Rect) -> String {
-    let view_box = format!("{} {} {} {}", crop.x, crop.y, crop.w, crop.h);
+pub fn scene_to_svg_crop(scene: &Scene, crop: Rect, bg: CanvasBg) -> String {
     let element_body = svg_body(scene.elements(), None);
-    svg_document(&view_box, crop.w, crop.h, &element_body)
+    svg_document(crop, crop.w, crop.h, bg, &element_body)
+}
+
+/// The on-screen canvas background. Exports paint it too: the default drawing
+/// colour is white, which would be invisible on a viewer's white backdrop if
+/// the image were transparent.
+fn bg_color(bg: CanvasBg) -> &'static str {
+    match bg {
+        CanvasBg::Dark => "#1a1b26",
+        CanvasBg::Light => "#ffffff",
+    }
 }
 
 /// `width`/`height` give the SVG an intrinsic pixel size. Without them an SVG
 /// loaded into an `<img>` falls back to a default 300×150 raster for PNG
 /// export, regardless of the drawing's size.
-fn svg_document(view_box: &str, width: f64, height: f64, body: &str) -> String {
+fn svg_document(view: Rect, width: f64, height: f64, bg: CanvasBg, body: &str) -> String {
+    let (x, y, w, h) = (view.x, view.y, view.w, view.h);
     format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="{view_box}">{body}</svg>"#
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="{x} {y} {w} {h}"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{}"/>{body}</svg>"#,
+        bg_color(bg)
     )
 }
 
@@ -560,10 +566,17 @@ mod tests {
     #[test]
     fn full_export_uses_the_screen_pixel_size() {
         let scene = Scene::new();
-        let svg = scene_to_svg(&scene, &Viewport::default(), Point::new(800.0, 600.0), None);
+        let svg = scene_to_svg(
+            &scene,
+            &Viewport::default(),
+            Point::new(800.0, 600.0),
+            None,
+            CanvasBg::Dark,
+        );
         assert!(svg.contains(r#"width="800""#));
         assert!(svg.contains(r#"height="600""#));
         assert!(svg.contains("viewBox="));
+        assert!(svg.contains(r##"fill="#1a1b26""##));
     }
 
     #[test]
@@ -582,6 +595,7 @@ mod tests {
             &Viewport::default(),
             Point::new(800.0, 600.0),
             Some(&[1]),
+            CanvasBg::Light,
         );
         assert!(svg.contains(r#"width="120""#));
         assert!(svg.contains(r#"height="70""#));
