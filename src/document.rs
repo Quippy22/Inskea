@@ -73,11 +73,21 @@ impl DocContext {
     }
 
     /// Record a successful write only if the document has not been replaced
-    /// since the write started.
-    pub fn mark_saved_for(&self, generation: u32, path: Option<String>, saved: Scene) {
-        if self.generation_now() == generation {
+    /// and its file path has not changed since the write started.
+    pub fn mark_saved_for(
+        &self,
+        generation: u32,
+        path_before: Option<String>,
+        path: Option<String>,
+        saved: Scene,
+    ) {
+        if self.generation_now() == generation && self.saved_path.get_untracked() == path_before {
             self.mark_saved(path, saved);
         }
+    }
+
+    pub fn path_now(&self) -> Option<String> {
+        self.saved_path.get_untracked()
     }
 
     /// Record a successful write of `saved` to `path`.

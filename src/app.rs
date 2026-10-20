@@ -457,11 +457,12 @@ pub fn App() -> impl IntoView {
                 };
                 let notifications = doc.notifications;
                 let generation = doc.generation_now();
+                let path_before = doc.path_now();
                 spawn_local(async move {
                     match tauri_bridge::save_skea(&path, &content).await {
-                        Ok(()) => doc.mark_saved_for(generation, Some(path), saved),
+                        Ok(()) => doc.mark_saved_for(generation, path_before, Some(path), saved),
                         Err(e) => {
-                            if doc.generation_now() == generation {
+                            if doc.generation_now() == generation && doc.path_now() == path_before {
                                 notify::error(notifications, format!("Could not autosave: {e}"));
                             }
                         }
