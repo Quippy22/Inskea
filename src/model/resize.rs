@@ -122,6 +122,8 @@ pub fn resize_from_handle(
     let mut new_h = original.height;
     let mut new_local_x = original.world_point.x;
     let mut new_local_y = original.world_point.y;
+    let mut flip_x = false;
+    let mut flip_y = false;
 
     if alt {
         if free_x {
@@ -134,32 +136,35 @@ pub fn resize_from_handle(
         }
     } else {
         if free_x {
-            new_w = (local_pointer.x - anchor.x).abs().max(MIN_ELEMENT_SIZE);
-            new_local_x = local_pointer.x.min(anchor.x);
+            let delta = local_pointer.x - anchor.x;
+            flip_x = delta >= 0.0;
+            new_w = delta.abs().max(MIN_ELEMENT_SIZE);
         }
         if free_y {
-            new_h = (local_pointer.y - anchor.y).abs().max(MIN_ELEMENT_SIZE);
-            new_local_y = local_pointer.y.min(anchor.y);
+            let delta = local_pointer.y - anchor.y;
+            flip_y = delta >= 0.0;
+            new_h = delta.abs().max(MIN_ELEMENT_SIZE);
         }
-    }
 
-    if shift {
-        let ratio = original.width / original.height;
-        let nratio = new_w / new_h;
-        if nratio > ratio {
-            new_h = new_w / ratio;
-            if !alt && free_y && handle == ResizeHandle::N {
-                new_local_y = anchor.y - new_h;
-            }
-        } else {
-            new_w = new_h * ratio;
-            if !alt && free_x && handle == ResizeHandle::W {
-                new_local_x = anchor.x - new_w;
+        if shift {
+            let ratio = original.width / original.height;
+            let nratio = new_w / new_h;
+            if nratio > ratio {
+                new_h = new_w / ratio;
+            } else {
+                new_w = new_h * ratio;
             }
         }
-    }
 
-    if !alt {
+        // Keep the opposite edge fixed. Once the pointer crosses it, the
+        // box flips to the other side instead of dragging a tiny box along.
+        if free_x {
+            new_local_x = if flip_x { anchor.x } else { anchor.x - new_w };
+        }
+        if free_y {
+            new_local_y = if flip_y { anchor.y } else { anchor.y - new_h };
+        }
+
         match handle {
             ResizeHandle::N | ResizeHandle::S => {
                 new_w = original.width;
@@ -514,6 +519,34 @@ mod tests {
         assert!((result.height - 100.0).abs() < 0.01);
         assert!((result.width - 150.0).abs() < 0.01);
         assert!((result.world_point.x - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn resize_west_keeps_the_east_edge_at_the_minimum_size() {
+        let original = default_data();
+        let result = resize_from_handle(
+            &original,
+            ResizeHandle::W,
+            Point::new(98.0, 50.0),
+            false,
+            false,
+        );
+        assert!((result.world_point.x - 95.0).abs() < 0.01);
+        assert!((result.width - MIN_ELEMENT_SIZE).abs() < 0.01);
+    }
+
+    #[test]
+    fn resize_west_past_the_east_edge_flips_to_the_right() {
+        let original = default_data();
+        let result = resize_from_handle(
+            &original,
+            ResizeHandle::W,
+            Point::new(130.0, 50.0),
+            false,
+            false,
+        );
+        assert!((result.world_point.x - 100.0).abs() < 0.01);
+        assert!((result.width - 30.0).abs() < 0.01);
     }
 
     #[test]

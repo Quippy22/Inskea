@@ -175,7 +175,7 @@ impl Resize for Ellipse {
             );
         } else {
             let result = resize_from_handle(
-                &self.data,
+                ctx.orig.data(),
                 ctx.handle,
                 ctx.pointer_world,
                 ctx.shift,

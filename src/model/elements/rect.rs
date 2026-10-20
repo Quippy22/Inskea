@@ -192,7 +192,7 @@ impl Resize for Rectangle {
             );
         } else {
             let result = resize_from_handle(
-                &self.data,
+                ctx.orig.data(),
                 ctx.handle,
                 ctx.pointer_world,
                 ctx.shift,
@@ -200,5 +200,43 @@ impl Resize for Rectangle {
             );
             self.data = result;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::resize::{ResizeContext, ResizeHandle};
+
+    fn ctx<'a>(orig: &'a Element, pointer: Point) -> ResizeContext<'a> {
+        ResizeContext {
+            orig,
+            handle: ResizeHandle::W,
+            pointer_world: pointer,
+            start_world: Point::new(0.0, 50.0),
+            shift: false,
+            alt: false,
+            multi: false,
+            bx: 0.0,
+            by: 0.0,
+            bw: 100.0,
+            bh: 100.0,
+        }
+    }
+
+    #[test]
+    fn west_resize_uses_the_original_anchor_after_crossing() {
+        let mut rect = Rectangle {
+            data: ElementData::new(1),
+        };
+        let orig = Element::Rectangle(rect.clone());
+
+        rect.resize(&ctx(&orig, Point::new(98.0, 50.0)));
+        assert!((rect.data.world_point.x - 95.0).abs() < 0.01);
+        assert!((rect.data.width - 5.0).abs() < 0.01);
+
+        rect.resize(&ctx(&orig, Point::new(130.0, 50.0)));
+        assert!((rect.data.world_point.x - 100.0).abs() < 0.01);
+        assert!((rect.data.width - 30.0).abs() < 0.01);
     }
 }
