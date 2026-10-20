@@ -165,8 +165,10 @@ fn arm_close_guard(state: tauri::State<CloseGuard>) {
 #[tauri::command]
 fn startup_file() -> Option<String> {
     let cwd = std::env::current_dir().ok();
-    std::env::args()
+    // `args()` panics on non-UTF-8 arguments; a file path may not be UTF-8.
+    std::env::args_os()
         .skip(1)
+        .map(|arg| arg.to_string_lossy().into_owned())
         .find(|arg| is_skea_arg(arg))
         .and_then(|arg| resolve_arg(&arg, cwd.as_deref()))
 }
