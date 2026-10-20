@@ -175,3 +175,34 @@ pub fn SettingsPanel(settings: RwSignal<CanvasSettings>) -> impl IntoView {
         </div>
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_round_trip_through_toml() {
+        let content = to_toml(
+            CenterStyle::Dot,
+            GridStyle::Line,
+            GridSize::new(37.5),
+            true,
+            CanvasBg::Light,
+        );
+        assert!(
+            from_toml(&content)
+                == Some((
+                    CenterStyle::Dot,
+                    GridStyle::Line,
+                    GridSize::new(37.5),
+                    true,
+                    CanvasBg::Light,
+                ))
+        );
+    }
+
+    #[test]
+    fn empty_settings_are_not_loaded() {
+        assert!(from_toml("").is_none());
+    }
+}
