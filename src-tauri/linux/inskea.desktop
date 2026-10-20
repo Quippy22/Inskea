@@ -4,6 +4,7 @@ Categories={{categories}}
 Comment={{comment}}
 {{/if}}
 Exec={{exec}} %f
+TryExec={{exec}}
 StartupWMClass=inskea
 Icon={{icon}}
 Name={{name}}

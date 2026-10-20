@@ -42,10 +42,16 @@
     "resources": ["fonts/*"],
     "linux": {
       "deb": {
-        "desktopTemplate": "linux/inskea.desktop"
+        "desktopTemplate": "linux/inskea.desktop",
+        "files": {
+          "/usr/share/mime/packages/inskea.xml": "linux/inskea-mime.xml"
+        }
       },
       "rpm": {
-        "desktopTemplate": "linux/inskea.desktop"
+        "desktopTemplate": "linux/inskea.desktop",
+        "files": {
+          "/usr/share/mime/packages/inskea.xml": "linux/inskea-mime.xml"
+        }
       }
     },
     "fileAssociations": [
