@@ -102,13 +102,37 @@ pub fn install_fonts(handle: &AppHandle) -> Result<Vec<PathBuf>, String> {
         if file.exists() {
             continue;
         }
-        if let Some(bundled) = bundled_font(handle, name) {
-            fs::copy(&bundled, &file)
-                .map_err(|e| format!("failed to install the bundled font: {e}"))?;
-        } else {
-            download(url, &file)?;
+        let result = match bundled_font(handle, name) {
+            Some(bundled) => fs::copy(&bundled, &file)
+                .map(|_| ())
+                .map_err(|e| format!("failed to install the bundled font: {e}")),
+            None => download(url, &file),
+        };
+        if let Err(e) = result {
+            // The licence file is informational; a missing font still blocks
+            // registration, but the licence must not.
+            if name.ends_with(".ttf") {
+                return Err(e);
+            }
+            log::warn!("could not install {name}: {e}");
         }
     }
+    // Preserve the regular/italic positions; a missing regular font means
+    // there is nothing to register even if the italic one exists.
+    let mut installed = Vec::new();
+    for path in installed_font_paths(handle)? {
+        if !path.is_file() {
+            break;
+        }
+        installed.push(path);
+    }
+    Ok(installed)
+}
+
+/// Font files already present in app-data. Never downloads, so callers that
+/// must not block (PNG export) can use it.
+pub fn installed_font_paths(handle: &AppHandle) -> Result<Vec<PathBuf>, String> {
+    let dir = fonts_dir(handle)?;
     Ok(FONTS
         .iter()
         .filter(|(name, _)| name.ends_with(".ttf"))

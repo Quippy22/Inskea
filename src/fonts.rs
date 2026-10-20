@@ -12,18 +12,22 @@ pub fn ensure_fonts_installed() {
         let Ok(paths) = tauri_bridge::get_font_paths().await else {
             return;
         };
-        let (Some(regular), Some(italic)) = (paths.first(), paths.get(1)) else {
+        let Some(regular) = paths.first() else {
             return;
         };
         let family = crate::model::elements::text::FONT_FAMILY;
         let regular = tauri_bridge::asset_url(regular);
-        let italic = tauri_bridge::asset_url(italic);
-        let css = format!(
+        let mut css = format!(
             "@font-face {{ font-family: \"{family}\"; src: url(\"{regular}\") format(\"truetype\"); \
-             font-weight: 100 900; font-style: normal; }}\n\
-             @font-face {{ font-family: \"{family}\"; src: url(\"{italic}\") format(\"truetype\"); \
-             font-weight: 100 900; font-style: italic; }}"
+             font-weight: 100 900; font-style: normal; }}"
         );
+        if let Some(italic) = paths.get(1) {
+            let italic = tauri_bridge::asset_url(italic);
+            css.push_str(&format!(
+                "\n@font-face {{ font-family: \"{family}\"; src: url(\"{italic}\") format(\"truetype\"); \
+                 font-weight: 100 900; font-style: italic; }}"
+            ));
+        }
         let Some(doc) = web_sys::window().and_then(|w| w.document()) else {
             return;
         };

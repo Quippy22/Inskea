@@ -232,14 +232,17 @@ fn get_font_paths(app_handle: tauri::AppHandle) -> Result<Vec<String>, String> {
 #[tauri::command]
 fn get_font_data(app_handle: tauri::AppHandle) -> Result<Vec<String>, String> {
     use base64::Engine;
-    setup::install_fonts(&app_handle)?
-        .iter()
-        .map(|path| {
-            fs::read(path)
-                .map(|bytes| base64::engine::general_purpose::STANDARD.encode(bytes))
-                .map_err(|e| format!("failed to read font: {e}"))
-        })
-        .collect()
+    let mut fonts = Vec::new();
+    for path in setup::installed_font_paths(&app_handle)? {
+        // Keep the regular/italic positions meaningful: stop if one is
+        // missing rather than returning the italic font as index 0.
+        if !path.is_file() {
+            break;
+        }
+        let bytes = fs::read(&path).map_err(|e| format!("failed to read font: {e}"))?;
+        fonts.push(base64::engine::general_purpose::STANDARD.encode(bytes));
+    }
+    Ok(fonts)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
