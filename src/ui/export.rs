@@ -362,10 +362,54 @@ fn svg_blob(svg: &str) -> Option<web_sys::Blob> {
     web_sys::Blob::new_with_str_sequence_and_options(&parts, &opts).ok()
 }
 
+/// Embed the app font in the SVG used for rasterization. An SVG loaded into
+/// an `<img>` cannot use `@font-face` rules from the surrounding document, so
+/// native PNG export would otherwise fall back to a different font. Browsers
+/// already share their installed fonts with the image, so they are untouched.
+async fn svg_with_fonts(svg: String) -> String {
+    if !crate::tauri_bridge::is_tauri() {
+        return svg;
+    }
+    let Ok(fonts) = crate::tauri_bridge::get_font_data().await else {
+        return svg;
+    };
+    let css = font_face_css(&fonts);
+    if css.is_empty() {
+        return svg;
+    }
+    inject_styles(svg, &css)
+}
+
+fn font_face_css(fonts: &[String]) -> String {
+    let family = crate::model::elements::text::FONT_FAMILY;
+    let mut css = String::new();
+    for (i, data) in fonts.iter().enumerate() {
+        let style = if i == 0 { "normal" } else { "italic" };
+        css.push_str(&format!(
+            "@font-face {{ font-family: \"{family}\"; \
+             src: url(\"data:font/ttf;base64,{data}\") format(\"truetype\"); \
+             font-weight: 100 900; font-style: {style}; }}"
+        ));
+    }
+    css
+}
+
+/// Insert a `<style>` block after the opening `<svg>` tag.
+fn inject_styles(svg: String, css: &str) -> String {
+    match svg.find('>') {
+        Some(pos) => {
+            let (open, rest) = svg.split_at(pos + 1);
+            format!("{open}<style>{css}</style>{rest}")
+        }
+        None => svg,
+    }
+}
+
 /// Shared SVG→canvas→blob pipeline used by both browser and Tauri PNG export.
 async fn svg_to_png_blob(svg: &str) -> Option<web_sys::Blob> {
+    let svg = svg_with_fonts(svg.to_string()).await;
     let document = web_sys::window()?.document()?;
-    let blob = svg_blob(svg)?;
+    let blob = svg_blob(&svg)?;
     let url = web_sys::Url::create_object_url_with_blob(&blob).ok()?;
     let img = document
         .create_element("img")
@@ -546,5 +590,20 @@ mod tests {
     #[test]
     fn text_content_is_escaped() {
         assert_eq!(escape_xml_text("a & <b>"), "a &amp; &lt;b&gt;");
+    }
+
+    #[test]
+    fn font_data_is_embedded_in_the_svg_root() {
+        let css = font_face_css(&["AAAA".to_string(), "BBBB".to_string()]);
+        let svg = inject_styles(
+            r#"<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>"#.to_string(),
+            &css,
+        );
+        assert!(svg.starts_with(r#"<svg xmlns="http://www.w3.org/2000/svg"><style>@font-face"#));
+        assert!(svg.contains("data:font/ttf;base64,AAAA"));
+        assert!(svg.contains("data:font/ttf;base64,BBBB"));
+        assert!(svg.contains("font-style: normal"));
+        assert!(svg.contains("font-style: italic"));
+        assert!(svg.contains(r#"<rect/></svg>"#));
     }
 }

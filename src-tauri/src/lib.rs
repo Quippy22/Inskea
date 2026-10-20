@@ -226,6 +226,22 @@ fn get_font_paths(app_handle: tauri::AppHandle) -> Result<Vec<String>, String> {
     })
 }
 
+/// Return the installed font files as base64, so PNG export can embed them in
+/// the intermediate SVG. An SVG loaded into an `<img>` cannot use the app's
+/// `@font-face` rules, and Cabin is not installed system-wide.
+#[tauri::command]
+fn get_font_data(app_handle: tauri::AppHandle) -> Result<Vec<String>, String> {
+    use base64::Engine;
+    setup::install_fonts(&app_handle)?
+        .iter()
+        .map(|path| {
+            fs::read(path)
+                .map(|bytes| base64::engine::general_purpose::STANDARD.encode(bytes))
+                .map_err(|e| format!("failed to read font: {e}"))
+        })
+        .collect()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -258,7 +274,8 @@ pub fn run() {
             get_documents_dir,
             save_settings,
             load_settings,
-            get_font_paths
+            get_font_paths,
+            get_font_data
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

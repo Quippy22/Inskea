@@ -188,6 +188,14 @@ pub async fn get_font_paths() -> Result<Vec<String>, String> {
     Ok(v)
 }
 
+/// Get the installed font files as base64 strings (regular, italic).
+pub async fn get_font_data() -> Result<Vec<String>, String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({}))
+        .map_err(|e| format!("serialization error: {e}"))?;
+    let result = invoke("get_font_data", args).await.map_err(invoke_error)?;
+    serde_wasm_bindgen::from_value(result).map_err(|e| format!("parse error: {e}"))
+}
+
 /// Turn an absolute file path into an `asset://` URL the webview can load.
 pub fn asset_url(path: &str) -> String {
     convert_file_src(path)
