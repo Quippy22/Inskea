@@ -94,6 +94,15 @@ lucide_icons! {
     text_align_left => "align-left.svg",
     text_align_center => "align-center.svg",
     text_align_right => "align-right.svg",
+
+    // Grouping and stroke/edge styles.
+    group => "group.svg",
+    ungroup => "ungroup.svg",
+    stroke_solid => "minus.svg",
+    stroke_dashed => "line-style.svg",
+    stroke_dotted => "ellipsis.svg",
+    edge_sharp => "square.svg",
+    edge_rounded => "squircle.svg",
 }
 
 /// Small chevrons for the number-slider stepper.

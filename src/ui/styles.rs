@@ -44,6 +44,12 @@ pub const BTN_SWATCH_OFF: &str =
 /// Layer order button (centers an SVG icon).
 pub const BTN_LAYER: &str = "flex items-center justify-center w-7 h-7 rounded-md border border-border transition-transform hover:scale-110";
 
+/// Panel icon button.
+pub const BTN_ICON: &str = "flex items-center justify-center w-7 h-7 rounded-md border border-border text-fg hover:bg-surface/50 transition-colors";
+
+/// Panel icon button — active (accent border + fill).
+pub const BTN_ICON_ACTIVE: &str = "flex items-center justify-center w-7 h-7 rounded-md border border-accent text-accent bg-accent/10 hover:bg-surface/50 transition-colors";
+
 /// Compact text button inside panels.
 pub const BTN_TEXT: &str = "flex items-center justify-center h-8 px-3 text-xs rounded-md border border-border text-fg hover:bg-surface/50 transition-colors";
 

@@ -1,9 +1,24 @@
 use crate::model::{CurveMode, EdgeStyle, ElementStyle, LineStyle, StrokeStyle};
-use crate::ui::components::styling_panel::utils::uniform_seg;
+use crate::ui::components::styling_panel::utils::{uniform_icon_seg, uniform_seg};
 use crate::ui::components::NumberSlider;
-use crate::ui::styles;
+use crate::ui::{icon, styles};
 use leptos::*;
 use std::rc::Rc;
+
+fn stroke_style_icon(style: StrokeStyle) -> View {
+    match style {
+        StrokeStyle::Solid => icon::stroke_solid().into_view(),
+        StrokeStyle::Dashed => icon::stroke_dashed().into_view(),
+        StrokeStyle::Dotted => icon::stroke_dotted().into_view(),
+    }
+}
+
+fn edge_style_icon(style: EdgeStyle) -> View {
+    match style {
+        EdgeStyle::Sharp => icon::edge_sharp().into_view(),
+        EdgeStyle::Rounded => icon::edge_rounded().into_view(),
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 pub fn style_section(
@@ -39,10 +54,11 @@ pub fn style_section(
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     "Stroke style"
                 </div>
-                {uniform_seg(
+                {uniform_icon_seg(
                     stroke_opts,
                     Signal::derive(move || local_style.get().stroke_style),
                     set_stroke_style,
+                    stroke_style_icon,
                 )}
             </div>
         </div>
@@ -64,10 +80,11 @@ pub fn style_section(
                     <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                         "Edge style"
                     </div>
-                    {uniform_seg(
+                    {uniform_icon_seg(
                         edge_opts,
                         Signal::derive(move || local_style.get().edge_style),
                         set_edge_style,
+                        edge_style_icon,
                     )}
                 </div>
                 <div class:hidden=move || !(is_rounded.get() && is_rect.get())>

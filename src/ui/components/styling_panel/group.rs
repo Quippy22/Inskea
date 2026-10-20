@@ -1,7 +1,7 @@
 use crate::canvas::CanvasMode;
 use crate::edit_ops;
 use crate::model::{ElementId, Scene};
-use crate::ui::styles;
+use crate::ui::{icon, styles};
 use leptos::*;
 use std::rc::Rc;
 
@@ -38,7 +38,7 @@ pub fn group_section(
             <div class="flex items-center gap-1">
                 <button
                     class=move || {
-                        if is_group.get() { styles::BTN_TEXT_ACTIVE } else { styles::BTN_TEXT }
+                        if is_group.get() { styles::BTN_ICON_ACTIVE } else { styles::BTN_ICON }
                     }
                     class:opacity-40=move || !can_group.get()
                     class:cursor-not-allowed=move || !can_group.get()
@@ -46,19 +46,21 @@ pub fn group_section(
                         edit_ops::group_selection(scene, selected_ids, &push_group);
                     }
                     title="Group selection (Ctrl+G)"
+                    aria-label="Group selection"
                 >
-                    "Group"
+                    {icon::group()}
                 </button>
                 <button
-                    class=styles::BTN_TEXT
+                    class=styles::BTN_ICON
                     class:opacity-40=move || !is_group.get()
                     class:cursor-not-allowed=move || !is_group.get()
                     on:click=move |_| {
                         edit_ops::ungroup_selection(scene, selected_ids, &push_ungroup);
                     }
                     title="Ungroup selection (Ctrl+Shift+G)"
+                    aria-label="Ungroup selection"
                 >
-                    "Ungroup"
+                    {icon::ungroup()}
                 </button>
                 <span class=move || {
                     if is_group.get() {
