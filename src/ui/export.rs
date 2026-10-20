@@ -538,19 +538,36 @@ pub fn tauri_export_png(svg: String, selection: bool, notifications: Notificatio
         let path = with_extension(path, "png");
         let ab_promise = js_sys::Promise::new(&mut {
             let blob2 = blob.clone();
-            move |resolve: js_sys::Function, _reject: js_sys::Function| {
+            move |resolve: js_sys::Function, reject: js_sys::Function| {
                 let reader = web_sys::FileReader::new().expect("FileReader");
                 let reader_c = reader.clone();
-                let cb = wasm_bindgen::closure::Closure::once(move || {
-                    let val = reader_c.result().unwrap_or(JsValue::null());
-                    let _ = resolve.call1(&JsValue::null(), &val);
+                let reject_err = reject.clone();
+                let reject_now = reject.clone();
+                let cb = wasm_bindgen::closure::Closure::once(move || match reader_c.result() {
+                    Ok(val) if !val.is_null() && !val.is_undefined() => {
+                        let _ = resolve.call1(&JsValue::null(), &val);
+                    }
+                    _ => {
+                        let _ = reject.call0(&JsValue::null());
+                    }
                 });
                 reader.set_onload(Some(cb.as_ref().unchecked_ref()));
                 cb.forget();
-                let _ = reader.read_as_array_buffer(&blob2);
+                let err_cb = wasm_bindgen::closure::Closure::once(move || {
+                    let _ = reject_err.call0(&JsValue::null());
+                });
+                reader.set_onerror(Some(err_cb.as_ref().unchecked_ref()));
+                err_cb.forget();
+                if reader.read_as_array_buffer(&blob2).is_err() {
+                    let _ = reject_now.call0(&JsValue::null());
+                }
             }
         });
         if let Ok(val) = wasm_bindgen_futures::JsFuture::from(ab_promise).await {
+            if val.is_null() || val.is_undefined() {
+                notify::error(notifications, "Could not render the PNG export.");
+                return;
+            }
             let uint8 = js_sys::Uint8Array::new(&val);
             let bytes = uint8.to_vec();
             match crate::tauri_bridge::save_file_binary(&path, &bytes).await {
