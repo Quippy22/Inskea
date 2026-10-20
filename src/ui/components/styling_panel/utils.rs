@@ -124,19 +124,6 @@ fn seg_control<T: PartialEq + Copy + 'static>(
     }
 }
 
-pub fn uniform_seg<T: PartialEq + Copy + 'static>(
-    options: &'static [(T, &'static str)],
-    active: Signal<T>,
-    on_change: Rc<dyn Fn(T)>,
-) -> impl IntoView {
-    seg_control(
-        options,
-        active,
-        on_change,
-        Rc::new(|_, label| label.into_view()),
-    )
-}
-
 pub fn uniform_icon_seg<T: PartialEq + Copy + 'static>(
     options: &'static [(T, &'static str)],
     active: Signal<T>,

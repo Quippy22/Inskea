@@ -95,12 +95,11 @@ lucide_icons! {
     text_align_center => "align-center.svg",
     text_align_right => "align-right.svg",
 
-    // Grouping and stroke/edge styles.
+    // Grouping, line curvature, and edge styles.
     group => "group.svg",
     ungroup => "ungroup.svg",
-    stroke_solid => "minus.svg",
-    stroke_dashed => "line-style.svg",
-    stroke_dotted => "ellipsis.svg",
+    line_straight => "slash.svg",
+    line_curved => "spline.svg",
     edge_sharp => "square.svg",
     edge_rounded => "squircle.svg",
 }
