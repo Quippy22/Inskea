@@ -8,8 +8,15 @@ mod setup;
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-/// Set once the frontend has answered a close request.
-struct CloseConfirmed(AtomicBool);
+/// Close-request state shared with the webview.
+///
+/// `armed` becomes true once the frontend listener is registered, so a close
+/// during startup is not swallowed. `confirmed` is set when the frontend has
+/// resolved the unsaved-changes prompt and wants the window to close.
+struct CloseGuard {
+    confirmed: AtomicBool,
+    armed: AtomicBool,
+}
 
 /// Write a file through a sibling temp file so an interrupted save cannot
 /// truncate the previous contents.
@@ -143,9 +150,16 @@ fn set_window_title(window: tauri::Window, title: String) {
 /// prompt. The close request event handler checks this flag so the second
 /// close attempt goes through.
 #[tauri::command]
-fn close_window(window: tauri::Window, state: tauri::State<CloseConfirmed>) {
-    state.0.store(true, Ordering::SeqCst);
+fn close_window(window: tauri::Window, state: tauri::State<CloseGuard>) {
+    state.confirmed.store(true, Ordering::SeqCst);
     let _ = window.close();
+}
+
+/// Let close requests be intercepted. Called by the frontend only after its
+/// close listener is registered; until then the window closes normally.
+#[tauri::command]
+fn arm_close_guard(state: tauri::State<CloseGuard>) {
+    state.armed.store(true, Ordering::SeqCst);
 }
 
 #[tauri::command]
@@ -228,7 +242,10 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .manage(CloseConfirmed(AtomicBool::new(false)))
+        .manage(CloseGuard {
+            confirmed: AtomicBool::new(false),
+            armed: AtomicBool::new(false),
+        })
         .invoke_handler(tauri::generate_handler![
             save_file,
             save_file_binary,
@@ -236,6 +253,7 @@ pub fn run() {
             load_skea,
             set_window_title,
             close_window,
+            arm_close_guard,
             startup_file,
             get_documents_dir,
             save_settings,
@@ -244,8 +262,10 @@ pub fn run() {
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let confirmed = window.app_handle().state::<CloseConfirmed>();
-                if !confirmed.0.load(Ordering::SeqCst) {
+                let guard = window.app_handle().state::<CloseGuard>();
+                if guard.armed.load(Ordering::SeqCst)
+                    && !guard.confirmed.load(Ordering::SeqCst)
+                {
                     api.prevent_close();
                     let _ = window.emit("inskea-close-requested", ());
                 }

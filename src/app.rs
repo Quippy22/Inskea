@@ -378,6 +378,7 @@ pub fn App() -> impl IntoView {
     // localStorage so a reload restores the drawing.
     let autosave_generation = create_rw_signal(0_u64);
     let autosave_prompted = create_rw_signal(false);
+    let autosave_was_on = create_rw_signal(false);
     let autosave_doc = doc.clone();
     create_effect(move |_| {
         // Track the inputs without cloning the scene on every drag frame;
@@ -387,7 +388,14 @@ pub fn App() -> impl IntoView {
         if saved_path.get_untracked().is_some() {
             autosave_prompted.set(false);
         }
-        if !settings.get().autosave {
+        let autosave_on = settings.get().autosave;
+        // Turning autosave back on after cancelling the file prompt should
+        // ask for a file again.
+        if autosave_on && !autosave_was_on.get_untracked() {
+            autosave_prompted.set(false);
+        }
+        autosave_was_on.set(autosave_on);
+        if !autosave_on {
             return;
         }
         let generation = autosave_generation.get_untracked().wrapping_add(1);

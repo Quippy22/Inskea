@@ -208,8 +208,14 @@ pub fn on_close_requested(callback: impl Fn() + 'static) {
         let handler = wasm_bindgen::closure::Closure::wrap(Box::new(move |_event: JsValue| {
             callback();
         }) as Box<dyn FnMut(JsValue)>);
-        let _ = listen("inskea-close-requested", handler.as_ref()).await;
-        handler.forget();
+        if listen("inskea-close-requested", handler.as_ref())
+            .await
+            .is_ok()
+        {
+            let args = JsValue::from(js_sys::Object::new());
+            let _ = invoke("arm_close_guard", args).await;
+            handler.forget();
+        }
     });
 }
 
