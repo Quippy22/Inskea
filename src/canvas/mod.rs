@@ -57,6 +57,7 @@ fn route_pointer_down(
     // Crop export owns the pointer while armed, even if the eraser is on.
     if props.export_crop_active.get() {
         st.select_anchor.set(Some(world));
+        st.drag.last_world.set(Some(world));
         return;
     }
 
