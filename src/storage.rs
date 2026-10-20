@@ -22,10 +22,12 @@ pub fn load_autosave() -> Option<String> {
     local_storage()?.get_item(AUTOSAVE_KEY).ok().flatten()
 }
 
-pub fn save_autosave(content: &str) {
-    if let Some(storage) = local_storage() {
-        let _ = storage.set_item(AUTOSAVE_KEY, content);
-    }
+/// Returns false when the browser refused the write (quota, private mode), so
+/// callers must not treat the drawing as safely stored.
+pub fn save_autosave(content: &str) -> bool {
+    local_storage()
+        .and_then(|storage| storage.set_item(AUTOSAVE_KEY, content).ok())
+        .is_some()
 }
 
 pub fn clear_autosave() {

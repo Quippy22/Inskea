@@ -418,8 +418,11 @@ pub fn App() -> impl IntoView {
                     }
                 };
                 if !is_tauri {
-                    crate::storage::save_autosave(&content);
-                    doc.mark_saved(None, saved);
+                    if crate::storage::save_autosave(&content) {
+                        doc.mark_saved(None, saved);
+                    } else {
+                        notify::error(doc.notifications, "Could not autosave to browser storage.");
+                    }
                     return;
                 }
                 let Some(path) = saved_path.get_untracked() else {
