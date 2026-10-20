@@ -285,9 +285,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let guard = window.app_handle().state::<CloseGuard>();
-                if guard.armed.load(Ordering::SeqCst)
-                    && !guard.confirmed.load(Ordering::SeqCst)
-                {
+                if guard.armed.load(Ordering::SeqCst) && !guard.confirmed.load(Ordering::SeqCst) {
                     api.prevent_close();
                     let _ = window.emit("inskea-close-requested", ());
                 }
