@@ -141,15 +141,25 @@ fn el_svg(el: &Element) -> String {
                 .as_ref()
                 .map(|c| c.to_hex())
                 .unwrap_or_else(|| "none".to_string());
+            let (rx, ry) = match r.data.style.edge_style {
+                crate::model::elements::EdgeStyle::Rounded => {
+                    (r.data.style.roundness, r.data.style.roundness)
+                }
+                crate::model::elements::EdgeStyle::Sharp => (0.0, 0.0),
+            };
             let rect = format!(
-                r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" stroke="{}" stroke-width="{}" opacity="{}"/>"#,
+                r#"<rect x="{}" y="{}" width="{}" height="{}" rx="{}" ry="{}" fill="{}" stroke="{}" stroke-width="{}" stroke-dasharray="{}" stroke-linejoin="{}" opacity="{}"/>"#,
                 r.data.world_point.x,
                 r.data.world_point.y,
                 r.data.width,
                 r.data.height,
+                rx,
+                ry,
                 fill,
                 r.data.style.stroke_color.to_hex(),
                 r.data.style.stroke_width,
+                r.data.style.stroke_style.stroke_dasharray(),
+                r.data.style.edge_style.stroke_linejoin(),
                 r.data.style.opacity,
             );
             if r.data.rotation == 0.0 {
@@ -172,7 +182,7 @@ fn el_svg(el: &Element) -> String {
             let cx = e.data.world_point.x + e.data.width / 2.0;
             let cy = e.data.world_point.y + e.data.height / 2.0;
             let ellipse = format!(
-                r#"<ellipse cx="{}" cy="{}" rx="{}" ry="{}" fill="{}" stroke="{}" stroke-width="{}" opacity="{}"/>"#,
+                r#"<ellipse cx="{}" cy="{}" rx="{}" ry="{}" fill="{}" stroke="{}" stroke-width="{}" stroke-dasharray="{}" stroke-linejoin="{}" opacity="{}"/>"#,
                 cx,
                 cy,
                 e.data.width / 2.0,
@@ -180,6 +190,8 @@ fn el_svg(el: &Element) -> String {
                 fill,
                 e.data.style.stroke_color.to_hex(),
                 e.data.style.stroke_width,
+                e.data.style.stroke_style.stroke_dasharray(),
+                e.data.style.edge_style.stroke_linejoin(),
                 e.data.style.opacity,
             );
             if e.data.rotation == 0.0 {
@@ -561,6 +573,7 @@ pub fn tauri_export_png(svg: String, selection: bool, notifications: Notificatio
 mod tests {
     use super::*;
     use crate::model::elements::rect::Rectangle;
+    use crate::model::elements::{EdgeStyle, StrokeStyle};
     use crate::model::ElementData;
 
     #[test]
@@ -599,6 +612,22 @@ mod tests {
         );
         assert!(svg.contains(r#"width="120""#));
         assert!(svg.contains(r#"height="70""#));
+    }
+
+    #[test]
+    fn rectangle_export_keeps_corners_and_dashes() {
+        let mut scene = Scene::new();
+        let mut rect = Rectangle {
+            data: ElementData::new(0),
+        };
+        rect.data.style.edge_style = EdgeStyle::Rounded;
+        rect.data.style.roundness = 12.0;
+        rect.data.style.stroke_style = StrokeStyle::Dashed;
+        scene.add_element(Element::Rectangle(rect));
+
+        let svg = scene_to_svg_crop(&scene, Rect::new(0.0, 0.0, 200.0, 200.0), CanvasBg::Dark);
+        assert!(svg.contains(r#"rx="12""#));
+        assert!(svg.contains(r#"stroke-dasharray="6 3""#));
     }
 
     #[test]
