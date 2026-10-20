@@ -9,6 +9,7 @@ use crate::ui::components::{Dropdown, DropdownItem, IconButton};
 use crate::ui::export;
 use crate::ui::file_ops;
 use crate::ui::icon;
+use crate::ui::notify;
 use crate::ui::styles;
 use crate::util::window_size;
 use leptos::*;
@@ -231,6 +232,10 @@ where
                     }
                 })));
                 export_crop_active.set(true);
+                notify::info(
+                    notifications,
+                    "Drag on the canvas to choose the export area. Esc cancels.",
+                );
                 return;
             }
             let vp = viewport.get();
