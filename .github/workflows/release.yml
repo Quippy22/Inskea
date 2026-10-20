@@ -290,8 +290,6 @@ jobs:
           fixes=$(printf '%s\n' "$subjects" | grep -E '^fix(\([^)]*\))?:' | sed -E 's/^fix(\([^)]*\))?: //' || true)
 
           {
-            echo "**Target:** Windows (.exe), Debian (.deb), Arch Linux (.pkg.tar.zst)"
-            echo
             echo "## Features"
             if [ -n "$features" ]; then
               printf '%s\n' "$features" | sed 's/^/- /'
