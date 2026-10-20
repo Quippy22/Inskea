@@ -1,0 +1,24 @@
+# Maintainer: Quippy22
+# Packages the Debian bundle produced by the release workflow.
+pkgname=inskea
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="Infinite-canvas drawing app"
+arch=('x86_64')
+url="https://github.com/Quippy22/Inskea"
+license=('MIT')
+depends=(
+  'gtk3'
+  'webkit2gtk-4.1'
+  'libayatana-appindicator'
+  'librsvg'
+  'hicolor-icon-theme'
+  'shared-mime-info'
+)
+source=('inskea.deb')
+sha256sums=('SKIP')
+
+package() {
+  dpkg-deb -x "$srcdir/inskea.deb" "$pkgdir"
+  install -Dm644 "$startdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
