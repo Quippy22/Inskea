@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/version-0.10.0-blue?style=flat-square" alt="Version 0.10.0">
+  <img src="https://img.shields.io/badge/version-0.11.0-blue?style=flat-square" alt="Version 0.11.0">
   <img src="https://img.shields.io/badge/platform-desktop%20%7C%20browser-blueviolet?style=flat-square" alt="Platform: desktop and browser">
 </p>
 
