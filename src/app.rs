@@ -148,6 +148,7 @@ pub fn App() -> impl IntoView {
         baseline,
         dirty,
         notifications,
+        generation: create_rw_signal(0_u32),
         reset_history: reset_history.clone(),
         clear_autosave,
     };
@@ -446,10 +447,15 @@ pub fn App() -> impl IntoView {
                     return;
                 };
                 let notifications = doc.notifications;
+                let generation = doc.generation_now();
                 spawn_local(async move {
                     match tauri_bridge::save_skea(&path, &content).await {
-                        Ok(()) => doc.mark_saved(Some(path), saved),
-                        Err(e) => notify::error(notifications, format!("Could not autosave: {e}")),
+                        Ok(()) => doc.mark_saved_for(generation, Some(path), saved),
+                        Err(e) => {
+                            if doc.generation_now() == generation {
+                                notify::error(notifications, format!("Could not autosave: {e}"));
+                            }
+                        }
                     }
                 });
             },

@@ -107,6 +107,7 @@ fn save_to_path(doc: DocContext, path: String, on_done: Option<SaveCallback>) {
     let notifications = doc.notifications;
     spawn_local(async move {
         let path = tauri_bridge::with_skea_extension(&path);
+        let generation = doc.generation_now();
         let saved = doc.scene.get_untracked();
         let content = match skea::save_to_string(&saved) {
             Ok(content) => content,
@@ -118,11 +119,13 @@ fn save_to_path(doc: DocContext, path: String, on_done: Option<SaveCallback>) {
         };
         match tauri_bridge::save_skea(&path, &content).await {
             Ok(()) => {
-                doc.mark_saved(Some(path), saved);
+                doc.mark_saved_for(generation, Some(path), saved);
                 report_saved(&on_done, true);
             }
             Err(e) => {
-                notify::error(notifications, format!("Could not save the file: {e}"));
+                if doc.generation_now() == generation {
+                    notify::error(notifications, format!("Could not save the file: {e}"));
+                }
                 report_saved(&on_done, false);
             }
         }

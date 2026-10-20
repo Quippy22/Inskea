@@ -26,6 +26,9 @@ pub struct DocContext {
     pub baseline: RwSignal<Scene>,
     pub dirty: RwSignal<bool>,
     pub notifications: Notifications,
+    /// Bumped whenever the open document is replaced. Async work uses it to
+    /// avoid writing its result into a different document.
+    pub generation: RwSignal<u32>,
     pub reset_history: Rc<dyn Fn()>,
     /// Drop any browser-side autosaved copy (no-op on desktop).
     pub clear_autosave: Rc<dyn Fn()>,
@@ -51,6 +54,9 @@ impl DocContext {
     }
 
     fn replace(&self, scene: Scene, path: Option<String>, clear_autosave: bool) {
+        self.generation.update(|generation| {
+            *generation = generation.wrapping_add(1);
+        });
         self.selected_ids.set(Vec::new());
         self.baseline.set(scene.clone());
         self.scene.set(scene);
@@ -59,6 +65,18 @@ impl DocContext {
         (self.reset_history)();
         if clear_autosave {
             (self.clear_autosave)();
+        }
+    }
+
+    pub fn generation_now(&self) -> u32 {
+        self.generation.get_untracked()
+    }
+
+    /// Record a successful write only if the document has not been replaced
+    /// since the write started.
+    pub fn mark_saved_for(&self, generation: u32, path: Option<String>, saved: Scene) {
+        if self.generation_now() == generation {
+            self.mark_saved(path, saved);
         }
     }
 
