@@ -96,6 +96,35 @@ fn chunk_count(x0: i32, y0: i32, x1: i32, y1: i32) -> i64 {
     width.saturating_mul(height)
 }
 
+fn collect_visible_chunk<'a>(
+    key: (i32, i32),
+    chunk: &'a SceneChunk,
+    seen: &mut std::collections::HashSet<(i32, i32)>,
+    visible: &mut Vec<VisibleElement<'a>>,
+    view: Rect,
+) {
+    if !seen.insert(key) {
+        return;
+    }
+    let origin = chunk_origin(key);
+    for stored in &chunk.elements {
+        let mut bounds = element_bounds(&stored.element);
+        bounds.x += origin.x;
+        bounds.y += origin.y;
+        if bounds.x <= view.right()
+            && bounds.right() >= view.x
+            && bounds.y <= view.bottom()
+            && bounds.bottom() >= view.y
+        {
+            visible.push(VisibleElement {
+                element: &stored.element,
+                origin,
+                order: stored.order,
+            });
+        }
+    }
+}
+
 fn element_bounds(element: &Element) -> Rect {
     crate::model::interaction::visual_envelope(element)
         .padded(element.data().style.stroke_width.max(0.0))
@@ -175,6 +204,14 @@ impl Drop for ElementMut<'_> {
     }
 }
 
+/// One element borrowed from its chunk, together with the chunk origin needed
+/// to place it in world space.
+pub struct VisibleElement<'a> {
+    pub element: &'a Element,
+    pub origin: Point,
+    pub order: u64,
+}
+
 impl Scene {
     /// Creates an empty scene with no elements (IDs start at 1).
     pub fn new() -> Self {
@@ -233,9 +270,10 @@ impl Scene {
         self.locations.is_empty()
     }
 
-    /// Materialize just the elements intersecting the view from their spatial
-    /// chunks; element geometry is stored relative to each chunk origin.
-    pub fn elements_in_view(&self, view: Rect) -> Vec<Element> {
+    /// Borrow just the elements intersecting the view from their spatial
+    /// chunks; element geometry stays relative to each chunk origin, so the
+    /// canvas can render it under a per-chunk translation without cloning.
+    pub fn visible_elements(&self, view: Rect) -> Vec<VisibleElement<'_>> {
         // Elements no larger than one chunk are stored by their center. Search
         // one neighboring chunk in each direction to catch shapes crossing a
         // chunk edge; larger paths are kept in the small `oversized` list.
@@ -246,36 +284,48 @@ impl Scene {
             x1.saturating_add(1),
             y1.saturating_add(1),
         );
-        if chunk_count(x0, y0, x1, y1) > 4096 {
-            return self.elements();
-        }
-        let mut ids = self.oversized.clone();
-        for x in x0..=x1 {
-            for y in y0..=y1 {
-                if let Some(chunk) = self.chunks.get(&(x, y)) {
-                    ids.extend(chunk.elements.iter().map(|stored| stored.element.id()));
-                }
-            }
-        }
-        ids.sort_unstable();
-        ids.dedup();
 
+        let mut seen = std::collections::HashSet::new();
         let mut visible = Vec::new();
-        for id in ids {
-            if let Some(element) = self.element_by_id(id) {
-                let bounds = element_bounds(&element);
-                if bounds.x <= view.right()
-                    && bounds.right() >= view.x
-                    && bounds.y <= view.bottom()
-                    && bounds.bottom() >= view.y
-                {
-                    let order = self.element_order(id).unwrap_or(u64::MAX);
-                    visible.push((order, element));
+
+        if chunk_count(x0, y0, x1, y1) > 4096 {
+            // Zoomed far out: walk the chunks that exist instead of every
+            // coordinate in the visible range.
+            for (key, chunk) in &self.chunks {
+                collect_visible_chunk(*key, chunk, &mut seen, &mut visible, view);
+            }
+        } else {
+            for x in x0..=x1 {
+                for y in y0..=y1 {
+                    if let Some(chunk) = self.chunks.get(&(x, y)) {
+                        collect_visible_chunk((x, y), chunk, &mut seen, &mut visible, view);
+                    }
+                }
+            }
+            // A large shape can live in a chunk outside the search range.
+            for id in &self.oversized {
+                if let Some(key) = self.locations.get(id) {
+                    if let Some(chunk) = self.chunks.get(key) {
+                        collect_visible_chunk(*key, chunk, &mut seen, &mut visible, view);
+                    }
                 }
             }
         }
-        visible.sort_by_key(|(order, _)| *order);
-        visible.into_iter().map(|(_, element)| element).collect()
+
+        visible.sort_by_key(|element| element.order);
+        visible
+    }
+
+    /// Materialize just the elements intersecting the view.
+    pub fn elements_in_view(&self, view: Rect) -> Vec<Element> {
+        self.visible_elements(view)
+            .into_iter()
+            .map(|visible| {
+                let mut element = visible.element.clone();
+                element.offset(visible.origin.x, visible.origin.y);
+                element
+            })
+            .collect()
     }
 
     pub fn element_by_id(&self, id: ElementId) -> Option<Element> {
@@ -718,5 +768,49 @@ mod tests {
         let legacy = r#"{"elements":[],"next_id":1}"#;
         let s: Scene = serde_json::from_str(legacy).unwrap();
         assert!(s.groups.is_empty());
+    }
+
+    #[test]
+    fn visible_elements_culls_distant_chunks_and_keeps_origins() {
+        let mut s = Scene::new();
+        let mut near = Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        });
+        near.data_mut().world_point = Point::new(10.0, 20.0);
+        s.add_element(near);
+
+        let mut far = Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        });
+        far.data_mut().world_point = Point::new(10_000.0, 10_000.0);
+        s.add_element(far);
+
+        let visible = s.visible_elements(Rect::new(0.0, 0.0, 100.0, 100.0));
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].element.id(), 1);
+        assert_eq!(
+            visible[0].element.data().world_point.x + visible[0].origin.x,
+            10.0
+        );
+        assert_eq!(
+            visible[0].element.data().world_point.y + visible[0].origin.y,
+            20.0
+        );
+    }
+
+    #[test]
+    fn visible_elements_includes_oversized_shapes_outside_search_chunks() {
+        let mut s = Scene::new();
+        let mut wide = Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        });
+        wide.data_mut().world_point = Point::new(-5000.0, 0.0);
+        wide.data_mut().width = 5000.0;
+        wide.data_mut().height = 100.0;
+        s.add_element(wide);
+
+        let visible = s.visible_elements(Rect::new(0.0, 0.0, 10.0, 10.0));
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].element.id(), 1);
     }
 }

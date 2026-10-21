@@ -755,18 +755,25 @@ pub fn Canvas(
                     // every drag step.
                     props.scene.with(|scene| {
                         scene
-                            .elements_in_view(visible)
-                            .iter()
-                            .filter(|el| {
-                                Some(el.id()) != editing
+                            .visible_elements(visible)
+                            .into_iter()
+                            .filter(|visible| {
+                                Some(visible.element.id()) != editing
                             })
-                            .map(|el| {
-                                // Elements render in world coordinates; the SVG
-                                // `viewBox` applies pan/zoom, so `render` ignores the
-                                // zoom argument. Viewport reads above keep this list
-                                // culled correctly as the camera moves.
-                                view! { <g pointer-events="none">{el.render(1.0)}</g> }
-                                    .into_view()
+                            .map(|visible| {
+                                // Chunk-stored geometry is relative to its
+                                // origin; translate the group instead of
+                                // cloning and offsetting every element.
+                                let transform = format!(
+                                    "translate({} {})",
+                                    visible.origin.x, visible.origin.y
+                                );
+                                view! {
+                                    <g transform=transform pointer-events="none">
+                                        {visible.element.render(1.0)}
+                                    </g>
+                                }
+                                .into_view()
                             })
                             .collect_view()
                     })
