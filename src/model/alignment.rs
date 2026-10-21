@@ -48,7 +48,7 @@ fn selection_items_with_bounds(
         let Some(group) = scene.group_containing(id) else {
             items.push(SelectionItem {
                 ids: vec![id],
-                bounds: bounds_for(element),
+                bounds: bounds_for(&element),
             });
             continue;
         };
@@ -56,7 +56,7 @@ fn selection_items_with_bounds(
         if !group.members.iter().all(|member| ids.contains(member)) {
             items.push(SelectionItem {
                 ids: vec![id],
-                bounds: bounds_for(element),
+                bounds: bounds_for(&element),
             });
             continue;
         }
@@ -65,8 +65,8 @@ fn selection_items_with_bounds(
         for member in &group.members {
             if let Some(element) = scene.element_by_id(*member) {
                 bounds = Some(match bounds {
-                    Some(current) => current.union(&bounds_for(element)),
-                    None => bounds_for(element),
+                    Some(current) => current.union(&bounds_for(&element)),
+                    None => bounds_for(&element),
                 });
             }
         }
@@ -83,8 +83,8 @@ fn selection_items_with_bounds(
 }
 
 fn offset_item(scene: &mut Scene, item: &SelectionItem, dx: f64, dy: f64) {
-    for element in scene.elements_mut() {
-        if item.ids.contains(&element.id()) {
+    for id in &item.ids {
+        if let Some(mut element) = scene.element_by_id_mut(*id) {
             element.offset(dx, dy);
         }
     }
@@ -265,9 +265,9 @@ mod tests {
 
         distribute_selection(&mut scene, &[1, 2, 3], Distribution::Horizontal);
 
-        let first = distribution_bounds(scene.element_by_id(1).unwrap());
-        let middle = distribution_bounds(scene.element_by_id(2).unwrap());
-        let last = distribution_bounds(scene.element_by_id(3).unwrap());
+        let first = distribution_bounds(&scene.element_by_id(1).unwrap());
+        let middle = distribution_bounds(&scene.element_by_id(2).unwrap());
+        let last = distribution_bounds(&scene.element_by_id(3).unwrap());
         let first_gap = middle.x - first.right();
         let last_gap = last.x - middle.right();
         assert!((first_gap - last_gap).abs() < 1e-9);
@@ -283,9 +283,9 @@ mod tests {
 
         distribute_selection(&mut scene, &[1, 2, 3], Distribution::Vertical);
 
-        let first = distribution_bounds(scene.element_by_id(1).unwrap());
-        let middle = distribution_bounds(scene.element_by_id(2).unwrap());
-        let last = distribution_bounds(scene.element_by_id(3).unwrap());
+        let first = distribution_bounds(&scene.element_by_id(1).unwrap());
+        let middle = distribution_bounds(&scene.element_by_id(2).unwrap());
+        let last = distribution_bounds(&scene.element_by_id(3).unwrap());
         let first_gap = middle.y - first.bottom();
         let last_gap = last.y - middle.bottom();
         assert!((first_gap - last_gap).abs() < 1e-9);

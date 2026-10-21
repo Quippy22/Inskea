@@ -32,12 +32,7 @@ pub fn copy_selection(
 ) {
     let ids = selected_ids.get();
     let (els, groups) = scene.with(|s| {
-        let els = s
-            .elements()
-            .iter()
-            .filter(|e| ids.contains(&e.id()))
-            .cloned()
-            .collect::<Vec<_>>();
+        let els = s.elements_for_ids(&ids);
         let groups = s
             .groups
             .iter()
@@ -87,7 +82,7 @@ pub fn duplicate_selection(
     let mut new_ids = Vec::new();
     let mut id_map = Vec::new();
     mutate_scene(scene, push_snapshot, |s| {
-        let elements = s.elements().to_vec();
+        let elements = s.elements_for_ids(&ids);
         let groups = s.groups.clone();
         for id in &ids {
             if let Some(el) = elements.iter().find(|e| e.id() == *id) {

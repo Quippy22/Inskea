@@ -59,34 +59,36 @@ pub fn scene_to_svg(
     selected: Option<&[ElementId]>,
     bg: CanvasBg,
 ) -> String {
-    let (view, width, height, elements): (Rect, f64, f64, &[Element]) = match selected {
+    let (view, width, height, elements): (Rect, f64, f64, Vec<Element>) = match selected {
         Some(ids) if !ids.is_empty() => {
-            let bounds = combined_bounds(ids, scene.elements());
+            let elements: Vec<_> = ids
+                .iter()
+                .filter_map(|id| scene.element_by_id(*id))
+                .collect();
+            let bounds = combined_bounds(ids, &elements);
             if let Some(b) = bounds {
                 let pad = 10.0;
                 (
                     Rect::new(b.x - pad, b.y - pad, b.w + pad * 2.0, b.h + pad * 2.0),
                     b.w + pad * 2.0,
                     b.h + pad * 2.0,
-                    scene.elements(),
+                    elements,
                 )
             } else {
                 return String::new();
             }
         }
-        _ => (
-            viewport.visible_rect(screen),
-            screen.x,
-            screen.y,
-            scene.elements(),
-        ),
+        _ => {
+            let view = viewport.visible_rect(screen);
+            (view, screen.x, screen.y, scene.elements_in_view(view))
+        }
     };
-    let element_body = svg_body(elements, selected);
+    let element_body = svg_body(&elements, selected);
     svg_document(view, width, height, bg, &element_body)
 }
 
 pub fn scene_to_svg_crop(scene: &Scene, crop: Rect, bg: CanvasBg) -> String {
-    let element_body = svg_body(scene.elements(), None);
+    let element_body = svg_body(&scene.elements_in_view(crop), None);
     svg_document(crop, crop.w, crop.h, bg, &element_body)
 }
 

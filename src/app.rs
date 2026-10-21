@@ -353,7 +353,7 @@ pub fn App() -> impl IntoView {
     if !is_tauri && settings.get_untracked().autosave {
         if let Some(content) = crate::storage::load_autosave() {
             if let Ok(restored) = skea::load_from_str(&content) {
-                if !restored.elements().is_empty() {
+                if !restored.is_empty() {
                     doc.restore(restored);
                     notify::info(doc.notifications, "Restored the autosaved drawing.");
                 }

@@ -7,6 +7,7 @@ use crate::model::{Point, Rect};
 /// same curve rule. There are no per-point tangent handles or corner-vs-
 /// smooth modes (those would be a materially larger feature).
 #[derive(Clone, Copy, Debug, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+#[repr(u8)]
 pub enum CurveMode {
     /// Render as straight line segments (a polyline).
     #[default]
@@ -60,7 +61,7 @@ pub fn path_d(points: &[Point], mode: CurveMode) -> String {
 ///
 /// Returns `None` when `i` is out of range.
 fn segment_cubic_bezier(points: &[Point], i: usize) -> Option<(Point, Point, Point, Point)> {
-    if i + 1 >= points.len() {
+    if i >= points.len().saturating_sub(1) {
         return None;
     }
     let p0 = &points[i];
@@ -159,7 +160,7 @@ pub fn hit_test_path(points: &[Point], mode: CurveMode, point: (f64, f64), toler
 /// placement. In `Straight` mode this is the linear midpoint; in `Curved`
 /// mode it is the midpoint of the cubic Bezier.
 pub fn segment_midpoint(points: &[Point], mode: CurveMode, i: usize) -> Option<(f64, f64)> {
-    if i + 1 >= points.len() {
+    if i >= points.len().saturating_sub(1) {
         return None;
     }
     if points.len() <= 2 || mode == CurveMode::Straight {
@@ -175,13 +176,16 @@ pub fn segment_midpoint(points: &[Point], mode: CurveMode, i: usize) -> Option<(
 }
 
 pub fn bounds_of_points(points: &[Point]) -> Rect {
-    if points.is_empty() {
+    let Some(first) = points.first() else {
         return Rect::new(0.0, 0.0, 0.0, 0.0);
+    };
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (first.x, first.y, first.x, first.y);
+    for point in &points[1..] {
+        min_x = min_x.min(point.x);
+        min_y = min_y.min(point.y);
+        max_x = max_x.max(point.x);
+        max_y = max_y.max(point.y);
     }
-    let min_x = points.iter().map(|p| p.x).reduce(f64::min).unwrap();
-    let min_y = points.iter().map(|p| p.y).reduce(f64::min).unwrap();
-    let max_x = points.iter().map(|p| p.x).reduce(f64::max).unwrap();
-    let max_y = points.iter().map(|p| p.y).reduce(f64::max).unwrap();
     let w = (max_x - min_x).max(1.0);
     let h = (max_y - min_y).max(1.0);
     Rect::new(min_x, min_y, w, h)

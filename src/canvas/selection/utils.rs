@@ -9,16 +9,6 @@ pub const ROTATE_HANDLE_OFFSET: f64 = 25.0;
 pub const PATH_MERGE_DIST: f64 = 3.0;
 pub const SELECT_PADDING: f64 = 5.0;
 
-/// Round `value` to the nearest multiple of `step`; a non-positive step leaves
-/// the value untouched.
-pub fn snap_value(value: f64, step: f64) -> f64 {
-    if step <= 0.0 {
-        value
-    } else {
-        (value / step).round() * step
-    }
-}
-
 pub fn selection_bounds(ids: &[ElementId], els: &[Element]) -> Option<Rect> {
     if ids.len() == 1 {
         els.iter()
@@ -64,6 +54,7 @@ mod tests {
     use super::*;
     use crate::model::elements::rect::Rectangle;
     use crate::model::ElementData;
+    use crate::util::snap_value;
 
     #[test]
     fn unrotate_handle_hit_lands_in_element_frame() {

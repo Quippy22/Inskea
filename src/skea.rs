@@ -53,6 +53,7 @@ mod tests {
         Color, Element, ElementData, Ellipse, Freehand, Line, LineStyle, Point, Rectangle, Text,
         TextAlign,
     };
+    use crate::util::ExpandableArray;
 
     fn make_scene() -> Scene {
         let mut s = Scene::new();
@@ -76,7 +77,10 @@ mod tests {
         ld.style.stroke_width = 3.0;
         s.add_element(Element::Line(Line {
             data: ld,
-            points: vec![Point { x: 0.0, y: 0.0 }, Point { x: 100.0, y: 100.0 }],
+            points: ExpandableArray::from_iter_with_capacity(
+                2,
+                [Point { x: 0.0, y: 0.0 }, Point { x: 100.0, y: 100.0 }],
+            ),
             line_style: LineStyle {
                 curve_mode: CurveMode::Straight,
                 has_start_arrowhead: false,
@@ -88,7 +92,10 @@ mod tests {
         ad.style.stroke_color = Color::new(Color::RED);
         s.add_element(Element::Line(Line {
             data: ad,
-            points: vec![Point { x: 10.0, y: 10.0 }, Point { x: 200.0, y: 50.0 }],
+            points: ExpandableArray::from_iter_with_capacity(
+                2,
+                [Point { x: 10.0, y: 10.0 }, Point { x: 200.0, y: 50.0 }],
+            ),
             line_style: LineStyle {
                 curve_mode: CurveMode::Straight,
                 has_start_arrowhead: false,
@@ -110,11 +117,14 @@ mod tests {
         fd.style.stroke_width = 1.5;
         s.add_element(Element::Freehand(Freehand {
             data: fd,
-            points: vec![
-                Point { x: 1.0, y: 2.0 },
-                Point { x: 3.0, y: 4.0 },
-                Point { x: 5.0, y: 6.0 },
-            ],
+            points: Box::new(ExpandableArray::from_iter_with_capacity(
+                128,
+                [
+                    Point { x: 1.0, y: 2.0 },
+                    Point { x: 3.0, y: 4.0 },
+                    Point { x: 5.0, y: 6.0 },
+                ],
+            )),
         }));
 
         s
@@ -200,7 +210,8 @@ mod tests {
         let loaded = load_from_str(&legacy).unwrap();
         assert_eq!(left_scene, loaded);
         assert_eq!(save_to_string(&loaded).unwrap(), with_field);
-        let Element::Text(t) = &loaded.elements()[0] else {
+        let elements = loaded.elements();
+        let Some(Element::Text(t)) = elements.first() else {
             panic!("expected text element");
         };
         assert_eq!(t.align, TextAlign::Left);

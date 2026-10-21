@@ -1,6 +1,7 @@
 use crate::model::elements::utils::scale_points;
 use crate::model::resize::ResizeContext;
 use crate::model::*;
+use crate::util::ExpandableArray;
 use leptos::IntoView;
 use std::fmt::Write;
 
@@ -21,7 +22,7 @@ pub struct Freehand {
     /// Stroke appearance (width, colour).
     pub data: ElementData,
     /// Sampled world-space points along the stroke path.
-    pub points: Vec<Point>,
+    pub points: Box<ExpandableArray<Point>>,
 }
 
 impl Freehand {
@@ -32,7 +33,7 @@ impl Freehand {
         if self.points.len() <= 2 {
             return;
         }
-        self.points = simplify_points(&self.points, epsilon);
+        *self.points = ExpandableArray::from_vec(128, simplify_points(&self.points, epsilon));
     }
 
     /// Finalise a live stroke, simplifying it with a tolerance that
@@ -101,10 +102,13 @@ impl FromDrag for Freehand {
                 },
                 ..ElementData::new(0)
             },
-            points: vec![Point {
-                x: anchor.x,
-                y: anchor.y,
-            }],
+            points: Box::new(ExpandableArray::from_iter_with_capacity(
+                128,
+                [Point {
+                    x: anchor.x,
+                    y: anchor.y,
+                }],
+            )),
         }
     }
 }
@@ -240,7 +244,7 @@ mod tests {
     fn stroke(points: &[(f64, f64)]) -> Freehand {
         Freehand {
             data: ElementData::new(1),
-            points: points.iter().map(|&(x, y)| Point { x, y }).collect(),
+            points: Box::new(points.iter().map(|&(x, y)| Point { x, y }).collect()),
         }
     }
 

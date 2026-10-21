@@ -75,8 +75,8 @@ pub(crate) fn line_endpoints(anchor: Point, current: Point, shift: bool) -> (Poi
 
 pub(crate) fn scale_points(points: &mut [Point], ctx: &ResizeContext) {
     let orig_slice: Vec<Point> = match ctx.orig {
-        Element::Line(orig) => orig.points.clone(),
-        Element::Freehand(orig) => orig.points.clone(),
+        Element::Line(orig) => orig.points.to_vec(),
+        Element::Freehand(orig) => orig.points.to_vec(),
         _ => points.to_vec(),
     };
     super::path::scale_points(points, ctx, &orig_slice);

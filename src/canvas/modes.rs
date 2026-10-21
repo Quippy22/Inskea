@@ -6,6 +6,7 @@ use crate::model::{
     UpdateDrag,
 };
 use crate::ui::dock::Tool;
+use crate::util::ExpandableArray;
 use leptos::{
     ev, SignalGet, SignalGetUntracked, SignalSet, SignalUpdate, SignalWith, SignalWithUntracked,
 };
@@ -35,14 +36,16 @@ pub(crate) fn finish_freehand(
     let zoom = props.viewport.get_untracked().zoom;
     let mut is_click = false;
     props.scene.update(|s| {
-        if let Some(Element::Freehand(fh)) = s.element_by_id_mut(id) {
-            if let Some(world) = world {
-                fh.update_drag(world, Point::from(state.anchor), false, zoom);
-            }
-            if fh.points.len() < 2 {
-                is_click = true;
-            } else {
-                fh.finish(zoom);
+        if let Some(mut element) = s.element_by_id_mut(id) {
+            if let Element::Freehand(fh) = &mut *element {
+                if let Some(world) = world {
+                    fh.update_drag(world, Point::from(state.anchor), false, zoom);
+                }
+                if fh.points.len() < 2 {
+                    is_click = true;
+                } else {
+                    fh.finish(zoom);
+                }
             }
         }
     });
@@ -121,7 +124,7 @@ pub fn draw_pointer_down(world: Point, st: &mut CanvasState, props: &mut CanvasI
             data.style = props.default_style.get();
             s.add_element(Element::Freehand(Freehand {
                 data,
-                points: vec![world],
+                points: Box::new(ExpandableArray::from_iter_with_capacity(128, [world])),
             }));
         });
         st.drawing.set(Some(DrawingState {

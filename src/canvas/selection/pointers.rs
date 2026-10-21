@@ -1,5 +1,5 @@
 use super::utils::{
-    handle_positions, selection_bounds, snap_value, unrotate_for_element, HANDLE_MOVE_RADIUS,
+    handle_positions, selection_bounds, unrotate_for_element, HANDLE_MOVE_RADIUS,
     HANDLE_RESIZE_RADIUS, HANDLE_ROTATE_RADIUS, PATH_MERGE_DIST, SELECT_PADDING,
 };
 use super::MIN_DRAG_DIST;
@@ -15,6 +15,7 @@ use crate::model::resize::ResizeContext;
 use crate::model::resize::ResizeHandle;
 use crate::model::selection::{expand_ids, normalize_ids, toggle_ids};
 use crate::model::{Element, ElementId, Point, Rect};
+use crate::util::snap_value;
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, *};
 
 /// Enter text-edit mode on double-click of a Text element.
@@ -28,14 +29,23 @@ fn handle_text_double_click(
     if detail < 2 {
         return false;
     }
-    let els = props.scene.get().elements().to_vec();
-    let id = match hit_test_topmost(world, &els, HIT_MARGIN) {
+    let nearby = props.scene.with(|scene| {
+        scene.elements_in_view(Rect::new(
+            world.x - HIT_MARGIN,
+            world.y - HIT_MARGIN,
+            HIT_MARGIN * 2.0,
+            HIT_MARGIN * 2.0,
+        ))
+    });
+    let id = match hit_test_topmost(world, &nearby, HIT_MARGIN) {
         Some(id) => id,
         None => return false,
     };
-    if let Some(Element::Text(text_elem)) = els.iter().find(|e| e.id() == id) {
+    if let Some(Element::Text(text_elem)) = nearby.iter().find(|e| e.id() == id) {
         st.text_edit.editing_id.set(Some(id));
-        st.text_edit.edit_text.set(text_elem.wrapped.raw.clone());
+        st.text_edit
+            .edit_text
+            .set(text_elem.wrapped.raw.to_string());
         return true;
     }
     false
@@ -277,8 +287,15 @@ fn handle_group_member_double_click(
     if detail < 2 {
         return false;
     }
-    let els = props.scene.get().elements().to_vec();
-    let id = match hit_test_topmost(world, &els, HIT_MARGIN) {
+    let nearby = props.scene.with(|scene| {
+        scene.elements_in_view(Rect::new(
+            world.x - HIT_MARGIN,
+            world.y - HIT_MARGIN,
+            HIT_MARGIN * 2.0,
+            HIT_MARGIN * 2.0,
+        ))
+    });
+    let id = match hit_test_topmost(world, &nearby, HIT_MARGIN) {
         Some(id) => id,
         None => return false,
     };
@@ -413,7 +430,7 @@ fn detect_hovered_handle(
     // `with` instead of `get`: hover runs on every pointer move and must
     // not deep-clone the whole scene.
     props.scene.with(|s| {
-        let els = s.elements();
+        let els = s.elements_for_ids(&ids);
 
         if ids.len() == 1 {
             if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
@@ -437,7 +454,7 @@ fn detect_hovered_handle(
             }
         }
 
-        if let Some(mut b) = selection_bounds(&ids, els) {
+        if let Some(mut b) = selection_bounds(&ids, &els) {
             b = b.padded(SELECT_PADDING);
             let hpos = handle_positions(b.x, b.y, b.w, b.h);
 
@@ -482,24 +499,25 @@ fn do_resize(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
             _ => return,
         };
         props.scene.update(|s| {
-            for el in s.elements_mut().iter_mut() {
-                if ids.contains(&el.id()) {
-                    if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
-                        let ctx = ResizeContext {
-                            orig,
-                            handle,
-                            pointer_world: world,
-                            start_world,
-                            shift,
-                            alt,
-                            multi,
-                            bx: b.x,
-                            by: b.y,
-                            bw: b.w,
-                            bh: b.h,
-                        };
-                        el.resize(&ctx);
-                    }
+            for id in &ids {
+                if let (Some(orig), Some(mut el)) = (
+                    originals.iter().find(|original| original.id() == *id),
+                    s.element_by_id_mut(*id),
+                ) {
+                    let ctx = ResizeContext {
+                        orig,
+                        handle,
+                        pointer_world: world,
+                        start_world,
+                        shift,
+                        alt,
+                        multi,
+                        bx: b.x,
+                        by: b.y,
+                        bw: b.w,
+                        bh: b.h,
+                    };
+                    el.resize(&ctx);
                 }
             }
         });
@@ -528,12 +546,13 @@ fn do_rotate(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
             let ids = st.selected_ids.get();
             let originals = st.drag.drag_originals.get();
             props.scene.update(|s| {
-                for el in s.elements_mut().iter_mut() {
-                    if ids.contains(&el.id()) {
-                        if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
-                            *el = orig.clone();
-                            el.rotate_around(Point { x: cx, y: cy }, delta);
-                        }
+                for id in &ids {
+                    if let (Some(orig), Some(mut el)) = (
+                        originals.iter().find(|original| original.id() == *id),
+                        s.element_by_id_mut(*id),
+                    ) {
+                        *el = orig.clone();
+                        el.rotate_around(Point { x: cx, y: cy }, delta);
                     }
                 }
             });
@@ -554,10 +573,12 @@ fn do_path_point_drag(world: Point, st: &mut CanvasState, props: &mut CanvasInpu
     };
     let ids = st.selected_ids.get();
     props.scene.update(|s| {
-        if let Some(el) = s.element_by_id_mut(ids[0]) {
+        if let Some(mut el) = s.element_by_id_mut(ids[0]) {
             if let Some(pts) = el.path_points_mut() {
                 if idx < pts.len() {
-                    pts[idx] = target;
+                    if let Some(point) = pts.get_mut(idx) {
+                        *point = target;
+                    }
                 }
             }
         }
@@ -584,10 +605,12 @@ fn do_path_midpoint_drag(world: Point, st: &mut CanvasState, props: &mut CanvasI
             });
             (props.push_snapshot)();
             props.scene.update(|s| {
-                if let Some(target) = s.element_by_id_mut(ids[0]) {
+                if let Some(mut target) = s.element_by_id_mut(ids[0]) {
                     if let Some(pts) = target.path_points_mut() {
                         pts.insert(new_idx, Point { x: mx, y: my });
-                        pts[new_idx] = world;
+                        if let Some(point) = pts.get_mut(new_idx) {
+                            *point = world;
+                        }
                     }
                 }
             });
@@ -661,12 +684,13 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
     let dx = raw_dx + snap_dx;
     let dy = raw_dy + snap_dy;
     props.scene.update(|s| {
-        for el in s.elements_mut().iter_mut() {
-            if ids.contains(&el.id()) {
-                if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
-                    *el = orig.clone();
-                    el.offset(dx, dy);
-                }
+        for id in &ids {
+            if let (Some(orig), Some(mut el)) = (
+                originals.iter().find(|original| original.id() == *id),
+                s.element_by_id_mut(*id),
+            ) {
+                *el = orig.clone();
+                el.offset(dx, dy);
             }
         }
     });
@@ -693,10 +717,10 @@ fn finish_path_point_drag(st: &mut CanvasState, props: &mut CanvasInputs, idx: u
     if merged {
         (props.push_snapshot)();
         props.scene.update(|s| {
-            if let Some(el) = s.element_by_id_mut(ids[0]) {
+            if let Some(mut el) = s.element_by_id_mut(ids[0]) {
                 if let Some(pts) = el.path_points_mut() {
                     if idx < pts.len() {
-                        pts.remove(idx);
+                        let _ = pts.remove(idx);
                     }
                 }
             }
@@ -732,7 +756,7 @@ pub(crate) fn cancel_drag(st: &mut CanvasState, props: &mut CanvasInputs) {
     if !originals.is_empty() {
         props.scene.update(|s| {
             for orig in &originals {
-                if let Some(el) = s.element_by_id_mut(orig.id()) {
+                if let Some(mut el) = s.element_by_id_mut(orig.id()) {
                     *el = orig.clone();
                 }
             }
@@ -757,7 +781,9 @@ fn complete_marquee_selection(world: Point, st: &mut CanvasState, props: &mut Ca
             let ry = anchor.y.min(world.y);
             let rw = (world.x - anchor.x).abs();
             let rh = (world.y - anchor.y).abs();
-            let els = props.scene.get().elements().to_vec();
+            let els = props
+                .scene
+                .with(|scene| scene.elements_in_view(Rect::new(rx, ry, rw, rh)));
             let contained: Vec<ElementId> = els
                 .iter()
                 .filter(|el| rect_fully_contains_element(Rect::new(rx, ry, rw, rh), el))
@@ -790,7 +816,7 @@ pub fn select_pointer_down(
     }
 
     let ids = st.selected_ids.get();
-    let els = props.scene.get().elements().to_vec();
+    let els = props.scene.with(|scene| scene.elements_for_ids(&ids));
 
     if ids.len() == 1 {
         if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
@@ -889,8 +915,8 @@ fn finish_shift_click(st: &mut CanvasState, props: &mut CanvasInputs) {
     };
     let originals = st.drag.drag_originals.get();
     props.scene.update(|s| {
-        for el in s.elements_mut().iter_mut() {
-            if let Some(orig) = originals.iter().find(|o| o.id() == el.id()) {
+        for orig in &originals {
+            if let Some(mut el) = s.element_by_id_mut(orig.id()) {
                 *el = orig.clone();
             }
         }

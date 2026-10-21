@@ -513,11 +513,16 @@ pub fn Canvas(
                                 let anchor = Point::from(state.anchor);
                                 let shift = ev.shift_key();
                                 let mut stale = false;
-                                props.scene.update(|s| match s.element_by_id_mut(id) {
-                                    Some(Element::Freehand(fh)) => {
-                                        fh.update_drag(world, anchor, shift, zoom)
+                                props.scene.update(|s| {
+                                    if let Some(mut element) = s.element_by_id_mut(id) {
+                                        if let Element::Freehand(fh) = &mut *element {
+                                            fh.update_drag(world, anchor, shift, zoom);
+                                        } else {
+                                            stale = true;
+                                        }
+                                    } else {
+                                        stale = true;
                                     }
-                                    _ => stale = true,
                                 });
                                 if stale {
                                     // The stroke was undone mid-draw: stop.
@@ -740,20 +745,26 @@ pub fn Canvas(
                 let editing_id = st.text_edit.editing_id;
                 move || {
                     let editing = editing_id.get();
+                    let visible = props
+                        .viewport
+                        .get()
+                        .visible_rect(st.screen_size.get())
+                        .padded(2.0);
                     // The scene is read with `with` (not `get`) so this
                     // closure does not deep-clone the whole document on
                     // every drag step.
                     props.scene.with(|scene| {
                         scene
-                            .elements()
+                            .elements_in_view(visible)
                             .iter()
-                            .filter(|el| Some(el.id()) != editing)
+                            .filter(|el| {
+                                Some(el.id()) != editing
+                            })
                             .map(|el| {
-                                // Elements render in world coordinates: the SVG
-                                // `viewBox` applies the pan/zoom, so `render` ignores
-                                // the zoom argument. Reading the viewport here would
-                                // rebuild the whole scene on every pan (e.g. while the
-                                // text follow-pan is typing), so stay untracked.
+                                // Elements render in world coordinates; the SVG
+                                // `viewBox` applies pan/zoom, so `render` ignores the
+                                // zoom argument. Viewport reads above keep this list
+                                // culled correctly as the camera moves.
                                 view! { <g pointer-events="none">{el.render(1.0)}</g> }
                                     .into_view()
                             })

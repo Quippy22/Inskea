@@ -4,10 +4,12 @@ use crate::model::elements::path::{
 use crate::model::elements::utils::{arrowhead_polyline, line_endpoints, scale_points};
 use crate::model::resize::ResizeContext;
 use crate::model::*;
+use crate::util::ExpandableArray;
 use leptos::IntoView;
 
 /// Line/arrow-specific properties.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[repr(C)]
 pub struct LineStyle {
     pub curve_mode: CurveMode,
     #[serde(default)]
@@ -36,7 +38,7 @@ pub struct Line {
     /// Stroke appearance (width, colour).
     pub data: ElementData,
     /// Ordered path points. At minimum 2 endpoints.
-    pub points: Vec<Point>,
+    pub points: ExpandableArray<Point>,
     /// Line-specific properties (curve mode, arrowhead).
     pub line_style: LineStyle,
 }
@@ -52,7 +54,7 @@ impl FromDrag for Line {
                 },
                 ..ElementData::new(0)
             },
-            points: vec![a, b],
+            points: ExpandableArray::from_iter_with_capacity(2, [a, b]),
             line_style: LineStyle::default(),
         }
     }
@@ -82,15 +84,23 @@ impl Render for Line {
         let opacity = self.data.style.opacity;
         let sw2 = sw;
 
-        let start_arrow = (self.line_style.has_start_arrowhead && self.points.len() >= 2)
-            .then(|| arrowhead_polyline(&self.points[1], &self.points[0], sw2));
-        let end_arrow = (self.line_style.has_end_arrowhead && self.points.len() >= 2).then(|| {
-            arrowhead_polyline(
-                &self.points[self.points.len() - 2],
-                &self.points[self.points.len() - 1],
-                sw2,
-            )
-        });
+        let start_endpoints = self.points.first().zip(self.points.get(1));
+        let end_endpoints = self
+            .points
+            .len()
+            .checked_sub(2)
+            .and_then(|index| self.points.get(index))
+            .zip(self.points.last());
+        let start_arrow = self
+            .line_style
+            .has_start_arrowhead
+            .then(|| start_endpoints.map(|(start, end)| arrowhead_polyline(end, start, sw2)))
+            .flatten();
+        let end_arrow = self
+            .line_style
+            .has_end_arrowhead
+            .then(|| end_endpoints.map(|(start, end)| arrowhead_polyline(start, end, sw2)))
+            .flatten();
 
         let has_any_arrow = start_arrow.is_some() || end_arrow.is_some();
 

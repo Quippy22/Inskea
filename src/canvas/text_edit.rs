@@ -64,7 +64,7 @@ pub fn guide_textarea(
     let Some(id) = editing_id.get() else { return };
     let Some(ta) = textarea_ref.get() else { return };
     let raw: &web_sys::HtmlTextAreaElement = &ta;
-    let Some(text) = scene.with(|s| s.element_by_id(id).cloned()) else {
+    let Some(text) = scene.with(|s| s.element_by_id(id)) else {
         return;
     };
     let Element::Text(text_elem) = text else {
@@ -223,7 +223,8 @@ pub fn make_commit_edit(
             let edited = scene.with_untracked(|s| {
                 matches!(
                     s.element_by_id(id),
-                    Some(Element::Text(t)) if !t.wrapped.raw.is_empty() && t.wrapped.raw != text
+                    Some(Element::Text(t))
+                        if !t.wrapped.raw.is_empty() && t.wrapped.raw.as_str() != text
                 )
             });
             if edited {
@@ -232,7 +233,10 @@ pub fn make_commit_edit(
             scene.update(|s| {
                 if text.is_empty() {
                     s.remove_by_id(id);
-                } else if let Some(Element::Text(text_elem)) = s.element_by_id_mut(id) {
+                } else if let Some(mut element) = s.element_by_id_mut(id) {
+                    let Element::Text(text_elem) = &mut *element else {
+                        return;
+                    };
                     // Keep the wrap width of an already-sized box. A fresh box
                     // is committed at its natural, unwrapped width — measured
                     // from the model, not the clipped textarea — so the SVG

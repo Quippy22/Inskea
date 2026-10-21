@@ -325,7 +325,7 @@ pub fn selection_handle_overlay(
         // `with` instead of `get`: the overlay re-runs on every scene change
         // (including each drag step) and must not clone the document.
         scene.with(|s| {
-            let els = s.elements();
+            let els = s.elements_for_ids(&ids);
             let hex = Color::BLUE;
 
             if ids.len() == 1 {
@@ -336,16 +336,16 @@ pub fn selection_handle_overlay(
                 }
             }
 
-            let b = compute_padded_bounds(&ids, els, overlay_freeze);
+            let b = compute_padded_bounds(&ids, &els, overlay_freeze);
             let hr = 3.5;
-            let pivot = selection_pivot(&ids, els, b, overlay_freeze.get());
+            let pivot = selection_pivot(&ids, &els, b, overlay_freeze.get());
             let cx = pivot.x;
             let cy = pivot.y;
             let rx = cx;
             let ry = b.y - ROTATE_HANDLE_OFFSET;
 
-            let rot = compute_rotation(&ids, els, rotation_delta);
-            let individual_boxes = render_multi_select_boxes(&ids, els, hex);
+            let rot = compute_rotation(&ids, &els, rotation_delta);
+            let individual_boxes = render_multi_select_boxes(&ids, &els, hex);
             let inner = render_bbox_overlay(b.x, b.y, b.w, b.h, hr, hex);
             let icons = render_move_rotate_icons(hex, cx, cy, rx, ry);
 

@@ -4,7 +4,62 @@ use crate::model::resize::{
     ResizeScale, MIN_ELEMENT_SIZE,
 };
 use crate::model::*;
+use crate::util::ExpandableArray;
 use leptos::IntoView;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::ops::Deref;
+
+/// UTF-8 text with room for 256 four-byte Unicode scalar values inline. It
+/// upgrades to heap storage when longer content is entered.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InlineText(ExpandableArray<u8>);
+
+impl InlineText {
+    fn new(text: &str) -> Self {
+        Self(ExpandableArray::from_iter_with_capacity(1024, text.bytes()))
+    }
+
+    fn set(&mut self, text: &str) {
+        self.0.clear();
+        self.0.extend(text.bytes());
+    }
+
+    pub fn as_str(&self) -> &str {
+        self
+    }
+}
+
+impl Deref for InlineText {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        // Construction and mutation accept `str`, so the byte buffer is valid UTF-8.
+        std::str::from_utf8(&self.0).unwrap_or("")
+    }
+}
+
+impl PartialEq<str> for InlineText {
+    fn eq(&self, other: &str) -> bool {
+        &**self == other
+    }
+}
+
+impl PartialEq<String> for InlineText {
+    fn eq(&self, other: &String) -> bool {
+        &**self == other
+    }
+}
+
+impl Serialize for InlineText {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self)
+    }
+}
+
+impl<'de> Deserialize<'de> for InlineText {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(|text| Self::new(&text))
+    }
+}
 
 pub(crate) const MIN_FONT_SIZE: f64 = 12.0;
 pub(crate) const TEXT_ASCENT_RATIO: f64 = 0.85;
@@ -20,6 +75,7 @@ pub(crate) const FONT_STACK: &str = "Cabin, sans-serif";
 /// Center and Right only show a difference once the box is wider than a line
 /// (i.e. after a side-resize wraps written text into a column).
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[repr(u8)]
 #[serde(rename_all = "lowercase")]
 pub enum TextAlign {
     #[default]
@@ -56,24 +112,24 @@ impl TextAlign {
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct WrappedText {
     /// Raw text with hard line breaks (from user Enter presses).
-    pub raw: String,
+    pub raw: Box<InlineText>,
     /// Display lines: hard breaks plus soft word-wrap breaks, one per `<tspan>`.
-    pub lines: Vec<String>,
+    pub lines: ExpandableArray<String>,
 }
 
 impl WrappedText {
     /// Build a new `WrappedText` from raw content.
     pub fn new(raw: &str) -> Self {
         WrappedText {
-            raw: raw.to_string(),
-            lines: Self::split_lines(raw),
+            raw: Box::new(InlineText::new(raw)),
+            lines: ExpandableArray::from_iter_with_capacity(4, Self::split_lines(raw)),
         }
     }
 
     /// Replace the raw content and re-split the lines.
     pub fn set_raw(&mut self, raw: &str) {
-        self.raw = raw.to_string();
-        self.lines = Self::split_lines(raw);
+        self.raw.set(raw);
+        self.lines = ExpandableArray::from_iter_with_capacity(4, Self::split_lines(raw));
     }
 
     fn split_lines(raw: &str) -> Vec<String> {
@@ -86,12 +142,14 @@ impl WrappedText {
     /// disables wrapping and leaves one line per hard break.
     pub fn rebuild(&mut self, max_width: f64, font_size: f64, font_family: &str) {
         if max_width <= 0.0 {
-            self.lines = Self::split_lines(&self.raw);
+            self.lines = ExpandableArray::from_iter_with_capacity(4, Self::split_lines(&self.raw));
         } else {
-            self.lines = Self::split_lines(&self.raw)
-                .into_iter()
-                .flat_map(|line| soft_wrap_line(&line, max_width, font_size, font_family))
-                .collect();
+            self.lines = ExpandableArray::from_iter_with_capacity(
+                4,
+                Self::split_lines(&self.raw)
+                    .into_iter()
+                    .flat_map(|line| soft_wrap_line(&line, max_width, font_size, font_family)),
+            );
         }
     }
 }
@@ -704,14 +762,28 @@ mod tests {
     fn soft_wrap_moves_whole_words_to_new_lines() {
         let mut t = text_elem("a b c d", 0.0, 20.0);
         t.wrapped.rebuild(1.8 * 20.0, 20.0, FONT_FAMILY);
-        assert_eq!(t.wrapped.lines, vec!["a b", "c d"]);
+        assert_eq!(
+            t.wrapped
+                .lines
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["a b", "c d"]
+        );
     }
 
     #[test]
     fn soft_wrap_respects_hard_newlines() {
         let mut t = text_elem("aa\nbb cc", 0.0, 20.0);
         t.wrapped.rebuild(1.5 * 20.0, 20.0, FONT_FAMILY);
-        assert_eq!(t.wrapped.lines, vec!["aa", "bb", "cc"]);
+        assert_eq!(
+            t.wrapped
+                .lines
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["aa", "bb", "cc"]
+        );
     }
 
     #[test]
@@ -727,7 +799,14 @@ mod tests {
         // "aa bb cc" is 88. A 56-wide box wraps as ["aa bb", "cc"].
         let mut t = text_elem("aa bb cc", 56.0, 20.0);
         t.recalc();
-        assert_eq!(t.wrapped.lines, vec!["aa bb", "cc"]);
+        assert_eq!(
+            t.wrapped
+                .lines
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["aa bb", "cc"]
+        );
         let orig = Element::Text(t.clone());
         // W drag: pointer 6px from the right edge → 22-wide box clamped to the
         // longest word ("aa"/"bb"/"cc"). The right edge stays fixed at x=56.
@@ -740,7 +819,14 @@ mod tests {
         ));
         assert!((t.data.width - 22.0).abs() < 0.001);
         assert!((t.data.world_point.x - 34.0).abs() < 0.001);
-        assert_eq!(t.wrapped.lines, vec!["aa", "bb", "cc"]);
+        assert_eq!(
+            t.wrapped
+                .lines
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["aa", "bb", "cc"]
+        );
         assert!((t.data.height - 20.0 * 1.2 * 3.0).abs() < 0.001);
     }
 
@@ -748,7 +834,14 @@ mod tests {
     fn corner_resize_scales_font_and_preserves_breaks() {
         let mut t = text_elem("aa bb cc", 56.0, 20.0);
         t.recalc();
-        assert_eq!(t.wrapped.lines, vec!["aa bb", "cc"]);
+        assert_eq!(
+            t.wrapped
+                .lines
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["aa bb", "cc"]
+        );
         let orig = Element::Text(t.clone());
         // SE drag from the box corner to 1.5× the size → font, width and
         // height all scale 1.5×.
@@ -763,7 +856,14 @@ mod tests {
         assert_eq!(t.data.style.font_size, fs_before * 1.5);
         assert!((t.data.width - 84.0).abs() < 0.001);
         assert!((t.data.height - 72.0).abs() < 0.001);
-        assert_eq!(t.wrapped.lines, vec!["aa bb", "cc"]);
+        assert_eq!(
+            t.wrapped
+                .lines
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["aa bb", "cc"]
+        );
     }
 
     #[test]
@@ -800,7 +900,14 @@ mod tests {
         t.data.width = 20.0;
         t.recalc();
         // At 20 width every word is its own line.
-        assert_eq!(t.wrapped.lines, vec!["one", "two", "three", "four"]);
+        assert_eq!(
+            t.wrapped
+                .lines
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["one", "two", "three", "four"]
+        );
         assert!((t.data.height - 24.0 * 4.0).abs() < 0.001);
     }
 
@@ -809,12 +916,26 @@ mod tests {
         // Natural width of "aa bb cc" at 20px = 88 world units.
         let mut t = text_elem("aa bb cc", 88.0, 20.0);
         t.recalc();
-        assert_eq!(t.wrapped.lines, vec!["aa bb cc"]);
+        assert_eq!(
+            t.wrapped
+                .lines
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["aa bb cc"]
+        );
         t.data.style.font_size = 40.0;
         t.font_changed();
         // Natural width grows with the font (176 world units at 40px).
         assert!((t.data.width - 176.0).abs() < 0.001);
-        assert_eq!(t.wrapped.lines, vec!["aa bb cc"]);
+        assert_eq!(
+            t.wrapped
+                .lines
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["aa bb cc"]
+        );
         assert!((t.data.height - 48.0).abs() < 0.001);
     }
 
@@ -822,12 +943,26 @@ mod tests {
     fn font_change_rewraps_wrapped_box() {
         let mut t = text_elem("aa bb cc", 56.0, 20.0);
         t.recalc();
-        assert_eq!(t.wrapped.lines, vec!["aa bb", "cc"]);
+        assert_eq!(
+            t.wrapped
+                .lines
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["aa bb", "cc"]
+        );
         t.data.style.font_size = 40.0;
         t.font_changed();
         // Wrap width is kept, so the larger font breaks every word.
         assert!((t.data.width - 56.0).abs() < 0.001);
-        assert_eq!(t.wrapped.lines, vec!["aa", "bb", "cc"]);
+        assert_eq!(
+            t.wrapped
+                .lines
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["aa", "bb", "cc"]
+        );
         assert!((t.data.height - 48.0 * 3.0).abs() < 0.001);
     }
 
@@ -838,7 +973,14 @@ mod tests {
         // column wider than it — where alignment can move the outline.
         let mut t = text_elem("aa bb cc", 70.0, 20.0);
         t.recalc();
-        assert_eq!(t.wrapped.lines, vec!["aa bb", "cc"]);
+        assert_eq!(
+            t.wrapped
+                .lines
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["aa bb", "cc"]
+        );
         let width = t.visual_bounds().w;
         assert!((width - 55.0).abs() < 0.001);
 

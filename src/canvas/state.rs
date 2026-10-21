@@ -182,8 +182,16 @@ pub struct CanvasInputs {
 // ── Helper functions used by pointer event handlers ──────────────────────
 
 pub fn hit_and_erase(point: Point, scene: RwSignal<Scene>) {
-    let id = scene
-        .with(|s| hit_test_topmost(point, s.elements(), crate::model::interaction::HIT_MARGIN));
+    let id = scene.with(|s| {
+        let margin = crate::model::interaction::HIT_MARGIN;
+        let nearby = s.elements_in_view(crate::model::Rect::new(
+            point.x - margin,
+            point.y - margin,
+            margin * 2.0,
+            margin * 2.0,
+        ));
+        hit_test_topmost(point, &nearby, margin)
+    });
     if let Some(id) = id {
         scene.update(|s| s.remove_by_id(id));
     }

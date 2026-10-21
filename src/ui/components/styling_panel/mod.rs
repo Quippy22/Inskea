@@ -78,9 +78,9 @@ fn mutate_selected_elements(
     update: impl Fn(&mut Element),
 ) {
     edit_ops::mutate_scene(scene, push_snapshot, |scene| {
-        for element in scene.elements_mut() {
-            if ids.contains(&element.id()) {
-                update(element);
+        for id in ids {
+            if let Some(mut element) = scene.element_by_id_mut(*id) {
+                update(&mut element);
             }
         }
     });

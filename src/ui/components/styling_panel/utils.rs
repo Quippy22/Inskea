@@ -12,9 +12,9 @@ pub fn read_panel_state(
     _tool: Tool,
 ) -> (ElementStyle, LineStyle) {
     if let Some(id) = ids.first() {
-        if let Some(el) = scene.elements().iter().find(|e| &e.id() == id) {
+        if let Some(el) = scene.element_by_id(*id) {
             let d = el.data();
-            let ls = if let Element::Line(l) = el {
+            let ls = if let Element::Line(l) = &el {
                 l.line_style.clone()
             } else {
                 LineStyle::default()
@@ -27,14 +27,14 @@ pub fn read_panel_state(
 
 pub fn single_selected_element(scene: Scene, ids: Vec<ElementId>) -> Option<Element> {
     let id = ids.first()?;
-    scene.elements().iter().find(|e| &e.id() == id).cloned()
+    scene.element_by_id(*id)
 }
 
 /// Alignment of the first selected text element, defaulting to `Left` when
 /// nothing is selected or the selection is not text.
 pub fn selected_text_align(scene: &Scene, ids: &[ElementId]) -> TextAlign {
     if let Some(id) = ids.first() {
-        if let Some(Element::Text(t)) = scene.elements().iter().find(|e| &e.id() == id) {
+        if let Some(Element::Text(t)) = scene.element_by_id(*id) {
             return t.align;
         }
     }

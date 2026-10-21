@@ -14,10 +14,12 @@ pub use rect::Rectangle;
 pub use text::{Text, TextAlign};
 
 use crate::model::{Color, Point, Rect};
+use crate::util::ExpandableArray;
 pub use path::CurveMode;
 
 /// Stroke dash style.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize, Default)]
+#[repr(u8)]
 pub enum StrokeStyle {
     #[default]
     Solid,
@@ -37,6 +39,7 @@ impl StrokeStyle {
 
 /// Edge corner style for shapes.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize, Default)]
+#[repr(u8)]
 pub enum EdgeStyle {
     #[default]
     Sharp,
@@ -55,6 +58,7 @@ impl EdgeStyle {
 /// Shared appearance properties for every element type.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
+#[repr(C)]
 pub struct ElementStyle {
     pub stroke_color: Color,
     pub fill_color: Option<Color>,
@@ -103,6 +107,7 @@ pub type ElementId = u64;
 
 /// Common data shared by every element type: position, size, and appearance.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[repr(C)]
 pub struct ElementData {
     /// Unique identifier for this element, assigned when added to a Scene.
     pub id: ElementId,
@@ -280,11 +285,11 @@ pub trait Rotate {
 /// per-dot handles. Freehand keeps its current render-only behavior.
 pub trait PathPoints {
     /// Shared reference to this element's path points, if it has them.
-    fn path_points(&self) -> Option<&Vec<Point>> {
+    fn path_points(&self) -> Option<&[Point]> {
         None
     }
     /// Mutable reference to this element's path points, if it has them.
-    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> {
+    fn path_points_mut(&mut self) -> Option<&mut dyn EditablePathPoints> {
         None
     }
     /// How the path is rendered (curve mode).
@@ -293,11 +298,37 @@ pub trait PathPoints {
     }
 }
 
-impl PathPoints for Line {
-    fn path_points(&self) -> Option<&Vec<Point>> {
-        Some(&self.points)
+/// Growable path storage operations used by node editing without requiring a
+/// heap-backed `Vec` for paths that fit in their inline buffer.
+pub trait EditablePathPoints {
+    fn len(&self) -> usize;
+    fn get_mut(&mut self, index: usize) -> Option<&mut Point>;
+    fn insert(&mut self, index: usize, point: Point);
+    fn remove(&mut self, index: usize) -> Option<Point>;
+}
+
+impl EditablePathPoints for ExpandableArray<Point> {
+    fn len(&self) -> usize {
+        self.len()
     }
-    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> {
+    fn get_mut(&mut self, index: usize) -> Option<&mut Point> {
+        self.as_mut_slice().get_mut(index)
+    }
+    fn insert(&mut self, index: usize, point: Point) {
+        if index <= self.len() {
+            let _ = self.insert(index, point);
+        }
+    }
+    fn remove(&mut self, index: usize) -> Option<Point> {
+        self.remove(index)
+    }
+}
+
+impl PathPoints for Line {
+    fn path_points(&self) -> Option<&[Point]> {
+        Some(self.points.as_slice())
+    }
+    fn path_points_mut(&mut self) -> Option<&mut dyn EditablePathPoints> {
         Some(&mut self.points)
     }
     fn curve_mode(&self) -> CurveMode {
@@ -306,13 +337,13 @@ impl PathPoints for Line {
 }
 
 impl PathPoints for Element {
-    fn path_points(&self) -> Option<&Vec<Point>> {
+    fn path_points(&self) -> Option<&[Point]> {
         match self {
-            Element::Line(e) => Some(&e.points),
+            Element::Line(e) => Some(e.points.as_slice()),
             _ => None,
         }
     }
-    fn path_points_mut(&mut self) -> Option<&mut Vec<Point>> {
+    fn path_points_mut(&mut self) -> Option<&mut dyn EditablePathPoints> {
         match self {
             Element::Line(e) => Some(&mut e.points),
             _ => None,
