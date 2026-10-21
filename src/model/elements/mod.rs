@@ -14,7 +14,6 @@ pub use rect::Rectangle;
 pub use text::{Text, TextAlign};
 
 use crate::model::{Color, Point, Rect};
-use crate::util::ExpandableArray;
 pub use path::CurveMode;
 
 /// Stroke dash style.
@@ -298,8 +297,9 @@ pub trait PathPoints {
     }
 }
 
-/// Growable path storage operations used by node editing without requiring a
-/// heap-backed `Vec` for paths that fit in their inline buffer.
+/// Path storage operations used by node editing. A line is normally just two
+/// points, so it stores them as an exact boxed slice and rebuilds it on the
+/// rare insert/remove.
 pub trait EditablePathPoints {
     fn len(&self) -> usize;
     fn get_mut(&mut self, index: usize) -> Option<&mut Point>;
@@ -307,26 +307,34 @@ pub trait EditablePathPoints {
     fn remove(&mut self, index: usize) -> Option<Point>;
 }
 
-impl EditablePathPoints for ExpandableArray<Point> {
+impl EditablePathPoints for Box<[Point]> {
     fn len(&self) -> usize {
-        self.len()
+        self.as_ref().len()
     }
     fn get_mut(&mut self, index: usize) -> Option<&mut Point> {
-        self.as_mut_slice().get_mut(index)
+        self.as_mut().get_mut(index)
     }
     fn insert(&mut self, index: usize, point: Point) {
         if index <= self.len() {
-            let _ = self.insert(index, point);
+            let mut points = self.to_vec();
+            points.insert(index, point);
+            *self = points.into_boxed_slice();
         }
     }
     fn remove(&mut self, index: usize) -> Option<Point> {
-        self.remove(index)
+        if index >= self.len() {
+            return None;
+        }
+        let mut points = self.to_vec();
+        let removed = points.remove(index);
+        *self = points.into_boxed_slice();
+        Some(removed)
     }
 }
 
 impl PathPoints for Line {
     fn path_points(&self) -> Option<&[Point]> {
-        Some(self.points.as_slice())
+        Some(self.points.as_ref())
     }
     fn path_points_mut(&mut self) -> Option<&mut dyn EditablePathPoints> {
         Some(&mut self.points)
@@ -339,7 +347,7 @@ impl PathPoints for Line {
 impl PathPoints for Element {
     fn path_points(&self) -> Option<&[Point]> {
         match self {
-            Element::Line(e) => Some(e.points.as_slice()),
+            Element::Line(e) => Some(e.points.as_ref()),
             _ => None,
         }
     }

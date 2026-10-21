@@ -1,7 +1,6 @@
 use crate::model::elements::utils::scale_points;
 use crate::model::resize::ResizeContext;
 use crate::model::*;
-use crate::util::ExpandableArray;
 use leptos::IntoView;
 use std::fmt::Write;
 
@@ -22,7 +21,7 @@ pub struct Freehand {
     /// Stroke appearance (width, colour).
     pub data: ElementData,
     /// Sampled world-space points along the stroke path.
-    pub points: Box<ExpandableArray<Point>>,
+    pub points: Vec<Point>,
 }
 
 impl Freehand {
@@ -30,10 +29,14 @@ impl Freehand {
     /// keeping points whose perpendicular distance from the simplified
     /// line segment exceeds `epsilon`.
     pub fn simplify(&mut self, epsilon: f64) {
-        if self.points.len() <= 2 {
-            return;
+        if self.points.len() > 2 {
+            self.points = simplify_points(&self.points, epsilon);
         }
-        *self.points = ExpandableArray::from_vec(128, simplify_points(&self.points, epsilon));
+        // Drop the growth capacity reserved while the stroke was live; the
+        // finished stroke only needs one slot per surviving point.
+        self.points = std::mem::take(&mut self.points)
+            .into_boxed_slice()
+            .into_vec();
     }
 
     /// Finalise a live stroke, simplifying it with a tolerance that
@@ -102,13 +105,10 @@ impl FromDrag for Freehand {
                 },
                 ..ElementData::new(0)
             },
-            points: Box::new(ExpandableArray::from_iter_with_capacity(
-                128,
-                [Point {
-                    x: anchor.x,
-                    y: anchor.y,
-                }],
-            )),
+            points: vec![Point {
+                x: anchor.x,
+                y: anchor.y,
+            }],
         }
     }
 }
@@ -244,7 +244,7 @@ mod tests {
     fn stroke(points: &[(f64, f64)]) -> Freehand {
         Freehand {
             data: ElementData::new(1),
-            points: Box::new(points.iter().map(|&(x, y)| Point { x, y }).collect()),
+            points: points.iter().map(|&(x, y)| Point { x, y }).collect(),
         }
     }
 
@@ -281,5 +281,14 @@ mod tests {
         zoomed_out.finish(0.1);
         assert_eq!(zoomed_in.points.len(), 3);
         assert_eq!(zoomed_out.points.len(), 2);
+    }
+
+    #[test]
+    fn finish_releases_growth_capacity() {
+        let mut fh = stroke(&[(0.0, 0.0), (5.0, 0.0), (10.0, 0.0)]);
+        fh.points.reserve(64);
+        fh.finish(1.0);
+        assert_eq!(fh.points.len(), 2);
+        assert_eq!(fh.points.capacity(), 2);
     }
 }

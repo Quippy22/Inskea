@@ -4,36 +4,32 @@ use crate::model::resize::{
     ResizeScale, MIN_ELEMENT_SIZE,
 };
 use crate::model::*;
-use crate::util::ExpandableArray;
 use leptos::IntoView;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::ops::Deref;
 
-/// UTF-8 text with room for 256 four-byte Unicode scalar values inline. It
-/// upgrades to heap storage when longer content is entered.
+/// UTF-8 text stored at exactly the length of its content.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct InlineText(ExpandableArray<u8>);
+pub struct InlineText(Box<str>);
 
 impl InlineText {
     fn new(text: &str) -> Self {
-        Self(ExpandableArray::from_iter_with_capacity(1024, text.bytes()))
+        Self(text.into())
     }
 
     fn set(&mut self, text: &str) {
-        self.0.clear();
-        self.0.extend(text.bytes());
+        self.0 = text.into();
     }
 
     pub fn as_str(&self) -> &str {
-        self
+        &self.0
     }
 }
 
 impl Deref for InlineText {
     type Target = str;
     fn deref(&self) -> &Self::Target {
-        // Construction and mutation accept `str`, so the byte buffer is valid UTF-8.
-        std::str::from_utf8(&self.0).unwrap_or("")
+        &self.0
     }
 }
 
@@ -57,7 +53,7 @@ impl Serialize for InlineText {
 
 impl<'de> Deserialize<'de> for InlineText {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        String::deserialize(deserializer).map(|text| Self::new(&text))
+        String::deserialize(deserializer).map(|text| Self(text.into_boxed_str()))
     }
 }
 
@@ -114,7 +110,7 @@ pub struct WrappedText {
     /// Raw text with hard line breaks (from user Enter presses).
     pub raw: Box<InlineText>,
     /// Display lines: hard breaks plus soft word-wrap breaks, one per `<tspan>`.
-    pub lines: ExpandableArray<String>,
+    pub lines: Box<[String]>,
 }
 
 impl WrappedText {
@@ -122,14 +118,14 @@ impl WrappedText {
     pub fn new(raw: &str) -> Self {
         WrappedText {
             raw: Box::new(InlineText::new(raw)),
-            lines: ExpandableArray::from_iter_with_capacity(4, Self::split_lines(raw)),
+            lines: Self::split_lines(raw).into_boxed_slice(),
         }
     }
 
     /// Replace the raw content and re-split the lines.
     pub fn set_raw(&mut self, raw: &str) {
         self.raw.set(raw);
-        self.lines = ExpandableArray::from_iter_with_capacity(4, Self::split_lines(raw));
+        self.lines = Self::split_lines(raw).into_boxed_slice();
     }
 
     fn split_lines(raw: &str) -> Vec<String> {
@@ -142,14 +138,13 @@ impl WrappedText {
     /// disables wrapping and leaves one line per hard break.
     pub fn rebuild(&mut self, max_width: f64, font_size: f64, font_family: &str) {
         if max_width <= 0.0 {
-            self.lines = ExpandableArray::from_iter_with_capacity(4, Self::split_lines(&self.raw));
+            self.lines = Self::split_lines(&self.raw).into_boxed_slice();
         } else {
-            self.lines = ExpandableArray::from_iter_with_capacity(
-                4,
-                Self::split_lines(&self.raw)
-                    .into_iter()
-                    .flat_map(|line| soft_wrap_line(&line, max_width, font_size, font_family)),
-            );
+            self.lines = Self::split_lines(&self.raw)
+                .into_iter()
+                .flat_map(|line| soft_wrap_line(&line, max_width, font_size, font_family))
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
         }
     }
 }

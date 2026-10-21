@@ -6,7 +6,6 @@ use crate::model::{
     UpdateDrag,
 };
 use crate::ui::dock::Tool;
-use crate::util::ExpandableArray;
 use leptos::{
     ev, SignalGet, SignalGetUntracked, SignalSet, SignalUpdate, SignalWith, SignalWithUntracked,
 };
@@ -124,7 +123,7 @@ pub fn draw_pointer_down(world: Point, st: &mut CanvasState, props: &mut CanvasI
             data.style = props.default_style.get();
             s.add_element(Element::Freehand(Freehand {
                 data,
-                points: Box::new(ExpandableArray::from_iter_with_capacity(128, [world])),
+                points: vec![world],
             }));
         });
         st.drawing.set(Some(DrawingState {

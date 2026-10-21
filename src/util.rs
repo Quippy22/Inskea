@@ -1,8 +1,5 @@
 use crate::model::Point;
 
-mod expandable_array;
-pub use expandable_array::ExpandableArray;
-
 pub fn window_size() -> Point {
     let window = web_sys::window().expect("no global `window` exists");
     let w = window

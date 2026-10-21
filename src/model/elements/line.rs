@@ -4,7 +4,6 @@ use crate::model::elements::path::{
 use crate::model::elements::utils::{arrowhead_polyline, line_endpoints, scale_points};
 use crate::model::resize::ResizeContext;
 use crate::model::*;
-use crate::util::ExpandableArray;
 use leptos::IntoView;
 
 /// Line/arrow-specific properties.
@@ -38,7 +37,7 @@ pub struct Line {
     /// Stroke appearance (width, colour).
     pub data: ElementData,
     /// Ordered path points. At minimum 2 endpoints.
-    pub points: ExpandableArray<Point>,
+    pub points: Box<[Point]>,
     /// Line-specific properties (curve mode, arrowhead).
     pub line_style: LineStyle,
 }
@@ -54,7 +53,7 @@ impl FromDrag for Line {
                 },
                 ..ElementData::new(0)
             },
-            points: ExpandableArray::from_iter_with_capacity(2, [a, b]),
+            points: vec![a, b].into_boxed_slice(),
             line_style: LineStyle::default(),
         }
     }
@@ -172,5 +171,33 @@ impl Rotate for Line {
 impl Resize for Line {
     fn resize(&mut self, ctx: &ResizeContext) {
         scale_points(&mut self.points, ctx);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn node_editing_inserts_and_removes_points() {
+        let mut line = Line::from_drag(
+            Point::new(0.0, 0.0),
+            Point::new(10.0, 0.0),
+            Color::new(Color::BLUE),
+            false,
+        );
+        {
+            let mut points = line.path_points_mut().unwrap();
+            points.insert(1, Point::new(5.0, 1.0));
+        }
+        assert_eq!(line.points.len(), 3);
+        assert_eq!(line.points[1], Point::new(5.0, 1.0));
+
+        {
+            let mut points = line.path_points_mut().unwrap();
+            assert_eq!(points.remove(1), Some(Point::new(5.0, 1.0)));
+        }
+        assert_eq!(line.points.len(), 2);
+        assert_eq!(line.points[1], Point::new(10.0, 0.0));
     }
 }
