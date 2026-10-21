@@ -312,29 +312,25 @@ pub fn resize_bbox(
     Some((Point::new(nx, ny), Point::new(nw, nh)))
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn resize_scale_element(
-    data: &mut ElementData,
-    orig: &ElementData,
-    pos: Point,
-    nw: f64,
-    nh: f64,
-    bx: f64,
-    by: f64,
-    bw: f64,
-    bh: f64,
-    set_height: bool,
-) {
-    let obw = bw.max(MIN_ELEMENT_SIZE);
-    let obh = bh.max(MIN_ELEMENT_SIZE);
-    let sx = nw / obw;
-    let sy = nh / obh;
+#[derive(Clone, Copy, Debug)]
+pub struct ResizeScale {
+    pub position: Point,
+    pub size: Point,
+    pub original_bounds: super::Rect,
+    /// Text recalculates its height from the scaled font and wrapping.
+    pub scale_height: bool,
+}
+
+pub fn resize_scale_element(data: &mut ElementData, orig: &ElementData, scale: ResizeScale) {
+    let bounds = scale.original_bounds;
+    let sx = scale.size.x / bounds.w.max(MIN_ELEMENT_SIZE);
+    let sy = scale.size.y / bounds.h.max(MIN_ELEMENT_SIZE);
     data.world_point.set(
-        (orig.world_point.x - bx) * sx + pos.x,
-        (orig.world_point.y - by) * sy + pos.y,
+        (orig.world_point.x - bounds.x) * sx + scale.position.x,
+        (orig.world_point.y - bounds.y) * sy + scale.position.y,
     );
     data.width = (orig.width * sx).max(MIN_ELEMENT_SIZE);
-    if set_height {
+    if scale.scale_height {
         data.height = (orig.height * sy).max(MIN_ELEMENT_SIZE);
     }
 }
@@ -570,14 +566,12 @@ mod tests {
         resize_scale_element(
             &mut data,
             &orig,
-            Point::new(0.0, 0.0),
-            200.0,
-            100.0,
-            0.0,
-            0.0,
-            100.0,
-            50.0,
-            true,
+            ResizeScale {
+                position: Point::new(0.0, 0.0),
+                size: Point::new(200.0, 100.0),
+                original_bounds: super::super::Rect::new(0.0, 0.0, 100.0, 50.0),
+                scale_height: true,
+            },
         );
         assert!((data.width - 200.0).abs() < 0.01);
         assert!((data.height - 100.0).abs() < 0.01);
@@ -624,14 +618,12 @@ mod tests {
         resize_scale_element(
             &mut data,
             &orig,
-            Point::new(0.0, 0.0),
-            200.0,
-            100.0,
-            0.0,
-            0.0,
-            100.0,
-            50.0,
-            false,
+            ResizeScale {
+                position: Point::new(0.0, 0.0),
+                size: Point::new(200.0, 100.0),
+                original_bounds: super::super::Rect::new(0.0, 0.0, 100.0, 50.0),
+                scale_height: false,
+            },
         );
         assert!((data.width - 200.0).abs() < 0.01);
         assert!((data.height - 50.0).abs() < 0.01); // unchanged

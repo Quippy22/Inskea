@@ -9,4 +9,4 @@ pub use dropdown::{Dropdown, DropdownItem};
 pub use icon_btn::IconButton;
 pub use number_slider::NumberSlider;
 pub use segmented::SegmentedControl;
-pub use styling_panel::StylingPanel;
+pub use styling_panel::{StylingPanel, StylingPanelContext};

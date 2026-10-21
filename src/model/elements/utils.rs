@@ -1,6 +1,46 @@
 use crate::model::elements::rect::MIN_DIMENSION;
-use crate::model::resize::ResizeContext;
-use crate::model::{Element, ElementData, Point};
+use crate::model::resize::{
+    resize_bbox, resize_from_handle, resize_scale_element, ResizeContext, ResizeScale,
+};
+use crate::model::{Color, Element, ElementData, Point, Rect};
+
+pub(crate) fn fill_paint(fill: &Option<Color>) -> String {
+    fill.as_ref()
+        .map_or_else(|| "none".to_string(), |color| color.to_hex())
+}
+
+pub(crate) fn resize_box(data: &mut ElementData, ctx: &ResizeContext) {
+    if ctx.multi {
+        let Some((position, size)) = resize_bbox(
+            Point::new(ctx.bx, ctx.by),
+            Point::new(ctx.bw, ctx.bh),
+            ctx.pointer_world,
+            ctx.handle,
+            ctx.shift,
+            ctx.alt,
+        ) else {
+            return;
+        };
+        resize_scale_element(
+            data,
+            ctx.orig.data(),
+            ResizeScale {
+                position,
+                size,
+                original_bounds: Rect::new(ctx.bx, ctx.by, ctx.bw, ctx.bh),
+                scale_height: true,
+            },
+        );
+    } else {
+        *data = resize_from_handle(
+            ctx.orig.data(),
+            ctx.handle,
+            ctx.pointer_world,
+            ctx.shift,
+            ctx.alt,
+        );
+    }
+}
 
 pub(crate) fn rotate_bbox(data: &mut ElementData, pivot: Point, delta: f64) {
     data.rotation += delta;

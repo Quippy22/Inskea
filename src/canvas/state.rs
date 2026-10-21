@@ -159,6 +159,7 @@ impl CanvasState {
 /// Props passed into the Canvas component, bundled for easy forwarding to handlers.
 #[derive(Clone)]
 pub struct CanvasInputs {
+    pub selected_ids: RwSignal<Vec<ElementId>>,
     pub cursor_screen: RwSignal<(f64, f64)>,
     pub cursor_world: RwSignal<Point>,
     pub viewport: RwSignal<super::viewport::Viewport>,

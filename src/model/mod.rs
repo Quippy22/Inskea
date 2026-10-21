@@ -57,7 +57,7 @@ impl Scene {
         &self.elements
     }
 
-    pub fn elements_mut(&mut self) -> &mut Vec<Element> {
+    pub fn elements_mut(&mut self) -> &mut [Element] {
         &mut self.elements
     }
 
@@ -70,9 +70,17 @@ impl Scene {
     }
 
     pub fn remove_by_id(&mut self, id: ElementId) {
-        self.elements.retain(|e| e.id() != id);
+        self.remove_elements(&[id]);
+    }
+
+    /// Remove several elements and normalize groups once after the batch.
+    pub fn remove_elements(&mut self, ids: &[ElementId]) {
+        if ids.is_empty() {
+            return;
+        }
+        self.elements.retain(|element| !ids.contains(&element.id()));
         for group in &mut self.groups {
-            group.members.retain(|m| *m != id);
+            group.members.retain(|member| !ids.contains(member));
         }
         self.normalize_groups();
     }

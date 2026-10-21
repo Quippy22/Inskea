@@ -8,7 +8,7 @@ use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
 use crate::model::{Color, ElementId, ElementStyle, LineStyle, Point, Scene};
 use crate::skea;
 use crate::tauri_bridge;
-use crate::ui::components::StylingPanel;
+use crate::ui::components::{StylingPanel, StylingPanelContext};
 use crate::ui::dock::{Dock, Tool};
 use crate::ui::notify::{self, Toasts};
 use crate::ui::settings::{from_toml, to_toml};
@@ -503,24 +503,26 @@ pub fn App() -> impl IntoView {
             format!("w-screen h-screen {bg} text-fg")
         }>
             <Canvas
-                cursor_screen=cursor_screen
-                cursor_world=cursor_world
-                viewport=viewport
-                selected_tool=selected_tool
-                selected_color=selected_color
-                canvas_mode=canvas_mode
-                scene=scene
-                eraser_active=eraser_active
-                settings=settings
-                push_snapshot=push_snapshot.clone()
-                discard_snapshot=discard_snapshot.clone()
-                export_crop_active=export_crop_active
-                on_crop_export=on_crop_export
+                inputs=crate::canvas::CanvasInputs {
+                    selected_ids,
+                    cursor_screen,
+                    cursor_world,
+                    viewport,
+                    selected_tool,
+                    selected_color,
+                    canvas_mode,
+                    scene,
+                    eraser_active,
+                    settings,
+                    push_snapshot: push_snapshot.clone(),
+                    discard_snapshot: discard_snapshot.clone(),
+                    export_crop_active,
+                    on_crop_export,
+                    default_style,
+                    default_line_style,
+                }
                 on_text_commit=on_text_commit
                 shortcuts_open=shortcuts_open
-                selected_ids=selected_ids
-                default_style=default_style
-                default_line_style=default_line_style
             />
             <ToolBar
                 doc=doc.clone()
@@ -554,15 +556,17 @@ pub fn App() -> impl IntoView {
                 <div class=styles::PANEL>
                     <div class="py-2 px-3">
                         <StylingPanel
-                            scene=scene
-                            selected_ids=selected_ids
-                            selected_tool=selected_tool
-                            default_style=default_style
-                            default_line_style=default_line_style
-                            clipboard=clipboard
-                            push_snapshot=push_snapshot.clone()
-                            canvas_mode=canvas_mode
-                            cursor_world=cursor_world
+                            context=StylingPanelContext {
+                                scene,
+                                selected_ids,
+                                selected_tool,
+                                default_style,
+                                default_line_style,
+                                clipboard,
+                                push_snapshot: push_snapshot.clone(),
+                                canvas_mode,
+                                cursor_world,
+                            }
                         />
                     </div>
                 </div>

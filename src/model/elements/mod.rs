@@ -153,13 +153,7 @@ pub enum Element {
 impl Element {
     /// Returns the unique identifier of this element.
     pub fn id(&self) -> ElementId {
-        match self {
-            Element::Rectangle(e) => e.data.id,
-            Element::Ellipse(e) => e.data.id,
-            Element::Line(e) => e.data.id,
-            Element::Text(e) => e.data.id,
-            Element::Freehand(e) => e.data.id,
-        }
+        self.data().id
     }
 
     /// Shared reference to the element's common data.

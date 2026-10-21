@@ -58,18 +58,47 @@ type UpdateStyle = Rc<dyn Fn(&dyn Fn(&mut ElementStyle))>;
 /// The same for freehand line styles.
 type UpdateLineStyle = Rc<dyn Fn(&dyn Fn(&mut LineStyle))>;
 
-#[component]
-pub fn StylingPanel(
+#[derive(Clone)]
+pub struct StylingPanelContext {
+    pub scene: RwSignal<Scene>,
+    pub selected_ids: RwSignal<Vec<ElementId>>,
+    pub selected_tool: RwSignal<Tool>,
+    pub default_style: RwSignal<ElementStyle>,
+    pub default_line_style: RwSignal<LineStyle>,
+    pub clipboard: RwSignal<Clipboard>,
+    pub push_snapshot: Rc<dyn Fn()>,
+    pub canvas_mode: RwSignal<CanvasMode>,
+    pub cursor_world: RwSignal<Point>,
+}
+
+fn mutate_selected_elements(
     scene: RwSignal<Scene>,
-    selected_ids: RwSignal<Vec<ElementId>>,
-    selected_tool: RwSignal<Tool>,
-    default_style: RwSignal<ElementStyle>,
-    default_line_style: RwSignal<LineStyle>,
-    clipboard: RwSignal<Clipboard>,
-    push_snapshot: Rc<dyn Fn()>,
-    canvas_mode: RwSignal<CanvasMode>,
-    cursor_world: RwSignal<Point>,
-) -> impl IntoView {
+    ids: &[ElementId],
+    push_snapshot: &Rc<dyn Fn()>,
+    update: impl Fn(&mut Element),
+) {
+    edit_ops::mutate_scene(scene, push_snapshot, |scene| {
+        for element in scene.elements_mut() {
+            if ids.contains(&element.id()) {
+                update(element);
+            }
+        }
+    });
+}
+
+#[component]
+pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
+    let StylingPanelContext {
+        scene,
+        selected_ids,
+        selected_tool,
+        default_style,
+        default_line_style,
+        clipboard,
+        push_snapshot,
+        canvas_mode,
+        cursor_world,
+    } = context;
     let styling_kind = Signal::derive(move || {
         let ids = selected_ids.get();
         let el = leptos::untrack(|| single_selected_element(scene.get_untracked(), ids));
@@ -164,12 +193,8 @@ pub fn StylingPanel(
         move |f: &dyn Fn(&mut ElementStyle)| {
             let ids = selected_ids.get_untracked();
             if !ids.is_empty() {
-                edit_ops::mutate_scene(scene, &push_snapshot, |s| {
-                    for id in &ids {
-                        if let Some(el) = s.element_by_id_mut(*id) {
-                            f(&mut el.data_mut().style);
-                        }
-                    }
+                mutate_selected_elements(scene, &ids, &push_snapshot, |element| {
+                    f(&mut element.data_mut().style);
                 });
             } else {
                 default_style.update(|s| f(s));
@@ -185,11 +210,9 @@ pub fn StylingPanel(
         move |f: &dyn Fn(&mut LineStyle)| {
             let ids = selected_ids.get_untracked();
             if !ids.is_empty() {
-                edit_ops::mutate_scene(scene, &push_snapshot, |s| {
-                    for id in &ids {
-                        if let Some(Element::Line(l)) = s.element_by_id_mut(*id) {
-                            f(&mut l.line_style);
-                        }
+                mutate_selected_elements(scene, &ids, &push_snapshot, |element| {
+                    if let Element::Line(line) = element {
+                        f(&mut line.line_style);
                     }
                 });
             } else {
@@ -294,24 +317,8 @@ pub fn StylingPanel(
     });
 
     let stroke_size_cb: Rc<dyn Fn(f64)> = Rc::new({
-        let scene = scene;
-        let selected_ids = selected_ids;
-        let default_style = default_style;
-        let push_snapshot = push_snapshot.clone();
-        move |val| {
-            let ids = selected_ids.get_untracked();
-            if !ids.is_empty() {
-                edit_ops::mutate_scene(scene, &push_snapshot, |s| {
-                    for id in &ids {
-                        if let Some(el) = s.element_by_id_mut(*id) {
-                            el.data_mut().style.stroke_width = val;
-                        }
-                    }
-                });
-            } else {
-                default_style.update(|s| s.stroke_width = val);
-            }
-        }
+        let update_style = update_style.clone();
+        move |val| update_style(&|style| style.stroke_width = val)
     });
 
     let text_size_cb: Rc<dyn Fn(f64)> = Rc::new({
@@ -322,14 +329,10 @@ pub fn StylingPanel(
         move |val| {
             let ids = selected_ids.get_untracked();
             if !ids.is_empty() {
-                edit_ops::mutate_scene(scene, &push_snapshot, |s| {
-                    for id in &ids {
-                        if let Some(el) = s.element_by_id_mut(*id) {
-                            el.data_mut().style.font_size = val;
-                            if let Element::Text(t) = el {
-                                t.font_changed();
-                            }
-                        }
+                mutate_selected_elements(scene, &ids, &push_snapshot, |element| {
+                    element.data_mut().style.font_size = val;
+                    if let Element::Text(text) = element {
+                        text.font_changed();
                     }
                 });
             } else {
@@ -355,11 +358,9 @@ pub fn StylingPanel(
             if !changed {
                 return;
             }
-            edit_ops::mutate_scene(scene, &push_snapshot, |s| {
-                for id in &ids {
-                    if let Some(Element::Text(t)) = s.element_by_id_mut(*id) {
-                        t.set_alignment(val);
-                    }
+            mutate_selected_elements(scene, &ids, &push_snapshot, |element| {
+                if let Element::Text(text) = element {
+                    text.set_alignment(val);
                 }
             });
         }
@@ -375,24 +376,10 @@ pub fn StylingPanel(
     });
 
     let opacity_cb: Rc<dyn Fn(f64)> = Rc::new({
-        let scene = scene;
-        let selected_ids = selected_ids;
-        let default_style = default_style;
-        let push_snapshot = push_snapshot.clone();
+        let update_style = update_style.clone();
         move |val| {
             let v = (val / 100.0).clamp(0.0, 1.0);
-            let ids = selected_ids.get_untracked();
-            if !ids.is_empty() {
-                edit_ops::mutate_scene(scene, &push_snapshot, |s| {
-                    for id in &ids {
-                        if let Some(el) = s.element_by_id_mut(*id) {
-                            el.data_mut().style.opacity = v;
-                        }
-                    }
-                });
-            } else {
-                default_style.update(|s| s.opacity = v);
-            }
+            update_style(&|style| style.opacity = v);
         }
     });
 

@@ -262,11 +262,7 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
                 let ids = ctx.doc.selected_ids.get();
                 if !ids.is_empty() {
                     (ctx.push_snapshot)();
-                    ctx.doc.scene.update(|s| {
-                        for id in &ids {
-                            s.remove_by_id(*id);
-                        }
-                    });
+                    ctx.doc.scene.update(|s| s.remove_elements(&ids));
                     ctx.doc.selected_ids.set(Vec::new());
                 }
             }

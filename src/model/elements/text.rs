@@ -1,7 +1,7 @@
 use crate::model::elements::utils::rotate_bbox;
 use crate::model::resize::{
     resize_bbox, resize_scale_element, rotate_point_around, ResizeContext, ResizeHandle,
-    MIN_ELEMENT_SIZE,
+    ResizeScale, MIN_ELEMENT_SIZE,
 };
 use crate::model::*;
 use leptos::IntoView;
@@ -644,14 +644,12 @@ impl Text {
             resize_scale_element(
                 &mut self.data,
                 orig,
-                pos,
-                size.x,
-                size.y,
-                ctx.bx,
-                ctx.by,
-                ctx.bw,
-                ctx.bh,
-                false,
+                ResizeScale {
+                    position: pos,
+                    size,
+                    original_bounds: Rect::new(ctx.bx, ctx.by, ctx.bw, ctx.bh),
+                    scale_height: false,
+                },
             );
             self.data.style.font_size = (orig.style.font_size * sx).max(MIN_FONT_SIZE);
             // Same line breaks, scaled: group scaling keeps the text's shape.

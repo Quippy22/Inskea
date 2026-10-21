@@ -13,10 +13,11 @@ mod text_edit;
 pub use crate::model::interaction::combined_bounds;
 use modes::{cancel_drawing, draw_pointer_down, draw_pointer_up, finish_freehand};
 use selection::{cancel_drag, select_pointer_down, select_pointer_move, select_pointer_up};
+pub use state::CanvasInputs;
 pub use state::CanvasMode;
 pub use state::CropExportCallback;
 pub use state::DragOperation;
-use state::{hit_and_erase, CanvasInputs, CanvasState};
+use state::{hit_and_erase, CanvasState};
 
 use crate::model::*;
 use crate::ui::cursor::cursor_style;
@@ -24,7 +25,6 @@ use crate::ui::dock::Tool;
 use crate::util::window_size;
 use leptos::ev;
 use leptos::*;
-use settings::CanvasSettings;
 use std::rc::Rc;
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -117,46 +117,15 @@ fn route_pointer_down(
 /// live in the sibling modules [`grid`], [`text_edit`], [`selection`], and [`state`].
 #[component]
 pub fn Canvas(
-    cursor_screen: RwSignal<(f64, f64)>,
-    cursor_world: RwSignal<Point>,
-    viewport: RwSignal<Viewport>,
-    selected_tool: RwSignal<Tool>,
-    selected_color: RwSignal<Color>,
-    canvas_mode: RwSignal<CanvasMode>,
-    scene: RwSignal<Scene>,
-    eraser_active: RwSignal<bool>,
-    settings: RwSignal<CanvasSettings>,
-    push_snapshot: Rc<dyn Fn()>,
-    discard_snapshot: Rc<dyn Fn()>,
-    export_crop_active: RwSignal<bool>,
-    on_crop_export: RwSignal<Option<CropExportCallback>>,
+    inputs: CanvasInputs,
     /// Set to the active text commit function so close handlers can flush a
     /// text edit before checking for unsaved changes.
     on_text_commit: RwSignal<Option<Rc<dyn Fn()>>>,
     shortcuts_open: RwSignal<bool>,
-    selected_ids: RwSignal<Vec<ElementId>>,
-    default_style: RwSignal<ElementStyle>,
-    default_line_style: RwSignal<LineStyle>,
 ) -> impl IntoView {
     let mut st = CanvasState::new();
-    st.selected_ids = selected_ids;
-    let props = CanvasInputs {
-        cursor_screen,
-        cursor_world,
-        viewport,
-        selected_tool,
-        selected_color,
-        canvas_mode,
-        scene,
-        eraser_active,
-        settings,
-        push_snapshot,
-        discard_snapshot,
-        export_crop_active,
-        on_crop_export,
-        default_style,
-        default_line_style,
-    };
+    st.selected_ids = inputs.selected_ids;
+    let props = inputs;
 
     st.screen_size.set(window_size());
     let _ = window_event_listener(ev::resize, {

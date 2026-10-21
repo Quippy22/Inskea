@@ -1,5 +1,5 @@
-use crate::model::elements::utils::{rect_from_drag, rotate_bbox};
-use crate::model::resize::{resize_bbox, resize_from_handle, resize_scale_element, ResizeContext};
+use crate::model::elements::utils::{fill_paint, rect_from_drag, resize_box, rotate_bbox};
+use crate::model::resize::ResizeContext;
 use crate::model::*;
 use leptos::IntoView;
 
@@ -10,19 +10,6 @@ pub(crate) const MIN_DIMENSION: f64 = 1.0;
 pub struct Rectangle {
     /// Position, size, and appearance (stroke/fill/rotation).
     pub data: ElementData,
-}
-
-impl Rectangle {
-    pub(crate) fn fill_paint(fill: &Option<Color>) -> String {
-        match fill {
-            Some(c) => c.to_hex().to_string(),
-            None => "none".to_string(),
-        }
-    }
-
-    pub(crate) fn stroke_hex(stroke: &Color) -> String {
-        stroke.to_hex()
-    }
 }
 
 impl FromDrag for Rectangle {
@@ -59,8 +46,8 @@ impl Render for Rectangle {
         let w = self.data.width;
         let h = self.data.height;
         let sw = self.data.style.stroke_width;
-        let fill = Self::fill_paint(&self.data.style.fill_color);
-        let stroke = Self::stroke_hex(&self.data.style.stroke_color);
+        let fill = fill_paint(&self.data.style.fill_color);
+        let stroke = self.data.style.stroke_color.to_hex();
         let dash = self.data.style.stroke_style.stroke_dasharray();
         let linejoin = self.data.style.edge_style.stroke_linejoin();
         let (rx, ry) = match self.data.style.edge_style {
@@ -166,40 +153,7 @@ impl Rotate for Rectangle {
 
 impl Resize for Rectangle {
     fn resize(&mut self, ctx: &ResizeContext) {
-        if ctx.multi {
-            let (pos, size) = match resize_bbox(
-                Point::new(ctx.bx, ctx.by),
-                Point::new(ctx.bw, ctx.bh),
-                ctx.pointer_world,
-                ctx.handle,
-                ctx.shift,
-                ctx.alt,
-            ) {
-                Some(v) => v,
-                None => return,
-            };
-            resize_scale_element(
-                &mut self.data,
-                ctx.orig.data(),
-                pos,
-                size.x,
-                size.y,
-                ctx.bx,
-                ctx.by,
-                ctx.bw,
-                ctx.bh,
-                true,
-            );
-        } else {
-            let result = resize_from_handle(
-                ctx.orig.data(),
-                ctx.handle,
-                ctx.pointer_world,
-                ctx.shift,
-                ctx.alt,
-            );
-            self.data = result;
-        }
+        resize_box(&mut self.data, ctx);
     }
 }
 
