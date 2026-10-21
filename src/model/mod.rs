@@ -37,8 +37,8 @@ fn default_next_group_id() -> GroupId {
 /// The single source of truth for everything on the canvas.
 #[derive(Clone, Debug)]
 pub struct Scene {
-    chunks: HashMap<(i64, i64), SceneChunk>,
-    locations: HashMap<ElementId, (i64, i64)>,
+    chunks: HashMap<(i32, i32), SceneChunk>,
+    locations: HashMap<ElementId, (i32, i32)>,
     oversized: Vec<ElementId>,
     next_order: u64,
     pub(crate) next_id: u64,
@@ -48,36 +48,36 @@ pub struct Scene {
 
 #[derive(Clone, Debug)]
 struct SceneChunk {
-    /// Absolute world-space origin; element geometry is stored relative to it.
-    origin: Point,
     elements: Vec<StoredElement>,
 }
 
 const CHUNK_SIZE: f64 = 1024.0;
 
-fn chunk_coord(value: f64) -> i64 {
+/// Chunk indices are 32-bit: at 1024 world units per chunk this covers
+/// ±2.2e12 units, far beyond any practical canvas.
+fn chunk_coord(value: f64) -> i32 {
     if value.is_nan() {
         0
     } else if value == f64::INFINITY {
-        i64::MAX
+        i32::MAX
     } else if value == f64::NEG_INFINITY {
-        i64::MIN
+        i32::MIN
     } else {
         (value / CHUNK_SIZE)
             .floor()
-            .clamp(i64::MIN as f64, i64::MAX as f64) as i64
+            .clamp(i32::MIN as f64, i32::MAX as f64) as i32
     }
 }
 
-fn chunk_of(point: Point) -> (i64, i64) {
+fn chunk_of(point: Point) -> (i32, i32) {
     (chunk_coord(point.x), chunk_coord(point.y))
 }
 
-fn chunk_origin((x, y): (i64, i64)) -> Point {
+fn chunk_origin((x, y): (i32, i32)) -> Point {
     Point::new(x as f64 * CHUNK_SIZE, y as f64 * CHUNK_SIZE)
 }
 
-fn chunk_range(rect: Rect) -> (i64, i64, i64, i64) {
+fn chunk_range(rect: Rect) -> (i32, i32, i32, i32) {
     (
         chunk_coord(rect.x.min(rect.right())),
         chunk_coord(rect.y.min(rect.bottom())),
@@ -90,10 +90,10 @@ fn is_oversized(bounds: Rect) -> bool {
     bounds.w.abs() > CHUNK_SIZE || bounds.h.abs() > CHUNK_SIZE
 }
 
-fn chunk_count(x0: i64, y0: i64, x1: i64, y1: i64) -> i64 {
-    x1.saturating_sub(x0)
-        .saturating_add(1)
-        .saturating_mul(y1.saturating_sub(y0).saturating_add(1))
+fn chunk_count(x0: i32, y0: i32, x1: i32, y1: i32) -> i64 {
+    let width = i64::from(x1) - i64::from(x0) + 1;
+    let height = i64::from(y1) - i64::from(y0) + 1;
+    width.saturating_mul(height)
 }
 
 fn element_bounds(element: &Element) -> Rect {
@@ -202,11 +202,12 @@ impl Scene {
     pub fn elements(&self) -> Vec<Element> {
         let mut ordered: Vec<_> = self
             .chunks
-            .values()
-            .flat_map(|chunk| {
+            .iter()
+            .flat_map(|(key, chunk)| {
+                let origin = chunk_origin(*key);
                 chunk.elements.iter().map(move |stored| {
                     let mut element = stored.element.clone();
-                    element.offset(chunk.origin.x, chunk.origin.y);
+                    element.offset(origin.x, origin.y);
                     (stored.order, element)
                 })
             })
@@ -286,7 +287,8 @@ impl Scene {
             .find(|stored| stored.element.id() == id)?
             .element
             .clone();
-        element.offset(chunk.origin.x, chunk.origin.y);
+        let origin = chunk_origin(key);
+        element.offset(origin.x, origin.y);
         Some(element)
     }
 
@@ -309,6 +311,22 @@ impl Scene {
             .iter()
             .find(|stored| stored.element.id() == id)
             .map(|stored| stored.order)
+    }
+
+    /// Element ids in canvas z-order, without cloning element geometry.
+    fn ordered_ids(&self) -> Vec<ElementId> {
+        let mut ordered: Vec<_> = self
+            .chunks
+            .values()
+            .flat_map(|chunk| {
+                chunk
+                    .elements
+                    .iter()
+                    .map(|stored| (stored.order, stored.element.id()))
+            })
+            .collect();
+        ordered.sort_by_key(|(order, _)| *order);
+        ordered.into_iter().map(|(_, id)| id).collect()
     }
 
     fn take_element(&mut self, id: ElementId) -> Option<Element> {
@@ -346,7 +364,6 @@ impl Scene {
         self.chunks
             .entry(home)
             .or_insert_with(|| SceneChunk {
-                origin,
                 elements: Vec::new(),
             })
             .elements
@@ -410,7 +427,7 @@ impl Scene {
     /// after normalization, making serialized scenes deterministic.
     pub fn normalize_groups(&mut self) {
         self.ensure_group_ids();
-        let element_ids: Vec<_> = self.elements().iter().map(Element::id).collect();
+        let element_ids = self.ordered_ids();
         let mut claimed = Vec::new();
         let mut groups = Vec::with_capacity(self.groups.len());
 
