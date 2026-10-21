@@ -170,8 +170,8 @@ pub struct CanvasInputs {
     pub eraser_active: RwSignal<bool>,
     pub settings: RwSignal<CanvasSettings>,
     pub push_snapshot: Rc<dyn Fn()>,
-    /// Pops the most recent undo snapshot. Used when an interaction is
-    /// aborted (a freehand click, Esc) so it leaves no no-op undo entry.
+    /// Seals the current undo entry. Used when an interaction ends or is
+    /// aborted, so a no-op interaction leaves no entry.
     pub discard_snapshot: Rc<dyn Fn()>,
     pub export_crop_active: RwSignal<bool>,
     pub on_crop_export: RwSignal<Option<CropExportCallback>>,

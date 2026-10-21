@@ -14,7 +14,7 @@ use leptos::{
 ///
 /// Appends the release point when one is available, then simplifies the
 /// stroke with a zoom-scaled tolerance. A stroke still at its starting point
-/// is treated as a click: the element and the undo snapshot taken when the
+/// is treated as a click: the element and the journal entry opened when the
 /// stroke began are both discarded, so clicking with the freehand tool leaves
 /// no trace. Does nothing when the in-progress element is not freehand.
 pub(crate) fn finish_freehand(
@@ -55,7 +55,7 @@ pub(crate) fn finish_freehand(
 }
 
 /// Abort an in-progress draw (Esc, pointer cancel). Freehand elements live in
-/// the scene from pointer-down, so the element and its undo snapshot are both
+/// the scene from pointer-down, so the element and its journal entry are both
 /// removed; other tools have nothing in the scene yet.
 pub(crate) fn cancel_drawing(st: &mut CanvasState, props: &mut CanvasInputs) {
     let Some(state) = st.drawing.get_untracked() else {

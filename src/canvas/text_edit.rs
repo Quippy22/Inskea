@@ -218,8 +218,9 @@ pub fn make_commit_edit(
     Rc::new(move || {
         if let Some(id) = editing_id.get() {
             let text = edit_text.get();
-            // Editing existing content is an undoable action; the snapshot
-            // for a freshly created text was already taken when it was made.
+            // Editing existing content is an undoable action; the journal
+            // entry for a freshly created text was already opened when it was
+            // made.
             let edited = scene.with_untracked(|s| {
                 matches!(
                     s.element_by_id(id),
@@ -254,9 +255,8 @@ pub fn make_commit_edit(
             });
             if text.is_empty() {
                 // Dismissing a box that was never given content removes the
-                // element on the same state its creation snapshot recorded,
-                // so that snapshot goes too. The callback verifies the match;
-                // clearing out an existing text keeps its undo entry.
+                // element and collapses the creation journal entry to nothing.
+                // Clearing out an existing text keeps its undo entry.
                 discard_snapshot();
             }
             editing_id.set(None);

@@ -5,7 +5,7 @@ use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
 use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::edit_ops::Clipboard;
 use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
-use crate::model::{Color, ElementId, ElementStyle, LineStyle, Point, Scene};
+use crate::model::{ChangeSet, Color, ElementId, ElementStyle, LineStyle, Point, Scene};
 use crate::skea;
 use crate::tauri_bridge;
 use crate::ui::components::{StylingPanel, StylingPanelContext};
@@ -59,31 +59,42 @@ pub fn App() -> impl IntoView {
 
     let clipboard = create_rw_signal(Clipboard::default());
 
-    let undo_stack = create_rw_signal(Vec::<Scene>::new());
-    let redo_stack = create_rw_signal(Vec::<Scene>::new());
+    let undo_stack = create_rw_signal(Vec::<ChangeSet>::new());
+    let redo_stack = create_rw_signal(Vec::<ChangeSet>::new());
 
     let push_snapshot = Rc::new(move || {
-        undo_stack.update(|s| {
-            s.push(scene.get());
-            if s.len() > 100 {
-                s.remove(0);
-            }
-        });
+        let mut sealed = None;
+        if scene.with_untracked(|s| s.has_pending()) {
+            scene.update(|s| sealed = s.seal_pending());
+        }
+        if let Some(changes) = sealed {
+            undo_stack.update(|s| {
+                s.push(changes);
+                if s.len() > 100 {
+                    s.remove(0);
+                }
+            });
+        }
         redo_stack.set(Vec::new());
     });
 
-    // Pops the most recent undo snapshot, but only when it still matches the
-    // current scene. Aborted interactions (a freehand click, Esc mid-stroke,
-    // dismissing an untouched new text) end exactly at the state their
-    // snapshot recorded, so undo history gets no no-op entries; anything that
-    // changed the scene in between is left alone.
+    // Aborted interactions usually restore the scene themselves, leaving an
+    // empty net change. If something did change (for example, emptying an
+    // existing text), seal it so undo can restore it.
     let discard_snapshot = Rc::new(move || {
-        let current = scene.get_untracked();
-        undo_stack.update(|s| {
-            if s.last() == Some(&current) {
-                s.pop();
-            }
-        });
+        let mut sealed = None;
+        if scene.with_untracked(|s| s.has_pending()) {
+            scene.update(|s| sealed = s.seal_pending());
+        }
+        if let Some(changes) = sealed {
+            undo_stack.update(|s| {
+                s.push(changes);
+                if s.len() > 100 {
+                    s.remove(0);
+                }
+            });
+            redo_stack.set(Vec::new());
+        }
     });
 
     let do_undo = {
@@ -91,12 +102,28 @@ pub fn App() -> impl IntoView {
         let undo_stack = undo_stack;
         let redo_stack = redo_stack;
         move || {
-            let mut prev = None;
-            undo_stack.update(|s| prev = s.pop());
-            if let Some(prev) = prev {
-                let current = scene.get();
-                scene.set(prev);
-                redo_stack.update(|s| s.push(current));
+            let had_pending = scene.with_untracked(|s| s.has_pending());
+            let mut sealed = None;
+            if had_pending {
+                scene.update(|s| sealed = s.seal_pending());
+            }
+            if let Some(changes) = sealed {
+                undo_stack.update(|s| {
+                    s.push(changes);
+                    if s.len() > 100 {
+                        s.remove(0);
+                    }
+                });
+            } else if had_pending {
+                // The interaction touched elements but had no net effect.
+                return;
+            }
+
+            let mut previous = None;
+            undo_stack.update(|s| previous = s.pop());
+            if let Some(changes) = previous {
+                scene.update(|s| s.apply_change_set(&changes, false));
+                redo_stack.update(|s| s.push(changes));
             }
         }
     };
@@ -108,17 +135,23 @@ pub fn App() -> impl IntoView {
         move || {
             let mut next = None;
             redo_stack.update(|s| next = s.pop());
-            if let Some(next) = next {
-                let current = scene.get();
-                scene.set(next);
-                undo_stack.update(|s| s.push(current));
+            if let Some(changes) = next {
+                scene.update(|s| s.apply_change_set(&changes, true));
+                undo_stack.update(|s| {
+                    s.push(changes);
+                    if s.len() > 100 {
+                        s.remove(0);
+                    }
+                });
             }
         }
     };
 
-    // `with` instead of `get`: these memos run whenever the history changes
-    // and must not deep-clone the (up to 100-scene) stacks.
-    let can_undo = Signal::derive(move || undo_stack.with(|s| !s.is_empty()));
+    // Pending changes are not on the undo stack yet; include them so the
+    // button enables as soon as an action starts.
+    let can_undo = Signal::derive(move || {
+        undo_stack.with(|s| !s.is_empty()) || scene.with(|s| s.has_pending())
+    });
     let can_redo = Signal::derive(move || redo_stack.with(|s| !s.is_empty()));
 
     let saved_path = create_rw_signal::<Option<String>>(None);
@@ -126,9 +159,11 @@ pub fn App() -> impl IntoView {
     let reset_history = {
         let undo_stack = undo_stack;
         let redo_stack = redo_stack;
+        let scene = scene;
         Rc::new(move || {
             undo_stack.set(Vec::new());
             redo_stack.set(Vec::new());
+            scene.update(|s| s.clear_pending());
         })
     };
 

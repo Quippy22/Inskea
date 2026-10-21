@@ -748,8 +748,9 @@ pub(crate) fn clear_drag_state(st: &mut CanvasState) {
 }
 
 /// Abort an in-progress selection drag (move / resize / rotate / path point)
-/// or marquee: restore the captured originals, drop the drag's undo snapshot,
-/// and clear all drag state so pointer-up cannot re-apply anything.
+/// or marquee: restore the captured originals, seal the drag's journal entry
+/// (which collapses to nothing when the originals were restored), and clear
+/// all drag state so pointer-up cannot re-apply anything.
 pub(crate) fn cancel_drag(st: &mut CanvasState, props: &mut CanvasInputs) {
     let action = st.drag.drag_action.get_untracked();
     let originals = st.drag.drag_originals.get_untracked();

@@ -35,7 +35,7 @@ fn default_next_group_id() -> GroupId {
 }
 
 /// The single source of truth for everything on the canvas.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Scene {
     chunks: HashMap<(i32, i32), SceneChunk>,
     locations: HashMap<ElementId, (i32, i32)>,
@@ -44,6 +44,30 @@ pub struct Scene {
     pub(crate) next_id: u64,
     pub(crate) groups: Vec<Group>,
     pub(crate) next_group_id: GroupId,
+    pending: Vec<PendingChange>,
+    pending_index: HashMap<ElementId, usize>,
+    groups_before: Option<GroupSnapshot>,
+    next_id_before: Option<u64>,
+}
+
+impl Clone for Scene {
+    fn clone(&self) -> Self {
+        Self {
+            chunks: self.chunks.clone(),
+            locations: self.locations.clone(),
+            oversized: self.oversized.clone(),
+            next_order: self.next_order,
+            next_id: self.next_id,
+            groups: self.groups.clone(),
+            next_group_id: self.next_group_id,
+            // A clone is a baseline/snapshot of committed state; unsealed
+            // journal entries belong only to the live scene.
+            pending: Vec::new(),
+            pending_index: HashMap::new(),
+            groups_before: None,
+            next_id_before: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -122,6 +146,55 @@ fn collect_visible_chunk<'a>(
                 order: stored.order,
             });
         }
+    }
+}
+
+/// Drop element payloads when only the z-order changed, so reorders keep a
+/// compact undo entry.
+fn normalize_snapshots(
+    before: ElementSnapshot,
+    after: ElementSnapshot,
+) -> (ElementSnapshot, ElementSnapshot) {
+    match (&before, &after) {
+        (
+            ElementSnapshot::Present {
+                element: Some(a),
+                order: before_order,
+            },
+            ElementSnapshot::Present {
+                element: Some(b),
+                order: after_order,
+            },
+        ) if a == b => (
+            ElementSnapshot::Present {
+                element: None,
+                order: *before_order,
+            },
+            ElementSnapshot::Present {
+                element: None,
+                order: *after_order,
+            },
+        ),
+        (
+            ElementSnapshot::Present {
+                element: None,
+                order: before_order,
+            },
+            ElementSnapshot::Present {
+                element: Some(_),
+                order: after_order,
+            },
+        ) => (
+            ElementSnapshot::Present {
+                element: None,
+                order: *before_order,
+            },
+            ElementSnapshot::Present {
+                element: None,
+                order: *after_order,
+            },
+        ),
+        _ => (before, after),
     }
 }
 
@@ -212,6 +285,68 @@ pub struct VisibleElement<'a> {
     pub order: u64,
 }
 
+/// Snapshot of one element's contribution to a scene change. `element: None`
+/// means the element's geometry did not change and only its z-order matters.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ElementSnapshot {
+    Absent,
+    Present {
+        element: Option<Box<Element>>,
+        order: u64,
+    },
+}
+
+/// A reversible change to one element.
+#[derive(Clone, Debug)]
+pub struct ElementChange {
+    pub id: ElementId,
+    pub before: ElementSnapshot,
+    pub after: ElementSnapshot,
+}
+
+/// A reversible change to the group table.
+#[derive(Clone, Debug)]
+pub struct GroupChange {
+    pub before: Vec<Group>,
+    pub before_next_id: GroupId,
+    pub after: Vec<Group>,
+    pub after_next_id: GroupId,
+}
+
+/// A reversible change to the id allocator.
+#[derive(Clone, Debug)]
+pub struct NextIdChange {
+    pub before: u64,
+    pub after: u64,
+}
+
+/// One undo/redo entry: only the elements (and group/id state) that actually
+/// changed, not a copy of the whole document.
+#[derive(Clone, Debug, Default)]
+pub struct ChangeSet {
+    pub elements: Vec<ElementChange>,
+    pub groups: Option<GroupChange>,
+    pub next_id: Option<NextIdChange>,
+}
+
+impl ChangeSet {
+    pub fn is_empty(&self) -> bool {
+        self.elements.is_empty() && self.groups.is_none() && self.next_id.is_none()
+    }
+}
+
+#[derive(Clone, Debug)]
+struct PendingChange {
+    id: ElementId,
+    before: ElementSnapshot,
+}
+
+#[derive(Clone, Debug)]
+struct GroupSnapshot {
+    groups: Vec<Group>,
+    next_group_id: GroupId,
+}
+
 impl Scene {
     /// Creates an empty scene with no elements (IDs start at 1).
     pub fn new() -> Self {
@@ -223,6 +358,10 @@ impl Scene {
             next_id: 1,
             groups: Vec::new(),
             next_group_id: 1,
+            pending: Vec::new(),
+            pending_index: HashMap::new(),
+            groups_before: None,
+            next_id_before: None,
         }
     }
 
@@ -364,7 +503,7 @@ impl Scene {
     }
 
     /// Element ids in canvas z-order, without cloning element geometry.
-    fn ordered_ids(&self) -> Vec<ElementId> {
+    fn ordered(&self) -> Vec<(u64, ElementId)> {
         let mut ordered: Vec<_> = self
             .chunks
             .values()
@@ -376,10 +515,216 @@ impl Scene {
             })
             .collect();
         ordered.sort_by_key(|(order, _)| *order);
-        ordered.into_iter().map(|(_, id)| id).collect()
+        ordered
     }
 
-    fn take_element(&mut self, id: ElementId) -> Option<Element> {
+    fn ordered_ids(&self) -> Vec<ElementId> {
+        self.ordered().into_iter().map(|(_, id)| id).collect()
+    }
+
+    /// Capture the state of `id` before its first mutation in this
+    /// transaction. Repeated mutations keep the original before-state.
+    fn record_before(&mut self, id: ElementId) {
+        if let Some(&index) = self.pending_index.get(&id) {
+            // An order-only record may be followed by a content change later
+            // in the same transaction; upgrade it to a full before snapshot.
+            let order = match &self.pending[index].before {
+                ElementSnapshot::Present {
+                    element: None,
+                    order,
+                } => Some(*order),
+                _ => None,
+            };
+            if let Some(order) = order {
+                if let Some(element) = self.element_by_id(id) {
+                    self.pending[index].before = ElementSnapshot::Present {
+                        element: Some(Box::new(element)),
+                        order,
+                    };
+                }
+            }
+            return;
+        }
+        let before = match self.element_by_id(id) {
+            Some(element) => ElementSnapshot::Present {
+                element: Some(Box::new(element)),
+                order: self.element_order(id).unwrap_or(0),
+            },
+            None => ElementSnapshot::Absent,
+        };
+        self.pending_index.insert(id, self.pending.len());
+        self.pending.push(PendingChange { id, before });
+    }
+
+    /// Record an order-only change without cloning the element.
+    fn record_order_before(&mut self, id: ElementId) {
+        if self.pending_index.contains_key(&id) {
+            return;
+        }
+        let Some(order) = self.element_order(id) else {
+            return;
+        };
+        self.pending_index.insert(id, self.pending.len());
+        self.pending.push(PendingChange {
+            id,
+            before: ElementSnapshot::Present {
+                element: None,
+                order,
+            },
+        });
+    }
+
+    fn record_groups_before(&mut self) {
+        if self.groups_before.is_none() {
+            self.groups_before = Some(GroupSnapshot {
+                groups: self.groups.clone(),
+                next_group_id: self.next_group_id,
+            });
+        }
+    }
+
+    fn record_next_id_before(&mut self) {
+        if self.next_id_before.is_none() {
+            self.next_id_before = Some(self.next_id);
+        }
+    }
+
+    fn element_state(&self, id: ElementId) -> ElementSnapshot {
+        match self.element_by_id(id) {
+            Some(element) => ElementSnapshot::Present {
+                element: Some(Box::new(element)),
+                order: self.element_order(id).unwrap_or(0),
+            },
+            None => ElementSnapshot::Absent,
+        }
+    }
+
+    /// Seal the accumulated journal into one undo entry. Returns `None` when
+    /// the transaction had no net effect.
+    pub fn seal_pending(&mut self) -> Option<ChangeSet> {
+        let pending = std::mem::take(&mut self.pending);
+        self.pending_index = HashMap::new();
+        let groups_before = self.groups_before.take();
+        let next_id_before = self.next_id_before.take();
+
+        let mut elements = Vec::new();
+        for change in pending {
+            let after = self.element_state(change.id);
+            if change.before == after {
+                continue;
+            }
+            let (before, after) = normalize_snapshots(change.before, after);
+            if before == after {
+                continue;
+            }
+            elements.push(ElementChange {
+                id: change.id,
+                before,
+                after,
+            });
+        }
+
+        let groups = groups_before.and_then(|before| {
+            if before.groups == self.groups {
+                None
+            } else {
+                Some(GroupChange {
+                    before: before.groups,
+                    before_next_id: before.next_group_id,
+                    after: self.groups.clone(),
+                    after_next_id: self.next_group_id,
+                })
+            }
+        });
+
+        // Adding and then removing an element leaves the scene unchanged; do
+        // not create an undo entry just to rewind the id allocator.
+        let next_id = if elements.is_empty() {
+            None
+        } else {
+            next_id_before.and_then(|before| {
+                (before != self.next_id).then_some(NextIdChange {
+                    before,
+                    after: self.next_id,
+                })
+            })
+        };
+
+        let changes = ChangeSet {
+            elements,
+            groups,
+            next_id,
+        };
+        if changes.is_empty() {
+            None
+        } else {
+            Some(changes)
+        }
+    }
+
+    /// Apply a sealed entry forwards (redo) or backwards (undo).
+    pub fn apply_change_set(&mut self, changes: &ChangeSet, forward: bool) {
+        self.clear_pending();
+        if forward {
+            for change in &changes.elements {
+                self.apply_snapshot(change.id, &change.after);
+            }
+        } else {
+            for change in changes.elements.iter().rev() {
+                self.apply_snapshot(change.id, &change.before);
+            }
+        }
+        if let Some(groups) = &changes.groups {
+            if forward {
+                self.groups = groups.after.clone();
+                self.next_group_id = groups.after_next_id;
+            } else {
+                self.groups = groups.before.clone();
+                self.next_group_id = groups.before_next_id;
+            }
+        }
+        if let Some(next_id) = &changes.next_id {
+            self.next_id = if forward {
+                next_id.after
+            } else {
+                next_id.before
+            };
+        }
+    }
+
+    fn apply_snapshot(&mut self, id: ElementId, snapshot: &ElementSnapshot) {
+        match snapshot {
+            ElementSnapshot::Absent => {
+                self.take_element_raw(id);
+            }
+            ElementSnapshot::Present {
+                element: Some(element),
+                order,
+            } => {
+                self.put_element_raw((**element).clone(), *order);
+            }
+            ElementSnapshot::Present {
+                element: None,
+                order,
+            } => {
+                self.set_element_order_raw(id, *order);
+            }
+        }
+    }
+
+    /// True while the live scene has mutations that have not been sealed.
+    pub fn has_pending(&self) -> bool {
+        !self.pending.is_empty() || self.groups_before.is_some() || self.next_id_before.is_some()
+    }
+
+    pub fn clear_pending(&mut self) {
+        self.pending = Vec::new();
+        self.pending_index = HashMap::new();
+        self.groups_before = None;
+        self.next_id_before = None;
+    }
+
+    fn take_element_raw(&mut self, id: ElementId) -> Option<Element> {
         let key = self.locations.remove(&id)?;
         let (stored, empty) = {
             let chunk = self.chunks.get_mut(&key)?;
@@ -402,10 +747,15 @@ impl Scene {
         Some(element)
     }
 
-    fn put_element(&mut self, mut element: Element, order: u64) {
+    fn take_element(&mut self, id: ElementId) -> Option<Element> {
+        self.record_before(id);
+        self.take_element_raw(id)
+    }
+
+    fn put_element_raw(&mut self, mut element: Element, order: u64) {
         let id = element.id();
         if self.locations.contains_key(&id) {
-            let _ = self.take_element(id);
+            let _ = self.take_element_raw(id);
         }
         let bounds = element_bounds(&element);
         let home = chunk_of(bounds.center());
@@ -426,14 +776,45 @@ impl Scene {
         }
     }
 
+    fn put_element(&mut self, element: Element, order: u64) {
+        self.record_before(element.id());
+        self.put_element_raw(element, order);
+    }
+
+    fn set_element_order_raw(&mut self, id: ElementId, order: u64) {
+        let Some(key) = self.locations.get(&id).copied() else {
+            return;
+        };
+        let mut found = false;
+        if let Some(chunk) = self.chunks.get_mut(&key) {
+            if let Some(stored) = chunk
+                .elements
+                .iter_mut()
+                .find(|stored| stored.element.id() == id)
+            {
+                stored.order = order;
+                found = true;
+            }
+        }
+        if found {
+            self.next_order = self.next_order.max(order.saturating_add(1));
+        }
+    }
+
+    fn set_element_order(&mut self, id: ElementId, order: u64) {
+        self.record_order_before(id);
+        self.set_element_order_raw(id, order);
+    }
+
     fn replace_all(&mut self, elements: Vec<Element>) {
+        self.clear_pending();
         self.chunks.clear();
         self.locations.clear();
         self.oversized.clear();
         self.next_order = 0;
         for element in elements {
             let order = self.next_order;
-            self.put_element(element, order);
+            self.put_element_raw(element, order);
         }
     }
 
@@ -446,6 +827,7 @@ impl Scene {
         if ids.is_empty() {
             return;
         }
+        self.record_groups_before();
         for id in ids {
             let _ = self.take_element(*id);
         }
@@ -457,6 +839,7 @@ impl Scene {
 
     /// Assign IDs to legacy or duplicated groups loaded from older files.
     pub fn ensure_group_ids(&mut self) {
+        self.record_groups_before();
         let mut next = self.next_group_id.max(1);
         let mut used = Vec::new();
         for group in &mut self.groups {
@@ -536,6 +919,7 @@ impl Scene {
 
     /// Group `ids` into one group, dissolving any existing groups that overlap the members.
     pub fn create_group(&mut self, ids: &[ElementId]) {
+        self.record_groups_before();
         self.normalize_groups();
         let members = self.expand_to_groups(ids);
         if members.len() < 2 {
@@ -550,6 +934,7 @@ impl Scene {
 
     /// Remove every group containing any of `ids`, returning the affected member ids.
     pub fn remove_groups_containing(&mut self, ids: &[ElementId]) -> Vec<ElementId> {
+        self.record_groups_before();
         let mut removed = Vec::new();
         self.groups.retain(|g| {
             let hit = ids.iter().any(|id| g.members.contains(id));
@@ -566,6 +951,7 @@ impl Scene {
     ///
     /// The element's previous ID is overwritten.
     pub fn add_element(&mut self, mut element: Element) {
+        self.record_next_id_before();
         element.data_mut().id = self.next_id;
         self.next_id += 1;
         let order = self.next_order;
@@ -579,11 +965,11 @@ impl Scene {
             return;
         }
 
-        let elements = self.elements();
+        let elements = self.ordered();
         let selected: Vec<_> = elements
             .iter()
-            .filter(|element| selected_ids.contains(&element.id()))
-            .cloned()
+            .filter(|(_, id)| selected_ids.contains(id))
+            .map(|(_, id)| *id)
             .collect();
         if selected.is_empty() {
             return;
@@ -591,16 +977,16 @@ impl Scene {
 
         let first_selected_index = elements
             .iter()
-            .position(|element| selected_ids.contains(&element.id()))
+            .position(|(_, id)| selected_ids.contains(id))
             .unwrap_or(0);
         let elements_before = elements[..first_selected_index]
             .iter()
-            .filter(|element| !selected_ids.contains(&element.id()))
+            .filter(|(_, id)| !selected_ids.contains(id))
             .count();
         let mut remaining: Vec<_> = elements
             .iter()
-            .filter(|element| !selected_ids.contains(&element.id()))
-            .cloned()
+            .filter(|(_, id)| !selected_ids.contains(id))
+            .map(|(_, id)| *id)
             .collect();
 
         let insert_at = match direction {
@@ -610,7 +996,15 @@ impl Scene {
             LayerOrder::Front => remaining.len(),
         };
         remaining.splice(insert_at..insert_at, selected);
-        self.replace_all(remaining);
+
+        // Reuse the existing order values. Only elements whose position in the
+        // stack changed get a journal entry, and those entries are order-only.
+        let order_values: Vec<_> = elements.iter().map(|(order, _)| *order).collect();
+        for (id, order) in remaining.into_iter().zip(order_values) {
+            if self.element_order(id) != Some(order) {
+                self.set_element_order(id, order);
+            }
+        }
     }
 }
 
@@ -634,6 +1028,8 @@ mod tests {
                 data: ElementData::new(0),
             }));
         }
+        // Setup is not a user action.
+        s.clear_pending();
         s
     }
 
@@ -812,5 +1208,203 @@ mod tests {
         let visible = s.visible_elements(Rect::new(0.0, 0.0, 10.0, 10.0));
         assert_eq!(visible.len(), 1);
         assert_eq!(visible[0].element.id(), 1);
+    }
+
+    #[test]
+    fn change_set_round_trips_a_moved_element() {
+        let mut s = scene_with_three();
+        let original = s.element_by_id(1).unwrap();
+        {
+            let mut element = s.element_by_id_mut(1).unwrap();
+            element.data_mut().world_point.x += 9000.0;
+        }
+        let changes = s.seal_pending().expect("move should be recorded");
+        assert_eq!(changes.elements.len(), 1);
+        assert_eq!(changes.elements[0].id, 1);
+
+        s.apply_change_set(&changes, false);
+        assert_eq!(s.element_by_id(1), Some(original.clone()));
+
+        s.apply_change_set(&changes, true);
+        let moved = s.element_by_id(1).unwrap();
+        assert_eq!(
+            moved.data().world_point.x,
+            original.data().world_point.x + 9000.0
+        );
+    }
+
+    #[test]
+    fn change_set_restores_a_removed_element() {
+        let mut s = scene_with_three();
+        let original = s.element_by_id(2).unwrap();
+        s.remove_by_id(2);
+
+        let changes = s.seal_pending().expect("removal should be recorded");
+        assert!(matches!(changes.elements[0].after, ElementSnapshot::Absent));
+
+        s.apply_change_set(&changes, false);
+        assert_eq!(s.element_by_id(2), Some(original));
+
+        s.apply_change_set(&changes, true);
+        assert!(s.element_by_id(2).is_none());
+    }
+
+    #[test]
+    fn change_set_restores_the_group_table() {
+        let mut s = scene_with_three();
+        s.create_group(&[1, 2]);
+
+        let changes = s.seal_pending().expect("group should be recorded");
+        assert!(changes.elements.is_empty());
+        let groups = changes.groups.as_ref().expect("group change");
+        assert_eq!(groups.after.len(), 1);
+
+        s.apply_change_set(&changes, false);
+        assert!(s.groups.is_empty());
+        assert_eq!(s.next_group_id, groups.before_next_id);
+
+        s.apply_change_set(&changes, true);
+        assert_eq!(s.groups, groups.after);
+        assert_eq!(s.next_group_id, groups.after_next_id);
+    }
+
+    #[test]
+    fn change_set_keeps_reorders_order_only() {
+        let mut s = scene_with_three();
+        s.reorder_selection(&[1], LayerOrder::Front);
+
+        let changes = s.seal_pending().expect("reorder should be recorded");
+        assert!(!changes.elements.is_empty());
+        assert!(changes.elements.iter().all(|change| matches!(
+            (&change.before, &change.after),
+            (
+                ElementSnapshot::Present { element: None, .. },
+                ElementSnapshot::Present { element: None, .. }
+            )
+        )));
+
+        s.apply_change_set(&changes, false);
+        assert_eq!(
+            s.elements().iter().map(Element::id).collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+
+        s.apply_change_set(&changes, true);
+        assert_eq!(
+            s.elements().iter().map(Element::id).collect::<Vec<_>>(),
+            vec![2, 3, 1]
+        );
+    }
+
+    #[test]
+    fn added_then_removed_element_leaves_no_history() {
+        let mut s = Scene::new();
+        s.add_element(Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        }));
+        s.remove_by_id(1);
+
+        assert!(s.seal_pending().is_none());
+        assert!(s.elements().is_empty());
+    }
+
+    #[test]
+    fn change_set_rewinds_the_id_allocator_for_adds() {
+        let mut s = Scene::new();
+        s.add_element(Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        }));
+        assert_eq!(s.next_id, 2);
+
+        let changes = s.seal_pending().expect("add should be recorded");
+        assert_eq!(
+            changes
+                .next_id
+                .as_ref()
+                .map(|change| (change.before, change.after)),
+            Some((1, 2))
+        );
+
+        s.apply_change_set(&changes, false);
+        assert_eq!(s.next_id, 1);
+        assert!(s.elements().is_empty());
+
+        s.apply_change_set(&changes, true);
+        assert_eq!(s.next_id, 2);
+        assert_eq!(s.elements().len(), 1);
+    }
+
+    #[test]
+    fn change_set_coalesces_repeated_moves_of_one_element() {
+        let mut s = scene_with_three();
+        let original = s.element_by_id(1).unwrap();
+        for dx in [1.0, 2.0, 3.0] {
+            let mut element = s.element_by_id_mut(1).unwrap();
+            element.data_mut().world_point.x += dx;
+        }
+
+        let changes = s.seal_pending().expect("moves should be recorded");
+        assert_eq!(changes.elements.len(), 1);
+
+        s.apply_change_set(&changes, false);
+        assert_eq!(s.element_by_id(1), Some(original));
+    }
+
+    #[test]
+    fn sealed_change_sets_compose_for_undo_and_redo() {
+        let mut s = scene_with_three();
+        let original = s.element_by_id(1).unwrap();
+        {
+            let mut element = s.element_by_id_mut(1).unwrap();
+            element.data_mut().world_point.x += 5000.0;
+        }
+        let move_changes = s.seal_pending().expect("move should be recorded");
+        let moved = s.element_by_id(1).unwrap();
+
+        s.add_element(Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        }));
+        let add_changes = s.seal_pending().expect("add should be recorded");
+        let added_id = 4;
+
+        s.apply_change_set(&add_changes, false);
+        s.apply_change_set(&move_changes, false);
+        assert_eq!(s.element_by_id(1), Some(original));
+        assert!(s.element_by_id(added_id).is_none());
+        assert_eq!(s.next_id, 4);
+
+        s.apply_change_set(&move_changes, true);
+        s.apply_change_set(&add_changes, true);
+        assert_eq!(s.element_by_id(1), Some(moved));
+        assert!(s.element_by_id(added_id).is_some());
+        assert_eq!(s.next_id, 5);
+    }
+
+    #[test]
+    fn change_set_undo_restores_grouped_element_and_membership() {
+        let mut s = scene_with_three();
+        s.create_group(&[1, 2]);
+        s.seal_pending().expect("group should be recorded");
+        let groups = s.groups.clone();
+        let original = s.element_by_id(1).unwrap();
+
+        s.remove_by_id(1);
+        let changes = s.seal_pending().expect("removal should be recorded");
+        assert!(changes.groups.is_some());
+
+        s.apply_change_set(&changes, false);
+        assert_eq!(s.element_by_id(1), Some(original));
+        assert_eq!(s.groups, groups);
+
+        s.apply_change_set(&changes, true);
+        assert!(s.element_by_id(1).is_none());
+        assert!(s.groups.is_empty());
+    }
+
+    #[test]
+    fn unchanged_element_guard_leaves_no_history() {
+        let mut s = scene_with_three();
+        let _ = s.element_by_id_mut(1).unwrap();
+        assert!(s.seal_pending().is_none());
     }
 }

@@ -41,6 +41,9 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
         serde_json::from_value(raw).map_err(|e| format!("failed to parse .skea file: {e}"))?;
     let mut scene = file.scene;
     scene.normalize_groups();
+    // Loading is not an undoable user action; discard any journal entries
+    // produced by group normalization.
+    scene.clear_pending();
     Ok(scene)
 }
 

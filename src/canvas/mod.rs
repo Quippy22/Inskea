@@ -110,7 +110,7 @@ fn route_pointer_down(
 /// | `scene`         | The document model – all elements live here |
 /// | `eraser_active` | Whether the eraser toggle is pressed |
 /// | `shortcuts_open` | Whether the shortcuts modal is open (Esc closes it first) |
-/// | `push_snapshot` | Callback: saves an undo snapshot before mutating the scene |
+/// | `push_snapshot` | Callback: seals the previous undo entry before mutating the scene |
 ///
 /// Internal state (drag tracking, selection, text editing, grid) lives in
 /// [`state::CanvasState`] and [`state::CanvasInputs`]; reusable render helpers
