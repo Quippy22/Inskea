@@ -14,13 +14,15 @@ pub struct PendingAction {
 /// Ask to run an action, prompting first when the document has unsaved edits.
 pub type RequestAction = Rc<dyn Fn(PendingAction)>;
 
-/// Shared state for the open document: its scene, file path, selection, the
-/// last saved contents, and the undo-history reset hook.
+/// Shared state for the open document: its scene, file path, selection,
+/// opening hint, the last saved contents, and the undo-history reset hook.
 #[derive(Clone)]
 pub struct DocContext {
     pub scene: RwSignal<Scene>,
     pub saved_path: RwSignal<Option<String>>,
     pub selected_ids: RwSignal<Vec<ElementId>>,
+    /// Whether the one-time opening hint should cover the canvas.
+    pub show_welcome: RwSignal<bool>,
     /// Scene contents last written to disk (or the empty scene before the
     /// first save). Compared against `scene` to derive the dirty flag.
     pub baseline: RwSignal<Scene>,
@@ -58,6 +60,7 @@ impl DocContext {
             *generation = generation.wrapping_add(1);
         });
         self.selected_ids.set(Vec::new());
+        self.show_welcome.set(path.is_none() && scene.is_empty());
         self.baseline.set(scene.clone());
         self.scene.set(scene);
         self.saved_path.set(path);

@@ -11,7 +11,10 @@ pub(crate) mod settings;
 pub(crate) mod styles;
 mod toolbar;
 pub(crate) mod unsaved_dialog;
+mod welcome;
+mod welcome_tips;
 
 pub use settings::SettingsPanel;
 pub use toolbar::ToolBar;
 pub use unsaved_dialog::UnsavedChangesDialog;
+pub use welcome::WelcomeOverlay;

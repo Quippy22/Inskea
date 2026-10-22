@@ -13,7 +13,7 @@ use crate::ui::dock::{Dock, Tool};
 use crate::ui::notify::{self, Toasts};
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
-use crate::ui::{file_ops, SettingsPanel, ToolBar, UnsavedChangesDialog};
+use crate::ui::{file_ops, SettingsPanel, ToolBar, UnsavedChangesDialog, WelcomeOverlay};
 use leptos::*;
 use std::time::Duration;
 use wasm_bindgen::JsCast;
@@ -183,6 +183,7 @@ pub fn App() -> impl IntoView {
         selected_ids,
         baseline,
         dirty,
+        show_welcome: create_rw_signal(true),
         notifications,
         generation: create_rw_signal(0_u32),
         reset_history: reset_history.clone(),
@@ -348,6 +349,16 @@ pub fn App() -> impl IntoView {
         do_undo: Rc::new(do_undo),
         do_redo: Rc::new(do_redo),
     };
+
+    // The welcome overlay hides on the first interaction. These listeners are
+    // registered before the hotkeys so that Ctrl+N, which resets the document,
+    // finishes with the overlay visible again.
+    {
+        let show_welcome = doc.show_welcome;
+        let _ = window_event_listener(leptos::ev::pointerdown, move |_| show_welcome.set(false));
+        let _ = window_event_listener(leptos::ev::keydown, move |_| show_welcome.set(false));
+        let _ = window_event_listener(leptos::ev::wheel, move |_| show_welcome.set(false));
+    }
 
     register_hotkeys(ctx);
 
@@ -549,6 +560,7 @@ pub fn App() -> impl IntoView {
                     scene,
                     eraser_active,
                     settings,
+                    hide_center: doc.show_welcome,
                     push_snapshot: push_snapshot.clone(),
                     discard_snapshot: discard_snapshot.clone(),
                     export_crop_active,
@@ -558,6 +570,11 @@ pub fn App() -> impl IntoView {
                 }
                 on_text_commit=on_text_commit
                 shortcuts_open=shortcuts_open
+            />
+            <WelcomeOverlay
+                welcome=doc.show_welcome
+                generation=doc.generation
+                settings=settings
             />
             <ToolBar
                 doc=doc.clone()

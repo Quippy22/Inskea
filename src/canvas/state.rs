@@ -169,6 +169,8 @@ pub struct CanvasInputs {
     pub scene: RwSignal<Scene>,
     pub eraser_active: RwSignal<bool>,
     pub settings: RwSignal<CanvasSettings>,
+    /// Suppresses the canvas centre marker while the opening screen is shown.
+    pub hide_center: RwSignal<bool>,
     pub push_snapshot: Rc<dyn Fn()>,
     /// Seals the current undo entry. Used when an interaction ends or is
     /// aborted, so a no-op interaction leaves no entry.
