@@ -187,14 +187,14 @@ mod tests {
             false,
         );
         {
-            let mut points = line.path_points_mut().unwrap();
+            let points = line.path_points_mut().unwrap();
             points.insert(1, Point::new(5.0, 1.0));
         }
         assert_eq!(line.points.len(), 3);
         assert_eq!(line.points[1], Point::new(5.0, 1.0));
 
         {
-            let mut points = line.path_points_mut().unwrap();
+            let points = line.path_points_mut().unwrap();
             assert_eq!(points.remove(1), Some(Point::new(5.0, 1.0)));
         }
         assert_eq!(line.points.len(), 2);

@@ -144,14 +144,14 @@ pub fn swatch_row(
             let on_click = on_click.clone();
             let is_active = is_active.clone();
             let c = Color::new(hex);
-            let cc = c.clone();
+            let cc = c;
             view! {
                 <button
                     class=move || {
                         if is_active(&cc) { styles::BTN_SWATCH_SEL } else { styles::BTN_SWATCH_OFF }
                     }
                     style:background-color=hex
-                    on:click=move |_| on_click(c.clone())
+                    on:click=move |_| on_click(c)
                 />
             }
         })

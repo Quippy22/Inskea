@@ -225,8 +225,8 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         let local_style = local_style;
         let update_style = update_style.clone();
         move |c| {
-            local_style.update(|s| s.stroke_color = c.clone());
-            update_style(&|s| s.stroke_color = c.clone());
+            local_style.update(|s| s.stroke_color = c);
+            update_style(&|s| s.stroke_color = c);
         }
     });
 
@@ -234,8 +234,8 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         let local_style = local_style;
         let update_style = update_style.clone();
         move |c| {
-            local_style.update(|s| s.fill_color = c.clone());
-            update_style(&|s| s.fill_color = c.clone());
+            local_style.update(|s| s.fill_color = c);
+            update_style(&|s| s.fill_color = c);
         }
     });
 
