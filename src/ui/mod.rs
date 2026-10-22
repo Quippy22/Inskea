@@ -6,6 +6,7 @@ pub(crate) mod file_ops;
 pub(crate) mod icon;
 pub(crate) mod notify;
 pub(crate) mod settings;
+mod status;
 /// UI overlay components: toolbar, dock, settings, icons, Tailwind class constants,
 /// and reusable UI building blocks.
 pub(crate) mod styles;
@@ -15,6 +16,7 @@ mod welcome;
 mod welcome_tips;
 
 pub use settings::SettingsPanel;
+pub use status::CanvasStatus;
 pub use toolbar::ToolBar;
 pub use unsaved_dialog::UnsavedChangesDialog;
 pub use welcome::WelcomeOverlay;

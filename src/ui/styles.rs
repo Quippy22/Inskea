@@ -22,6 +22,16 @@ pub const CONTAINER_DOCK: &str =
 pub const CONTAINER_STATUSBAR: &str =
     "fixed max-sm:top-2 top-4 inset-x-0 flex justify-center pointer-events-none z-50";
 
+/// Bottom-right canvas HUD wrapper.
+pub const CONTAINER_HUD: &str = "fixed max-sm:bottom-2 max-sm:right-2 bottom-4 right-4 z-50 flex flex-col items-end gap-2 select-none pointer-events-none";
+
+/// Read-only element / group counter pill in the canvas HUD.
+pub const HUD_COUNTER: &str =
+    "rounded-md border border-border bg-panel/80 backdrop-blur-sm px-2 py-1 text-[11px] text-subtle tabular-nums";
+
+/// Action button in the canvas HUD.
+pub const BTN_HUD: &str = "pointer-events-auto flex items-center justify-center h-8 px-3 text-xs rounded-md border border-border bg-panel/90 backdrop-blur-sm text-fg shadow-lg hover:text-accent hover:bg-surface/50 transition-colors";
+
 /// Active toolbar button (hand / select / draw).
 pub const BTN_TBAR_ACTIVE: &str = "flex items-center justify-center h-8 w-8 rounded-md transition-colors text-accent bg-accent/10";
 

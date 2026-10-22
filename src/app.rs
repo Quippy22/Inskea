@@ -13,7 +13,9 @@ use crate::ui::dock::{Dock, Tool};
 use crate::ui::notify::{self, Toasts};
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
-use crate::ui::{file_ops, SettingsPanel, ToolBar, UnsavedChangesDialog, WelcomeOverlay};
+use crate::ui::{
+    file_ops, CanvasStatus, SettingsPanel, ToolBar, UnsavedChangesDialog, WelcomeOverlay,
+};
 use leptos::*;
 use std::time::Duration;
 use wasm_bindgen::JsCast;
@@ -591,6 +593,7 @@ pub fn App() -> impl IntoView {
                 settings=settings
             />
             <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />
+            <CanvasStatus scene=scene viewport=viewport />
             <SettingsPanel settings=settings />
             <ShortcutsModal shortcuts_open=shortcuts_open />
             <UnsavedChangesDialog

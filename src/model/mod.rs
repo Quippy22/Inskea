@@ -120,6 +120,19 @@ fn chunk_count(x0: i32, y0: i32, x1: i32, y1: i32) -> i64 {
     width.saturating_mul(height)
 }
 
+fn bounds_intersect(a: Rect, b: Rect) -> bool {
+    a.x <= b.right() && a.right() >= b.x && a.y <= b.bottom() && a.bottom() >= b.y
+}
+
+fn chunk_has_visible(chunk: &SceneChunk, origin: Point, view: Rect) -> bool {
+    chunk.elements.iter().any(|stored| {
+        let mut bounds = element_bounds(&stored.element);
+        bounds.x += origin.x;
+        bounds.y += origin.y;
+        bounds_intersect(bounds, view)
+    })
+}
+
 fn collect_visible_chunk<'a>(
     key: (i32, i32),
     chunk: &'a SceneChunk,
@@ -135,11 +148,7 @@ fn collect_visible_chunk<'a>(
         let mut bounds = element_bounds(&stored.element);
         bounds.x += origin.x;
         bounds.y += origin.y;
-        if bounds.x <= view.right()
-            && bounds.right() >= view.x
-            && bounds.y <= view.bottom()
-            && bounds.bottom() >= view.y
-        {
+        if bounds_intersect(bounds, view) {
             visible.push(VisibleElement {
                 element: &stored.element,
                 origin,
@@ -201,6 +210,13 @@ fn normalize_snapshots(
 fn element_bounds(element: &Element) -> Rect {
     crate::model::interaction::visual_envelope(element)
         .padded(element.data().style.stroke_width.max(0.0))
+}
+
+/// Squared distance from `point` to the nearest point of `bounds`.
+fn distance_to_bounds(bounds: Rect, point: Point) -> f64 {
+    let dx = (bounds.x - point.x).max(0.0).max(point.x - bounds.right());
+    let dy = (bounds.y - point.y).max(0.0).max(point.y - bounds.bottom());
+    dx * dx + dy * dy
 }
 
 #[derive(Clone, Debug)]
@@ -465,6 +481,78 @@ impl Scene {
                 element
             })
             .collect()
+    }
+
+    /// Number of elements in the scene.
+    pub fn element_count(&self) -> usize {
+        self.locations.len()
+    }
+
+    /// Number of persistent groups in the scene.
+    pub fn group_count(&self) -> usize {
+        self.groups.len()
+    }
+
+    /// True when at least one element intersects the view. Stops at the first
+    /// hit instead of collecting the visible set.
+    pub fn has_elements_in_view(&self, view: Rect) -> bool {
+        let (x0, y0, x1, y1) = chunk_range(view);
+        let (x0, y0, x1, y1) = (
+            x0.saturating_sub(1),
+            y0.saturating_sub(1),
+            x1.saturating_add(1),
+            y1.saturating_add(1),
+        );
+
+        if chunk_count(x0, y0, x1, y1) > 4096 {
+            return self
+                .chunks
+                .iter()
+                .any(|(key, chunk)| chunk_has_visible(chunk, chunk_origin(*key), view));
+        }
+
+        for x in x0..=x1 {
+            for y in y0..=y1 {
+                if let Some(chunk) = self.chunks.get(&(x, y)) {
+                    if chunk_has_visible(chunk, chunk_origin((x, y)), view) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        self.oversized.iter().any(|id| {
+            let Some(key) = self.locations.get(id) else {
+                return false;
+            };
+            self.chunks
+                .get(key)
+                .is_some_and(|chunk| chunk_has_visible(chunk, chunk_origin(*key), view))
+        })
+    }
+
+    /// Center of the element whose visual bounds are nearest to `point`.
+    pub fn nearest_element_center(&self, point: Point) -> Option<Point> {
+        let mut nearest: Option<(f64, u64, Point)> = None;
+        for (key, chunk) in &self.chunks {
+            let origin = chunk_origin(*key);
+            for stored in &chunk.elements {
+                let mut bounds = element_bounds(&stored.element);
+                bounds.x += origin.x;
+                bounds.y += origin.y;
+                let distance = distance_to_bounds(bounds, point);
+                let closer = nearest.is_none_or(|(best, best_order, _)| {
+                    distance
+                        .total_cmp(&best)
+                        .then(stored.order.cmp(&best_order))
+                        .is_lt()
+                });
+                if closer {
+                    nearest = Some((distance, stored.order, bounds.center()));
+                }
+            }
+        }
+        nearest.map(|(_, _, center)| center)
     }
 
     pub fn element_by_id(&self, id: ElementId) -> Option<Element> {
@@ -1208,6 +1296,56 @@ mod tests {
         let visible = s.visible_elements(Rect::new(0.0, 0.0, 10.0, 10.0));
         assert_eq!(visible.len(), 1);
         assert_eq!(visible[0].element.id(), 1);
+    }
+
+    #[test]
+    fn counts_elements_and_groups() {
+        let s = scene_with_three();
+        assert_eq!((s.element_count(), s.group_count()), (3, 0));
+
+        let mut s = s;
+        s.create_group(&[1, 2]);
+        assert_eq!((s.element_count(), s.group_count()), (3, 1));
+    }
+
+    #[test]
+    fn has_elements_in_view_stops_at_the_view_edge() {
+        let mut s = scene_with_three();
+        assert!(!s.has_elements_in_view(Rect::new(1000.0, 1000.0, 10.0, 10.0)));
+
+        {
+            let mut element = s.element_by_id_mut(2).unwrap();
+            element.data_mut().world_point = Point::new(1005.0, 1005.0);
+        }
+
+        assert!(s.has_elements_in_view(Rect::new(1000.0, 1000.0, 10.0, 10.0)));
+    }
+
+    #[test]
+    fn nearest_element_center_measures_distance_to_bounds() {
+        let mut s = Scene::new();
+        let mut wide = Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        });
+        wide.data_mut().world_point = Point::new(0.0, 60.0);
+        wide.data_mut().width = 1000.0;
+        wide.data_mut().height = 20.0;
+        s.add_element(wide);
+
+        let mut distant = Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        });
+        distant.data_mut().world_point = Point::new(0.0, 200.0);
+        distant.data_mut().width = 10.0;
+        distant.data_mut().height = 10.0;
+        s.add_element(distant);
+
+        // The wide shape's centre is far away, but its top edge is closest to
+        // the point, so it wins over the shape whose centre is nearer.
+        assert_eq!(
+            s.nearest_element_center(Point::new(0.0, 0.0)),
+            Some(Point::new(500.0, 70.0))
+        );
     }
 
     #[test]
