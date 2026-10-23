@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/version-1.2.0-blue?style=flat-square" alt="Version 1.2.0">
+  <img src="https://img.shields.io/badge/version-1.2.1-blue?style=flat-square" alt="Version 1.2.1">
   <img src="https://img.shields.io/badge/platform-desktop%20%7C%20browser-blueviolet?style=flat-square" alt="Platform: desktop and browser">
 </p>
 
@@ -71,3 +71,18 @@ The shortcuts are chosen for one-handed use, so your other hand can stay on the 
 | New / open / save / save as | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` |
 | Cancel, deselect, or leave a group | `Esc` |
 | Shortcut help | `?` |
+
+## Windows notes
+
+The Windows build installs `Inskea.exe`, uses an Inskea icon at every shell size (including the installer and uninstaller), and sets the bundle identifier as its AppUserModelID so shortcuts, taskbar pins, and file associations resolve to the same app.
+
+`src-tauri/icons/icon.ico` is hand-tuned: 16–64 px use a simplified mark and 128–256 px use the full logo. `cargo tauri icon` regenerates every size from one source image, so restore the tuned `icon.ico` after running it.
+
+Windows 11 also lists a separate `WebView2 Manager` group in Task Manager. Those are Microsoft's WebView2 runtime processes; an app cannot rename or absorb that group. The Inskea process itself is listed separately with the app name and icon.
+
+The release workflow signs the Windows executable and installer when these repository secrets are set:
+
+- `WINDOWS_CERTIFICATE`: the base64-encoded `.pfx` certificate. Run `certutil -encode certificate.pfx base64cert.txt` and paste the contents of `base64cert.txt`, or use `base64 -w0 certificate.pfx` on Linux/macOS.
+- `WINDOWS_CERTIFICATE_PASSWORD`: the password used when exporting the `.pfx`
+
+Without a code-signing certificate the installer is unsigned, and SmartScreen shows its standard warning. Signing replaces "Unknown publisher" with the certificate's publisher name; use a certificate from a publicly trusted CA, because a self-signed certificate does not remove the warning. SmartScreen reputation still builds over releases, so a newly issued certificate can show a warning until it has reputation; submitting the installer to Microsoft can also help.

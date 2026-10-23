@@ -218,12 +218,53 @@ jobs:
           tool: trunk@0.21.14
       - name: Install frontend dependencies
         run: npm ci
+      - name: Configure Windows code signing
+        if: matrix.artifact == 'windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE)) {
+            Write-Host "WINDOWS_CERTIFICATE is not set; building an unsigned installer."
+            exit 0
+          }
+
+          $pfxPath = Join-Path $env:RUNNER_TEMP "inskea.pfx"
+          $base64 = $env:WINDOWS_CERTIFICATE -replace '-----(BEGIN|END) CERTIFICATE-----', '' -replace '\s', ''
+          [IO.File]::WriteAllBytes(
+            $pfxPath,
+            [Convert]::FromBase64String($base64)
+          )
+          $password = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+          $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password |
+            Where-Object HasPrivateKey |
+            Select-Object -First 1
+          Remove-Item -LiteralPath $pfxPath -Force
+
+          if (-not $certificate) {
+            throw "The imported PFX did not contain a certificate with a private key."
+          }
+
+          $configPath = Join-Path $env:RUNNER_TEMP "inskea-signing.json"
+          @{
+            bundle = @{
+              windows = @{
+                certificateThumbprint = $certificate.Thumbprint
+                digestAlgorithm = "sha256"
+                timestampUrl = "http://timestamp.digicert.com"
+              }
+            }
+          } | ConvertTo-Json -Depth 5 | Set-Content -Path $configPath -Encoding utf8
+
+          "TAURI_CONFIG_ARGS=--config `"$configPath`"" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Windows code signing enabled with certificate $($certificate.Thumbprint)."
       - name: Build bundles
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          args: --bundles ${{ matrix.bundle }}
+          args: --bundles ${{ matrix.bundle }} ${{ env.TAURI_CONFIG_ARGS }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}

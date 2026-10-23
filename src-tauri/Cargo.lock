@@ -1847,7 +1847,7 @@ dependencies = [
 
 [[package]]
 name = "inskea"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "base64 0.22.1",
  "log",
@@ -1859,6 +1859,7 @@ dependencies = [
  "tauri-plugin-log",
  "tauri-plugin-single-instance",
  "ureq",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

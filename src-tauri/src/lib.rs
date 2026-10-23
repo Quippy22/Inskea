@@ -8,6 +8,17 @@ mod setup;
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// Give the process the same AppUserModelID the NSIS shortcut uses, so the
+/// taskbar, jump lists, and notifications group under the installed app.
+#[cfg(windows)]
+fn set_app_user_model_id(identifier: &str) {
+    use windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
+
+    let app_id: Vec<u16> = identifier.encode_utf16().chain(std::iter::once(0)).collect();
+    // A failed call leaves the default process identity in place; startup continues.
+    let _ = unsafe { SetCurrentProcessExplicitAppUserModelID(app_id.as_ptr()) };
+}
+
 /// Close-request state shared with the webview.
 ///
 /// `armed` becomes true once the frontend listener is registered, so a close
@@ -249,6 +260,11 @@ fn get_font_data(app_handle: tauri::AppHandle) -> Result<Vec<String>, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let context = tauri::generate_context!();
+
+    #[cfg(windows)]
+    set_app_user_model_id(context.config().identifier.as_str());
+
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             if let Some(path) = argv
@@ -303,6 +319,6 @@ pub fn run() {
             setup::run(app.handle())?;
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }
