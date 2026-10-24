@@ -69,6 +69,7 @@ lucide_icons! {
     gear => "settings.svg",
     menu => "menu.svg",
     close => "x.svg",
+    check => "check.svg",
     chevron_right => "chevron-right.svg",
 
     // Edit, clipboard, and layers.
@@ -111,6 +112,11 @@ pub fn chevron_up() -> impl IntoView {
 
 pub fn chevron_down() -> impl IntoView {
     svg(include_str!("icons/chevron-down.svg"), "w-3 h-3")
+}
+
+/// Palette mark used by the theme picker.
+pub fn palette() -> impl IntoView {
+    svg(include_str!("icons/palette.svg"), "w-4 h-4")
 }
 
 #[cfg(test)]

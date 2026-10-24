@@ -206,7 +206,7 @@ where
                 let on_crop_export = _on_crop_export;
                 let export_crop_active = _export_crop_active;
                 let close_menu = _close_menu;
-                let bg = settings.get_untracked().canvas_bg;
+                let bg = settings.get_untracked().theme;
                 on_crop_export.set(Some(Rc::new(move |rect: Rect| {
                     close_menu();
                     let svg = scene.with(|s| export::scene_to_svg_crop(s, rect, bg));
@@ -240,7 +240,7 @@ where
             }
             let vp = viewport.get();
             let size = window_size();
-            let bg = settings.get_untracked().canvas_bg;
+            let bg = settings.get_untracked().theme;
             let svg = _doc
                 .scene
                 .with(|s| export::scene_to_svg(s, &vp, size, None, bg));

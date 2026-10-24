@@ -168,6 +168,10 @@ pub fn Canvas(
             if ev.key() != "Escape" {
                 return;
             }
+            if _props.theme_open.get_untracked() {
+                _props.theme_open.set(false);
+                return;
+            }
             if shortcuts_open.get_untracked() {
                 shortcuts_open.set(false);
                 return;
@@ -374,7 +378,8 @@ pub fn Canvas(
             let pan = st.pan_anchor.get().is_some();
             let handle = st.drag.drag_action.get();
             let hovered = st.drag.hovered_handle.get();
-            let cursor = cursor_style(mode, tool, handle, eraser, pan, crop, hovered);
+            let theme = props.settings.get().theme;
+            let cursor = cursor_style(mode, tool, handle, eraser, pan, crop, hovered, theme);
             st.cursor_style.set(cursor);
         });
     }
@@ -781,13 +786,20 @@ pub fn Canvas(
             }
 
             {drawing_preview}
-            {smart_guides::guide_overlay(st.drag.smart_guides, props.viewport)}
-            {selection::selection_preview_overlay(st.select_anchor, props.cursor_world)}
-            {selection::selection_handle_overlay(
+            {smart_guides::guide_overlay(
+                st.drag.smart_guides,
+                props.viewport,
+                props.settings,
+            )} {selection::selection_preview_overlay(
+                st.select_anchor,
+                props.cursor_world,
+                props.settings,
+            )} {selection::selection_handle_overlay(
                 st.selected_ids,
                 props.scene,
                 st.drag.overlay_freeze,
                 st.drag.rotation_delta,
+                props.settings,
             )}
         </svg>
 

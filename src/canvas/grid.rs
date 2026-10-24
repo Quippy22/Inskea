@@ -1,4 +1,4 @@
-use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridStyle};
+use crate::canvas::settings::{CanvasSettings, CenterStyle, GridStyle};
 use leptos::*;
 
 /// Returns a reactive closure that renders the grid pattern and centre indicator.
@@ -7,15 +7,12 @@ pub fn grid_overlay(
     hide_center: RwSignal<bool>,
 ) -> impl Fn() -> View {
     move || {
-        let gs = settings.get().grid_style;
-        let sz = settings.get().grid_size.px();
+        let settings_state = settings.get();
+        let gs = settings_state.grid_style;
+        let sz = settings_state.grid_size.px();
+        let theme = settings_state.theme;
         let half = sz / 2.0;
-        // A darker tone keeps the grid legible on the light canvas background.
-        let grid_color = if settings.get().canvas_bg == CanvasBg::Light {
-            "#64748b"
-        } else {
-            "#d1d5db"
-        };
+        let grid_color = theme.grid();
 
         let pattern = match gs {
             GridStyle::Dot => view! {
@@ -72,13 +69,13 @@ pub fn grid_overlay(
         let center = if hide_center.get() {
             view! {}.into_view()
         } else {
-            match settings.get().center_style {
+            match settings_state.center_style {
                 CenterStyle::Crosshair => {
-                    view! { <path d="M-12,0 L12,0 M0,-12 L0,12" stroke="#7aa2f7" stroke-width="2" /> }
+                    view! { <path d="M-12,0 L12,0 M0,-12 L0,12" stroke=theme.accent() stroke-width="2" /> }
                         .into_view()
                 }
                 CenterStyle::Dot => {
-                    view! { <circle cx="0" cy="0" r="3" fill="#7aa2f7" /> }.into_view()
+                    view! { <circle cx="0" cy="0" r="3" fill=theme.accent() /> }.into_view()
                 }
                 CenterStyle::Off => view! {}.into_view(),
             }

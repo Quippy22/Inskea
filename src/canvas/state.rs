@@ -179,6 +179,9 @@ pub struct CanvasInputs {
     pub on_crop_export: RwSignal<Option<CropExportCallback>>,
     pub default_style: RwSignal<ElementStyle>,
     pub default_line_style: RwSignal<LineStyle>,
+    /// The theme picker modal is open; Escape closes it before touching the
+    /// canvas or the current selection.
+    pub theme_open: RwSignal<bool>,
 }
 
 // ── Helper functions used by pointer event handlers ──────────────────────

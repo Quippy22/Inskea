@@ -2,10 +2,11 @@
 //! transform.
 
 use super::{
-    GuideAxis, GuideKind, SmartGuideState, GUIDE_ALIGNMENT_COLOR, GUIDE_LABEL_CLEARANCE_PX,
-    GUIDE_LABEL_FONT_PX, GUIDE_MIN_LABEL_SPAN_PX, GUIDE_SPACING_BAND_PX, GUIDE_SPACING_CAP_PX,
-    GUIDE_SPACING_CLEARANCE_PX, GUIDE_SPACING_COLOR,
+    GuideAxis, GuideKind, SmartGuideState, GUIDE_LABEL_CLEARANCE_PX, GUIDE_LABEL_FONT_PX,
+    GUIDE_MIN_LABEL_SPAN_PX, GUIDE_SPACING_BAND_PX, GUIDE_SPACING_CAP_PX,
+    GUIDE_SPACING_CLEARANCE_PX,
 };
+use crate::canvas::settings::CanvasSettings;
 use crate::canvas::viewport::Viewport;
 use crate::model::Point;
 use leptos::*;
@@ -34,12 +35,18 @@ fn guide_line(start: Point, end: Point, color: &'static str, width: f64, opacity
 pub fn guide_overlay(
     guide_state: RwSignal<SmartGuideState>,
     viewport: RwSignal<Viewport>,
+    settings: RwSignal<CanvasSettings>,
 ) -> impl Fn() -> Option<View> {
     move || {
         let state = guide_state.get();
         if state.guides.is_empty() {
             return None;
         }
+
+        let theme = settings.get().theme;
+        let alignment_color = theme.guide_alignment();
+        let spacing_color = theme.guide_spacing();
+        let halo = theme.halo();
 
         let zoom = viewport.get().zoom;
         let zoom = if zoom.is_finite() && zoom > 0.0 {
@@ -114,11 +121,11 @@ pub fn guide_overlay(
                             width=width
                             height=height
                             rx=band
-                            fill=GUIDE_SPACING_COLOR
+                            fill=spacing_color
                             fill-opacity="0.28"
                         />
-                        {guide_line(a1, a2, GUIDE_SPACING_COLOR, 1.5, 0.9)}
-                        {guide_line(b1, b2, GUIDE_SPACING_COLOR, 1.5, 0.9)}
+                        {guide_line(a1, a2, spacing_color, 1.5, 0.9)}
+                        {guide_line(b1, b2, spacing_color, 1.5, 0.9)}
                     </g>
                 }
                 .into_view()
@@ -134,8 +141,8 @@ pub fn guide_overlay(
                 let (start, end) = (guide.start, guide.end);
                 view! {
                     <g>
-                        {guide_line(start, end, GUIDE_ALIGNMENT_COLOR, 4.0, 0.18)}
-                        {guide_line(start, end, GUIDE_ALIGNMENT_COLOR, 1.5, 0.95)}
+                        {guide_line(start, end, alignment_color, 4.0, 0.18)}
+                        {guide_line(start, end, alignment_color, 1.5, 0.95)}
                     </g>
                 }
                 .into_view()
@@ -167,8 +174,8 @@ pub fn guide_overlay(
                         dominant-baseline="middle"
                         font-family="sans-serif"
                         font-size=font
-                        fill=GUIDE_SPACING_COLOR
-                        stroke="#0b0d12"
+                        fill=spacing_color
+                        stroke=halo
                         stroke-opacity="0.85"
                         stroke-width=font * 0.3
                         stroke-linejoin="round"

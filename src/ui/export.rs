@@ -1,4 +1,4 @@
-use crate::canvas::settings::CanvasBg;
+use crate::canvas::settings::Theme;
 use crate::canvas::{combined_bounds, Viewport};
 use crate::model::{Element, ElementId, Point, Rect, Scene};
 use crate::ui::notify::{self, Notifications};
@@ -57,7 +57,7 @@ pub fn scene_to_svg(
     viewport: &Viewport,
     screen: Point,
     selected: Option<&[ElementId]>,
-    bg: CanvasBg,
+    bg: Theme,
 ) -> String {
     let (view, width, height, elements): (Rect, f64, f64, Vec<Element>) = match selected {
         Some(ids) if !ids.is_empty() => {
@@ -87,7 +87,7 @@ pub fn scene_to_svg(
     svg_document(view, width, height, bg, &element_body)
 }
 
-pub fn scene_to_svg_crop(scene: &Scene, crop: Rect, bg: CanvasBg) -> String {
+pub fn scene_to_svg_crop(scene: &Scene, crop: Rect, bg: Theme) -> String {
     let element_body = svg_body(&scene.elements_in_view(crop), None);
     svg_document(crop, crop.w, crop.h, bg, &element_body)
 }
@@ -95,17 +95,14 @@ pub fn scene_to_svg_crop(scene: &Scene, crop: Rect, bg: CanvasBg) -> String {
 /// The on-screen canvas background. Exports paint it too: the default drawing
 /// colour is white, which would be invisible on a viewer's white backdrop if
 /// the image were transparent.
-fn bg_color(bg: CanvasBg) -> &'static str {
-    match bg {
-        CanvasBg::Dark => "#1a1b26",
-        CanvasBg::Light => "#ffffff",
-    }
+fn bg_color(bg: Theme) -> &'static str {
+    bg.canvas()
 }
 
 /// `width`/`height` give the SVG an intrinsic pixel size. Without them an SVG
 /// loaded into an `<img>` falls back to a default 300×150 raster for PNG
 /// export, regardless of the drawing's size.
-fn svg_document(view: Rect, width: f64, height: f64, bg: CanvasBg, body: &str) -> String {
+fn svg_document(view: Rect, width: f64, height: f64, bg: Theme, body: &str) -> String {
     let (x, y, w, h) = (view.x, view.y, view.w, view.h);
     format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="{x} {y} {w} {h}"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{}"/>{body}</svg>"#,
@@ -597,7 +594,7 @@ mod tests {
             &Viewport::default(),
             Point::new(800.0, 600.0),
             None,
-            CanvasBg::Dark,
+            Theme::Storm,
         );
         assert!(svg.contains(r#"width="800""#));
         assert!(svg.contains(r#"height="600""#));
@@ -621,7 +618,7 @@ mod tests {
             &Viewport::default(),
             Point::new(800.0, 600.0),
             Some(&[1]),
-            CanvasBg::Light,
+            Theme::Paper,
         );
         assert!(svg.contains(r#"width="120""#));
         assert!(svg.contains(r#"height="70""#));
@@ -638,7 +635,7 @@ mod tests {
         rect.data.style.stroke_style = StrokeStyle::Dashed;
         scene.add_element(Element::Rectangle(rect));
 
-        let svg = scene_to_svg_crop(&scene, Rect::new(0.0, 0.0, 200.0, 200.0), CanvasBg::Dark);
+        let svg = scene_to_svg_crop(&scene, Rect::new(0.0, 0.0, 200.0, 200.0), Theme::Storm);
         assert!(svg.contains(r#"rx="12""#));
         assert!(svg.contains(r#"stroke-dasharray="6 3""#));
     }

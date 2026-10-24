@@ -54,8 +54,6 @@ pub const GUIDE_LABEL_FONT_PX: f64 = 11.0;
 /// Bands shorter than this on screen get no label: there is no room to read
 /// one without it spilling over the pieces the band measures.
 pub const GUIDE_MIN_LABEL_SPAN_PX: f64 = 34.0;
-const GUIDE_ALIGNMENT_COLOR: &str = "#7aa2f7";
-const GUIDE_SPACING_COLOR: &str = "#9ece6a";
 const EPSILON: f64 = 1e-9;
 const FEATURES: [GuideFeature; 3] = [GuideFeature::Start, GuideFeature::Center, GuideFeature::End];
 

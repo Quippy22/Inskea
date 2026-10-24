@@ -8,8 +8,9 @@ html {
   font-size: clamp(11px, 0.5vmin + 8.5px, 18px);
 }
 
+/* The default palette is Storm. `data-theme` on <html> swaps the tokens at
+   runtime; Tailwind utilities resolve to var(--color-*) and follow along. */
 @theme {
-  /* Tokyo Night */
   --color-bg: #1a1b26;
   --color-surface: #1e1f2e;
   --color-panel: #24283b;
@@ -22,4 +23,92 @@ html {
   --color-cyan: #7dcfff;
   --color-border: #3b4261;
   --color-subtle: #565f89;
+}
+
+:root {
+  color-scheme: dark;
+  --accent-glow: rgb(122 162 247 / 0.35);
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+}
+
+/* Accent-tinted glow under the main toolbar. */
+.panel-glow {
+  box-shadow: 0 6px 12px -4px var(--accent-glow);
+}
+
+html[data-theme="storm"] {
+  color-scheme: dark;
+  --accent-glow: rgb(122 162 247 / 0.35);
+}
+
+html[data-theme="tokyo-night"] {
+  color-scheme: dark;
+  --color-bg: #16161e;
+  --color-surface: #1a1b26;
+  --color-panel: #1f2335;
+  --color-fg: #c0caf5;
+  --color-accent: #bb9af7;
+  --color-green: #9ece6a;
+  --color-red: #f7768e;
+  --color-yellow: #e0af68;
+  --color-magenta: #bb9af7;
+  --color-cyan: #7dcfff;
+  --color-border: #2f3549;
+  --color-subtle: #565f89;
+  --accent-glow: rgb(187 154 247 / 0.35);
+}
+
+html[data-theme="mono"] {
+  color-scheme: dark;
+  --color-bg: #121213;
+  --color-surface: #171718;
+  --color-panel: #1c1c1e;
+  --color-fg: #e6e6e9;
+  --color-accent: #c9c9ce;
+  --color-green: #c2c2c7;
+  --color-red: #dedee2;
+  --color-yellow: #d0d0d5;
+  --color-magenta: #b9b9bf;
+  --color-cyan: #c7c7cc;
+  --color-border: #2c2c2f;
+  --color-subtle: #8b8b91;
+  --accent-glow: rgb(0 0 0 / 0.5);
+}
+
+html[data-theme="paper"] {
+  color-scheme: light;
+  --color-bg: #f3f0e9;
+  --color-surface: #ebe7de;
+  --color-panel: #fbf9f4;
+  --color-fg: #2b2925;
+  --color-accent: #3f6a8c;
+  --color-green: #4c7a46;
+  --color-red: #a8483f;
+  --color-yellow: #9a7423;
+  --color-magenta: #855a81;
+  --color-cyan: #357a80;
+  --color-border: #d8d1c3;
+  --color-subtle: #7b7569;
+  --accent-glow: rgb(63 106 140 / 0.22);
+}
+
+html[data-theme="greenboard"] {
+  color-scheme: dark;
+  --color-bg: #0e1d17;
+  --color-surface: #12251c;
+  --color-panel: #162d22;
+  --color-fg: #d7e6db;
+  --color-accent: #8fd3a5;
+  --color-green: #a3d977;
+  --color-red: #e08b7a;
+  --color-yellow: #d9c07e;
+  --color-magenta: #c4a0c8;
+  --color-cyan: #86cfc6;
+  --color-border: #294637;
+  --color-subtle: #6f8f7c;
+  --accent-glow: rgb(143 211 165 / 0.28);
 }

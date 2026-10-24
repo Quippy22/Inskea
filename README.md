@@ -44,7 +44,7 @@ It runs as a native desktop app and in the browser, with the same tools and the 
 - **Reset view.** Click the zoom readout to jump back to 100%, centered.
 - **Grid.** Dots, lines, or off, with adjustable spacing. Alt-snapping follows the spacing you set.
 - **Center marker.** A crosshair or dot at the origin, so you can find your way back.
-- **Background.** Dark or light canvas.
+- **Themes.** Storm, Tokyo Night, Mono, Paper, and Greenboard. Switch from the settings panel; the choice applies to the whole app and is remembered.
 
 ### Files and export
 

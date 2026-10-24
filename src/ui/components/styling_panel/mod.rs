@@ -23,6 +23,7 @@ use self::style::style_section;
 use self::utils::{
     read_panel_state, selected_text_align, single_selected_element, uniform_icon_seg,
 };
+use crate::canvas::settings::CanvasSettings;
 use crate::canvas::CanvasMode;
 use crate::edit_ops;
 use crate::edit_ops::Clipboard;
@@ -69,6 +70,7 @@ pub struct StylingPanelContext {
     pub push_snapshot: Rc<dyn Fn()>,
     pub canvas_mode: RwSignal<CanvasMode>,
     pub cursor_world: RwSignal<Point>,
+    pub settings: RwSignal<CanvasSettings>,
 }
 
 fn mutate_selected_elements(
@@ -98,6 +100,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         push_snapshot,
         canvas_mode,
         cursor_world,
+        settings,
     } = context;
     let styling_kind = Signal::derive(move || {
         let ids = selected_ids.get();
@@ -438,6 +441,6 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
             {alignment_section(scene, selected_ids, canvas_mode, push_snapshot.clone())}
             {layers_section(scene, selected_ids, push_snapshot.clone())}
         </div>
-        {float_picker(active_slot, picker_color, picker_on_change, picker_ref)}
+        {float_picker(active_slot, picker_color, picker_on_change, picker_ref, settings)}
     }
 }

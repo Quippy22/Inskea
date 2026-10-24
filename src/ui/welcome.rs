@@ -1,93 +1,22 @@
 use super::welcome_tips;
-use crate::canvas::settings::{CanvasBg, CanvasSettings};
 use leptos::*;
+
+const WORD_CLASS: &str = "relative z-10 select-none whitespace-nowrap text-[clamp(2.75rem,7vw,5.75rem)] font-bold leading-none tracking-[0.24em] pl-[0.24em] text-fg";
+const TIP_CLASS: &str = "relative z-10 mt-6 max-w-[min(92vw,44rem)] text-center font-mono text-sm tracking-[0.12em] sm:text-base text-subtle";
+const HINT_CLASS: &str = "relative z-10 mt-5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 font-mono text-[0.68rem] tracking-[0.08em] text-subtle/80";
+const KEY_CLASS: &str = "rounded border border-border/80 bg-panel/60 px-1 py-0.5 font-mono text-[0.6rem] leading-none text-subtle";
+const ACCENT_CLASS: &str = "text-accent/60";
+const SUBTLE_CLASS: &str = "text-subtle/60";
+const HANDLE_CLASS: &str = "fill-bg stroke-accent/70";
+const POINT_CLASS: &str = "fill-fg stroke-accent";
+const MARQUEE_CLASS: &str = "text-accent/55";
 
 /// One-time opening hint shown over a fresh, blank document. It is chrome,
 /// not scene content, so it never appears in exports.
 #[component]
-pub fn WelcomeOverlay(
-    welcome: RwSignal<bool>,
-    generation: RwSignal<u32>,
-    settings: RwSignal<CanvasSettings>,
-) -> impl IntoView {
+pub fn WelcomeOverlay(welcome: RwSignal<bool>, generation: RwSignal<u32>) -> impl IntoView {
     let tip_start = welcome_tips::pick_index();
     let tip_text = move || welcome_tips::tip_for(generation.get(), tip_start);
-
-    let word_class = move || {
-        let tone = if settings.get().canvas_bg == CanvasBg::Light {
-            "text-[#1a1b26]"
-        } else {
-            "text-fg"
-        };
-        format!(
-            "relative z-10 select-none whitespace-nowrap text-[clamp(2.75rem,7vw,5.75rem)] font-bold \
-             leading-none tracking-[0.24em] pl-[0.24em] {tone}"
-        )
-    };
-    let tip_class = move || {
-        let tone = if settings.get().canvas_bg == CanvasBg::Light {
-            "text-[#565f89]"
-        } else {
-            "text-subtle"
-        };
-        format!(
-            "relative z-10 mt-6 max-w-[min(92vw,44rem)] text-center font-mono text-sm \
-             tracking-[0.12em] sm:text-base {tone}"
-        )
-    };
-    let hint_class = move || {
-        let tone = if settings.get().canvas_bg == CanvasBg::Light {
-            "text-[#565f89]/80"
-        } else {
-            "text-subtle/80"
-        };
-        format!(
-            "relative z-10 mt-5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 \
-             font-mono text-[0.68rem] tracking-[0.08em] {tone}"
-        )
-    };
-    let key_class = move || {
-        if settings.get().canvas_bg == CanvasBg::Light {
-            "rounded border border-[#3b4261]/30 bg-[#1a1b26]/5 px-1 py-0.5 font-mono text-[0.6rem] leading-none text-[#565f89]"
-        } else {
-            "rounded border border-border/80 bg-panel/60 px-1 py-0.5 font-mono text-[0.6rem] leading-none text-subtle"
-        }
-    };
-    let accent_class = move || {
-        if settings.get().canvas_bg == CanvasBg::Light {
-            "text-[#3b4261]/60"
-        } else {
-            "text-accent/60"
-        }
-    };
-    let subtle_class = move || {
-        if settings.get().canvas_bg == CanvasBg::Light {
-            "text-[#3b4261]/35"
-        } else {
-            "text-subtle/60"
-        }
-    };
-    let handle_class = move || {
-        if settings.get().canvas_bg == CanvasBg::Light {
-            "fill-white stroke-[#3b4261]/70"
-        } else {
-            "fill-bg stroke-accent/80"
-        }
-    };
-    let point_class = move || {
-        if settings.get().canvas_bg == CanvasBg::Light {
-            "fill-white stroke-[#3b4261]"
-        } else {
-            "fill-white stroke-accent"
-        }
-    };
-    let marquee_class = move || {
-        if settings.get().canvas_bg == CanvasBg::Light {
-            "text-[#3b4261]/45"
-        } else {
-            "text-accent/55"
-        }
-    };
 
     move || {
         if !welcome.get() {
@@ -108,7 +37,7 @@ pub fn WelcomeOverlay(
                             // Selected rectangle: outline, padded selection box,
                             // hollow corner handles, and the rotation affordance.
                             <g
-                                class=subtle_class
+                                class=SUBTLE_CLASS
                                 stroke="currentColor"
                                 stroke-width="1.5"
                                 stroke-linecap="round"
@@ -118,7 +47,7 @@ pub fn WelcomeOverlay(
                                 <rect x="52" y="79" width="140" height="84" />
                             </g>
                             <g
-                                class=accent_class
+                                class=ACCENT_CLASS
                                 stroke="currentColor"
                                 stroke-width="1.5"
                                 stroke-linecap="round"
@@ -129,7 +58,7 @@ pub fn WelcomeOverlay(
                                 <path d="M107.8 40.6L110 38L112.2 40.6" />
                             </g>
                             <g
-                                class=handle_class
+                                class=HANDLE_CLASS
                                 stroke-width="1.5"
                                 transform="rotate(-6 122 121)"
                             >
@@ -141,7 +70,7 @@ pub fn WelcomeOverlay(
 
                             // Crosshair, matching the canvas centre marker.
                             <g
-                                class=accent_class
+                                class=ACCENT_CLASS
                                 stroke="currentColor"
                                 stroke-width="2"
                                 stroke-linecap="round"
@@ -151,7 +80,7 @@ pub fn WelcomeOverlay(
 
                             // Curved arrow, drawn like an arrow element.
                             <g
-                                class=accent_class
+                                class=ACCENT_CLASS
                                 stroke="currentColor"
                                 stroke-width="1.5"
                                 stroke-linecap="round"
@@ -171,7 +100,7 @@ pub fn WelcomeOverlay(
                             // Freehand stroke with its path points.
                             <g transform="translate(-8 28)">
                                 <g
-                                    class=accent_class
+                                    class=ACCENT_CLASS
                                     stroke="currentColor"
                                     stroke-width="1.8"
                                     stroke-linecap="round"
@@ -185,13 +114,13 @@ pub fn WelcomeOverlay(
                                         opacity="0.7"
                                     />
                                 </g>
-                                <g class=point_class stroke-width="1.5">
+                                <g class=POINT_CLASS stroke-width="1.5">
                                     <circle cx="54" cy="358" r="5" />
                                     <circle cx="220" cy="346" r="5" />
                                     <circle cx="366" cy="338" r="5" />
                                 </g>
                                 <g
-                                    class=accent_class
+                                    class=ACCENT_CLASS
                                     stroke="currentColor"
                                     stroke-width="1"
                                     opacity="0.6"
@@ -203,7 +132,7 @@ pub fn WelcomeOverlay(
 
                             // Marquee selection around an ellipse.
                             <g
-                                class=marquee_class
+                                class=MARQUEE_CLASS
                                 stroke="currentColor"
                                 fill="currentColor"
                                 stroke-width="1.2"
@@ -218,7 +147,7 @@ pub fn WelcomeOverlay(
                                     transform="rotate(4 875 364)"
                                 />
                             </g>
-                            <g class=subtle_class stroke="currentColor" stroke-width="1.5">
+                            <g class=SUBTLE_CLASS stroke="currentColor" stroke-width="1.5">
                                 <ellipse
                                     cx="875"
                                     cy="364"
@@ -229,7 +158,7 @@ pub fn WelcomeOverlay(
                             </g>
 
                             <g
-                                class=subtle_class
+                                class=SUBTLE_CLASS
                                 stroke="currentColor"
                                 stroke-width="1.5"
                                 stroke-linecap="round"
@@ -239,7 +168,7 @@ pub fn WelcomeOverlay(
                         </svg>
 
                         <h1
-                            class=word_class
+                            class=WORD_CLASS
                             style="font-family: Arial, 'Liberation Sans', 'Helvetica Neue', sans-serif;"
                             aria-label="Inskea"
                         >
@@ -247,13 +176,13 @@ pub fn WelcomeOverlay(
                         </h1>
                     </div>
 
-                    <p class=tip_class>{tip_text}</p>
+                    <p class=TIP_CLASS>{tip_text}</p>
 
-                    <div class=hint_class>
+                    <div class=HINT_CLASS>
                         <span>"Scroll to zoom"</span>
                         <span class="opacity-40">"·"</span>
                         <span class="flex items-center gap-1.5">
-                            "Press" <kbd class=key_class>"?"</kbd> "for shortcuts"
+                            "Press" <kbd class=KEY_CLASS>"?"</kbd> "for shortcuts"
                         </span>
                     </div>
                 </div>

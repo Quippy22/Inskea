@@ -1,14 +1,16 @@
 use super::utils::{selection_bounds, ROTATE_HANDLE_OFFSET, SELECT_PADDING};
 use super::DASH_PREVIEW;
+use crate::canvas::settings::CanvasSettings;
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{Bounds, PathPoints};
 use crate::model::interaction::layout_bounds;
-use crate::model::{Color, Element, ElementId, Point, Rect, Scene};
+use crate::model::{Element, ElementId, Point, Rect, Scene};
 use leptos::*;
 
 pub fn selection_preview_overlay(
     select_anchor: RwSignal<Option<Point>>,
     cursor_world: RwSignal<Point>,
+    settings: RwSignal<CanvasSettings>,
 ) -> impl Fn() -> Option<View> {
     move || {
         let anchor = select_anchor.get()?;
@@ -20,7 +22,7 @@ pub fn selection_preview_overlay(
         if w < 1.0 || h < 1.0 {
             return None;
         }
-        let hex = Color::BLUE;
+        let hex = settings.get().theme.accent();
         Some(
             view! {
                 <rect
@@ -44,7 +46,11 @@ pub fn selection_preview_overlay(
 /// for a single-selected path element (Line, Arrow, Freehand).
 /// Returns `None` if the element has no path points.
 #[inline]
-fn render_path_element_overlay(el: &Element, hex: &'static str) -> Option<View> {
+fn render_path_element_overlay(
+    el: &Element,
+    hex: &'static str,
+    fill: &'static str,
+) -> Option<View> {
     let points = el.path_points()?;
     let n = points.len();
     let b = el.bounds();
@@ -59,7 +65,7 @@ fn render_path_element_overlay(el: &Element, hex: &'static str) -> Option<View> 
                     cx=p.x
                     cy=p.y
                     r="5"
-                    fill="white"
+                    fill=fill
                     stroke=hex
                     stroke-width="1.5"
                     pointer-events="none"
@@ -316,21 +322,24 @@ pub fn selection_handle_overlay(
     scene: RwSignal<Scene>,
     overlay_freeze: RwSignal<Option<Rect>>,
     rotation_delta: RwSignal<f64>,
+    settings: RwSignal<CanvasSettings>,
 ) -> impl Fn() -> Option<View> {
     move || {
         let ids = selected_ids.get();
         if ids.is_empty() {
             return None;
         }
+        let theme = settings.get().theme;
         // `with` instead of `get`: the overlay re-runs on every scene change
         // (including each drag step) and must not clone the document.
         scene.with(|s| {
             let els = s.elements_for_ids(&ids);
-            let hex = Color::BLUE;
+            let hex = theme.accent();
+            let fill = theme.canvas();
 
             if ids.len() == 1 {
                 if let Some(el) = els.iter().find(|el| el.id() == ids[0]) {
-                    if let Some(view) = render_path_element_overlay(el, hex) {
+                    if let Some(view) = render_path_element_overlay(el, hex, fill) {
                         return Some(view);
                     }
                 }

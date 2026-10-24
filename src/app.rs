@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::canvas::settings::{CanvasBg, CanvasSettings, CenterStyle, GridSize, GridStyle};
+use crate::canvas::settings::{CanvasSettings, CenterStyle, GridSize, GridStyle, Theme};
 use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
 use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::edit_ops::Clipboard;
@@ -14,7 +14,8 @@ use crate::ui::notify::{self, Toasts};
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{
-    file_ops, CanvasStatus, SettingsPanel, ToolBar, UnsavedChangesDialog, WelcomeOverlay,
+    file_ops, CanvasStatus, SettingsPanel, ThemePicker, ToolBar, UnsavedChangesDialog,
+    WelcomeOverlay,
 };
 use leptos::*;
 use std::time::Duration;
@@ -46,6 +47,7 @@ pub fn App() -> impl IntoView {
     let selected_ids = create_rw_signal(Vec::<ElementId>::new());
     let eraser_active = create_rw_signal(false);
     let shortcuts_open = create_rw_signal(false);
+    let theme_open = create_rw_signal(false);
 
     let export_crop_active = create_rw_signal(false);
     let on_crop_export = create_rw_signal::<Option<CropExportCallback>>(None);
@@ -56,7 +58,7 @@ pub fn App() -> impl IntoView {
         grid_style: GridStyle::Dot,
         grid_size: GridSize::new(30.0),
         autosave: false,
-        canvas_bg: CanvasBg::Dark,
+        theme: Theme::Storm,
     });
 
     let clipboard = create_rw_signal(Clipboard::default());
@@ -286,9 +288,10 @@ pub fn App() -> impl IntoView {
     });
     let dialog_cancel = Callback::new(move |_: ()| pending_action.set(None));
 
-    // Escape dismisses the unsaved-changes dialog. Shortcuts are blocked while
-    // it is open, so this is the only key it listens for.
-    let modal_open = Signal::derive(move || pending_action.get().is_some());
+    // Escape dismisses the unsaved-changes dialog. Canvas shortcuts stay
+    // quiet while it is open. The theme picker joins it in `modal_open` below,
+    // but closes through the canvas Escape handler.
+    let modal_open = Signal::derive(move || pending_action.get().is_some() || theme_open.get());
     {
         let _ = window_event_listener(leptos::ev::keydown, move |ev: leptos::ev::KeyboardEvent| {
             if ev.key() == "Escape" && pending_action.get_untracked().is_some() {
@@ -370,13 +373,13 @@ pub fn App() -> impl IntoView {
         crate::fonts::ensure_fonts_installed();
         spawn_local(async move {
             if let Ok(content) = tauri_bridge::load_settings().await {
-                if let Some((cs, gs, gz, auto, bg)) = from_toml(&content) {
+                if let Some((cs, gs, gz, auto, theme)) = from_toml(&content) {
                     settings.set(CanvasSettings {
                         center_style: cs,
                         grid_style: gs,
                         grid_size: gz,
                         autosave: auto,
-                        canvas_bg: bg,
+                        theme,
                     });
                 }
             }
@@ -384,13 +387,13 @@ pub fn App() -> impl IntoView {
         });
     } else {
         if let Some(content) = crate::storage::load_settings() {
-            if let Some((cs, gs, gz, auto, bg)) = from_toml(&content) {
+            if let Some((cs, gs, gz, auto, theme)) = from_toml(&content) {
                 settings.set(CanvasSettings {
                     center_style: cs,
                     grid_style: gs,
                     grid_size: gz,
                     autosave: auto,
-                    canvas_bg: bg,
+                    theme,
                 });
             }
         }
@@ -417,7 +420,7 @@ pub fn App() -> impl IntoView {
                 s.grid_style,
                 s.grid_size,
                 s.autosave,
-                s.canvas_bg,
+                s.theme,
             );
             if is_tauri {
                 spawn_local(async move {
@@ -426,6 +429,19 @@ pub fn App() -> impl IntoView {
             } else {
                 crate::storage::save_settings(&content);
             }
+        }
+    });
+
+    // The palette lives on `<html>` so `body` and every fixed overlay inherit
+    // the same custom properties. The root view also sets the attribute, which
+    // makes theme switches immediate even before this effect runs.
+    create_effect(move |_| {
+        let theme = settings.with(|s| s.theme);
+        if let Some(root) = web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.document_element())
+        {
+            let _ = root.set_attribute("data-theme", theme.attr());
         }
     });
 
@@ -546,10 +562,10 @@ pub fn App() -> impl IntoView {
     });
 
     view! {
-        <div class=move || {
-            let bg = if settings.get().canvas_bg == CanvasBg::Dark { "bg-bg" } else { "bg-white" };
-            format!("w-screen h-screen {bg} text-fg")
-        }>
+        <div
+            class="w-screen h-screen bg-bg text-fg"
+            data-theme=move || settings.get().theme.attr()
+        >
             <Canvas
                 inputs=crate::canvas::CanvasInputs {
                     selected_ids,
@@ -569,15 +585,12 @@ pub fn App() -> impl IntoView {
                     on_crop_export,
                     default_style,
                     default_line_style,
+                    theme_open,
                 }
                 on_text_commit=on_text_commit
                 shortcuts_open=shortcuts_open
             />
-            <WelcomeOverlay
-                welcome=doc.show_welcome
-                generation=doc.generation
-                settings=settings
-            />
+            <WelcomeOverlay welcome=doc.show_welcome generation=doc.generation />
             <ToolBar
                 doc=doc.clone()
                 request_action=request_action.clone()
@@ -594,7 +607,8 @@ pub fn App() -> impl IntoView {
             />
             <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />
             <CanvasStatus scene=scene viewport=viewport />
-            <SettingsPanel settings=settings />
+            <SettingsPanel settings=settings theme_open=theme_open />
+            <ThemePicker open=theme_open settings=settings />
             <ShortcutsModal shortcuts_open=shortcuts_open />
             <UnsavedChangesDialog
                 pending=pending_action
@@ -621,6 +635,7 @@ pub fn App() -> impl IntoView {
                                 push_snapshot: push_snapshot.clone(),
                                 canvas_mode,
                                 cursor_world,
+                                settings,
                             }
                         />
                     </div>
