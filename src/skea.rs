@@ -3,10 +3,16 @@ use serde::{Deserialize, Serialize};
 use crate::model::Scene;
 
 /// A `.skea` file is the `Scene` struct plus a version header. Inskea has not
-/// shipped a public release yet, so only files written by the current format
+/// shipped a public release yet, so only files written by a supported format
 /// load; older internal formats are rejected with a version error instead of
 /// being migrated.
-pub const FORMAT_VERSION: u32 = 6;
+///
+/// Version 7 added embedded images. A version 6 file has no image elements, so
+/// it loads unchanged.
+pub const FORMAT_VERSION: u32 = 7;
+
+/// Oldest format this build still reads.
+const MIN_FORMAT_VERSION: u32 = 6;
 
 #[derive(Serialize, Deserialize)]
 struct SkeaFile {
@@ -31,9 +37,9 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
         .and_then(|v| v.as_u64())
         .unwrap_or(0) as u32;
 
-    if version != FORMAT_VERSION {
+    if !(MIN_FORMAT_VERSION..=FORMAT_VERSION).contains(&version) {
         return Err(format!(
-            "unsupported format version: {version} (expected {FORMAT_VERSION})"
+            "unsupported format version: {version} (expected {MIN_FORMAT_VERSION} to {FORMAT_VERSION})"
         ));
     }
 
@@ -257,6 +263,16 @@ mod tests {
     fn malformed_input_returns_err() {
         let err = load_from_str("this is not json").unwrap_err();
         assert!(err.contains("failed to parse"));
+    }
+
+    #[test]
+    fn version_6_files_still_load() {
+        let mut raw: serde_json::Value =
+            serde_json::from_str(&save_to_string(&make_scene()).unwrap()).unwrap();
+        raw["format_version"] = serde_json::json!(6);
+
+        let loaded = load_from_str(&serde_json::to_string(&raw).unwrap()).unwrap();
+        assert!(!loaded.is_empty());
     }
 
     #[test]
