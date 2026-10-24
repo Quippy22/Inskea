@@ -405,8 +405,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 opacity_cb,
                 text_size,
                 text_size_cb,
-                hide_stroke,
-                is_text,
+                styling_kind,
             )} <div class="flex flex-col gap-1.5 mt-1" class:hidden=move || !is_text.get()>
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     Alignment
