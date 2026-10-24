@@ -325,11 +325,32 @@ fn el_svg(el: &Element) -> String {
                 f.data.style.opacity,
             )
         }
+        Element::Image(i) => {
+            // The data URL is embedded in the document, so exports stay
+            // self-contained and work when loaded as an <img> for PNG.
+            let image = format!(
+                r#"<image x="{}" y="{}" width="{}" height="{}" href="{}" preserveAspectRatio="none" opacity="{}"/>"#,
+                i.data.world_point.x,
+                i.data.world_point.y,
+                i.data.width,
+                i.data.height,
+                i.src,
+                i.data.style.opacity,
+            );
+            if i.data.rotation == 0.0 {
+                image
+            } else {
+                let cx = i.data.world_point.x + i.data.width / 2.0;
+                let cy = i.data.world_point.y + i.data.height / 2.0;
+                let deg = i.data.rotation.to_degrees();
+                format!(r#"<g transform="rotate({deg} {cx} {cy})">{image}</g>"#)
+            }
+        }
     }
 }
 
 /// Create a JS Promise that resolves when the image finishes loading.
-fn image_load_promise(img: &web_sys::HtmlImageElement, url: &str) -> js_sys::Promise {
+pub(crate) fn image_load_promise(img: &web_sys::HtmlImageElement, url: &str) -> js_sys::Promise {
     let img2 = img.clone();
     let img3 = img.clone();
     let url2 = String::from(url);
@@ -641,6 +662,25 @@ mod tests {
         let svg = scene_to_svg_crop(&scene, Rect::new(0.0, 0.0, 200.0, 200.0), CanvasBg::Dark);
         assert!(svg.contains(r#"rx="12""#));
         assert!(svg.contains(r#"stroke-dasharray="6 3""#));
+    }
+
+    #[test]
+    fn image_export_embeds_the_data_url_and_rotation() {
+        use crate::model::elements::image::Image;
+
+        let mut scene = Scene::new();
+        let image = Image::new(
+            "data:image/png;base64,AAAA".to_string(),
+            100.0,
+            50.0,
+            Point::new(50.0, 25.0),
+        );
+        scene.add_element(Element::Image(image));
+
+        let svg = scene_to_svg_crop(&scene, Rect::new(0.0, 0.0, 200.0, 200.0), CanvasBg::Dark);
+        assert!(svg.contains(r#"<image x="0" y="0" width="100" height="50""#));
+        assert!(svg.contains(r#"href="data:image/png;base64,AAAA""#));
+        assert!(svg.contains(r#"preserveAspectRatio="none""#));
     }
 
     #[test]

@@ -149,6 +149,22 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_image_data() {
+        use crate::model::elements::image::Image;
+
+        let mut scene = Scene::new();
+        scene.add_element(Element::Image(Image::new(
+            "data:image/svg+xml;base64,PHN2Zy8+".to_string(),
+            120.0,
+            80.0,
+            Point::new(10.0, 10.0),
+        )));
+        let saved = save_to_string(&scene).unwrap();
+        let loaded = load_from_str(&saved).unwrap();
+        assert_eq!(scene, loaded);
+    }
+
+    #[test]
     fn round_trip_rotation_and_font_size() {
         let mut s = Scene::new();
         let mut rd = ElementData::new(0);
