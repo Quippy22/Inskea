@@ -10,10 +10,11 @@ pub fn sliders_section(
     opacity_cb: Rc<dyn Fn(f64)>,
     text_size: RwSignal<f64>,
     text_size_cb: Rc<dyn Fn(f64)>,
+    hide_stroke: Signal<bool>,
     is_text: Signal<bool>,
 ) -> impl IntoView {
     view! {
-        <div class:hidden=move || is_text.get()>
+        <div class:hidden=move || hide_stroke.get()>
             <NumberSlider
                 value=stroke_size
                 min=1.0
