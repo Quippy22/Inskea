@@ -2,6 +2,7 @@ use crate::model::elements::utils::{resize_box, rotate_bbox};
 use crate::model::resize::ResizeContext;
 use crate::model::*;
 use leptos::IntoView;
+use std::rc::Rc;
 
 /// Largest world-space side a freshly imported image is scaled down to.
 /// Smaller images keep their natural size.
@@ -11,19 +12,20 @@ pub const MAX_IMPORT_SIZE: f64 = 512.0;
 ///
 /// The image bytes live in the document itself (base64-encoded in `src`), so a
 /// `.skea` file is self-contained and does not depend on the original file
-/// staying on disk.
+/// staying on disk. The URL is shared through an [`Rc`] so undo snapshots and
+/// scene clones do not copy the encoded bytes.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Image {
     /// Position, size, rotation, and opacity.
     pub data: ElementData,
     /// Full data URL (`data:image/png;base64,...`) used as the SVG `href`.
-    pub src: String,
+    pub src: Rc<str>,
 }
 
 impl Image {
     /// Create an image centred on `center`, scaled down to fit
     /// [`MAX_IMPORT_SIZE`] while preserving its aspect ratio.
-    pub fn new(src: String, natural_width: f64, natural_height: f64, center: Point) -> Self {
+    pub fn new(src: Rc<str>, natural_width: f64, natural_height: f64, center: Point) -> Self {
         let (width, height) = fit_size(natural_width, natural_height);
         let mut data = ElementData::new(0);
         data.world_point = Point::new(center.x - width / 2.0, center.y - height / 2.0);
@@ -53,7 +55,7 @@ impl Render for Image {
         let y = self.data.world_point.y;
         let w = self.data.width;
         let h = self.data.height;
-        let href = self.src.clone();
+        let href = Rc::clone(&self.src);
         let opacity = self.data.style.opacity;
         let inner = leptos::view! {
             <image

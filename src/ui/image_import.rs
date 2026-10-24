@@ -125,7 +125,7 @@ impl ImageImport {
                 };
                 let cascade = index as f64 * CASCADE_STEP;
                 let centre = Point::new(anchor.x + cascade, anchor.y + cascade);
-                images.push(Image::new(data_url, width, height, centre));
+                images.push(Image::new(data_url.into(), width, height, centre));
             }
             if images.is_empty() {
                 return;

@@ -160,7 +160,7 @@ mod tests {
 
         let mut scene = Scene::new();
         scene.add_element(Element::Image(Image::new(
-            "data:image/svg+xml;base64,PHN2Zy8+".to_string(),
+            "data:image/svg+xml;base64,PHN2Zy8+".into(),
             120.0,
             80.0,
             Point::new(10.0, 10.0),

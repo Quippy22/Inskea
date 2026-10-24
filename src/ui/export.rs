@@ -670,7 +670,7 @@ mod tests {
 
         let mut scene = Scene::new();
         let image = Image::new(
-            "data:image/png;base64,AAAA".to_string(),
+            "data:image/png;base64,AAAA".into(),
             100.0,
             50.0,
             Point::new(50.0, 25.0),
