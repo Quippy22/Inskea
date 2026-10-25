@@ -287,8 +287,16 @@ impl DerefMut for ElementMut<'_> {
 impl Drop for ElementMut<'_> {
     fn drop(&mut self) {
         if let Some(mut element) = self.element.take() {
+            let updates_connections =
+                crate::model::elements::connector::connection_points(&element).is_some();
             element.data_mut().id = self.id;
             self.scene.put_element(element, self.order);
+            // A shape that can be attached to may have moved. Keep its bound
+            // connectors on their connection points as part of the same
+            // journal entry, so undo restores both together.
+            if updates_connections {
+                self.scene.refresh_connectors_for(self.id);
+            }
         }
     }
 }
@@ -387,6 +395,7 @@ impl Scene {
         scene.groups = file.groups;
         scene.next_group_id = file.next_group_id;
         scene.replace_all(file.elements);
+        scene.sync_all_connectors();
         scene
     }
 
@@ -778,6 +787,7 @@ impl Scene {
                 next_id.before
             };
         }
+        self.sync_all_connectors();
     }
 
     fn apply_snapshot(&mut self, id: ElementId, snapshot: &ElementSnapshot) {
@@ -922,6 +932,7 @@ impl Scene {
         for group in &mut self.groups {
             group.members.retain(|member| !ids.contains(member));
         }
+        self.detach_connectors_from(ids);
         self.normalize_groups();
     }
 
@@ -1091,6 +1102,187 @@ impl Scene {
         for (id, order) in remaining.into_iter().zip(order_values) {
             if self.element_order(id) != Some(order) {
                 self.set_element_order(id, order);
+            }
+        }
+    }
+
+    /// Connectors attached to `shape_id`, found without cloning their geometry.
+    fn connector_ids_bound_to(&self, shape_id: ElementId) -> Vec<ElementId> {
+        let mut ids = Vec::new();
+        for chunk in self.chunks.values() {
+            for stored in &chunk.elements {
+                let Element::Connector(connector) = &stored.element else {
+                    continue;
+                };
+                let bound = connector
+                    .start_binding
+                    .is_some_and(|binding| binding.element == shape_id)
+                    || connector
+                        .end_binding
+                        .is_some_and(|binding| binding.element == shape_id);
+                if bound {
+                    ids.push(connector.data.id);
+                }
+            }
+        }
+        ids
+    }
+
+    /// Move every connector endpoint attached to `shape_id` onto its current
+    /// connection point. Detaches endpoints whose shape or point no longer
+    /// exists. Changes go through the journal so undo sees them.
+    pub fn refresh_connectors_for(&mut self, shape_id: ElementId) {
+        let target = self.element_by_id(shape_id);
+        let ids = self.connector_ids_bound_to(shape_id);
+        if ids.is_empty() {
+            return;
+        }
+        for id in ids {
+            let Some(Element::Connector(current)) = self.element_by_id(id) else {
+                continue;
+            };
+            let mut updated = current;
+            let mut changed = false;
+
+            if let Some(binding) = updated.start_binding {
+                match target
+                    .as_ref()
+                    .and_then(|element| connector::binding_point(element, binding))
+                {
+                    Some(point) => {
+                        if updated.points.first() != Some(&point) {
+                            if let Some(first) = updated.points.first_mut() {
+                                *first = point;
+                                changed = true;
+                            }
+                        }
+                    }
+                    None => {
+                        updated.start_binding = None;
+                        changed = true;
+                    }
+                }
+            }
+
+            if let Some(binding) = updated.end_binding {
+                match target
+                    .as_ref()
+                    .and_then(|element| connector::binding_point(element, binding))
+                {
+                    Some(point) => {
+                        if updated.points.last() != Some(&point) {
+                            if let Some(last) = updated.points.last_mut() {
+                                *last = point;
+                                changed = true;
+                            }
+                        }
+                    }
+                    None => {
+                        updated.end_binding = None;
+                        changed = true;
+                    }
+                }
+            }
+
+            if changed {
+                if let Some(mut element) = self.element_by_id_mut(id) {
+                    *element = Element::Connector(updated);
+                }
+            }
+        }
+    }
+
+    /// Resolve every connector binding without journaling. Used after undo,
+    /// redo, and loading, where snapshots already carry the intended geometry.
+    pub fn sync_all_connectors(&mut self) {
+        let connector_ids: Vec<ElementId> = self
+            .ordered()
+            .into_iter()
+            .filter_map(|(_, id)| {
+                self.element_by_id(id)
+                    .filter(|element| matches!(element, Element::Connector(_)))
+                    .map(|_| id)
+            })
+            .collect();
+
+        for id in connector_ids {
+            let Some(Element::Connector(current)) = self.element_by_id(id) else {
+                continue;
+            };
+            let mut updated = current;
+            let mut changed = false;
+
+            for start in [true, false] {
+                let Some(binding) = updated.binding(start) else {
+                    continue;
+                };
+                let point = self
+                    .element_by_id(binding.element)
+                    .and_then(|element| connector::binding_point(&element, binding));
+                match point {
+                    Some(point) => {
+                        let slot = if start {
+                            updated.points.first_mut()
+                        } else {
+                            updated.points.last_mut()
+                        };
+                        if let Some(slot) = slot {
+                            if *slot != point {
+                                *slot = point;
+                                changed = true;
+                            }
+                        }
+                    }
+                    None => {
+                        updated.set_binding(start, None);
+                        changed = true;
+                    }
+                }
+            }
+
+            if changed {
+                if let Some(order) = self.element_order(id) {
+                    let _ = self.take_element_raw(id);
+                    self.put_element_raw(Element::Connector(updated), order);
+                }
+            }
+        }
+    }
+
+    /// Drop bindings that point at elements that are about to disappear.
+    fn detach_connectors_from(&mut self, removed: &[ElementId]) {
+        let connector_ids: Vec<ElementId> = self
+            .ordered()
+            .into_iter()
+            .filter_map(|(_, id)| {
+                let element = self.element_by_id(id)?;
+                let Element::Connector(connector) = element else {
+                    return None;
+                };
+                let touched = connector
+                    .start_binding
+                    .is_some_and(|binding| removed.contains(&binding.element))
+                    || connector
+                        .end_binding
+                        .is_some_and(|binding| removed.contains(&binding.element));
+                touched.then_some(id)
+            })
+            .collect();
+
+        for id in connector_ids {
+            let Some(Element::Connector(mut connector)) = self.element_by_id(id) else {
+                continue;
+            };
+            for start in [true, false] {
+                if connector
+                    .binding(start)
+                    .is_some_and(|binding| removed.contains(&binding.element))
+                {
+                    connector.set_binding(start, None);
+                }
+            }
+            if let Some(mut element) = self.element_by_id_mut(id) {
+                *element = Element::Connector(connector);
             }
         }
     }

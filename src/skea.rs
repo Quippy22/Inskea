@@ -7,9 +7,9 @@ use crate::model::Scene;
 /// load; older internal formats are rejected with a version error instead of
 /// being migrated.
 ///
-/// Version 7 added embedded images. A version 6 file has no image elements, so
-/// it loads unchanged.
-pub const FORMAT_VERSION: u32 = 7;
+/// Version 7 added embedded images; version 8 added connectors. Older files
+/// cannot contain either, so they load unchanged.
+pub const FORMAT_VERSION: u32 = 8;
 
 /// Oldest format this build still reads.
 const MIN_FORMAT_VERSION: u32 = 6;
@@ -257,6 +257,48 @@ mod tests {
         let loaded = load_from_str(&serde_json::to_string(&raw).unwrap()).unwrap();
         assert_eq!(loaded.groups[0].id, 1);
         assert_eq!(loaded.next_group_id, 2);
+    }
+
+    #[test]
+    fn round_trip_connector_bindings_and_variants() {
+        use crate::model::elements::connector::{connection_points, ConnectionEnd, Connector};
+        use crate::model::elements::ConnectorVariant;
+
+        let mut scene = Scene::new();
+        let mut rd = ElementData::new(0);
+        rd.world_point.set(0.0, 0.0);
+        rd.width = 100.0;
+        rd.height = 80.0;
+        scene.add_element(Element::Rectangle(Rectangle { data: rd }));
+
+        let mut ed = ElementData::new(0);
+        ed.world_point.set(300.0, 0.0);
+        ed.width = 120.0;
+        ed.height = 100.0;
+        scene.add_element(Element::Ellipse(Ellipse { data: ed }));
+
+        let elements = scene.elements();
+        let start = connection_points(&elements[0]).unwrap()[2];
+        let end = connection_points(&elements[1]).unwrap()[6];
+
+        let mut cd = ElementData::new(0);
+        cd.style.stroke_color = Color::new(Color::GREEN);
+        scene.add_element(Element::Connector(Connector {
+            data: cd,
+            points: vec![start, end].into_boxed_slice(),
+            line_style: LineStyle {
+                has_end_arrowhead: true,
+                ..Default::default()
+            },
+            variant: ConnectorVariant::Curved,
+            start_binding: Some(ConnectionEnd::new(1, 2)),
+            end_binding: Some(ConnectionEnd::new(2, 6)),
+        }));
+
+        let saved = save_to_string(&scene).unwrap();
+        let loaded = load_from_str(&saved).unwrap();
+        assert_eq!(scene, loaded);
+        assert_eq!(save_to_string(&loaded).unwrap(), saved);
     }
 
     #[test]
