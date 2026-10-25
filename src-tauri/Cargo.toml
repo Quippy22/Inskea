@@ -1,6 +1,6 @@
 [package]
 name = "inskea"
-version = "1.4.0"
+version = "1.4.1"
 description = "Inskea - vector illustration app"
 authors = ["Quippy22"]
 license = "MIT"
