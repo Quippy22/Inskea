@@ -9,6 +9,7 @@ use crate::ui::components::{Dropdown, DropdownItem, IconButton};
 use crate::ui::export;
 use crate::ui::file_ops;
 use crate::ui::icon;
+use crate::ui::image_import::ImageImport;
 use crate::ui::notify;
 use crate::ui::styles;
 use crate::util::window_size;
@@ -32,6 +33,7 @@ pub fn ToolBar<F1, F2>(
     on_crop_export: RwSignal<Option<CropExportCallback>>,
     shortcuts_open: RwSignal<bool>,
     settings: RwSignal<CanvasSettings>,
+    image_import: ImageImport,
 ) -> impl IntoView
 where
     F1: Fn() + 'static,
@@ -139,6 +141,14 @@ where
                 label: "import another drawing",
                 run,
             });
+        }
+    };
+    let on_import_image = {
+        let close_menu = close_menu;
+        let image_import = image_import.clone();
+        move || {
+            close_menu();
+            image_import.pick();
         }
     };
 
@@ -285,8 +295,12 @@ where
         },
         DropdownItem::Separator,
         DropdownItem::Action {
-            label: "Import",
+            label: "Import Drawing",
             on_click: Rc::new(on_import),
+        },
+        DropdownItem::Action {
+            label: "Import Image",
+            on_click: Rc::new(on_import_image),
         },
     ];
 

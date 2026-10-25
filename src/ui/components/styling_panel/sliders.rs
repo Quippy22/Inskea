@@ -1,4 +1,5 @@
 use crate::model::elements::text::MIN_FONT_SIZE;
+use crate::model::StylingKind;
 use crate::ui::components::NumberSlider;
 use leptos::*;
 use std::rc::Rc;
@@ -10,10 +11,10 @@ pub fn sliders_section(
     opacity_cb: Rc<dyn Fn(f64)>,
     text_size: RwSignal<f64>,
     text_size_cb: Rc<dyn Fn(f64)>,
-    is_text: Signal<bool>,
+    kind: Signal<StylingKind>,
 ) -> impl IntoView {
     view! {
-        <div class:hidden=move || is_text.get()>
+        <div class:hidden=move || matches!(kind.get(), StylingKind::Text | StylingKind::Image)>
             <NumberSlider
                 value=stroke_size
                 min=1.0
@@ -31,7 +32,7 @@ pub fn sliders_section(
                 on_change=opacity_cb
             />
         </div>
-        <div class:hidden=move || !is_text.get()>
+        <div class:hidden=move || kind.get() != StylingKind::Text>
             <NumberSlider
                 value=text_size
                 min=MIN_FONT_SIZE

@@ -67,7 +67,7 @@ pub fn style_section(
     set_edge_style: Rc<dyn Fn(EdgeStyle)>,
     roundness: RwSignal<f64>,
     roundness_cb: Rc<dyn Fn(f64)>,
-    is_text: Signal<bool>,
+    hide_stroke: Signal<bool>,
     is_line: Signal<bool>,
     is_rect: Signal<bool>,
     is_rounded: Signal<bool>,
@@ -87,7 +87,7 @@ pub fn style_section(
         &[(EdgeStyle::Sharp, "Sharp"), (EdgeStyle::Rounded, "Rounded")];
 
     view! {
-        <div class:hidden=move || is_text.get()>
+        <div class:hidden=move || hide_stroke.get()>
             <div>
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     "Stroke style"
@@ -100,7 +100,7 @@ pub fn style_section(
                 )}
             </div>
         </div>
-        <div class:hidden=move || is_text.get()>
+        <div class:hidden=move || hide_stroke.get()>
             <div class:hidden=move || !is_line.get()>
                 <div>
                     <div class=styles::SETTINGS_LABEL class:mb-1=move || true>

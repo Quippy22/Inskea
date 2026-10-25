@@ -69,8 +69,26 @@ pub async fn pick_save_path_png(default_name: &str, default_dir: Option<&str>) -
 /// Open a native open-file dialog and return the chosen path, or `None` if cancelled.
 /// If `default_dir` is provided, the dialog starts in that directory.
 pub async fn pick_open_path(default_dir: Option<&str>) -> Option<String> {
+    pick_open_path_with_filter("Inskea Drawing", &["skea"], default_dir).await
+}
+
+/// Open a native open-file dialog for an image, or `None` if cancelled.
+pub async fn pick_image_path(default_dir: Option<&str>) -> Option<String> {
+    pick_open_path_with_filter(
+        "Image",
+        &["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"],
+        default_dir,
+    )
+    .await
+}
+
+async fn pick_open_path_with_filter(
+    filter_name: &str,
+    extensions: &[&str],
+    default_dir: Option<&str>,
+) -> Option<String> {
     let mut opts = serde_json::json!({
-        "filters": [{ "name": "Inskea Drawing", "extensions": ["skea"] }],
+        "filters": [{ "name": filter_name, "extensions": extensions }],
         "multiple": false,
     });
     if let Some(dir) = default_dir {
@@ -79,6 +97,18 @@ pub async fn pick_open_path(default_dir: Option<&str>) -> Option<String> {
     let args = serde_wasm_bindgen::to_value(&opts).ok()?;
     let result = open(args).await;
     result.as_string()
+}
+
+/// Read an image file as a `data:` URL, including its MIME type.
+pub async fn read_image_data(path: &str) -> Result<String, String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({ "path": path }))
+        .map_err(|e| format!("serialization error: {e}"))?;
+    let result = invoke("read_image_data", args)
+        .await
+        .map_err(invoke_error)?;
+    result
+        .as_string()
+        .ok_or_else(|| "failed to read image".into())
 }
 
 /// Get the default folder for drawings, `<Documents>/Inskea` (creates it if
@@ -245,6 +275,45 @@ pub fn on_open_file(callback: impl Fn(String) + 'static) {
             }
         }) as Box<dyn FnMut(JsValue)>);
         let _ = listen("inskea-open-file", handler.as_ref()).await;
+        handler.forget();
+    });
+}
+
+/// Read a numeric field from a JS object, accepting integers and floats.
+fn number_field(object: &JsValue, key: &str) -> Option<f64> {
+    js_sys::Reflect::get(object, &JsValue::from_str(key))
+        .ok()
+        .and_then(|value| value.as_f64())
+}
+
+/// Listen for OS file drag-and-drop. The callback receives the dropped paths
+/// and the drop position in physical pixels, when the platform reports one.
+pub fn on_file_drop(callback: impl Fn(Vec<String>, Option<(f64, f64)>) + 'static) {
+    wasm_bindgen_futures::spawn_local(async move {
+        let handler = wasm_bindgen::closure::Closure::wrap(Box::new(move |event: JsValue| {
+            let Ok(payload) = js_sys::Reflect::get(&event, &JsValue::from_str("payload")) else {
+                return;
+            };
+            let paths = js_sys::Reflect::get(&payload, &JsValue::from_str("paths"))
+                .ok()
+                .map(|paths| {
+                    js_sys::Array::from(&paths)
+                        .iter()
+                        .filter_map(|value| value.as_string())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            if paths.is_empty() {
+                return;
+            }
+            let position = js_sys::Reflect::get(&payload, &JsValue::from_str("position"))
+                .ok()
+                .and_then(|position| {
+                    Some((number_field(&position, "x")?, number_field(&position, "y")?))
+                });
+            callback(paths, position);
+        }) as Box<dyn FnMut(JsValue)>);
+        let _ = listen("tauri://drag-drop", handler.as_ref()).await;
         handler.forget();
     });
 }

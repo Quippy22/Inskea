@@ -10,6 +10,7 @@ use crate::skea;
 use crate::tauri_bridge;
 use crate::ui::components::{StylingPanel, StylingPanelContext};
 use crate::ui::dock::{Dock, Tool};
+use crate::ui::image_import::ImageImport;
 use crate::ui::notify::{self, Toasts};
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
@@ -17,6 +18,7 @@ use crate::ui::{
     file_ops, CanvasStatus, SettingsPanel, ThemePicker, ToolBar, UnsavedChangesDialog,
     WelcomeOverlay,
 };
+use crate::util::window_size;
 use leptos::*;
 use std::time::Duration;
 use wasm_bindgen::JsCast;
@@ -31,6 +33,18 @@ fn update_window_title(title: &str) {
     if tauri_bridge::is_tauri() {
         tauri_bridge::set_window_title(title);
     }
+}
+
+/// Whether a drag carries files (as opposed to text or a link).
+fn has_files(event: &leptos::ev::DragEvent) -> bool {
+    event
+        .data_transfer()
+        .map(|data| {
+            data.types()
+                .iter()
+                .any(|kind| kind.as_string().as_deref() == Some("Files"))
+        })
+        .unwrap_or(false)
 }
 
 #[component]
@@ -195,6 +209,61 @@ pub fn App() -> impl IntoView {
     };
 
     let is_tauri = tauri_bridge::is_tauri();
+
+    let image_import = ImageImport {
+        doc: doc.clone(),
+        viewport,
+        canvas_mode,
+        push_snapshot: push_snapshot.clone(),
+    };
+
+    // Images arrive either from Tauri's OS drop event (physical pixels) or,
+    // in a browser, from a DOM drop on the canvas.
+    if is_tauri {
+        let image_import = image_import.clone();
+        tauri_bridge::on_file_drop(move |paths, position| {
+            let at = position.map(|(x, y)| {
+                let ratio = web_sys::window()
+                    .map(|window| window.device_pixel_ratio())
+                    .filter(|ratio| *ratio > 0.0)
+                    .unwrap_or(1.0);
+                let screen = Point::new(x / ratio, y / ratio);
+                image_import
+                    .viewport
+                    .get_untracked()
+                    .screen_to_world(screen, window_size())
+            });
+            image_import.import_paths(paths, at);
+        });
+    } else {
+        let image_import_drag = image_import.clone();
+        let _ = window_event_listener(leptos::ev::dragover, move |event: leptos::ev::DragEvent| {
+            if has_files(&event) {
+                event.prevent_default();
+            }
+        });
+        let _ = window_event_listener(leptos::ev::drop, move |event: leptos::ev::DragEvent| {
+            if !has_files(&event) {
+                return;
+            }
+            event.prevent_default();
+            let Some(list) = event.data_transfer().and_then(|data| data.files()) else {
+                return;
+            };
+            let files: Vec<web_sys::File> = (0..list.length())
+                .filter_map(|index| list.item(index))
+                .collect();
+            if files.is_empty() {
+                return;
+            }
+            let screen = Point::new(event.client_x() as f64, event.client_y() as f64);
+            let at = image_import_drag
+                .viewport
+                .get_untracked()
+                .screen_to_world(screen, window_size());
+            image_import_drag.import_files(files, Some(at));
+        });
+    }
 
     // Actions that replace or discard the document ask for confirmation when
     // there are unsaved edits. The action itself is stored so it can run after
@@ -604,6 +673,7 @@ pub fn App() -> impl IntoView {
                 on_crop_export=on_crop_export
                 shortcuts_open=shortcuts_open
                 settings=settings
+                image_import=image_import
             />
             <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />
             <CanvasStatus scene=scene viewport=viewport />

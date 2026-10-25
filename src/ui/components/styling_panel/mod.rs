@@ -118,7 +118,12 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
     let is_arrow = Signal::derive(move || styling_kind.get() == StylingKind::Arrow);
     let is_rect = Signal::derive(move || styling_kind.get() == StylingKind::Rectangle);
     let is_freehand = Signal::derive(move || styling_kind.get() == StylingKind::Freehand);
-    let base_kind = Signal::derive(move || !is_text.get() && !is_line.get() && !is_freehand.get());
+    let is_image = Signal::derive(move || styling_kind.get() == StylingKind::Image);
+    // Images keep only the opacity slider; stroke and fill do nothing to them.
+    let hide_stroke = Signal::derive(move || is_text.get() || is_image.get());
+    let base_kind = Signal::derive(move || {
+        !is_text.get() && !is_line.get() && !is_freehand.get() && !is_image.get()
+    });
 
     let (init_style, init_line_style) = read_panel_state(
         &scene.get_untracked(),
@@ -403,7 +408,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 opacity_cb,
                 text_size,
                 text_size_cb,
-                is_text,
+                styling_kind,
             )} <div class="flex flex-col gap-1.5 mt-1" class:hidden=move || !is_text.get()>
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     Alignment
@@ -423,11 +428,17 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 set_edge_style,
                 roundness,
                 roundness_cb,
-                is_text,
+                hide_stroke,
                 is_line,
                 is_rect,
                 is_rounded,
-            )} {color_section(local_style, set_color, active_slot, color_swatches)}
+            )} {color_section(
+                local_style,
+                set_color,
+                active_slot,
+                color_swatches,
+                hide_stroke,
+            )}
             {fill_section(local_style, set_fill, active_slot, base_kind, color_swatches)}
             {arrow_section(is_arrow, local_line_style, set_start_arrowhead, set_end_arrowhead)}
             {edit_section(

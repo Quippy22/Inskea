@@ -16,9 +16,10 @@ pub fn color_section(
     set_color: Rc<dyn Fn(Color)>,
     active_slot: RwSignal<Option<ColorSlot>>,
     color_swatches: &'static [&'static str],
+    hide_stroke: Signal<bool>,
 ) -> impl IntoView {
     view! {
-        <div>
+        <div class:hidden=move || hide_stroke.get()>
             <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                 "Color"
             </div>

@@ -4,6 +4,7 @@ pub mod dock;
 pub(crate) mod export;
 pub(crate) mod file_ops;
 pub(crate) mod icon;
+pub(crate) mod image_import;
 pub(crate) mod notify;
 pub(crate) mod settings;
 mod status;

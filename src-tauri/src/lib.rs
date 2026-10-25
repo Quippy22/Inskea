@@ -103,9 +103,42 @@ fn load_skea(path: String) -> Result<String, String> {
     fs::read_to_string(path).map_err(|e| format!("failed to read file: {e}"))
 }
 
+/// Image formats the editor can embed, with the MIME type used in their data URL.
+const IMAGE_MIME_TYPES: &[(&str, &str)] = &[
+    ("png", "image/png"),
+    ("jpg", "image/jpeg"),
+    ("jpeg", "image/jpeg"),
+    ("gif", "image/gif"),
+    ("webp", "image/webp"),
+    ("svg", "image/svg+xml"),
+    ("bmp", "image/bmp"),
+];
+
+/// The MIME type for a supported image path, or `None` for other files.
+fn image_mime(path: &Path) -> Option<&'static str> {
+    let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+    IMAGE_MIME_TYPES
+        .iter()
+        .find(|(name, _)| *name == extension)
+        .map(|(_, mime)| *mime)
+}
+
+/// Read an image file and return it as a data URL the canvas can render.
+#[tauri::command]
+fn read_image_data(path: String) -> Result<String, String> {
+    use base64::Engine;
+
+    let path = validate_file_path(&path)?;
+    let mime = image_mime(&path)
+        .ok_or_else(|| "unsupported image type (expected PNG, JPEG, GIF, WebP, SVG, or BMP)".to_string())?;
+    let bytes = fs::read(path).map_err(|e| format!("failed to read image: {e}"))?;
+    let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(format!("data:{mime};base64,{data}"))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{is_skea_arg, resolve_arg, validate_file_path, write_atomic};
+    use super::{image_mime, is_skea_arg, resolve_arg, validate_file_path, write_atomic};
     use std::path::Path;
 
     #[test]
@@ -135,6 +168,14 @@ mod tests {
             resolve_arg("file:///tmp/drawing.skea", None).as_deref(),
             Some("/tmp/drawing.skea")
         );
+    }
+
+    #[test]
+    fn image_extensions_map_to_mime_types() {
+        assert_eq!(image_mime(Path::new("/tmp/photo.PNG")), Some("image/png"));
+        assert_eq!(image_mime(Path::new("/tmp/logo.svg")), Some("image/svg+xml"));
+        assert_eq!(image_mime(Path::new("/tmp/scan.jpeg")), Some("image/jpeg"));
+        assert_eq!(image_mime(Path::new("/tmp/drawing.skea")), None);
     }
 
     #[test]
@@ -288,6 +329,7 @@ pub fn run() {
             save_file_binary,
             save_skea,
             load_skea,
+            read_image_data,
             set_window_title,
             close_window,
             arm_close_guard,

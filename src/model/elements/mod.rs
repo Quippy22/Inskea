@@ -1,5 +1,6 @@
 pub mod ellipse;
 pub mod freehand;
+pub mod image;
 pub(crate) mod line;
 pub mod path;
 pub mod rect;
@@ -8,6 +9,7 @@ pub(crate) mod utils;
 
 pub use ellipse::Ellipse;
 pub use freehand::Freehand;
+pub use image::Image;
 #[allow(unused_imports)]
 pub use line::{Line, LineStyle};
 pub use rect::Rectangle;
@@ -99,6 +101,7 @@ pub enum StylingKind {
     Arrow,
     Text,
     Freehand,
+    Image,
 }
 
 /// Unique identifier for an element in the scene.
@@ -150,6 +153,8 @@ pub enum Element {
     Text(Text),
     /// A [`Freehand`] stroke made of sampled points.
     Freehand(Freehand),
+    /// An [`Image`] imported from a file and embedded as a data URL.
+    Image(Image),
 }
 
 // ── Element dispatch methods ───────────────────────────────────────────
@@ -168,6 +173,7 @@ impl Element {
             Element::Line(e) => &e.data,
             Element::Text(e) => &e.data,
             Element::Freehand(e) => &e.data,
+            Element::Image(e) => &e.data,
         }
     }
 
@@ -179,6 +185,7 @@ impl Element {
             Element::Line(e) => &mut e.data,
             Element::Text(e) => &mut e.data,
             Element::Freehand(e) => &mut e.data,
+            Element::Image(e) => &mut e.data,
         }
     }
 
@@ -196,6 +203,7 @@ impl Element {
             }
             Element::Text(_) => StylingKind::Text,
             Element::Freehand(_) => StylingKind::Freehand,
+            Element::Image(_) => StylingKind::Image,
         }
     }
 }
@@ -217,6 +225,7 @@ impl_into_element!(Ellipse);
 impl_into_element!(Line);
 impl_into_element!(Text);
 impl_into_element!(Freehand);
+impl_into_element!(Image);
 
 // ── Trait definitions ──────────────────────────────────────────────────
 
@@ -399,6 +408,7 @@ macro_rules! dispatch_element {
                     Element::Line(e) => e.$method($($arg),*),
                     Element::Text(e) => e.$method($($arg),*),
                     Element::Freehand(e) => e.$method($($arg),*),
+                    Element::Image(e) => e.$method($($arg),*),
                 }
             }
         }
@@ -412,6 +422,7 @@ macro_rules! dispatch_element {
                     Element::Line(e) => e.$method($($arg),*),
                     Element::Text(e) => e.$method($($arg),*),
                     Element::Freehand(e) => e.$method($($arg),*),
+                    Element::Image(e) => e.$method($($arg),*),
                 }
             }
         }
