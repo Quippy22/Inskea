@@ -5,7 +5,9 @@ use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
 use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::edit_ops::Clipboard;
 use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
-use crate::model::{ChangeSet, Color, ElementId, ElementStyle, LineStyle, Point, Scene};
+use crate::model::{
+    ChangeSet, Color, ConnectorVariant, ElementId, ElementStyle, LineStyle, Point, Scene,
+};
 use crate::skea;
 use crate::tauri_bridge;
 use crate::ui::components::{StylingPanel, StylingPanelContext};
@@ -612,9 +614,10 @@ pub fn App() -> impl IntoView {
         ..Default::default()
     });
     let default_line_style = create_rw_signal(LineStyle::default());
+    let default_connector_variant = create_rw_signal(ConnectorVariant::default());
 
     create_effect(move |_| {
-        let is_arrow = selected_tool.get() == Tool::Arrow;
+        let is_arrow = matches!(selected_tool.get(), Tool::Arrow | Tool::Connector);
         default_line_style.update(|ls| ls.has_end_arrowhead = is_arrow);
     });
 
@@ -654,6 +657,7 @@ pub fn App() -> impl IntoView {
                     on_crop_export,
                     default_style,
                     default_line_style,
+                    default_connector_variant,
                     theme_open,
                 }
                 on_text_commit=on_text_commit
@@ -701,6 +705,7 @@ pub fn App() -> impl IntoView {
                                 selected_tool,
                                 default_style,
                                 default_line_style,
+                                default_connector_variant,
                                 clipboard,
                                 push_snapshot: push_snapshot.clone(),
                                 canvas_mode,

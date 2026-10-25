@@ -5,6 +5,7 @@ use super::utils::{
 use super::MIN_DRAG_DIST;
 use crate::canvas::smart_guides::{self, GuideBox, SmartGuideState};
 use crate::canvas::state::{CanvasInputs, CanvasState, DragOperation};
+use crate::model::elements::connector::SNAP_SCREEN_PX;
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{Bounds, Offset, PathPoints, Resize, Rotate};
 use crate::model::interaction::{
@@ -73,6 +74,10 @@ fn handle_path_point_hit(
             st.drag.last_world.set(Some(world));
             return true;
         }
+    }
+    // Connectors route themselves; inserting a bend would fight the variant.
+    if !el.editable_midpoints() {
+        return false;
     }
     let cm = el.curve_mode();
     for i in 0..points.len().saturating_sub(1) {
@@ -572,9 +577,24 @@ fn do_path_point_drag(world: Point, st: &mut CanvasState, props: &mut CanvasInpu
         world
     };
     let ids = st.selected_ids.get();
+    let id = ids[0];
+    // A connector endpoint re-binds when it is dragged onto another connection
+    // point and detaches as soon as it leaves the snap radius.
+    let zoom = props.viewport.get_untracked().zoom.max(0.01);
+    let snap = props.scene.with_untracked(|s| {
+        matches!(s.element_by_id(id), Some(Element::Connector(_)))
+            .then(|| s.snap_connection(target, SNAP_SCREEN_PX / zoom, Some(id)))
+            .flatten()
+    });
     props.scene.update(|s| {
-        if let Some(mut el) = s.element_by_id_mut(ids[0]) {
-            if let Some(pts) = el.path_points_mut() {
+        if let Some(mut el) = s.element_by_id_mut(id) {
+            if let Element::Connector(connector) = &mut *el {
+                let (point, binding) = match snap {
+                    Some((point, binding)) => (point, Some(binding)),
+                    None => (target, None),
+                };
+                connector.set_endpoint(idx, point, binding);
+            } else if let Some(pts) = el.path_points_mut() {
                 if idx < pts.len() {
                     if let Some(point) = pts.get_mut(idx) {
                         *point = target;
@@ -701,6 +721,14 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
 #[inline]
 fn finish_path_point_drag(st: &mut CanvasState, props: &mut CanvasInputs, idx: usize) {
     let ids = st.selected_ids.get();
+    let editable = props.scene.with(|s| {
+        s.element_by_id(ids[0])
+            .map(|el| el.editable_midpoints())
+            .unwrap_or(false)
+    });
+    if !editable {
+        return;
+    }
     let merged = props
         .scene
         .with(|s| {

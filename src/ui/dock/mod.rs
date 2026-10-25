@@ -41,11 +41,12 @@ pub fn Dock(
         }
     };
 
-    const ALL_TOOLS: [Tool; 6] = [
+    const ALL_TOOLS: [Tool; 7] = [
         Tool::Rectangle,
         Tool::Ellipse,
         Tool::Line,
         Tool::Arrow,
+        Tool::Connector,
         Tool::Text,
         Tool::Freehand,
     ];
@@ -56,6 +57,7 @@ pub fn Dock(
             Tool::Ellipse => "Ellipse",
             Tool::Line => "Line",
             Tool::Arrow => "Arrow",
+            Tool::Connector => "Connector",
             Tool::Text => "Text",
             Tool::Freehand => "Freehand",
         }
@@ -67,6 +69,7 @@ pub fn Dock(
             Tool::Ellipse => icon::ellipse().into_view(),
             Tool::Line => icon::line().into_view(),
             Tool::Arrow => icon::arrow().into_view(),
+            Tool::Connector => icon::connector_straight().into_view(),
             Tool::Text => icon::text().into_view(),
             Tool::Freehand => icon::freehand().into_view(),
         }

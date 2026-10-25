@@ -1,6 +1,7 @@
 use crate::model::elements::{Bounds, Offset};
 use crate::model::{
-    Alignment, Distribution, Element, ElementId, Group, LayerOrder, Point, Rect, Scene,
+    Alignment, ConnectionEnd, Distribution, Element, ElementId, Group, LayerOrder, Point, Rect,
+    Scene,
 };
 use leptos::{RwSignal, SignalGet, SignalSet, SignalUpdate, SignalWith, SignalWithUntracked};
 use std::rc::Rc;
@@ -68,6 +69,44 @@ fn regroup_clones(scene: &mut Scene, groups: &[Group], id_map: &[(ElementId, Ele
     }
 }
 
+type ConnectorBindings = (Option<ConnectionEnd>, Option<ConnectionEnd>);
+
+/// Take a copied connector's bindings before it is offset. Bound endpoints do
+/// not move with `offset`, so detaching first lets the whole copy shift and
+/// keeps the original targets available for remapping.
+fn take_connector_bindings(element: &mut Element) -> ConnectorBindings {
+    let Element::Connector(connector) = element else {
+        return (None, None);
+    };
+    let bindings = (connector.start_binding, connector.end_binding);
+    connector.start_binding = None;
+    connector.end_binding = None;
+    bindings
+}
+
+/// Point copied connector bindings at the cloned shapes. A binding whose
+/// shape was not copied stays detached, so the clone moves on its own.
+fn restore_connector_bindings(
+    element: &mut Element,
+    bindings: ConnectorBindings,
+    id_map: &[(ElementId, ElementId)],
+) {
+    let Element::Connector(connector) = element else {
+        return;
+    };
+    let remap = |binding: ConnectionEnd| {
+        id_map
+            .iter()
+            .find(|(old, _)| *old == binding.element)
+            .map(|&(_, new)| ConnectionEnd {
+                element: new,
+                point: binding.point,
+            })
+    };
+    connector.start_binding = bindings.0.and_then(remap);
+    connector.end_binding = bindings.1.and_then(remap);
+}
+
 /// Clone every selected element, offset by 20px, and select the clones.
 /// Duplicates keep the group structure of the original selection.
 pub fn duplicate_selection(
@@ -81,17 +120,26 @@ pub fn duplicate_selection(
     }
     let mut new_ids = Vec::new();
     let mut id_map = Vec::new();
+    let mut pending_bindings = Vec::new();
     mutate_scene(scene, push_snapshot, |s| {
         let elements = s.elements_for_ids(&ids);
         let groups = s.groups.clone();
         for id in &ids {
             if let Some(el) = elements.iter().find(|e| e.id() == *id) {
                 let mut clone = el.clone();
+                let bindings = take_connector_bindings(&mut clone);
                 clone.offset(20.0, 20.0);
                 clone.data_mut().id = 0;
                 s.add_element(clone);
-                new_ids.push(s.next_id - 1);
-                id_map.push((*id, s.next_id - 1));
+                let new_id = s.next_id - 1;
+                new_ids.push(new_id);
+                id_map.push((*id, new_id));
+                pending_bindings.push((new_id, bindings));
+            }
+        }
+        for (new_id, bindings) in pending_bindings {
+            if let Some(mut element) = s.element_by_id_mut(new_id) {
+                restore_connector_bindings(&mut element, bindings, &id_map);
             }
         }
         regroup_clones(s, &groups, &id_map);
@@ -156,14 +204,23 @@ pub fn paste_clipboard(
     let dy = target.y - center.y;
     let mut new_ids = Vec::new();
     let mut id_map = Vec::new();
+    let mut pending_bindings = Vec::new();
     mutate_scene(scene, push_snapshot, |s| {
         for mut el in els {
             let old_id = el.id();
+            let bindings = take_connector_bindings(&mut el);
             el.offset(dx, dy);
             el.data_mut().id = 0;
             s.add_element(el);
-            new_ids.push(s.next_id - 1);
-            id_map.push((old_id, s.next_id - 1));
+            let new_id = s.next_id - 1;
+            new_ids.push(new_id);
+            id_map.push((old_id, new_id));
+            pending_bindings.push((new_id, bindings));
+        }
+        for (new_id, bindings) in pending_bindings {
+            if let Some(mut element) = s.element_by_id_mut(new_id) {
+                restore_connector_bindings(&mut element, bindings, &id_map);
+            }
         }
         regroup_clones(s, &groups, &id_map);
     });
@@ -222,7 +279,7 @@ pub fn distribute_selection(
 mod tests {
     use super::*;
     use crate::model::elements::rect::Rectangle;
-    use crate::model::ElementData;
+    use crate::model::{Connector, ConnectorVariant, ElementData, LineStyle};
 
     fn scene_with_three() -> Scene {
         let mut s = Scene::new();
@@ -257,6 +314,45 @@ mod tests {
         let id_map = vec![(2, 4)];
         regroup_clones(&mut s, &groups, &id_map);
         assert!(s.groups.is_empty());
+    }
+
+    #[test]
+    fn copied_connector_bindings_follow_cloned_shapes() {
+        let mut element = Element::Connector(Connector {
+            data: ElementData::new(1),
+            points: vec![Point::new(0.0, 0.0), Point::new(50.0, 0.0)].into_boxed_slice(),
+            line_style: LineStyle::default(),
+            variant: ConnectorVariant::Straight,
+            start_binding: Some(ConnectionEnd::new(1, 2)),
+            end_binding: Some(ConnectionEnd::new(2, 6)),
+        });
+
+        let bindings = take_connector_bindings(&mut element);
+        if let Element::Connector(connector) = &element {
+            assert_eq!(connector.start_binding, None);
+            assert_eq!(connector.end_binding, None);
+        }
+        // With the bindings detached, the copy offsets as one piece.
+        element.offset(20.0, 20.0);
+        let Element::Connector(connector) = &element else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.points[0], Point::new(20.0, 20.0));
+        assert_eq!(connector.points[1], Point::new(70.0, 20.0));
+
+        restore_connector_bindings(&mut element, bindings, &[(1, 10)]);
+        let Element::Connector(connector) = &element else {
+            panic!("expected connector");
+        };
+        assert_eq!(
+            connector.start_binding,
+            Some(ConnectionEnd {
+                element: 10,
+                point: 2
+            })
+        );
+        // Shape 2 was not copied, so that end stays free.
+        assert_eq!(connector.end_binding, None);
     }
 
     #[test]

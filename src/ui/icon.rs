@@ -105,6 +105,70 @@ lucide_icons! {
     edge_rounded => "squircle.svg",
 }
 
+/// Connector routing previews: a dot at each end plus the route between them.
+pub fn connector_straight() -> impl IntoView {
+    view! {
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class=DEFAULT_CLASS
+            aria-hidden="true"
+            focusable="false"
+        >
+            <circle cx="5" cy="19" r="2" fill="currentColor" stroke="none" />
+            <circle cx="19" cy="5" r="2" fill="currentColor" stroke="none" />
+            <path d="M6.5 17.5 L17.5 6.5" />
+        </svg>
+    }
+}
+
+pub fn connector_curved() -> impl IntoView {
+    view! {
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class=DEFAULT_CLASS
+            aria-hidden="true"
+            focusable="false"
+        >
+            <circle cx="5" cy="19" r="2" fill="currentColor" stroke="none" />
+            <circle cx="19" cy="5" r="2" fill="currentColor" stroke="none" />
+            <path d="M6.5 17.5 Q15 16 17.5 6.5" />
+        </svg>
+    }
+}
+
+pub fn connector_direct() -> impl IntoView {
+    view! {
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class=DEFAULT_CLASS
+            aria-hidden="true"
+            focusable="false"
+        >
+            <circle cx="5" cy="19" r="2" fill="currentColor" stroke="none" />
+            <circle cx="19" cy="5" r="2" fill="currentColor" stroke="none" />
+            <path d="M5 17 L5 12 L19 12 L19 7" />
+        </svg>
+    }
+}
+
 /// Small chevrons for the number-slider stepper.
 pub fn chevron_up() -> impl IntoView {
     svg(include_str!("icons/chevron-up.svg"), "w-3 h-3")

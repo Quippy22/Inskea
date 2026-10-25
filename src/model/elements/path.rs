@@ -60,7 +60,10 @@ pub fn path_d(points: &[Point], mode: CurveMode) -> String {
 /// `points[i]` and `points[i+1]`) of a Catmull-Rom spline.
 ///
 /// Returns `None` when `i` is out of range.
-fn segment_cubic_bezier(points: &[Point], i: usize) -> Option<(Point, Point, Point, Point)> {
+pub(crate) fn segment_cubic_bezier(
+    points: &[Point],
+    i: usize,
+) -> Option<(Point, Point, Point, Point)> {
     if i >= points.len().saturating_sub(1) {
         return None;
     }

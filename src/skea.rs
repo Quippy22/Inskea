@@ -308,13 +308,15 @@ mod tests {
     }
 
     #[test]
-    fn version_6_files_still_load() {
-        let mut raw: serde_json::Value =
-            serde_json::from_str(&save_to_string(&make_scene()).unwrap()).unwrap();
-        raw["format_version"] = serde_json::json!(6);
+    fn older_supported_versions_still_load() {
+        for version in 6..FORMAT_VERSION {
+            let mut raw: serde_json::Value =
+                serde_json::from_str(&save_to_string(&make_scene()).unwrap()).unwrap();
+            raw["format_version"] = serde_json::json!(version);
 
-        let loaded = load_from_str(&serde_json::to_string(&raw).unwrap()).unwrap();
-        assert!(!loaded.is_empty());
+            let loaded = load_from_str(&serde_json::to_string(&raw).unwrap()).unwrap();
+            assert!(!loaded.is_empty(), "version {version} should load");
+        }
     }
 
     #[test]

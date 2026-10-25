@@ -3,7 +3,10 @@ use crate::canvas::smart_guides::{GuideBox, SmartGuideState};
 use crate::model::interaction::{hit_test_topmost, GuideFrame};
 use crate::model::resize::ResizeHandle;
 use crate::model::Color;
-use crate::model::{Element, ElementId, ElementStyle, GroupId, LineStyle, Point, Rect, Scene};
+use crate::model::{
+    ConnectionEnd, ConnectorVariant, Element, ElementId, ElementStyle, GroupId, LineStyle, Point,
+    Rect, Scene,
+};
 use crate::ui::dock::Tool;
 use leptos::*;
 use std::rc::Rc;
@@ -115,6 +118,8 @@ pub struct DrawingState {
     /// The element already placed in the scene by this draw, if any
     /// (only Freehand creates its element on pointer-down).
     pub element_id: Option<ElementId>,
+    /// Connection point the drag started on, if it snapped to a shape.
+    pub start_binding: Option<ConnectionEnd>,
 }
 
 /// All interior mutable state owned by the canvas component.
@@ -179,6 +184,7 @@ pub struct CanvasInputs {
     pub on_crop_export: RwSignal<Option<CropExportCallback>>,
     pub default_style: RwSignal<ElementStyle>,
     pub default_line_style: RwSignal<LineStyle>,
+    pub default_connector_variant: RwSignal<ConnectorVariant>,
     /// The theme picker modal is open; Escape closes it before touching the
     /// canvas or the current selection.
     pub theme_open: RwSignal<bool>,

@@ -1,5 +1,6 @@
 use crate::model::elements::path::{
-    bounds_of_points, hit_test_path, path_d, scale_points, CurveMode,
+    bounds_of_points, eval_cubic_bezier, hit_test_path, path_d, scale_points, segment_cubic_bezier,
+    CurveMode,
 };
 use crate::model::elements::utils::{arrowhead_polyline, line_endpoints};
 use crate::model::resize::ResizeContext;
@@ -206,14 +207,15 @@ impl Connector {
                 if self.points.len() <= 2 {
                     self.sample_quadratic(20)
                 } else {
-                    // Extra bends keep the existing Catmull-Rom behaviour.
+                    // Extra bends follow the same Catmull-Rom curve the
+                    // renderer draws.
                     let mut route = Vec::new();
                     for i in 0..self.points.len().saturating_sub(1) {
-                        let a = self.points[i];
-                        let b = self.points[i + 1];
+                        let Some((p0, p1, p2, p3)) = segment_cubic_bezier(&self.points, i) else {
+                            continue;
+                        };
                         for step in 0..8 {
-                            let t = step as f64 / 8.0;
-                            route.push(Point::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t));
+                            route.push(eval_cubic_bezier(&p0, &p1, &p2, &p3, step as f64 / 8.0));
                         }
                     }
                     if let Some(last) = self.last() {

@@ -76,25 +76,29 @@ fn render_path_element_overlay(
         .collect();
 
     let cm = el.curve_mode();
-    let ghost_handles: Vec<_> = (0..n.saturating_sub(1))
-        .filter_map(|i| {
-            let (gx, gy) = segment_midpoint(points, cm, i)?;
-            Some(
-                view! {
-                    <circle
-                        cx=gx
-                        cy=gy
-                        r="3.5"
-                        fill="none"
-                        stroke=hex
-                        stroke-width="1"
-                        pointer-events="none"
-                    />
-                }
-                .into_view(),
-            )
-        })
-        .collect();
+    let ghost_handles: Vec<View> = if el.editable_midpoints() {
+        (0..n.saturating_sub(1))
+            .filter_map(|i| {
+                let (gx, gy) = segment_midpoint(points, cm, i)?;
+                Some(
+                    view! {
+                        <circle
+                            cx=gx
+                            cy=gy
+                            r="3.5"
+                            fill="none"
+                            stroke=hex
+                            stroke-width="1"
+                            pointer-events="none"
+                        />
+                    }
+                    .into_view(),
+                )
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     let move_icon = view! {
         <g
