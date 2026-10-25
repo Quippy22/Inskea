@@ -47,6 +47,10 @@ where
     let file_sub_hover = create_rw_signal(false);
     let show_file = Signal::derive(move || file_hover.get() || file_sub_hover.get());
 
+    let import_hover = create_rw_signal(false);
+    let import_sub_hover = create_rw_signal(false);
+    let show_import = Signal::derive(move || import_hover.get() || import_sub_hover.get());
+
     let export_hover = create_rw_signal(false);
     let export_sub_hover = create_rw_signal(false);
     let show_export = Signal::derive(move || export_hover.get() || export_sub_hover.get());
@@ -57,6 +61,8 @@ where
         menu_open.set(false);
         file_hover.set(false);
         file_sub_hover.set(false);
+        import_hover.set(false);
+        import_sub_hover.set(false);
         export_hover.set(false);
         export_sub_hover.set(false);
     };
@@ -293,13 +299,15 @@ where
             label: "Open",
             on_click: Rc::new(on_open),
         },
-        DropdownItem::Separator,
+    ];
+
+    let import_items: Vec<DropdownItem> = vec![
         DropdownItem::Action {
-            label: "Import Drawing",
+            label: "Drawing",
             on_click: Rc::new(on_import),
         },
         DropdownItem::Action {
-            label: "Import Image",
+            label: "Image",
             on_click: Rc::new(on_import_image),
         },
     ];
@@ -446,6 +454,30 @@ where
                                                     move || s.set(false)
                                                 })
                                                 items=file_items.clone()
+                                            />
+                                        </div>
+
+                                        // ── Import ───────────────────────────
+                                        <div
+                                            class="relative"
+                                            on:mouseenter=move |_| import_hover.set(true)
+                                            on:mouseleave=move |_| import_hover.set(false)
+                                        >
+                                            <button class=styles::MENU_ITEM>
+                                                <span>"Import"</span>
+                                                {icon::chevron_right()}
+                                            </button>
+                                            <Dropdown
+                                                show=show_import
+                                                on_mouseenter=Rc::new({
+                                                    let s = import_sub_hover;
+                                                    move || s.set(true)
+                                                })
+                                                on_mouseleave=Rc::new({
+                                                    let s = import_sub_hover;
+                                                    move || s.set(false)
+                                                })
+                                                items=import_items.clone()
                                             />
                                         </div>
 

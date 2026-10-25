@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/version-1.4.0-blue?style=flat-square" alt="Version 1.4.0">
+  <img src="https://img.shields.io/badge/version-1.4.1-blue?style=flat-square" alt="Version 1.4.1">
   <img src="https://img.shields.io/badge/platform-desktop%20%7C%20browser-blueviolet?style=flat-square" alt="Platform: desktop and browser">
 </p>
 
@@ -18,7 +18,7 @@ It runs as a native desktop app and in the browser, with the same tools and the 
 - **Shapes.** Rectangles with sharp or rounded corners, ellipses, and lines that are straight or gently curved. Hold Shift while drawing for perfect squares and circles.
 - **Arrows.** Add an arrowhead to either end of a line, or both.
 - **Freehand.** Strokes are smoothed as you draw, which keeps hand-drawn lines from looking jittery.
-- **Images.** Import a PNG, JPEG, GIF, WebP, SVG, or BMP from File → Import Image, or drop one onto the canvas. Images move, resize, and rotate like any other element, and the image data travels with the drawing.
+- **Images.** Import a PNG, JPEG, GIF, WebP, SVG, or BMP from Import → Image, or drop one onto the canvas. Images move, resize, and rotate like any other element, and the image data travels with the drawing.
 - **Text.** Click to place a cursor and type. Resize the box to set how the text wraps, change the font size, and align text left, center, or right.
 - **Eraser.** Drag across anything you want to remove.
 - **Point edits.** Reshape a line or arrow after the fact by dragging its points, or drag between two points to add a bend.
