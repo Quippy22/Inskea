@@ -67,7 +67,7 @@ pub fn cursor_style(
 
 fn draw_cursor(tool: Tool, stroke: &str) -> String {
     match tool {
-        Tool::Rectangle | Tool::Ellipse | Tool::Line | Tool::Arrow | Tool::Connector => {
+        Tool::Rectangle | Tool::Ellipse | Tool::Line | Tool::Arrow => {
             to_cursor(svgs::CROSSHAIR, 16, 16, "crosshair", stroke)
         }
         Tool::Text => to_cursor(svgs::TEXT_CURSOR, 16, 22, "text", stroke),

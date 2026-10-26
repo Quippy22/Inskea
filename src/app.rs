@@ -617,7 +617,7 @@ pub fn App() -> impl IntoView {
     let default_connector_variant = create_rw_signal(ConnectorVariant::default());
 
     create_effect(move |_| {
-        let is_arrow = matches!(selected_tool.get(), Tool::Arrow | Tool::Connector);
+        let is_arrow = matches!(selected_tool.get(), Tool::Arrow);
         default_line_style.update(|ls| ls.has_end_arrowhead = is_arrow);
     });
 

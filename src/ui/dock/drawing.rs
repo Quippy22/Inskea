@@ -7,7 +7,6 @@ pub enum Tool {
     Ellipse,
     Line,
     Arrow,
-    Connector,
     Text,
     Freehand,
 }
@@ -20,7 +19,6 @@ impl Tool {
             Tool::Ellipse => StylingKind::Ellipse,
             Tool::Line => StylingKind::Line,
             Tool::Arrow => StylingKind::Arrow,
-            Tool::Connector => StylingKind::Connector,
             Tool::Text => StylingKind::Text,
             Tool::Freehand => StylingKind::Freehand,
         }
