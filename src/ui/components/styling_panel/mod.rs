@@ -31,8 +31,8 @@ use crate::canvas::CanvasMode;
 use crate::edit_ops;
 use crate::edit_ops::Clipboard;
 use crate::model::{
-    Color, ConnectorVariant, CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle,
-    Point, Scene, StrokeStyle, StylingKind, TextAlign,
+    Color, Connector, ConnectorVariant, CurveMode, EdgeStyle, Element, ElementId, ElementStyle,
+    LineStyle, Point, Scene, StrokeStyle, StylingKind, TextAlign,
 };
 use crate::ui::dock::Tool;
 use crate::ui::{icon, styles};
@@ -117,10 +117,13 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
     });
 
     let is_text = Signal::derive(move || styling_kind.get() == StylingKind::Text);
-    let is_line = Signal::derive(move || {
-        styling_kind.get() == StylingKind::Line || styling_kind.get() == StylingKind::Arrow
+    let is_line = Signal::derive(move || styling_kind.get() == StylingKind::Line);
+    let is_connector = Signal::derive(move || {
+        matches!(
+            styling_kind.get(),
+            StylingKind::Arrow | StylingKind::Connector
+        )
     });
-    let is_connector = Signal::derive(move || styling_kind.get() == StylingKind::Connector);
     let is_arrow = Signal::derive(move || {
         matches!(
             styling_kind.get(),
@@ -340,10 +343,19 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
             local_connector_variant.set(variant);
             let ids = selected_ids.get_untracked();
             if !ids.is_empty() {
-                mutate_selected_elements(scene, &ids, &push_snapshot, |element| {
-                    if let Element::Connector(connector) = element {
-                        connector.variant = variant;
+                mutate_selected_elements(scene, &ids, &push_snapshot, |element| match element {
+                    Element::Connector(connector) => connector.variant = variant,
+                    // Older arrows are plain lines. Routing is meaningless for
+                    // a line, so choosing a route promotes it to a connector.
+                    Element::Line(line) => {
+                        *element = Element::Connector(Connector::from_line(
+                            line.clone(),
+                            variant,
+                            None,
+                            None,
+                        ));
                     }
+                    _ => {}
                 });
             } else {
                 default_connector_variant.set(variant);

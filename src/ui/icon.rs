@@ -105,7 +105,7 @@ lucide_icons! {
     edge_rounded => "squircle.svg",
 }
 
-/// Connector routing previews: a dot at each end plus the route between them.
+/// Connector routing previews: a node at each end plus the route between them.
 pub fn connector_straight() -> impl IntoView {
     view! {
         <svg
@@ -120,9 +120,9 @@ pub fn connector_straight() -> impl IntoView {
             aria-hidden="true"
             focusable="false"
         >
-            <circle cx="5" cy="19" r="2" fill="currentColor" stroke="none" />
-            <circle cx="19" cy="5" r="2" fill="currentColor" stroke="none" />
-            <path d="M6.5 17.5 L17.5 6.5" />
+            <rect x="3" y="9" width="4" height="6" rx="1" fill="currentColor" stroke="none" />
+            <rect x="17" y="9" width="4" height="6" rx="1" fill="currentColor" stroke="none" />
+            <path d="M7 12 H17" />
         </svg>
     }
 }
@@ -141,9 +141,9 @@ pub fn connector_curved() -> impl IntoView {
             aria-hidden="true"
             focusable="false"
         >
-            <circle cx="5" cy="19" r="2" fill="currentColor" stroke="none" />
-            <circle cx="19" cy="5" r="2" fill="currentColor" stroke="none" />
-            <path d="M6.5 17.5 Q15 16 17.5 6.5" />
+            <rect x="3" y="9" width="4" height="6" rx="1" fill="currentColor" stroke="none" />
+            <rect x="17" y="9" width="4" height="6" rx="1" fill="currentColor" stroke="none" />
+            <path d="M7 12 C10 7 14 17 17 12" />
         </svg>
     }
 }
@@ -162,9 +162,9 @@ pub fn connector_direct() -> impl IntoView {
             aria-hidden="true"
             focusable="false"
         >
-            <circle cx="5" cy="19" r="2" fill="currentColor" stroke="none" />
-            <circle cx="19" cy="5" r="2" fill="currentColor" stroke="none" />
-            <path d="M5 17 L5 12 L19 12 L19 7" />
+            <rect x="3" y="9" width="4" height="6" rx="1" fill="currentColor" stroke="none" />
+            <rect x="17" y="9" width="4" height="6" rx="1" fill="currentColor" stroke="none" />
+            <path d="M7 12 H12 V7 H17" />
         </svg>
     }
 }
