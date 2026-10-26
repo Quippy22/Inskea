@@ -591,7 +591,7 @@ fn do_path_point_drag(world: Point, st: &mut CanvasState, props: &mut CanvasInpu
             s.element_by_id(id),
             Some(Element::Line(_) | Element::Connector(_))
         )
-        .then(|| s.snap_connection(target, SNAP_SCREEN_PX / zoom, Some(id)))
+        .then(|| s.bind_connection(target, SNAP_SCREEN_PX / zoom, Some(id)))
         .flatten()
     });
     props.scene.update(|s| {

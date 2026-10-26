@@ -89,7 +89,7 @@ pub(crate) fn snap_draw_point(
     let threshold = SNAP_SCREEN_PX / zoom;
     props
         .scene
-        .with_untracked(|scene| scene.snap_connection(world, threshold, None))
+        .with_untracked(|scene| scene.bind_connection(world, threshold, None))
         .map_or((world, None), |(point, binding)| (point, Some(binding)))
 }
 

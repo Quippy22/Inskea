@@ -1267,8 +1267,52 @@ impl Scene {
         connector::nearest_connection_point(&nearby, point, threshold, exclude)
     }
 
+    /// Bind an endpoint to the nearest connection point. The tight snap radius
+    /// wins first; if no point is that close, the shape under the cursor
+    /// provides its nearest point so dropping an arrow anywhere on a shape
+    /// attaches instead of requiring pixel-perfect aim.
+    pub fn bind_connection(
+        &self,
+        point: Point,
+        threshold: f64,
+        exclude: Option<ElementId>,
+    ) -> Option<(Point, ConnectionEnd)> {
+        if let Some(snap) = self.snap_connection(point, threshold, exclude) {
+            return Some(snap);
+        }
+        let shape = self.connection_shape_at(point, exclude)?;
+        let points = connector::connection_points(&shape)?;
+        let (index, target) = nearest_connection(&points, point)?;
+        Some((target, ConnectionEnd::new(shape.id(), index)))
+    }
+
+    /// The topmost shape (an element with connection points) under `point`.
+    ///
+    /// Uses the shape's bounds rather than its stroke hit test so dropping an
+    /// arrow inside a hollow shape still attaches to it.
+    fn connection_shape_at(&self, point: Point, exclude: Option<ElementId>) -> Option<Element> {
+        let margin = interaction::HIT_MARGIN;
+        let nearby = self.elements_in_view(Rect::new(
+            point.x - margin,
+            point.y - margin,
+            margin * 2.0,
+            margin * 2.0,
+        ));
+        nearby.into_iter().rev().find(|element| {
+            if exclude == Some(element.id()) || connector::connection_points(element).is_none() {
+                return false;
+            }
+            let bounds = element.bounds();
+            point.x >= bounds.x - margin
+                && point.x <= bounds.x + bounds.w + margin
+                && point.y >= bounds.y - margin
+                && point.y <= bounds.y + bounds.h + margin
+        })
+    }
+
     /// The connection grid of the shape nearest to `point`, for the hover
-    /// overlay. `None` when no point lies within `threshold`.
+    /// overlay. Shows whenever the cursor is over a shape, and highlights the
+    /// point a release would bind to.
     pub fn connection_guide_at(
         &self,
         point: Point,
@@ -1285,7 +1329,13 @@ impl Scene {
             threshold * 2.0,
         );
         let nearby = self.elements_in_view(view);
-        connector::connection_guide(&nearby, point, threshold)
+        if let Some(guide) = connector::connection_guide(&nearby, point, threshold) {
+            return Some(guide);
+        }
+        let shape = self.connection_shape_at(point, None)?;
+        let points = connector::connection_points(&shape)?;
+        let (index, _) = nearest_connection(&points, point)?;
+        Some((shape.id(), points, Some(index)))
     }
 
     /// Drop bindings that point at elements that are about to disappear.
@@ -1325,6 +1375,22 @@ impl Scene {
             }
         }
     }
+}
+
+/// Index and position of the connection point closest to `point`.
+fn nearest_connection(
+    points: &[Point; connector::CONNECTION_POINT_COUNT],
+    point: Point,
+) -> Option<(usize, Point)> {
+    points
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| {
+            let da = (a.x - point.x).hypot(a.y - point.y);
+            let db = (b.x - point.x).hypot(b.y - point.y);
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(index, candidate)| (index, *candidate))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1837,5 +1903,60 @@ mod tests {
             panic!("expected connector");
         };
         assert_eq!(connector.points[0], Point::new(100.0, 0.0));
+    }
+
+    #[test]
+    fn dropping_on_a_shape_binds_to_its_nearest_connection_point() {
+        let mut s = Scene::new();
+        let mut rd = ElementData::new(0);
+        rd.world_point = Point::new(0.0, 0.0);
+        rd.width = 100.0;
+        rd.height = 100.0;
+        s.add_element(Element::Rectangle(Rectangle { data: rd }));
+
+        // Inside the shape but nowhere near a grid point: the shape under the
+        // cursor still provides a target.
+        let (point, binding) = s
+            .bind_connection(Point::new(15.0, 12.0), 0.5, None)
+            .expect("the shape should bind");
+        assert_eq!(binding, ConnectionEnd::new(1, 0));
+        assert_eq!(point, Point::new(0.0, 0.0));
+
+        assert!(s
+            .bind_connection(Point::new(500.0, 500.0), 14.0, None)
+            .is_none());
+    }
+
+    #[test]
+    fn a_point_within_the_snap_radius_wins_over_the_shape_fallback() {
+        let mut s = Scene::new();
+        let mut rd = ElementData::new(0);
+        rd.world_point = Point::new(0.0, 0.0);
+        rd.width = 100.0;
+        rd.height = 100.0;
+        s.add_element(Element::Rectangle(Rectangle { data: rd }));
+
+        let (point, binding) = s
+            .bind_connection(Point::new(52.0, 3.0), 14.0, None)
+            .expect("nearby point should bind");
+        assert_eq!(binding, ConnectionEnd::new(1, 1));
+        assert_eq!(point, Point::new(50.0, 0.0));
+    }
+
+    #[test]
+    fn hovering_a_shape_shows_its_connection_grid() {
+        let mut s = Scene::new();
+        let mut rd = ElementData::new(0);
+        rd.world_point = Point::new(0.0, 0.0);
+        rd.width = 100.0;
+        rd.height = 100.0;
+        s.add_element(Element::Rectangle(Rectangle { data: rd }));
+
+        let (id, points, highlight) = s
+            .connection_guide_at(Point::new(15.0, 12.0), 0.5)
+            .expect("hovering the shape should show its grid");
+        assert_eq!(id, 1);
+        assert_eq!(points[0], Point::new(0.0, 0.0));
+        assert_eq!(highlight, Some(0));
     }
 }
