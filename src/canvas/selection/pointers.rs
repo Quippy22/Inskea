@@ -5,9 +5,11 @@ use super::utils::{
 use super::MIN_DRAG_DIST;
 use crate::canvas::smart_guides::{self, GuideBox, SmartGuideState};
 use crate::canvas::state::{CanvasInputs, CanvasState, DragOperation};
-use crate::model::elements::connector::SNAP_SCREEN_PX;
+use crate::model::elements::connector::{self, ConnectionEnd, SNAP_SCREEN_PX};
 use crate::model::elements::path::segment_midpoint;
-use crate::model::elements::{Bounds, Offset, PathPoints, Resize, Rotate};
+use crate::model::elements::{
+    Bounds, Connector, ConnectorVariant, CurveMode, Offset, PathPoints, Resize, Rotate,
+};
 use crate::model::interaction::{
     guide_bounds, guide_frame, guide_union_bounds, guide_union_frame, hit_test_topmost,
     point_inside_any_element, rect_fully_contains_element, GuideFrame, CLICK_MARGIN, HIT_MARGIN,
@@ -15,7 +17,7 @@ use crate::model::interaction::{
 use crate::model::resize::ResizeContext;
 use crate::model::resize::ResizeHandle;
 use crate::model::selection::{expand_ids, normalize_ids, toggle_ids};
-use crate::model::{Element, ElementId, Point, Rect};
+use crate::model::{Element, ElementId, Point, Rect, Scene};
 use crate::util::snap_value;
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, *};
 
@@ -525,6 +527,7 @@ fn do_resize(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
                     el.resize(&ctx);
                 }
             }
+            refresh_bound_connectors(s, &originals);
         });
     }
 }
@@ -560,6 +563,7 @@ fn do_rotate(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
                         el.rotate_around(Point { x: cx, y: cy }, delta);
                     }
                 }
+                refresh_bound_connectors(s, &originals);
             });
             st.drag.rotation_delta.set(delta);
         }
@@ -578,32 +582,66 @@ fn do_path_point_drag(world: Point, st: &mut CanvasState, props: &mut CanvasInpu
     };
     let ids = st.selected_ids.get();
     let id = ids[0];
-    // A connector endpoint re-binds when it is dragged onto another connection
-    // point and detaches as soon as it leaves the snap radius.
+    // A line endpoint becomes a connector when it lands on a connection point;
+    // an attached connector re-binds when dragged onto another point and
+    // detaches as soon as it leaves the snap radius.
     let zoom = props.viewport.get_untracked().zoom.max(0.01);
     let snap = props.scene.with_untracked(|s| {
-        matches!(s.element_by_id(id), Some(Element::Connector(_)))
-            .then(|| s.snap_connection(target, SNAP_SCREEN_PX / zoom, Some(id)))
-            .flatten()
+        matches!(
+            s.element_by_id(id),
+            Some(Element::Line(_) | Element::Connector(_))
+        )
+        .then(|| s.snap_connection(target, SNAP_SCREEN_PX / zoom, Some(id)))
+        .flatten()
     });
     props.scene.update(|s| {
         if let Some(mut el) = s.element_by_id_mut(id) {
-            if let Element::Connector(connector) = &mut *el {
-                let (point, binding) = match snap {
-                    Some((point, binding)) => (point, Some(binding)),
-                    None => (target, None),
-                };
-                connector.set_endpoint(idx, point, binding);
-            } else if let Some(pts) = el.path_points_mut() {
-                if idx < pts.len() {
-                    if let Some(point) = pts.get_mut(idx) {
-                        *point = target;
-                    }
-                }
-            }
+            place_path_point(&mut el, idx, target, snap);
         }
     });
     st.drag.moving_anchor.set(Some(world));
+}
+
+/// Move one path point, converting a line endpoint that lands on a connection
+/// point into a connector. Interior line points cannot bind, so they just move.
+fn place_path_point(
+    el: &mut Element,
+    idx: usize,
+    point: Point,
+    snap: Option<(Point, ConnectionEnd)>,
+) {
+    match el {
+        Element::Connector(connector) => {
+            let (position, binding) = match snap {
+                Some((snapped, binding)) => (snapped, Some(binding)),
+                None => (point, None),
+            };
+            connector.set_endpoint(idx, position, binding);
+        }
+        Element::Line(line) => {
+            let is_endpoint = idx == 0 || idx + 1 == line.points.len();
+            let Some((snapped, binding)) = snap.filter(|_| is_endpoint) else {
+                if let Some(target) = line.points.get_mut(idx) {
+                    *target = point;
+                }
+                return;
+            };
+            let variant = match line.line_style.curve_mode {
+                CurveMode::Straight => ConnectorVariant::Straight,
+                CurveMode::Curved => ConnectorVariant::Curved,
+            };
+            let mut connector = Connector::from_line(line.clone(), variant, None, None);
+            connector.set_endpoint(idx, snapped, Some(binding));
+            *el = Element::Connector(connector);
+        }
+        _ => {
+            if let Some(pts) = el.path_points_mut() {
+                if let Some(target) = pts.get_mut(idx) {
+                    *target = point;
+                }
+            }
+        }
+    }
 }
 
 /// Drag a segment midpoint beyond `MIN_DRAG_DIST` to insert a new path point.
@@ -639,6 +677,19 @@ fn do_path_midpoint_drag(world: Point, st: &mut CanvasState, props: &mut CanvasI
                 .set(Some(DragOperation::PathPoint(new_idx)));
             st.drag.moving_anchor.set(Some(world));
             st.drag.last_world.set(Some(world));
+        }
+    }
+}
+
+/// Re-pin connectors bound to any moved shape. Drag frames restore every
+/// selected element from its original before re-applying the transform, so a
+/// selected connector is written after (or before) the shape it follows and
+/// can be left holding a stale endpoint. Run this once after the whole
+/// selection has been written.
+fn refresh_bound_connectors(s: &mut Scene, originals: &[Element]) {
+    for original in originals {
+        if connector::connection_points(original).is_some() {
+            s.refresh_connectors_for(original.id());
         }
     }
 }
@@ -713,6 +764,7 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
                 el.offset(dx, dy);
             }
         }
+        refresh_bound_connectors(s, &originals);
     });
     st.drag.smart_guides.set(next_guides);
 }
@@ -789,6 +841,7 @@ pub(crate) fn cancel_drag(st: &mut CanvasState, props: &mut CanvasInputs) {
                     *el = orig.clone();
                 }
             }
+            refresh_bound_connectors(s, &originals);
         });
     }
     // A still-pending PathMidpoint has not pushed a snapshot yet; every other
@@ -949,9 +1002,92 @@ fn finish_shift_click(st: &mut CanvasState, props: &mut CanvasInputs) {
                 *el = orig.clone();
             }
         }
+        refresh_bound_connectors(s, &originals);
     });
     if st.shift_pressed.get() {
         let ids = normalize_ids(&props.scene.get_untracked(), &st.selected_ids.get());
         st.selected_ids.set(toggle_ids(&ids, &target));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::elements::{FromDrag, Line};
+
+    fn line(points: &[Point]) -> Element {
+        let mut line = Line::from_drag(
+            Point::new(0.0, 0.0),
+            Point::new(100.0, 0.0),
+            crate::model::Color::new(crate::model::Color::WHITE),
+            false,
+        );
+        line.points = points.to_vec().into_boxed_slice();
+        Element::Line(line)
+    }
+
+    fn binding(binding: ConnectionEnd) -> Option<(Point, ConnectionEnd)> {
+        Some((Point::new(100.0, 50.0), binding))
+    }
+
+    #[test]
+    fn line_endpoint_on_a_connection_point_becomes_a_connector() {
+        let mut el = line(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0)]);
+        let end = ConnectionEnd::new(7, 4);
+        place_path_point(&mut el, 1, Point::new(100.0, 0.0), binding(end));
+        let Element::Connector(connector) = el else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.end_binding, Some(end));
+        assert_eq!(connector.start_binding, None);
+        assert_eq!(connector.points[1], Point::new(100.0, 50.0));
+        assert_eq!(connector.variant, ConnectorVariant::Straight);
+    }
+
+    #[test]
+    fn curved_line_keeps_its_curve_when_converted() {
+        let points = [
+            Point::new(0.0, 0.0),
+            Point::new(50.0, 20.0),
+            Point::new(100.0, 0.0),
+        ];
+        let mut el = line(&points);
+        let Element::Line(line) = &mut el else {
+            panic!("expected line");
+        };
+        line.line_style.curve_mode = CurveMode::Curved;
+        let end = ConnectionEnd::new(2, 8);
+        place_path_point(&mut el, 2, points[2], binding(end));
+        let Element::Connector(connector) = el else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.variant, ConnectorVariant::Curved);
+        assert_eq!(connector.end_binding, Some(end));
+        assert_eq!(connector.points.len(), 3);
+    }
+
+    #[test]
+    fn line_interior_point_cannot_bind() {
+        let mut el = line(&[
+            Point::new(0.0, 0.0),
+            Point::new(50.0, 0.0),
+            Point::new(100.0, 0.0),
+        ]);
+        let end = ConnectionEnd::new(2, 4);
+        place_path_point(&mut el, 1, Point::new(60.0, 0.0), binding(end));
+        let Element::Line(line) = el else {
+            panic!("expected line");
+        };
+        assert_eq!(line.points[1], Point::new(60.0, 0.0));
+    }
+
+    #[test]
+    fn unsnapped_line_endpoint_stays_a_line() {
+        let mut el = line(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0)]);
+        place_path_point(&mut el, 0, Point::new(10.0, 10.0), None);
+        let Element::Line(line) = el else {
+            panic!("expected line");
+        };
+        assert_eq!(line.points[0], Point::new(10.0, 10.0));
     }
 }

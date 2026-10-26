@@ -717,7 +717,7 @@ pub fn Canvas(
                         .get_untracked()
                         .first()
                         .and_then(|id| scene.element_by_id(*id))
-                        .is_some_and(|el| matches!(el, Element::Connector(_)))
+                        .is_some_and(|el| matches!(el, Element::Line(_) | Element::Connector(_)))
                 });
             if !drawing && !dragging_connector {
                 return None;
