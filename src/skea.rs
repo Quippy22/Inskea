@@ -2,13 +2,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::Scene;
 
-/// A `.skea` file is the `Scene` struct plus a version header. Inskea has not
-/// shipped a public release yet, so only files written by a supported format
-/// load; older internal formats are rejected with a version error instead of
-/// being migrated.
+/// A `.skea` file is the `Scene` struct plus a version header. Files written by
+/// any supported format load through [`migrate`]; formats older than
+/// [`MIN_FORMAT_VERSION`] are rejected with a version error.
 ///
-/// Version 7 added embedded images; version 8 added connectors. Older files
-/// cannot contain either, so they load unchanged.
+/// Version 7 added embedded images; version 8 added connectors.
 pub const FORMAT_VERSION: u32 = 8;
 
 /// Oldest format this build still reads.
@@ -47,10 +45,24 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
         serde_json::from_value(raw).map_err(|e| format!("failed to parse .skea file: {e}"))?;
     let mut scene = file.scene;
     scene.normalize_groups();
+    migrate(&mut scene, version);
     // Loading is not an undoable user action; discard any journal entries
-    // produced by group normalization.
+    // produced by normalization and migration.
     scene.clear_pending();
     Ok(scene)
+}
+
+/// Bring a scene written by an older supported build up to the current layout.
+///
+/// v7 added embedded images and v8 added connectors; neither changed how
+/// existing elements serialize, so pre-v8 scenes need no field rewriting.
+/// Connector endpoints are stored next to their bindings, though, so every load
+/// re-pins them from the bound shape and drops bindings whose shape or
+/// connection point no longer exists. That repairs early-v8 files saved before
+/// the two were kept in sync, and hand-edited files.
+fn migrate(scene: &mut Scene, from_version: u32) {
+    debug_assert!(from_version <= FORMAT_VERSION);
+    scene.sync_all_connectors();
 }
 
 #[cfg(test)]
@@ -316,7 +328,100 @@ mod tests {
 
             let loaded = load_from_str(&serde_json::to_string(&raw).unwrap()).unwrap();
             assert!(!loaded.is_empty(), "version {version} should load");
+
+            // Loading migrates the scene; saving always writes the current
+            // version header.
+            let saved: serde_json::Value =
+                serde_json::from_str(&save_to_string(&loaded).unwrap()).unwrap();
+            assert_eq!(saved["format_version"], serde_json::json!(FORMAT_VERSION));
         }
+    }
+
+    #[test]
+    fn load_repins_connector_endpoints_to_their_bindings() {
+        use crate::model::elements::connector::{connection_points, ConnectionEnd, Connector};
+        use crate::model::elements::ConnectorVariant;
+
+        let mut scene = Scene::new();
+        let mut rd = ElementData::new(0);
+        rd.world_point.set(0.0, 0.0);
+        rd.width = 100.0;
+        rd.height = 80.0;
+        scene.add_element(Element::Rectangle(Rectangle { data: rd }));
+
+        let points = connection_points(&scene.elements()[0]).unwrap();
+        scene.add_element(Element::Connector(Connector {
+            data: ElementData::new(0),
+            // Deliberately stale: the file carries a binding but stores the
+            // endpoint somewhere else.
+            points: vec![Point::new(-500.0, -500.0), points[4]].into_boxed_slice(),
+            line_style: LineStyle::default(),
+            variant: ConnectorVariant::Straight,
+            start_binding: Some(ConnectionEnd::new(1, 0)),
+            end_binding: Some(ConnectionEnd::new(1, 4)),
+        }));
+
+        let loaded = load_from_str(&save_to_string(&scene).unwrap()).unwrap();
+        let Some(Element::Connector(connector)) = loaded.elements().last().cloned() else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.points[0], points[0]);
+        assert_eq!(connector.points[1], points[4]);
+    }
+
+    #[test]
+    fn load_drops_bindings_to_missing_shapes() {
+        use crate::model::elements::connector::{ConnectionEnd, Connector};
+        use crate::model::elements::ConnectorVariant;
+
+        let mut scene = Scene::new();
+        scene.add_element(Element::Connector(Connector {
+            data: ElementData::new(0),
+            points: vec![Point::new(0.0, 0.0), Point::new(50.0, 50.0)].into_boxed_slice(),
+            line_style: LineStyle::default(),
+            variant: ConnectorVariant::Curved,
+            start_binding: Some(ConnectionEnd::new(99, 0)),
+            end_binding: Some(ConnectionEnd::new(99, 8)),
+        }));
+
+        let loaded = load_from_str(&save_to_string(&scene).unwrap()).unwrap();
+        let Some(Element::Connector(connector)) = loaded.elements().first().cloned() else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.start_binding, None);
+        assert_eq!(connector.end_binding, None);
+        assert_eq!(connector.variant, ConnectorVariant::Curved);
+    }
+
+    #[test]
+    fn connector_fields_missing_from_early_v8_files_use_defaults() {
+        use crate::model::elements::connector::Connector;
+        use crate::model::elements::ConnectorVariant;
+
+        let mut scene = Scene::new();
+        scene.add_element(Element::Connector(Connector {
+            data: ElementData::new(0),
+            points: vec![Point::new(0.0, 0.0), Point::new(50.0, 50.0)].into_boxed_slice(),
+            line_style: LineStyle::default(),
+            variant: ConnectorVariant::Curved,
+            start_binding: None,
+            end_binding: None,
+        }));
+
+        let mut raw: serde_json::Value =
+            serde_json::from_str(&save_to_string(&scene).unwrap()).unwrap();
+        let element = raw.pointer_mut("/scene/elements/0").unwrap();
+        for field in ["variant", "start_binding", "end_binding"] {
+            element.as_object_mut().unwrap().remove(field);
+        }
+
+        let loaded = load_from_str(&serde_json::to_string(&raw).unwrap()).unwrap();
+        let Some(Element::Connector(connector)) = loaded.elements().first().cloned() else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.variant, ConnectorVariant::Straight);
+        assert_eq!(connector.start_binding, None);
+        assert_eq!(connector.end_binding, None);
     }
 
     #[test]
