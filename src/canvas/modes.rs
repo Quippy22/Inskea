@@ -76,7 +76,7 @@ pub(crate) fn cancel_drawing(st: &mut CanvasState, props: &mut CanvasInputs) {
 
 /// Tools whose endpoints can attach to shape connection points.
 pub(crate) fn snaps_to_shapes(tool: Tool) -> bool {
-    matches!(tool, Tool::Line | Tool::Arrow | Tool::Connector)
+    matches!(tool, Tool::Line | Tool::Arrow)
 }
 
 /// Snap a world point to the nearest connection point within the screen-space
@@ -93,8 +93,9 @@ pub(crate) fn snap_draw_point(
         .map_or((world, None), |(point, binding)| (point, Some(binding)))
 }
 
-/// Construct the element a drag would produce. Line-like tools become
-/// connectors as soon as either endpoint lands on a shape.
+/// Construct the element a drag would produce. The arrow tool always creates a
+/// connector (unattached until an endpoint lands on a shape), while the line
+/// tool only converts a line when one of its endpoints binds.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_drag_element(
     tool: Tool,
@@ -109,40 +110,37 @@ pub(crate) fn build_drag_element(
     match tool {
         Tool::Rectangle => Rectangle::from_drag(anchor, current, color, shift).into(),
         Tool::Ellipse => Ellipse::from_drag(anchor, current, color, shift).into(),
-        Tool::Line | Tool::Arrow => {
+        Tool::Line => {
             let line = Line::from_drag(anchor, current, color, shift);
             if start_binding.is_none() && end_binding.is_none() {
                 return Element::Line(line);
             }
-            let mut connector = Connector::from_line(line, variant, start_binding, end_binding);
-            if start_binding.is_some() {
-                connector.points[0] = anchor;
-            }
-            if end_binding.is_some() {
-                if let Some(last) = connector.points.last_mut() {
-                    *last = current;
-                }
-            }
-            Element::Connector(connector)
+            let connector = Connector::from_line(line, variant, start_binding, end_binding);
+            Element::Connector(bound_endpoints(connector, anchor, current))
         }
-        Tool::Connector => {
+        Tool::Arrow => {
             let mut connector = Connector::from_drag(anchor, current, color, shift);
             connector.variant = variant;
             connector.start_binding = start_binding;
             connector.end_binding = end_binding;
-            if start_binding.is_some() {
-                connector.points[0] = anchor;
-            }
-            if end_binding.is_some() {
-                if let Some(last) = connector.points.last_mut() {
-                    *last = current;
-                }
-            }
-            Element::Connector(connector)
+            Element::Connector(bound_endpoints(connector, anchor, current))
         }
         Tool::Text => Text::from_drag(anchor, current, color, shift).into(),
         Tool::Freehand => Freehand::from_drag(anchor, current, color, shift).into(),
     }
+}
+
+/// Snap the endpoint geometry onto the exact connection points it bound to.
+fn bound_endpoints(mut connector: Connector, anchor: Point, current: Point) -> Connector {
+    if connector.start_binding.is_some() {
+        connector.points[0] = anchor;
+    }
+    if connector.end_binding.is_some() {
+        if let Some(last) = connector.points.last_mut() {
+            *last = current;
+        }
+    }
+    connector
 }
 
 /// Apply the panel's defaults to a freshly built element.
@@ -325,8 +323,8 @@ mod tests {
     }
 
     #[test]
-    fn connector_tool_creates_a_connector_without_bindings() {
-        let Element::Connector(connector) = drag(Tool::Connector, None, None) else {
+    fn arrow_tool_creates_a_connector_without_bindings() {
+        let Element::Connector(connector) = drag(Tool::Arrow, None, None) else {
             panic!("expected connector");
         };
         assert_eq!(connector.start_binding, None);
