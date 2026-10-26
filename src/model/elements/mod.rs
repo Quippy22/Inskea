@@ -388,10 +388,7 @@ impl PathPoints for Element {
         }
     }
     fn editable_midpoints(&self) -> bool {
-        match self {
-            Element::Connector(_) => false,
-            _ => true,
-        }
+        !matches!(self, Element::Connector(_))
     }
 }
 
