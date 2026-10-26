@@ -290,3 +290,47 @@ pub fn draw_pointer_up(
         st.drawing.set(None);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn drag(tool: Tool, start: Option<ConnectionEnd>, end: Option<ConnectionEnd>) -> Element {
+        build_drag_element(
+            tool,
+            Point::new(0.0, 0.0),
+            Point::new(100.0, 0.0),
+            Color::new(Color::WHITE),
+            false,
+            ConnectorVariant::Straight,
+            start,
+            end,
+        )
+    }
+
+    #[test]
+    fn unbound_line_stays_a_line() {
+        assert!(matches!(drag(Tool::Line, None, None), Element::Line(_)));
+    }
+
+    #[test]
+    fn a_bound_line_becomes_a_connector() {
+        let Element::Connector(connector) = drag(Tool::Arrow, None, Some(ConnectionEnd::new(7, 4)))
+        else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.end_binding, Some(ConnectionEnd::new(7, 4)));
+        assert_eq!(connector.start_binding, None);
+        assert_eq!(connector.points[1], Point::new(100.0, 0.0));
+    }
+
+    #[test]
+    fn connector_tool_creates_a_connector_without_bindings() {
+        let Element::Connector(connector) = drag(Tool::Connector, None, None) else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.start_binding, None);
+        assert_eq!(connector.end_binding, None);
+        assert_eq!(connector.points.len(), 2);
+    }
+}
