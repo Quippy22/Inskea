@@ -313,6 +313,17 @@ mod tests {
 
     #[test]
     fn a_bound_line_becomes_a_connector() {
+        let Element::Connector(connector) = drag(Tool::Line, None, Some(ConnectionEnd::new(7, 4)))
+        else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.end_binding, Some(ConnectionEnd::new(7, 4)));
+        assert_eq!(connector.start_binding, None);
+        assert_eq!(connector.points[1], Point::new(100.0, 0.0));
+    }
+
+    #[test]
+    fn a_bound_arrow_keeps_its_binding() {
         let Element::Connector(connector) = drag(Tool::Arrow, None, Some(ConnectionEnd::new(7, 4)))
         else {
             panic!("expected connector");
