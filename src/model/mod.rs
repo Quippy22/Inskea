@@ -408,7 +408,7 @@ impl Scene {
                 let origin = chunk_origin(*key);
                 chunk.elements.iter().map(move |stored| {
                     let mut element = stored.element.clone();
-                    element.offset(origin.x, origin.y);
+                    element.translate_storage(origin.x, origin.y);
                     (stored.order, element)
                 })
             })
@@ -486,7 +486,7 @@ impl Scene {
             .into_iter()
             .map(|visible| {
                 let mut element = visible.element.clone();
-                element.offset(visible.origin.x, visible.origin.y);
+                element.translate_storage(visible.origin.x, visible.origin.y);
                 element
             })
             .collect()
@@ -574,7 +574,7 @@ impl Scene {
             .element
             .clone();
         let origin = chunk_origin(key);
-        element.offset(origin.x, origin.y);
+        element.translate_storage(origin.x, origin.y);
         Some(element)
     }
 
@@ -838,7 +838,7 @@ impl Scene {
         }
         let origin = chunk_origin(key);
         let mut element = stored.element;
-        element.offset(origin.x, origin.y);
+        element.translate_storage(origin.x, origin.y);
         if is_oversized(element_bounds(&element)) {
             self.oversized.retain(|candidate| *candidate != id);
         }
@@ -858,7 +858,7 @@ impl Scene {
         let bounds = element_bounds(&element);
         let home = chunk_of(bounds.center());
         let origin = chunk_origin(home);
-        element.offset(-origin.x, -origin.y);
+        element.translate_storage(-origin.x, -origin.y);
         self.chunks
             .entry(home)
             .or_insert_with(|| SceneChunk {
@@ -1958,5 +1958,45 @@ mod tests {
         assert_eq!(id, 1);
         assert_eq!(points[0], Point::new(0.0, 0.0));
         assert_eq!(highlight, Some(0));
+    }
+
+    #[test]
+    fn a_bound_connector_keeps_its_world_position_across_chunks() {
+        let mut s = Scene::new();
+        let mut rd = ElementData::new(0);
+        rd.world_point = Point::new(-2048.0, -2048.0);
+        rd.width = 100.0;
+        rd.height = 100.0;
+        s.add_element(Element::Rectangle(Rectangle { data: rd }));
+
+        let anchor = connector::connection_points(&s.element_by_id(1).unwrap()).unwrap()[5];
+        s.add_element(Element::Connector(Connector {
+            data: ElementData::new(0),
+            points: vec![anchor, Point::new(-1800.0, -1998.0)].into_boxed_slice(),
+            line_style: LineStyle::default(),
+            variant: ConnectorVariant::Straight,
+            start_binding: Some(ConnectionEnd::new(1, 5)),
+            end_binding: None,
+        }));
+
+        let view = Rect::new(-4000.0, -4000.0, 8000.0, 8000.0);
+        let visible = s.visible_elements(view);
+        let element = visible
+            .iter()
+            .find(|visible| visible.element.id() == 2)
+            .expect("connector should be visible");
+        let Element::Connector(connector) = element.element else {
+            panic!("expected connector");
+        };
+        // Rendering translates the stored geometry by the chunk origin, so the
+        // held endpoint has to be stored in the same space as the other one.
+        assert_eq!(
+            connector.points[0].x + element.origin.x,
+            anchor.x,
+            "bound endpoint must not be displaced by the chunk origin"
+        );
+        assert_eq!(connector.points[0].y + element.origin.y, anchor.y);
+        assert_eq!(connector.points[1].x + element.origin.x, -1800.0);
+        assert_eq!(connector.points[1].y + element.origin.y, -1998.0);
     }
 }

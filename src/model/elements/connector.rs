@@ -286,6 +286,15 @@ impl Connector {
             .flatten();
         (start, end)
     }
+
+    /// Move every point, bound or not. Only used for chunk storage; see
+    /// [`Element::translate_storage`].
+    pub fn translate_all(&mut self, dx: f64, dy: f64) {
+        self.data.world_point.offset(dx, dy);
+        for point in self.points.iter_mut() {
+            point.offset(dx, dy);
+        }
+    }
 }
 
 impl FromDrag for Connector {

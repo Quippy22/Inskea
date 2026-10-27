@@ -196,6 +196,20 @@ impl Element {
         }
     }
 
+    /// Translate every coordinate, including connector endpoints held by a
+    /// shape.
+    ///
+    /// `Offset::offset` deliberately leaves bound endpoints where they are
+    /// (they follow their shape instead), which is wrong when an element moves
+    /// between scene chunks: the chunk translation has to apply to the whole
+    /// geometry or the stored copy drifts by one chunk.
+    pub fn translate_storage(&mut self, dx: f64, dy: f64) {
+        match self {
+            Element::Connector(e) => e.translate_all(dx, dy),
+            other => other.offset(dx, dy),
+        }
+    }
+
     /// The kind of styling panel to show for this element.
     pub fn styling_kind(&self) -> StylingKind {
         match self {
