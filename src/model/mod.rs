@@ -1128,66 +1128,60 @@ impl Scene {
         ids
     }
 
-    /// Move every connector endpoint attached to `shape_id` onto its current
-    /// connection point. Detaches endpoints whose shape or point no longer
-    /// exists. Changes go through the journal so undo sees them.
-    pub fn refresh_connectors_for(&mut self, shape_id: ElementId) {
-        let target = self.element_by_id(shape_id);
-        let ids = self.connector_ids_bound_to(shape_id);
-        if ids.is_empty() {
-            return;
+    /// Re-pin both endpoints of a connector to the shapes they name, dropping
+    /// bindings whose shape or point is gone. `None` when nothing moved.
+    ///
+    /// Each endpoint resolves against its own binding: a connector between two
+    /// shapes must keep one end on each, even when only one of them moved.
+    fn repinned(&self, connector: Connector) -> Option<Connector> {
+        let mut updated = connector;
+        let mut changed = false;
+
+        for start in [true, false] {
+            let Some(binding) = updated.binding(start) else {
+                continue;
+            };
+            let point = self
+                .element_by_id(binding.element)
+                .and_then(|element| connector::binding_point(&element, binding));
+            match point {
+                Some(point) => {
+                    let slot = if start {
+                        updated.points.first_mut()
+                    } else {
+                        updated.points.last_mut()
+                    };
+                    if let Some(slot) = slot {
+                        if *slot != point {
+                            *slot = point;
+                            changed = true;
+                        }
+                    }
+                }
+                None => {
+                    updated.set_binding(start, None);
+                    changed = true;
+                }
+            }
         }
-        for id in ids {
+
+        changed.then_some(updated)
+    }
+
+    /// Move every connector endpoint attached to `shape_id` onto its current
+    /// connection point, leaving the endpoint held by another shape alone.
+    /// Detaches endpoints whose shape or point no longer exists. Changes go
+    /// through the journal so undo sees them.
+    pub fn refresh_connectors_for(&mut self, shape_id: ElementId) {
+        for id in self.connector_ids_bound_to(shape_id) {
             let Some(Element::Connector(current)) = self.element_by_id(id) else {
                 continue;
             };
-            let mut updated = current;
-            let mut changed = false;
-
-            if let Some(binding) = updated.start_binding {
-                match target
-                    .as_ref()
-                    .and_then(|element| connector::binding_point(element, binding))
-                {
-                    Some(point) => {
-                        if updated.points.first() != Some(&point) {
-                            if let Some(first) = updated.points.first_mut() {
-                                *first = point;
-                                changed = true;
-                            }
-                        }
-                    }
-                    None => {
-                        updated.start_binding = None;
-                        changed = true;
-                    }
-                }
-            }
-
-            if let Some(binding) = updated.end_binding {
-                match target
-                    .as_ref()
-                    .and_then(|element| connector::binding_point(element, binding))
-                {
-                    Some(point) => {
-                        if updated.points.last() != Some(&point) {
-                            if let Some(last) = updated.points.last_mut() {
-                                *last = point;
-                                changed = true;
-                            }
-                        }
-                    }
-                    None => {
-                        updated.end_binding = None;
-                        changed = true;
-                    }
-                }
-            }
-
-            if changed {
-                if let Some(mut element) = self.element_by_id_mut(id) {
-                    *element = Element::Connector(updated);
-                }
+            let Some(updated) = self.repinned(current) else {
+                continue;
+            };
+            if let Some(mut element) = self.element_by_id_mut(id) {
+                *element = Element::Connector(updated);
             }
         }
     }
@@ -1209,42 +1203,12 @@ impl Scene {
             let Some(Element::Connector(current)) = self.element_by_id(id) else {
                 continue;
             };
-            let mut updated = current;
-            let mut changed = false;
-
-            for start in [true, false] {
-                let Some(binding) = updated.binding(start) else {
-                    continue;
-                };
-                let point = self
-                    .element_by_id(binding.element)
-                    .and_then(|element| connector::binding_point(&element, binding));
-                match point {
-                    Some(point) => {
-                        let slot = if start {
-                            updated.points.first_mut()
-                        } else {
-                            updated.points.last_mut()
-                        };
-                        if let Some(slot) = slot {
-                            if *slot != point {
-                                *slot = point;
-                                changed = true;
-                            }
-                        }
-                    }
-                    None => {
-                        updated.set_binding(start, None);
-                        changed = true;
-                    }
-                }
-            }
-
-            if changed {
-                if let Some(order) = self.element_order(id) {
-                    let _ = self.take_element_raw(id);
-                    self.put_element_raw(Element::Connector(updated), order);
-                }
+            let Some(updated) = self.repinned(current) else {
+                continue;
+            };
+            if let Some(order) = self.element_order(id) {
+                let _ = self.take_element_raw(id);
+                self.put_element_raw(Element::Connector(updated), order);
             }
         }
     }
@@ -1903,6 +1867,42 @@ mod tests {
             panic!("expected connector");
         };
         assert_eq!(connector.points[0], Point::new(100.0, 0.0));
+    }
+
+    /// A connector between two shapes holds one endpoint on each. Moving one
+    /// shape must not drag the other endpoint onto the shape that moved.
+    #[test]
+    fn moving_one_shape_leaves_the_other_end_on_its_own_shape() {
+        let mut s = Scene::new();
+        for x in [0.0, 400.0] {
+            let mut rd = ElementData::new(0);
+            rd.world_point = Point::new(x, 0.0);
+            rd.width = 100.0;
+            rd.height = 100.0;
+            s.add_element(Element::Rectangle(Rectangle { data: rd }));
+        }
+        let a = connector::connection_points(&s.element_by_id(1).unwrap()).unwrap();
+        let b = connector::connection_points(&s.element_by_id(2).unwrap()).unwrap();
+        s.add_element(Element::Connector(Connector {
+            data: ElementData::new(0),
+            points: vec![a[5], b[3]].into_boxed_slice(),
+            line_style: LineStyle::default(),
+            variant: ConnectorVariant::Straight,
+            start_binding: Some(ConnectionEnd::new(1, 5)),
+            end_binding: Some(ConnectionEnd::new(2, 3)),
+        }));
+        s.clear_pending();
+
+        if let Some(mut shape) = s.element_by_id_mut(1) {
+            shape.offset(50.0, 60.0);
+        }
+        s.refresh_connectors_for(1);
+
+        let Some(Element::Connector(connector)) = s.element_by_id(3) else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.points[0], Point::new(150.0, 110.0));
+        assert_eq!(connector.points[1], Point::new(400.0, 50.0));
     }
 
     #[test]
