@@ -106,7 +106,7 @@ lucide_icons! {
 }
 
 /// Connector routing previews: a node at each end plus the route between them.
-pub fn connector_straight() -> impl IntoView {
+pub fn connector_direct() -> impl IntoView {
     view! {
         <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -148,7 +148,7 @@ pub fn connector_curved() -> impl IntoView {
     }
 }
 
-pub fn connector_direct() -> impl IntoView {
+pub fn connector_straight() -> impl IntoView {
     view! {
         <svg
             xmlns="http://www.w3.org/2000/svg"

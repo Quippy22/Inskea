@@ -6,9 +6,9 @@ use std::rc::Rc;
 
 fn variant_icon(variant: ConnectorVariant) -> View {
     match variant {
-        ConnectorVariant::Straight => icon::connector_straight().into_view(),
-        ConnectorVariant::Curved => icon::connector_curved().into_view(),
         ConnectorVariant::Direct => icon::connector_direct().into_view(),
+        ConnectorVariant::Curved => icon::connector_curved().into_view(),
+        ConnectorVariant::Straight => icon::connector_straight().into_view(),
     }
 }
 
@@ -18,9 +18,9 @@ pub fn connector_section(
     set_variant: Rc<dyn Fn(ConnectorVariant)>,
 ) -> impl IntoView {
     let options: &[(ConnectorVariant, &str)] = &[
-        (ConnectorVariant::Straight, "Straight"),
-        (ConnectorVariant::Curved, "Curved"),
         (ConnectorVariant::Direct, "Direct"),
+        (ConnectorVariant::Curved, "Curved"),
+        (ConnectorVariant::Straight, "Straight"),
     ];
 
     view! {
