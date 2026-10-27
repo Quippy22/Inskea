@@ -898,7 +898,16 @@ pub fn select_pointer_down(
     }
 
     let ids = st.selected_ids.get();
-    let els = props.scene.with(|scene| scene.elements_for_ids(&ids));
+    // Hit testing and smart-guide targets need the elements around the
+    // pointer, not just the current selection: using the selection alone made
+    // an empty canvas impossible to click-select.
+    let scene = props.scene;
+    let view = props
+        .viewport
+        .get_untracked()
+        .visible_rect(st.screen_size.get_untracked())
+        .padded(2.0);
+    let els = scene.with(|scene| scene.elements_in_view(view));
 
     if ids.len() == 1 {
         if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
