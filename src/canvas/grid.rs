@@ -66,19 +66,26 @@ pub fn grid_overlay(
             }
         };
 
-        let center = if hide_center.get() {
-            view! {}.into_view()
-        } else {
-            match settings_state.center_style {
-                CenterStyle::Crosshair => {
-                    view! { <path d="M-12,0 L12,0 M0,-12 L0,12" stroke=theme.accent() stroke-width="2" /> }
-                        .into_view()
-                }
-                CenterStyle::Dot => {
-                    view! { <circle cx="0" cy="0" r="3" fill=theme.accent() /> }.into_view()
-                }
-                CenterStyle::Off => view! {}.into_view(),
+        // The centre marker is hidden with a class rather than removed: a
+        // pointerdown that hides the welcome overlay must not replace DOM
+        // nodes, or Leptos's delegated handler loses the event target and the
+        // canvas never sees the click.
+        let hidden = move || hide_center.get();
+        let center = match settings_state.center_style {
+            CenterStyle::Crosshair => view! {
+                <path
+                    class:hidden=hidden
+                    d="M-12,0 L12,0 M0,-12 L0,12"
+                    stroke=theme.accent()
+                    stroke-width="2"
+                />
             }
+            .into_view(),
+            CenterStyle::Dot => {
+                view! { <circle class:hidden=hidden cx="0" cy="0" r="3" fill=theme.accent() /> }
+                    .into_view()
+            }
+            CenterStyle::Off => view! {}.into_view(),
         };
 
         view! {
