@@ -322,7 +322,7 @@ mod tests {
             data: ElementData::new(1),
             points: vec![Point::new(0.0, 0.0), Point::new(50.0, 0.0)].into_boxed_slice(),
             line_style: LineStyle::default(),
-            variant: ConnectorVariant::Straight,
+            variant: ConnectorVariant::Direct,
             start_binding: Some(ConnectionEnd::new(1, 2)),
             end_binding: Some(ConnectionEnd::new(2, 6)),
         });

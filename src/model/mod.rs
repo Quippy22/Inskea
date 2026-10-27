@@ -1820,7 +1820,7 @@ mod tests {
             data: ElementData::new(0),
             points: vec![corner, Point::new(300.0, 0.0)].into_boxed_slice(),
             line_style: LineStyle::default(),
-            variant: ConnectorVariant::Straight,
+            variant: ConnectorVariant::Direct,
             start_binding: Some(ConnectionEnd::new(1, 2)),
             end_binding: None,
         }));
@@ -1887,7 +1887,7 @@ mod tests {
             data: ElementData::new(0),
             points: vec![a[5], b[3]].into_boxed_slice(),
             line_style: LineStyle::default(),
-            variant: ConnectorVariant::Straight,
+            variant: ConnectorVariant::Direct,
             start_binding: Some(ConnectionEnd::new(1, 5)),
             end_binding: Some(ConnectionEnd::new(2, 3)),
         }));
@@ -1974,7 +1974,7 @@ mod tests {
             data: ElementData::new(0),
             points: vec![anchor, Point::new(-1800.0, -1998.0)].into_boxed_slice(),
             line_style: LineStyle::default(),
-            variant: ConnectorVariant::Straight,
+            variant: ConnectorVariant::Direct,
             start_binding: Some(ConnectionEnd::new(1, 5)),
             end_binding: None,
         }));

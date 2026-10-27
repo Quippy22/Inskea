@@ -627,7 +627,7 @@ fn place_path_point(
                 return;
             };
             let variant = match line.line_style.curve_mode {
-                CurveMode::Straight => ConnectorVariant::Straight,
+                CurveMode::Straight => ConnectorVariant::Direct,
                 CurveMode::Curved => ConnectorVariant::Curved,
             };
             let mut connector = Connector::from_line(line.clone(), variant, None, None);
@@ -1050,7 +1050,7 @@ mod tests {
         assert_eq!(connector.end_binding, Some(end));
         assert_eq!(connector.start_binding, None);
         assert_eq!(connector.points[1], Point::new(100.0, 50.0));
-        assert_eq!(connector.variant, ConnectorVariant::Straight);
+        assert_eq!(connector.variant, ConnectorVariant::Direct);
     }
 
     #[test]

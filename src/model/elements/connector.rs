@@ -38,16 +38,22 @@ impl ConnectionEnd {
 }
 
 /// Routing style for a connector.
+///
+/// The names read backwards on purpose: files and the panel call the plain
+/// line "Direct" and the elbow "Straight". Keep the serde names pinned so old
+/// `.skea` files still resolve to the route they were drawn with.
 #[derive(Clone, Copy, Debug, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 #[repr(u8)]
 pub enum ConnectorVariant {
-    /// A direct line between the two endpoints.
+    /// A direct line between the two endpoints; shown as "Direct".
     #[default]
-    Straight,
+    #[serde(rename = "Straight")]
+    Direct,
     /// A smoothly bowed curve between the two endpoints.
     Curved,
-    /// An orthogonal elbow that runs around the shapes.
-    Direct,
+    /// An orthogonal elbow that runs around the shapes; shown as "Straight".
+    #[serde(rename = "Direct")]
+    Straight,
 }
 
 /// A line or arrow that can stay attached to connection points on two shapes.
@@ -202,7 +208,7 @@ impl Connector {
     /// A polyline approximation of the rendered route.
     pub fn route_points(&self) -> Vec<Point> {
         match self.variant {
-            ConnectorVariant::Straight => self.points.to_vec(),
+            ConnectorVariant::Direct => self.points.to_vec(),
             ConnectorVariant::Curved => {
                 if self.points.len() <= 2 {
                     self.sample_quadratic(20)
@@ -224,14 +230,14 @@ impl Connector {
                     route
                 }
             }
-            ConnectorVariant::Direct => self.elbow_points(),
+            ConnectorVariant::Straight => self.elbow_points(),
         }
     }
 
     /// SVG path data for this connector.
     pub fn path_d(&self) -> String {
         match self.variant {
-            ConnectorVariant::Straight => path_d(&self.points, CurveMode::Straight),
+            ConnectorVariant::Direct => path_d(&self.points, CurveMode::Straight),
             ConnectorVariant::Curved if self.points.len() <= 2 => {
                 let (Some(a), Some(b), Some(control)) =
                     (self.first(), self.last(), self.curve_control())
@@ -244,7 +250,7 @@ impl Connector {
                 )
             }
             ConnectorVariant::Curved => path_d(&self.points, CurveMode::Curved),
-            ConnectorVariant::Direct => {
+            ConnectorVariant::Straight => {
                 let route = self.elbow_points();
                 if route.is_empty() {
                     return String::new();
@@ -552,7 +558,7 @@ mod tests {
     }
 
     fn connector(a: Point, b: Point) -> Connector {
-        Connector::new(a, b, Color::new(Color::WHITE), ConnectorVariant::Straight)
+        Connector::new(a, b, Color::new(Color::WHITE), ConnectorVariant::default())
     }
 
     #[test]
@@ -602,10 +608,29 @@ mod tests {
         assert_eq!(point, Point::new(50.0, 0.0));
     }
 
+    /// The panel calls the plain line "Direct" and the elbow "Straight", but
+    /// older files stored those names for the opposite routes. Both spellings
+    /// must keep resolving to the route they were saved with.
     #[test]
-    fn direct_route_has_two_elbows() {
+    fn legacy_variant_names_keep_their_route() {
+        let line: ConnectorVariant = serde_json::from_str("\"Straight\"").unwrap();
+        let elbow: ConnectorVariant = serde_json::from_str("\"Direct\"").unwrap();
+        assert_eq!(line, ConnectorVariant::Direct);
+        assert_eq!(elbow, ConnectorVariant::Straight);
+        assert_eq!(serde_json::to_string(&line).unwrap(), "\"Straight\"");
+        assert_eq!(serde_json::to_string(&elbow).unwrap(), "\"Direct\"");
+
         let connector = Connector {
-            variant: ConnectorVariant::Direct,
+            variant: line,
+            ..connector(Point::new(0.0, 0.0), Point::new(100.0, 100.0))
+        };
+        assert_eq!(connector.path_d().matches(" L").count(), 1);
+    }
+
+    #[test]
+    fn elbow_route_has_two_elbows() {
+        let connector = Connector {
+            variant: ConnectorVariant::Straight,
             ..connector(Point::new(0.0, 0.0), Point::new(100.0, 100.0))
         };
         assert_eq!(connector.route_points().len(), 4);

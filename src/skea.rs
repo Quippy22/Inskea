@@ -356,7 +356,7 @@ mod tests {
             // endpoint somewhere else.
             points: vec![Point::new(-500.0, -500.0), points[4]].into_boxed_slice(),
             line_style: LineStyle::default(),
-            variant: ConnectorVariant::Straight,
+            variant: ConnectorVariant::Direct,
             start_binding: Some(ConnectionEnd::new(1, 0)),
             end_binding: Some(ConnectionEnd::new(1, 4)),
         }));
@@ -419,7 +419,7 @@ mod tests {
         let Some(Element::Connector(connector)) = loaded.elements().first().cloned() else {
             panic!("expected connector");
         };
-        assert_eq!(connector.variant, ConnectorVariant::Straight);
+        assert_eq!(connector.variant, ConnectorVariant::Direct);
         assert_eq!(connector.start_binding, None);
         assert_eq!(connector.end_binding, None);
     }

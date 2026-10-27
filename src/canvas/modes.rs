@@ -300,7 +300,7 @@ mod tests {
             Point::new(100.0, 0.0),
             Color::new(Color::WHITE),
             false,
-            ConnectorVariant::Straight,
+            ConnectorVariant::Direct,
             start,
             end,
         )
