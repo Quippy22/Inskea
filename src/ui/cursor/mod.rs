@@ -38,7 +38,10 @@ pub fn cursor_style(
             DragOperation::Resize(rh) => rh.css_cursor().to_string(),
             DragOperation::Move => "move".to_string(),
             DragOperation::Rotate => "grabbing".to_string(),
-            DragOperation::PathPoint(_) | DragOperation::PathMidpoint(_) => "pointer".to_string(),
+            DragOperation::PathPoint(_)
+            | DragOperation::PathMidpoint(_)
+            | DragOperation::CurveBend
+            | DragOperation::ElbowSplit => "pointer".to_string(),
         };
     }
 
@@ -47,7 +50,10 @@ pub fn cursor_style(
             DragOperation::Resize(rh) => rh.css_cursor().to_string(),
             DragOperation::Move => "move".to_string(),
             DragOperation::Rotate => "grab".to_string(),
-            DragOperation::PathPoint(_) | DragOperation::PathMidpoint(_) => "pointer".to_string(),
+            DragOperation::PathPoint(_)
+            | DragOperation::PathMidpoint(_)
+            | DragOperation::CurveBend
+            | DragOperation::ElbowSplit => "pointer".to_string(),
         };
     }
 

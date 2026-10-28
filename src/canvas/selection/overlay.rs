@@ -116,10 +116,36 @@ fn render_path_element_overlay(
         </g>
     };
 
+    // Connectors route themselves, so their adjustable handles depend on the
+    // variant: one bow point for curves, a dot on every elbow section, and
+    // nothing extra for direct lines.
+    let route_handles: Vec<View> = match el {
+        Element::Connector(connector) => connector
+            .route_handles()
+            .into_iter()
+            .map(|(_, p)| {
+                view! {
+                    <circle
+                        cx=p.x
+                        cy=p.y
+                        r="4"
+                        fill=hex
+                        stroke=hex
+                        stroke-width="1"
+                        pointer-events="none"
+                    />
+                }
+                .into_view()
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+
     Some(
         view! {
             {path_handles}
             {ghost_handles}
+            {route_handles}
             {move_icon}
         }
         .into_view(),

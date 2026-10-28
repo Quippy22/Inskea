@@ -5,7 +5,7 @@ use super::utils::{
 use super::MIN_DRAG_DIST;
 use crate::canvas::smart_guides::{self, GuideBox, SmartGuideState};
 use crate::canvas::state::{CanvasInputs, CanvasState, DragOperation};
-use crate::model::elements::connector::{self, ConnectionEnd, SNAP_SCREEN_PX};
+use crate::model::elements::connector::{self, ConnectionEnd, RouteHandle, SNAP_SCREEN_PX};
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{
     Bounds, Connector, ConnectorVariant, CurveMode, Offset, PathPoints, Resize, Rotate,
@@ -54,6 +54,30 @@ fn handle_text_double_click(
     false
 }
 
+/// Route handle of a connector under the pointer, if any.
+#[inline]
+fn route_handle_at(el: &Element, world: Point) -> Option<RouteHandle> {
+    let Element::Connector(connector) = el else {
+        return None;
+    };
+    connector
+        .route_handles()
+        .into_iter()
+        .find(|(_, p)| {
+            ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS
+        })
+        .map(|(kind, _)| kind)
+}
+
+/// Which drag a grabbed route handle starts.
+#[inline]
+fn route_drag_operation(kind: RouteHandle) -> DragOperation {
+    match kind {
+        RouteHandle::Curve => DragOperation::CurveBend,
+        RouteHandle::Elbow => DragOperation::ElbowSplit,
+    }
+}
+
 /// Check if pointer is on a path-point dot or segment-midpoint ghost handle.
 /// On hit, snapshot + set drag action to `PathPoint(i)` / `PathMidpoint(i)`.
 #[inline]
@@ -76,6 +100,14 @@ fn handle_path_point_hit(
             st.drag.last_world.set(Some(world));
             return true;
         }
+    }
+    if let Some(kind) = route_handle_at(el, world) {
+        (props.push_snapshot)();
+        st.drag.drag_originals.set(vec![el.clone()]);
+        st.drag.drag_action.set(Some(route_drag_operation(kind)));
+        st.drag.moving_anchor.set(Some(world));
+        st.drag.last_world.set(Some(world));
+        return true;
     }
     // Connectors route themselves; inserting a bend would fight the variant.
     if !el.editable_midpoints() {
@@ -449,6 +481,9 @@ fn detect_hovered_handle(
                             return Some(DragOperation::PathPoint(i));
                         }
                     }
+                    if let Some(kind) = route_handle_at(el, world) {
+                        return Some(route_drag_operation(kind));
+                    }
                     let b = el.bounds();
                     let mx = b.x + b.w / 2.0;
                     let my = b.y - 25.0;
@@ -679,6 +714,29 @@ fn do_path_midpoint_drag(world: Point, st: &mut CanvasState, props: &mut CanvasI
             st.drag.last_world.set(Some(world));
         }
     }
+}
+
+/// Drag a connector's route handle: the bow point of a curve, or a section
+/// midpoint of an elbow.
+#[inline]
+fn do_route_handle_drag(
+    world: Point,
+    st: &mut CanvasState,
+    props: &mut CanvasInputs,
+    apply: impl Fn(&mut Connector, Point),
+) {
+    let Some(&id) = st.selected_ids.get().first() else {
+        return;
+    };
+    props.scene.update(|s| {
+        if let Some(mut el) = s.element_by_id_mut(id) {
+            if let Element::Connector(connector) = &mut *el {
+                apply(connector, world);
+            }
+        }
+    });
+    st.drag.moving_anchor.set(Some(world));
+    st.drag.last_world.set(Some(world));
 }
 
 /// Re-pin connectors bound to any moved shape. Drag frames restore every
@@ -961,6 +1019,12 @@ pub fn select_pointer_move(
             Some(DragOperation::Rotate) => do_rotate(world, st, props),
             Some(DragOperation::PathPoint(idx)) => do_path_point_drag(world, st, props, idx),
             Some(DragOperation::PathMidpoint(i)) => do_path_midpoint_drag(world, st, props, i),
+            Some(DragOperation::CurveBend) => {
+                do_route_handle_drag(world, st, props, Connector::set_curve_bend)
+            }
+            Some(DragOperation::ElbowSplit) => {
+                do_route_handle_drag(world, st, props, Connector::set_elbow_split)
+            }
             _ => do_move(world, anchor, st, props),
         }
     }

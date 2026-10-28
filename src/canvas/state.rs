@@ -38,6 +38,10 @@ pub enum DragOperation {
     /// Grabbed the ghost handle between points[i] and points[i+1].
     /// Resolved to PathPoint once the drag exceeds MIN_DRAG_DIST.
     PathMidpoint(usize),
+    /// Dragging a curved connector's bow handle.
+    CurveBend,
+    /// Dragging one of an elbow connector's section midpoints.
+    ElbowSplit,
 }
 
 /// Drag-related state (resize, move, rotate, path-point drag).
