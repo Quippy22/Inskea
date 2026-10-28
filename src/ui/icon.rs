@@ -103,70 +103,11 @@ lucide_icons! {
     line_curved => "spline.svg",
     edge_sharp => "square.svg",
     edge_rounded => "squircle.svg",
-}
 
-/// Connector routing previews: a node at each end plus the route between them.
-pub fn connector_direct() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class=DEFAULT_CLASS
-            aria-hidden="true"
-            focusable="false"
-        >
-            <rect x="3" y="9" width="4" height="6" rx="1" fill="currentColor" stroke="none" />
-            <rect x="17" y="9" width="4" height="6" rx="1" fill="currentColor" stroke="none" />
-            <path d="M7 12 H17" />
-        </svg>
-    }
-}
-
-pub fn connector_curved() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class=DEFAULT_CLASS
-            aria-hidden="true"
-            focusable="false"
-        >
-            <rect x="3" y="9" width="4" height="6" rx="1" fill="currentColor" stroke="none" />
-            <rect x="17" y="9" width="4" height="6" rx="1" fill="currentColor" stroke="none" />
-            <path d="M7 12 C10 7 14 17 17 12" />
-        </svg>
-    }
-}
-
-pub fn connector_straight() -> impl IntoView {
-    view! {
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class=DEFAULT_CLASS
-            aria-hidden="true"
-            focusable="false"
-        >
-            <rect x="3" y="9" width="4" height="6" rx="1" fill="currentColor" stroke="none" />
-            <rect x="17" y="9" width="4" height="6" rx="1" fill="currentColor" stroke="none" />
-            <path d="M7 12 H12 V7 H17" />
-        </svg>
-    }
+    // Connector routing.
+    connector_direct => "minus.svg",
+    connector_curved => "spline.svg",
+    connector_straight => "corner-down-right.svg",
 }
 
 /// Small chevrons for the number-slider stepper.
