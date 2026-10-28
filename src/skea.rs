@@ -6,8 +6,9 @@ use crate::model::Scene;
 /// any supported format load through [`migrate`]; formats older than
 /// [`MIN_FORMAT_VERSION`] are rejected with a version error.
 ///
-/// Version 7 added embedded images; version 8 added connectors.
-pub const FORMAT_VERSION: u32 = 8;
+/// Version 7 added embedded images; version 8 added connectors; version 9
+/// added adjustable connector routes.
+pub const FORMAT_VERSION: u32 = 9;
 
 /// Oldest format this build still reads.
 const MIN_FORMAT_VERSION: u32 = 6;
@@ -54,12 +55,13 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
 
 /// Bring a scene written by an older supported build up to the current layout.
 ///
-/// v7 added embedded images and v8 added connectors; neither changed how
-/// existing elements serialize, so pre-v8 scenes need no field rewriting.
-/// Connector endpoints are stored next to their bindings, though, so every load
-/// re-pins them from the bound shape and drops bindings whose shape or
-/// connection point no longer exists. That repairs early-v8 files saved before
-/// the two were kept in sync, and hand-edited files.
+/// v7 added embedded images, v8 added connectors, and v9 added the optional
+/// route-tuning fields on connectors; none changed how existing elements
+/// serialize, so pre-v9 scenes need no field rewriting. Connector endpoints are
+/// stored next to their bindings, though, so every load re-pins them from the
+/// bound shape and drops bindings whose shape or connection point no longer
+/// exists. That repairs early-v8 files saved before the two were kept in sync,
+/// and hand-edited files.
 fn migrate(scene: &mut Scene, from_version: u32) {
     debug_assert!(from_version <= FORMAT_VERSION);
     scene.sync_all_connectors();
@@ -305,12 +307,55 @@ mod tests {
             variant: ConnectorVariant::Curved,
             start_binding: Some(ConnectionEnd::new(1, 2)),
             end_binding: Some(ConnectionEnd::new(2, 6)),
+            curve_bend: None,
+            elbow_split: None,
         }));
 
         let saved = save_to_string(&scene).unwrap();
         let loaded = load_from_str(&saved).unwrap();
         assert_eq!(scene, loaded);
         assert_eq!(save_to_string(&loaded).unwrap(), saved);
+    }
+
+    #[test]
+    fn round_trip_connector_route_tuning() {
+        use crate::model::elements::connector::Connector;
+        use crate::model::elements::ConnectorVariant;
+
+        let mut scene = Scene::new();
+        scene.add_element(Element::Connector(Connector {
+            data: ElementData::new(0),
+            points: vec![Point::new(0.0, 0.0), Point::new(100.0, 100.0)].into_boxed_slice(),
+            line_style: LineStyle::default(),
+            variant: ConnectorVariant::Curved,
+            start_binding: None,
+            end_binding: None,
+            curve_bend: Some(-0.35),
+            elbow_split: Some(0.3),
+        }));
+
+        let loaded = load_from_str(&save_to_string(&scene).unwrap()).unwrap();
+        let Some(Element::Connector(connector)) = loaded.elements().first().cloned() else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.curve_bend, Some(-0.35));
+        assert_eq!(connector.elbow_split, Some(0.3));
+
+        // v8 files predate the route-tuning fields; they must load centred
+        // and self-bowing rather than being rejected.
+        let mut raw: serde_json::Value =
+            serde_json::from_str(&save_to_string(&scene).unwrap()).unwrap();
+        raw["format_version"] = serde_json::json!(8);
+        let element = raw["scene"]["elements"][0].as_object_mut().unwrap();
+        element.remove("curve_bend");
+        element.remove("elbow_split");
+
+        let loaded = load_from_str(&serde_json::to_string(&raw).unwrap()).unwrap();
+        let Some(Element::Connector(connector)) = loaded.elements().first().cloned() else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.curve_bend, None);
+        assert_eq!(connector.elbow_split, None);
     }
 
     #[test]
@@ -359,6 +404,8 @@ mod tests {
             variant: ConnectorVariant::Direct,
             start_binding: Some(ConnectionEnd::new(1, 0)),
             end_binding: Some(ConnectionEnd::new(1, 4)),
+            curve_bend: None,
+            elbow_split: None,
         }));
 
         let loaded = load_from_str(&save_to_string(&scene).unwrap()).unwrap();
@@ -382,6 +429,8 @@ mod tests {
             variant: ConnectorVariant::Curved,
             start_binding: Some(ConnectionEnd::new(99, 0)),
             end_binding: Some(ConnectionEnd::new(99, 8)),
+            curve_bend: None,
+            elbow_split: None,
         }));
 
         let loaded = load_from_str(&save_to_string(&scene).unwrap()).unwrap();
@@ -406,6 +455,8 @@ mod tests {
             variant: ConnectorVariant::Curved,
             start_binding: None,
             end_binding: None,
+            curve_bend: None,
+            elbow_split: None,
         }));
 
         let mut raw: serde_json::Value =

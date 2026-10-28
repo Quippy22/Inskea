@@ -73,6 +73,23 @@ pub struct Connector {
     /// Shape point held by the last endpoint.
     #[serde(default)]
     pub end_binding: Option<ConnectionEnd>,
+    /// Manual curvature, as a signed fraction of the chord. Positive bows to
+    /// the left of the start → end direction. `None` uses the route's default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub curve_bend: Option<f64>,
+    /// Where the elbow's middle section sits between the endpoints, as a
+    /// fraction of the dominant axis. `None` centres it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub elbow_split: Option<f64>,
+}
+
+/// Which route handle the pointer grabbed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RouteHandle {
+    /// The point that changes a curved connector's bow.
+    Curve,
+    /// A section midpoint that slides an elbow connector's bend.
+    Elbow,
 }
 
 impl Connector {
@@ -95,6 +112,8 @@ impl Connector {
             variant,
             start_binding: None,
             end_binding: None,
+            curve_bend: None,
+            elbow_split: None,
         }
     }
 
@@ -111,6 +130,8 @@ impl Connector {
             variant,
             start_binding,
             end_binding,
+            curve_bend: None,
+            elbow_split: None,
         }
     }
 
@@ -151,6 +172,64 @@ impl Connector {
         self.points.last().copied()
     }
 
+    /// Outward direction of a connection point, derived from its 3×3 grid
+    /// position. The centre has no direction.
+    fn connection_normal(binding: ConnectionEnd) -> Option<Point> {
+        let x = (binding.index() % 3) as f64 - 1.0;
+        let y = (binding.index() / 3) as f64 - 1.0;
+        let len = x.hypot(y);
+        (len > 0.0).then(|| Point::new(x / len, y / len))
+    }
+
+    /// Which side a curve bows to when neither connection point dictates one.
+    /// The arc leans vertically toward the target: a shape below bows the route
+    /// down, one above bows it up. Level routes pick the upper side, so a shape
+    /// crossing the source's height flips the arc instead of keeping the same
+    /// orientation.
+    fn fallback_curve_side(dx: f64, dy: f64) -> f64 {
+        if dy > 1e-9 {
+            1.0
+        } else if dy < -1e-9 || dx >= 0.0 {
+            -1.0
+        } else {
+            1.0
+        }
+    }
+
+    /// Signed control offset of the curve, as a fraction of the chord length.
+    /// An explicit drag wins; otherwise the side follows the connection points
+    /// (both on top bows above, both on the right bows right, and so on) and
+    /// falls back to the direction the target sits in.
+    fn curve_fraction(&self) -> f64 {
+        let (Some(a), Some(b)) = (self.first(), self.last()) else {
+            return 0.0;
+        };
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let len = dx.hypot(dy);
+        if len <= 1e-9 {
+            return 0.0;
+        }
+        if let Some(fraction) = self.curve_bend {
+            return fraction;
+        }
+        let (nx, ny) = (-dy / len, dx / len);
+        let normal_projection = match (
+            self.start_binding.and_then(Self::connection_normal),
+            self.end_binding.and_then(Self::connection_normal),
+        ) {
+            (Some(start), Some(end)) => Some((start.x + end.x) * nx + (start.y + end.y) * ny),
+            (Some(start), None) => Some(start.x * nx + start.y * ny),
+            (None, Some(end)) => Some(end.x * nx + end.y * ny),
+            (None, None) => None,
+        };
+        let side = match normal_projection {
+            Some(projection) if projection.abs() > 0.15 => projection.signum(),
+            _ => Self::fallback_curve_side(dx, dy),
+        };
+        // Keep short connectors visibly bowed and long ones from ballooning.
+        side * (len * 0.24).clamp(18.0, 110.0) / len
+    }
+
     /// Control point of the bowed curve. The bow is proportional to the
     /// endpoint distance so short connectors stay gentle and long ones do not
     /// collapse into straight lines.
@@ -160,14 +239,98 @@ impl Connector {
         let dx = b.x - a.x;
         let dy = b.y - a.y;
         let len = dx.hypot(dy);
-        if len <= 1e-9 {
-            return Some(Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0));
-        }
-        let offset = (len * 0.2).clamp(10.0, 60.0);
-        let nx = -dy / len;
-        let ny = dx / len;
         let mid = Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+        if len <= 1e-9 {
+            return Some(mid);
+        }
+        let offset = self.curve_fraction() * len;
+        let (nx, ny) = (-dy / len, dx / len);
         Some(Point::new(mid.x + nx * offset, mid.y + ny * offset))
+    }
+
+    /// Point halfway along a plain two-point curve, where the curvature handle
+    /// sits. Connectors with interior points expose those dots instead.
+    pub fn curve_handle(&self) -> Option<Point> {
+        if self.variant != ConnectorVariant::Curved || self.points.len() != 2 {
+            return None;
+        }
+        let (a, b) = (self.first()?, self.last()?);
+        let control = self.curve_control()?;
+        Some(Point::new(
+            (a.x + 2.0 * control.x + b.x) / 4.0,
+            (a.y + 2.0 * control.y + b.y) / 4.0,
+        ))
+    }
+
+    /// Set the bow so the curve's halfway point lands on `point`.
+    pub fn set_curve_bend(&mut self, point: Point) {
+        let (Some(a), Some(b)) = (self.first(), self.last()) else {
+            return;
+        };
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let len = dx.hypot(dy);
+        if len <= 1e-9 {
+            return;
+        }
+        let mid = Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+        let (nx, ny) = (-dy / len, dx / len);
+        let away = (point.x - mid.x) * nx + (point.y - mid.y) * ny;
+        self.curve_bend = Some((2.0 * away / len).clamp(-1.5, 1.5));
+    }
+
+    /// Midpoints of the sections the elbow actually draws.
+    pub fn elbow_handles(&self) -> Vec<Point> {
+        if self.variant != ConnectorVariant::Straight {
+            return Vec::new();
+        }
+        let route = self.elbow_points();
+        if route.len() <= 2 {
+            return Vec::new();
+        }
+        route
+            .windows(2)
+            .filter(|pair| (pair[1].x - pair[0].x).hypot(pair[1].y - pair[0].y) > 1e-6)
+            .map(|pair| Point::new((pair[0].x + pair[1].x) / 2.0, (pair[0].y + pair[1].y) / 2.0))
+            .collect()
+    }
+
+    /// Slide the elbow's middle section so the grabbed `point` sets its
+    /// position along the route's dominant axis.
+    pub fn set_elbow_split(&mut self, point: Point) {
+        let (Some(a), Some(b)) = (self.first(), self.last()) else {
+            return;
+        };
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let fraction = if dx.abs() >= dy.abs() {
+            if dx.abs() <= 1e-9 {
+                return;
+            }
+            (point.x - a.x) / dx
+        } else {
+            if dy.abs() <= 1e-9 {
+                return;
+            }
+            (point.y - a.y) / dy
+        };
+        self.elbow_split = Some(fraction.clamp(0.08, 0.92));
+    }
+
+    /// Handles the overlay shows for this variant, paired with what dragging
+    /// them changes.
+    pub fn route_handles(&self) -> Vec<(RouteHandle, Point)> {
+        match self.variant {
+            ConnectorVariant::Curved => self
+                .curve_handle()
+                .map(|point| (RouteHandle::Curve, point))
+                .into_iter()
+                .collect(),
+            ConnectorVariant::Straight => self
+                .elbow_handles()
+                .into_iter()
+                .map(|point| (RouteHandle::Elbow, point))
+                .collect(),
+            ConnectorVariant::Direct => Vec::new(),
+        }
     }
 
     /// Sample the curve for hit testing and bounds.
@@ -197,10 +360,12 @@ impl Connector {
             return vec![a, b];
         }
         if (b.x - a.x).abs() >= (b.y - a.y).abs() {
-            let mx = (a.x + b.x) / 2.0;
+            let fraction = self.elbow_split.unwrap_or(0.5).clamp(0.08, 0.92);
+            let mx = a.x + (b.x - a.x) * fraction;
             vec![a, Point::new(mx, a.y), Point::new(mx, b.y), b]
         } else {
-            let my = (a.y + b.y) / 2.0;
+            let fraction = self.elbow_split.unwrap_or(0.5).clamp(0.08, 0.92);
+            let my = a.y + (b.y - a.y) * fraction;
             vec![a, Point::new(a.x, my), Point::new(b.x, my), b]
         }
     }
@@ -646,6 +811,106 @@ mod tests {
         let route = connector.route_points();
         let mid = route[route.len() / 2];
         assert!(mid.y.abs() > 1.0, "curve should leave the straight chord");
+    }
+
+    fn curved(a: Point, b: Point) -> Connector {
+        Connector {
+            variant: ConnectorVariant::Curved,
+            ..connector(a, b)
+        }
+    }
+
+    /// Signed distance from the chord to the curve's halfway point, positive on
+    /// the same side as the chord's left normal.
+    fn bow_side(connector: &Connector) -> f64 {
+        let a = connector.first().unwrap();
+        let b = connector.last().unwrap();
+        let handle = connector.curve_handle().unwrap();
+        let len = (b.x - a.x).hypot(b.y - a.y);
+        let (nx, ny) = (-(b.y - a.y) / len, (b.x - a.x) / len);
+        let (mx, my) = ((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+        (handle.x - mx) * nx + (handle.y - my) * ny
+    }
+
+    #[test]
+    fn curve_leans_to_the_side_the_target_sits_on() {
+        let level = curved(Point::new(0.0, 0.0), Point::new(400.0, 0.0));
+        let below = curved(Point::new(0.0, 0.0), Point::new(60.0, 200.0));
+        let above = curved(Point::new(0.0, 0.0), Point::new(60.0, -200.0));
+        assert!(bow_side(&level) < -10.0, "a level route bows up");
+        assert!(
+            bow_side(&below) > 10.0,
+            "a target below should sag the arc down"
+        );
+        assert!(
+            bow_side(&above) < -10.0,
+            "a target above should lift the arc up"
+        );
+    }
+
+    #[test]
+    fn curve_bows_toward_the_shared_connection_side() {
+        let mut connector = curved(Point::new(0.0, 0.0), Point::new(100.0, 0.0));
+        connector.start_binding = Some(ConnectionEnd::new(1, 1));
+        connector.end_binding = Some(ConnectionEnd::new(2, 1));
+        assert!(connector.curve_handle().unwrap().y < 0.0);
+
+        connector.start_binding = Some(ConnectionEnd::new(1, 7));
+        connector.end_binding = Some(ConnectionEnd::new(2, 7));
+        assert!(connector.curve_handle().unwrap().y > 0.0);
+    }
+
+    #[test]
+    fn dragging_the_curve_handle_reverses_the_bow() {
+        let mut connector = curved(Point::new(0.0, 0.0), Point::new(100.0, 0.0));
+        assert!(connector.curve_handle().unwrap().y < 0.0);
+
+        connector.set_curve_bend(Point::new(50.0, 30.0));
+        let handle = connector.curve_handle().unwrap();
+        assert!((handle.x - 50.0).abs() < 1e-9);
+        assert!((handle.y - 30.0).abs() < 1e-9);
+        assert_eq!(connector.curve_bend, Some(0.6));
+        assert!(connector.path_d().contains('Q'));
+    }
+
+    #[test]
+    fn elbow_handles_sit_on_every_section() {
+        let connector = Connector {
+            variant: ConnectorVariant::Straight,
+            ..connector(Point::new(0.0, 0.0), Point::new(100.0, 100.0))
+        };
+        let handles = connector.elbow_handles();
+        assert_eq!(
+            handles,
+            vec![
+                Point::new(25.0, 0.0),
+                Point::new(50.0, 50.0),
+                Point::new(75.0, 100.0),
+            ]
+        );
+    }
+
+    #[test]
+    fn dragging_an_elbow_handle_slides_the_bend() {
+        let mut connector = Connector {
+            variant: ConnectorVariant::Straight,
+            ..connector(Point::new(0.0, 0.0), Point::new(100.0, 100.0))
+        };
+        connector.set_elbow_split(Point::new(25.0, 80.0));
+        let route = connector.route_points();
+        assert_eq!(route[1], Point::new(25.0, 0.0));
+        assert_eq!(route[2], Point::new(25.0, 100.0));
+        assert_eq!(connector.elbow_handles().len(), 3);
+    }
+
+    #[test]
+    fn direct_routes_offer_no_extra_handles() {
+        let mut connector = connector(Point::new(0.0, 0.0), Point::new(100.0, 100.0));
+        assert!(connector.route_handles().is_empty());
+        connector.variant = ConnectorVariant::Curved;
+        assert_eq!(connector.route_handles().len(), 1);
+        connector.variant = ConnectorVariant::Straight;
+        assert_eq!(connector.route_handles().len(), 3);
     }
 
     #[test]

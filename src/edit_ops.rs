@@ -325,6 +325,8 @@ mod tests {
             variant: ConnectorVariant::Direct,
             start_binding: Some(ConnectionEnd::new(1, 2)),
             end_binding: Some(ConnectionEnd::new(2, 6)),
+            curve_bend: None,
+            elbow_split: None,
         });
 
         let bindings = take_connector_bindings(&mut element);

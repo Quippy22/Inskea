@@ -1823,6 +1823,8 @@ mod tests {
             variant: ConnectorVariant::Direct,
             start_binding: Some(ConnectionEnd::new(1, 2)),
             end_binding: None,
+            curve_bend: None,
+            elbow_split: None,
         }));
         s.clear_pending();
         s
@@ -1890,6 +1892,8 @@ mod tests {
             variant: ConnectorVariant::Direct,
             start_binding: Some(ConnectionEnd::new(1, 5)),
             end_binding: Some(ConnectionEnd::new(2, 3)),
+            curve_bend: None,
+            elbow_split: None,
         }));
         s.clear_pending();
 
@@ -1977,6 +1981,8 @@ mod tests {
             variant: ConnectorVariant::Direct,
             start_binding: Some(ConnectionEnd::new(1, 5)),
             end_binding: None,
+            curve_bend: None,
+            elbow_split: None,
         }));
 
         let view = Rect::new(-4000.0, -4000.0, 8000.0, 8000.0);
