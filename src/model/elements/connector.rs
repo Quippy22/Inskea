@@ -102,11 +102,6 @@ pub enum RouteHandle {
 }
 
 impl Connector {
-    pub fn from_drag(anchor: Point, current: Point, color: Color, shift: bool) -> Self {
-        let (a, b) = line_endpoints(anchor, current, shift);
-        Self::new(a, b, color, ConnectorVariant::default())
-    }
-
     pub fn new(a: Point, b: Point, color: Color, variant: ConnectorVariant) -> Self {
         Self {
             data: ElementData {

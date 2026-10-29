@@ -93,9 +93,9 @@ pub(crate) fn snap_draw_point(
         .map_or((world, None), |(point, binding)| (point, Some(binding)))
 }
 
-/// Construct the element a drag would produce. The arrow tool always creates a
-/// connector (unattached until an endpoint lands on a shape), while the line
-/// tool only converts a line when one of its endpoints binds.
+/// Construct the element a drag would produce. Line-like tools stay plain
+/// lines/arrows until either endpoint lands on a shape connection point; then
+/// they become connectors.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_drag_element(
     tool: Tool,
@@ -110,19 +110,12 @@ pub(crate) fn build_drag_element(
     match tool {
         Tool::Rectangle => Rectangle::from_drag(anchor, current, color, shift).into(),
         Tool::Ellipse => Ellipse::from_drag(anchor, current, color, shift).into(),
-        Tool::Line => {
+        Tool::Line | Tool::Arrow => {
             let line = Line::from_drag(anchor, current, color, shift);
             if start_binding.is_none() && end_binding.is_none() {
                 return Element::Line(line);
             }
             let connector = Connector::from_line(line, variant, start_binding, end_binding);
-            Element::Connector(bound_endpoints(connector, anchor, current))
-        }
-        Tool::Arrow => {
-            let mut connector = Connector::from_drag(anchor, current, color, shift);
-            connector.variant = variant;
-            connector.start_binding = start_binding;
-            connector.end_binding = end_binding;
             Element::Connector(bound_endpoints(connector, anchor, current))
         }
         Tool::Text => Text::from_drag(anchor, current, color, shift).into(),
@@ -323,23 +316,18 @@ mod tests {
     }
 
     #[test]
-    fn a_bound_arrow_keeps_its_binding() {
+    fn unbound_arrow_stays_a_line() {
+        assert!(matches!(drag(Tool::Arrow, None, None), Element::Line(_)));
+    }
+
+    #[test]
+    fn a_bound_arrow_becomes_a_connector() {
         let Element::Connector(connector) = drag(Tool::Arrow, None, Some(ConnectionEnd::new(7, 4)))
         else {
             panic!("expected connector");
         };
+        assert_eq!(connector.start_binding, None);
         assert_eq!(connector.end_binding, Some(ConnectionEnd::new(7, 4)));
-        assert_eq!(connector.start_binding, None);
         assert_eq!(connector.points[1], Point::new(100.0, 0.0));
-    }
-
-    #[test]
-    fn arrow_tool_creates_a_connector_without_bindings() {
-        let Element::Connector(connector) = drag(Tool::Arrow, None, None) else {
-            panic!("expected connector");
-        };
-        assert_eq!(connector.start_binding, None);
-        assert_eq!(connector.end_binding, None);
-        assert_eq!(connector.points.len(), 2);
     }
 }
