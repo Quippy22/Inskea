@@ -117,7 +117,9 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
     });
 
     let is_text = Signal::derive(move || styling_kind.get() == StylingKind::Text);
-    let is_line = Signal::derive(move || styling_kind.get() == StylingKind::Line);
+    let is_line_or_arrow = Signal::derive(move || {
+        matches!(styling_kind.get(), StylingKind::Line | StylingKind::Arrow)
+    });
     let is_connector = Signal::derive(move || styling_kind.get() == StylingKind::Connector);
     let is_arrow = Signal::derive(move || {
         matches!(
@@ -132,7 +134,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
     let hide_stroke = Signal::derive(move || is_text.get() || is_image.get());
     let base_kind = Signal::derive(move || {
         !is_text.get()
-            && !is_line.get()
+            && !is_line_or_arrow.get()
             && !is_connector.get()
             && !is_freehand.get()
             && !is_image.get()
@@ -524,7 +526,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 roundness,
                 roundness_cb,
                 hide_stroke,
-                is_line,
+                is_line_or_arrow,
                 is_rect,
                 is_rounded,
             )} {connector_section(
