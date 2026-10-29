@@ -118,12 +118,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
 
     let is_text = Signal::derive(move || styling_kind.get() == StylingKind::Text);
     let is_line = Signal::derive(move || styling_kind.get() == StylingKind::Line);
-    let is_connector = Signal::derive(move || {
-        matches!(
-            styling_kind.get(),
-            StylingKind::Arrow | StylingKind::Connector
-        )
-    });
+    let is_connector = Signal::derive(move || styling_kind.get() == StylingKind::Connector);
     let is_arrow = Signal::derive(move || {
         matches!(
             styling_kind.get(),
