@@ -111,11 +111,10 @@ pub fn guide_textarea(
         let _ = style.set_property("height", &format!("{content_height}px"));
         raw.set_scroll_top(0);
         let shift_up = EDIT_BASELINE_SHIFT * font_size * zoom;
-        // Keep the first line anchored where the label started. Centering the
-        // textarea by its growing content height moves every existing line up
-        // on Enter and can push it out of the host shape.
-        let initial_height = layout.height * zoom;
-        let top = screen_center.y - initial_height / 2.0 - shift_up;
+        // Keep the whole block centered around the host as it grows. The
+        // textarea starts with one row, so its scroll height follows the
+        // actual text instead of an unused second default row.
+        let top = screen_center.y - content_height / 2.0 - shift_up;
         let _ = style.set_property("top", &format!("{top}px"));
         let band_bottom = (ss.y - EDIT_PAD).max(EDIT_PAD);
         let overflow = top + content_height - band_bottom;
@@ -460,6 +459,7 @@ pub fn text_edit_overlay(
             view! {
                 <textarea
                     _ref=textarea_ref
+                    rows="1"
                     on:focus=move |ev| {
                         let ta = event_target::<web_sys::HtmlTextAreaElement>(&ev);
                         let ta2 = ta.clone();
