@@ -353,8 +353,12 @@ pub fn selection_handle_overlay(
     overlay_freeze: RwSignal<Option<Rect>>,
     rotation_delta: RwSignal<f64>,
     settings: RwSignal<CanvasSettings>,
+    editing_id: RwSignal<Option<ElementId>>,
 ) -> impl Fn() -> Option<View> {
     move || {
+        if editing_id.get().is_some() {
+            return None;
+        }
         let ids = selected_ids.get();
         if ids.is_empty() {
             return None;

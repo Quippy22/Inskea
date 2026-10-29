@@ -1,7 +1,7 @@
-use crate::canvas::CanvasMode;
+use crate::canvas::{CanvasMode, OpenEmbeddedText};
 use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::edit_ops::{self, Clipboard};
-use crate::model::{Alignment, Distribution, ElementId, Point};
+use crate::model::{Alignment, Distribution, Point};
 use crate::ui::dock::Tool;
 use crate::ui::{file_ops, icon, notify};
 use leptos::ev;
@@ -58,8 +58,8 @@ pub struct HotkeysContext {
     pub clipboard: RwSignal<Clipboard>,
     pub cursor_world: RwSignal<Point>,
     pub shortcuts_open: RwSignal<bool>,
-    /// Requests that the canvas open the selected element's embedded text editor.
-    pub embedded_text_request: RwSignal<Option<ElementId>>,
+    /// Canvas callback that opens an embedded text editor for an element.
+    pub open_embedded_text: RwSignal<Option<OpenEmbeddedText>>,
     /// A blocking dialog is open; canvas shortcuts stay quiet.
     pub modal_open: Signal<bool>,
     pub push_snapshot: Rc<dyn Fn()>,
@@ -238,7 +238,9 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
                         .is_some_and(|element| element.supports_embedded_text())
                 });
                 if supported {
-                    ctx.embedded_text_request.set(Some(id));
+                    if let Some(open) = ctx.open_embedded_text.get_untracked() {
+                        open(id);
+                    }
                 }
             }
             (false, "?") => ctx.shortcuts_open.update(|v| *v = !*v),
@@ -311,16 +313,16 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
             }
             return;
         }
-        if let Some(target) = ev.target() {
-            if is_text_input(&target) {
-                return;
-            }
-        }
         let key = ev.key();
         // Cmd on macOS, Ctrl elsewhere.
         let ctrl = ev.ctrl_key() || ev.meta_key();
         let shift = ev.shift_key();
         let alt = ev.alt_key();
+        if ev.target().is_some_and(|target| is_text_input(&target))
+            && !(ctrl && matches!(key.as_str(), "t" | "T"))
+        {
+            return;
+        }
         if is_browser_shortcut(&key, ctrl, alt) {
             ev.prevent_default();
         }

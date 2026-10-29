@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::canvas::settings::{CanvasSettings, CenterStyle, GridSize, GridStyle, Theme};
-use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
+use crate::canvas::{Canvas, CanvasMode, CropExportCallback, OpenEmbeddedText, Viewport};
 use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::edit_ops::Clipboard;
 use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
@@ -63,7 +63,7 @@ pub fn App() -> impl IntoView {
     let selected_ids = create_rw_signal(Vec::<ElementId>::new());
     let eraser_active = create_rw_signal(false);
     let shortcuts_open = create_rw_signal(false);
-    let embedded_text_request = create_rw_signal::<Option<ElementId>>(None);
+    let open_embedded_text = create_rw_signal::<Option<OpenEmbeddedText>>(None);
     let theme_open = create_rw_signal(false);
 
     let export_crop_active = create_rw_signal(false);
@@ -421,7 +421,7 @@ pub fn App() -> impl IntoView {
         clipboard,
         cursor_world,
         shortcuts_open,
-        embedded_text_request,
+        open_embedded_text,
         modal_open,
         push_snapshot: push_snapshot.clone(),
         do_undo: Rc::new(do_undo),
@@ -662,7 +662,7 @@ pub fn App() -> impl IntoView {
                     default_connector_variant,
                     theme_open,
                     modal_open,
-                    embedded_text_request,
+                    open_embedded_text,
                 }
                 on_text_commit=on_text_commit
                 shortcuts_open=shortcuts_open

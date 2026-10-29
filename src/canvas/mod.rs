@@ -18,6 +18,7 @@ pub use state::CanvasInputs;
 pub use state::CanvasMode;
 pub use state::CropExportCallback;
 pub use state::DragOperation;
+pub use state::OpenEmbeddedText;
 use state::{hit_and_erase, CanvasState};
 
 use crate::model::*;
@@ -158,22 +159,23 @@ pub fn Canvas(
         }
     });
     {
-        let st = st;
-        let props = props.clone();
-        create_effect(move |_| {
-            let Some(id) = props.embedded_text_request.get() else {
-                return;
-            };
-            props.embedded_text_request.set(None);
-            if st.text_edit.editing_id.get_untracked().is_some()
-                || props.modal_open.get_untracked()
-                || props.theme_open.get_untracked()
-                || props.export_crop_active.get_untracked()
-                || st.selected_ids.get_untracked().as_slice() != [id]
+        let text_edit = st.text_edit;
+        let selected_ids = st.selected_ids;
+        let scene = props.scene;
+        let modal_open = props.modal_open;
+        let theme_open = props.theme_open;
+        let export_crop_active = props.export_crop_active;
+        let push_snapshot = props.push_snapshot.clone();
+        props.open_embedded_text.set(Some(Rc::new(move |id| {
+            if text_edit.editing_id.get_untracked().is_some()
+                || modal_open.get_untracked()
+                || theme_open.get_untracked()
+                || export_crop_active.get_untracked()
+                || selected_ids.get_untracked().as_slice() != [id]
             {
                 return;
             }
-            let eligible = props.scene.with_untracked(|scene| {
+            let eligible = scene.with_untracked(|scene| {
                 scene
                     .element_by_id(id)
                     .is_some_and(|element| element.supports_embedded_text())
@@ -181,16 +183,16 @@ pub fn Canvas(
             if !eligible {
                 return;
             }
-            let already_has_text = props.scene.with_untracked(|scene| {
+            let already_has_text = scene.with_untracked(|scene| {
                 scene
                     .element_by_id(id)
                     .is_some_and(|element| element.data().embedded_text.is_some())
             });
             if !already_has_text {
-                (props.push_snapshot)();
+                push_snapshot();
             }
             let mut text = None;
-            props.scene.update(|scene| {
+            scene.update(|scene| {
                 let Some(mut element) = scene.element_by_id_mut(id) else {
                     return;
                 };
@@ -215,12 +217,12 @@ pub fn Canvas(
                     .map(|label| label.wrapped.raw.to_string());
             });
             if let Some(text) = text {
-                st.text_edit.editing_id.set(Some(id));
-                st.text_edit.editing_embedded.set(true);
-                st.text_edit.editing_new.set(!already_has_text);
-                st.text_edit.edit_text.set(text);
+                text_edit.editing_id.set(Some(id));
+                text_edit.editing_embedded.set(true);
+                text_edit.editing_new.set(!already_has_text);
+                text_edit.edit_text.set(text);
             }
-        });
+        })));
     }
 
     // Esc: cancel the most recent interaction, in priority order: open
@@ -919,6 +921,7 @@ pub fn Canvas(
                 st.drag.overlay_freeze,
                 st.drag.rotation_delta,
                 props.settings,
+                st.text_edit.editing_id,
             )}
         </svg>
 

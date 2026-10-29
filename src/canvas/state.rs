@@ -113,6 +113,7 @@ impl TextEditState {
 }
 
 pub type CropExportCallback = Rc<dyn Fn(Rect)>;
+pub type OpenEmbeddedText = Rc<dyn Fn(ElementId)>;
 
 /// Tracks an in-progress draw operation.
 #[derive(Clone)]
@@ -197,8 +198,8 @@ pub struct CanvasInputs {
     /// canvas or the current selection.
     pub theme_open: RwSignal<bool>,
     pub modal_open: Signal<bool>,
-    /// Shared Ctrl+T request produced by the global shortcut handler.
-    pub embedded_text_request: RwSignal<Option<ElementId>>,
+    /// Callback registered with the global shortcut handler.
+    pub open_embedded_text: RwSignal<Option<OpenEmbeddedText>>,
 }
 
 // ── Helper functions used by pointer event handlers ──────────────────────
