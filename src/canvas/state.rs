@@ -41,7 +41,7 @@ pub enum DragOperation {
     /// Dragging a curved connector's bow handle.
     CurveBend,
     /// Dragging one of an elbow connector's section midpoints.
-    ElbowSplit,
+    ElbowSection(usize),
 }
 
 /// Drag-related state (resize, move, rotate, path-point drag).

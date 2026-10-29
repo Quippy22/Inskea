@@ -14,6 +14,10 @@ pub const SNAP_SCREEN_PX: f64 = 14.0;
 /// midpoints, and the centre.
 pub const CONNECTION_POINT_COUNT: usize = 9;
 
+/// How close (in world units) a dragged elbow run must come to another run
+/// before it snaps onto it. Aligned runs then collapse into one.
+pub const ELBOW_MERGE_MARGIN: f64 = 8.0;
+
 /// A point on a shape an endpoint can be attached to.
 ///
 /// The index is stable for the shape's lifetime: it always addresses the same
@@ -78,9 +82,14 @@ pub struct Connector {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub curve_bend: Option<f64>,
     /// Where the elbow's middle section sits between the endpoints, as a
-    /// fraction of the dominant axis. `None` centres it.
+    /// fraction of the dominant axis. `None` centres it. Only used while no
+    /// hand-shaped bends are stored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub elbow_split: Option<f64>,
+    /// Interior vertices of a hand-shaped elbow route, stored as fractions of
+    /// the endpoint span. Empty keeps the default two-bend route.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub elbow_bends: Vec<Point>,
 }
 
 /// Which route handle the pointer grabbed.
@@ -88,8 +97,8 @@ pub struct Connector {
 pub enum RouteHandle {
     /// The point that changes a curved connector's bow.
     Curve,
-    /// A section midpoint that slides an elbow connector's bend.
-    Elbow,
+    /// A section midpoint that reshapes an elbow connector, by section index.
+    Elbow(usize),
 }
 
 impl Connector {
@@ -114,6 +123,7 @@ impl Connector {
             end_binding: None,
             curve_bend: None,
             elbow_split: None,
+            elbow_bends: Vec::new(),
         }
     }
 
@@ -132,6 +142,7 @@ impl Connector {
             end_binding,
             curve_bend: None,
             elbow_split: None,
+            elbow_bends: Vec::new(),
         }
     }
 
@@ -278,41 +289,181 @@ impl Connector {
         self.curve_bend = Some((2.0 * away / len).clamp(-1.5, 1.5));
     }
 
-    /// Midpoints of the sections the elbow actually draws.
-    pub fn elbow_handles(&self) -> Vec<Point> {
+    /// Midpoints of the sections the elbow actually draws, paired with the
+    /// section index a drag refers to.
+    fn elbow_handles(&self) -> Vec<(usize, Point)> {
         if self.variant != ConnectorVariant::Straight {
             return Vec::new();
         }
-        let route = self.elbow_points();
-        if route.len() <= 2 {
-            return Vec::new();
-        }
+        let route = self.elbow_route();
         route
             .windows(2)
-            .filter(|pair| (pair[1].x - pair[0].x).hypot(pair[1].y - pair[0].y) > 1e-6)
-            .map(|pair| Point::new((pair[0].x + pair[1].x) / 2.0, (pair[0].y + pair[1].y) / 2.0))
+            .enumerate()
+            .filter(|(_, pair)| (pair[1].x - pair[0].x).hypot(pair[1].y - pair[0].y) > 1e-6)
+            .map(|(index, pair)| {
+                (
+                    index,
+                    Point::new((pair[0].x + pair[1].x) / 2.0, (pair[0].y + pair[1].y) / 2.0),
+                )
+            })
             .collect()
     }
 
-    /// Slide the elbow's middle section so the grabbed `point` sets its
-    /// position along the route's dominant axis.
-    pub fn set_elbow_split(&mut self, point: Point) {
-        let (Some(a), Some(b)) = (self.first(), self.last()) else {
+    /// Reshape the elbow so the dragged `section` follows `world`.
+    ///
+    /// The route is rebuilt from `base`, the connector as it was when the drag
+    /// started, so repeated moves never compound. Interior sections slide
+    /// sideways; the sections next to an endpoint grow a step instead, which
+    /// keeps the port stub straight. Runs that line up within
+    /// [`ELBOW_MERGE_MARGIN`] snap together and collapse back to one bend.
+    pub fn drag_elbow_section(&mut self, base: &Connector, section: usize, world: Point) {
+        let route = base.elbow_route();
+        let count = route.len().saturating_sub(1);
+        if count == 0 || section >= count {
+            return;
+        }
+        let start = route[section];
+        let end = route[section + 1];
+        let horizontal = (start.y - end.y).abs() <= (start.x - end.x).abs();
+        let mut level = if horizontal { world.y } else { world.x };
+        if let Some(snapped) = Self::nearest_run_level(&route, horizontal, level) {
+            level = snapped;
+        }
+
+        let shaped = if section > 0 && section + 1 < count {
+            // An interior run moves sideways: both of its ends shift, while the
+            // perpendicular neighbours just change length.
+            let shift = level - if horizontal { start.y } else { start.x };
+            let mut shaped = route.clone();
+            if horizontal {
+                shaped[section].y += shift;
+                shaped[section + 1].y += shift;
+            } else {
+                shaped[section].x += shift;
+                shaped[section + 1].x += shift;
+            }
+            shaped
+        } else if section == 0 {
+            let (stub, corner, run_end) = Self::elbow_step(start, end, world, horizontal, level);
+            let mut shaped = vec![start, stub, corner, run_end];
+            shaped.extend_from_slice(&route[1..]);
+            shaped
+        } else {
+            let (stub, corner, run_end) = Self::elbow_step(end, start, world, horizontal, level);
+            let mut shaped = route[..count].to_vec();
+            shaped.extend_from_slice(&[run_end, corner, stub, end]);
+            shaped
+        };
+
+        let shaped = Self::normalize_route(shaped);
+        if shaped == route {
+            self.elbow_bends = base.elbow_bends.clone();
+            self.elbow_split = base.elbow_split;
+            return;
+        }
+        let (Some(a), Some(b)) = (base.first(), base.last()) else {
             return;
         };
-        let (dx, dy) = (b.x - a.x, b.y - a.y);
-        let fraction = if dx.abs() >= dy.abs() {
-            if dx.abs() <= 1e-9 {
-                return;
-            }
-            (point.x - a.x) / dx
+        let (denom_x, denom_y) = Self::elbow_denominators(a, b);
+        self.elbow_bends = shaped[1..shaped.len().saturating_sub(1)]
+            .iter()
+            .map(|p| Point::new((p.x - a.x) / denom_x, (p.y - a.y) / denom_y))
+            .collect();
+        self.elbow_split = None;
+    }
+
+    /// Two corners that turn a tip-side stub into a run at `level`, plus the
+    /// point where that run meets the rest of the route. `tip` is the connector
+    /// endpoint and `inner` the other end of the grabbed section.
+    fn elbow_step(
+        tip: Point,
+        inner: Point,
+        world: Point,
+        horizontal: bool,
+        level: f64,
+    ) -> (Point, Point, Point) {
+        let (along, inward) = if horizontal {
+            (
+                (world.x - tip.x) * (inner.x - tip.x).signum(),
+                (inner.x - tip.x).signum(),
+            )
         } else {
-            if dy.abs() <= 1e-9 {
-                return;
-            }
-            (point.y - a.y) / dy
+            (
+                (world.y - tip.y) * (inner.y - tip.y).signum(),
+                (inner.y - tip.y).signum(),
+            )
         };
-        self.elbow_split = Some(fraction.clamp(0.08, 0.92));
+        let along = along.max(1.0);
+        let stub = if horizontal {
+            Point::new(tip.x + inward * along, tip.y)
+        } else {
+            Point::new(tip.x, tip.y + inward * along)
+        };
+        let corner = if horizontal {
+            Point::new(stub.x, level)
+        } else {
+            Point::new(level, stub.y)
+        };
+        let run_end = if horizontal {
+            Point::new(inner.x, level)
+        } else {
+            Point::new(level, inner.y)
+        };
+        (stub, corner, run_end)
+    }
+
+    /// Closest run level to `level` within the merge margin, if any.
+    fn nearest_run_level(route: &[Point], horizontal: bool, level: f64) -> Option<f64> {
+        route
+            .iter()
+            .map(|p| if horizontal { p.y } else { p.x })
+            .filter(|candidate| (candidate - level).abs() <= ELBOW_MERGE_MARGIN)
+            .min_by(|a, b| (a - level).abs().total_cmp(&(b - level).abs()))
+    }
+
+    /// Drop duplicate points and any point that only continues a straight run.
+    /// Reversals collapse too, so a step dragged back onto its neighbour melts
+    /// away instead of leaving a doubled-back stub.
+    fn normalize_route(mut route: Vec<Point>) -> Vec<Point> {
+        loop {
+            let before = route.len();
+            route.dedup_by(|a, b| Self::same_point(*a, *b));
+            let mut i = 1;
+            while i + 1 < route.len() {
+                let (prev, current, next) = (route[i - 1], route[i], route[i + 1]);
+                let collinear = (Self::near(prev.x, current.x) && Self::near(current.x, next.x))
+                    || (Self::near(prev.y, current.y) && Self::near(current.y, next.y));
+                if collinear {
+                    route.remove(i);
+                } else {
+                    i += 1;
+                }
+            }
+            if route.len() == before {
+                break;
+            }
+        }
+        route
+    }
+
+    fn near(a: f64, b: f64) -> bool {
+        (a - b).abs() < 1e-9
+    }
+
+    fn same_point(a: Point, b: Point) -> bool {
+        Self::near(a.x, b.x) && Self::near(a.y, b.y)
+    }
+
+    /// Scale factors that turn a stored bend fraction back into world offsets.
+    /// A zero-length axis falls back to the span of the other axis so bends
+    /// keep their spread when the endpoints line up.
+    fn elbow_denominators(a: Point, b: Point) -> (f64, f64) {
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let span = dx.abs().max(dy.abs()).max(1e-9);
+        (
+            if dx.abs() > 1e-9 { dx } else { span },
+            if dy.abs() > 1e-9 { dy } else { span },
+        )
     }
 
     /// Handles the overlay shows for this variant, paired with what dragging
@@ -327,7 +478,7 @@ impl Connector {
             ConnectorVariant::Straight => self
                 .elbow_handles()
                 .into_iter()
-                .map(|point| (RouteHandle::Elbow, point))
+                .map(|(index, point)| (RouteHandle::Elbow(index), point))
                 .collect(),
             ConnectorVariant::Direct => Vec::new(),
         }
@@ -352,22 +503,32 @@ impl Connector {
     }
 
     /// Orthogonal elbow route between the first and last point.
-    fn elbow_points(&self) -> Vec<Point> {
+    fn elbow_route(&self) -> Vec<Point> {
         let (Some(a), Some(b)) = (self.first(), self.last()) else {
             return Vec::new();
         };
-        if (a.x - b.x).abs() < 1e-9 || (a.y - b.y).abs() < 1e-9 {
-            return vec![a, b];
-        }
-        if (b.x - a.x).abs() >= (b.y - a.y).abs() {
+        if self.elbow_bends.is_empty() {
+            if (a.x - b.x).abs() < 1e-9 || (a.y - b.y).abs() < 1e-9 {
+                return vec![a, b];
+            }
             let fraction = self.elbow_split.unwrap_or(0.5).clamp(0.08, 0.92);
-            let mx = a.x + (b.x - a.x) * fraction;
-            vec![a, Point::new(mx, a.y), Point::new(mx, b.y), b]
-        } else {
-            let fraction = self.elbow_split.unwrap_or(0.5).clamp(0.08, 0.92);
+            if (b.x - a.x).abs() >= (b.y - a.y).abs() {
+                let mx = a.x + (b.x - a.x) * fraction;
+                return vec![a, Point::new(mx, a.y), Point::new(mx, b.y), b];
+            }
             let my = a.y + (b.y - a.y) * fraction;
-            vec![a, Point::new(a.x, my), Point::new(b.x, my), b]
+            return vec![a, Point::new(a.x, my), Point::new(b.x, my), b];
         }
+        let (denom_x, denom_y) = Self::elbow_denominators(a, b);
+        let mut route = Vec::with_capacity(self.elbow_bends.len() + 2);
+        route.push(a);
+        route.extend(
+            self.elbow_bends
+                .iter()
+                .map(|f| Point::new(a.x + f.x * denom_x, a.y + f.y * denom_y)),
+        );
+        route.push(b);
+        route
     }
 
     /// A polyline approximation of the rendered route.
@@ -395,7 +556,7 @@ impl Connector {
                     route
                 }
             }
-            ConnectorVariant::Straight => self.elbow_points(),
+            ConnectorVariant::Straight => self.elbow_route(),
         }
     }
 
@@ -416,7 +577,7 @@ impl Connector {
             }
             ConnectorVariant::Curved => path_d(&self.points, CurveMode::Curved),
             ConnectorVariant::Straight => {
-                let route = self.elbow_points();
+                let route = self.elbow_route();
                 if route.is_empty() {
                     return String::new();
                 }
@@ -873,13 +1034,21 @@ mod tests {
         assert!(connector.path_d().contains('Q'));
     }
 
+    fn elbow(a: Point, b: Point) -> Connector {
+        Connector {
+            variant: ConnectorVariant::Straight,
+            ..connector(a, b)
+        }
+    }
+
     #[test]
     fn elbow_handles_sit_on_every_section() {
-        let connector = Connector {
-            variant: ConnectorVariant::Straight,
-            ..connector(Point::new(0.0, 0.0), Point::new(100.0, 100.0))
-        };
-        let handles = connector.elbow_handles();
+        let connector = elbow(Point::new(0.0, 0.0), Point::new(100.0, 100.0));
+        let handles: Vec<Point> = connector
+            .elbow_handles()
+            .into_iter()
+            .map(|(_, point)| point)
+            .collect();
         assert_eq!(
             handles,
             vec![
@@ -891,16 +1060,97 @@ mod tests {
     }
 
     #[test]
-    fn dragging_an_elbow_handle_slides_the_bend() {
-        let mut connector = Connector {
-            variant: ConnectorVariant::Straight,
-            ..connector(Point::new(0.0, 0.0), Point::new(100.0, 100.0))
-        };
-        connector.set_elbow_split(Point::new(25.0, 80.0));
+    fn dragging_the_middle_section_slides_the_bend() {
+        let mut connector = elbow(Point::new(0.0, 0.0), Point::new(100.0, 100.0));
+        let base = connector.clone();
+        connector.drag_elbow_section(&base, 1, Point::new(20.0, 50.0));
         let route = connector.route_points();
-        assert_eq!(route[1], Point::new(25.0, 0.0));
-        assert_eq!(route[2], Point::new(25.0, 100.0));
+        assert_eq!(route[1], Point::new(20.0, 0.0));
+        assert_eq!(route[2], Point::new(20.0, 100.0));
         assert_eq!(connector.elbow_handles().len(), 3);
+    }
+
+    #[test]
+    fn dragging_an_end_section_grows_a_step() {
+        let mut connector = elbow(Point::new(0.0, 0.0), Point::new(100.0, 100.0));
+        let base = connector.clone();
+        connector.drag_elbow_section(&base, 0, Point::new(25.0, 40.0));
+        let route = connector.route_points();
+        assert_eq!(
+            route,
+            vec![
+                Point::new(0.0, 0.0),
+                Point::new(25.0, 0.0),
+                Point::new(25.0, 40.0),
+                Point::new(50.0, 40.0),
+                Point::new(50.0, 100.0),
+                Point::new(100.0, 100.0),
+            ]
+        );
+        assert!(route
+            .windows(2)
+            .all(|pair| pair[0].x == pair[1].x || pair[0].y == pair[1].y));
+    }
+
+    #[test]
+    fn dragging_the_last_section_mirrors_the_step() {
+        let mut connector = elbow(Point::new(0.0, 0.0), Point::new(100.0, 100.0));
+        let base = connector.clone();
+        connector.drag_elbow_section(&base, 2, Point::new(75.0, 60.0));
+        let route = connector.route_points();
+        assert_eq!(
+            route,
+            vec![
+                Point::new(0.0, 0.0),
+                Point::new(50.0, 0.0),
+                Point::new(50.0, 60.0),
+                Point::new(75.0, 60.0),
+                Point::new(75.0, 100.0),
+                Point::new(100.0, 100.0),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_step_dragged_back_merges_into_one_bend() {
+        let mut connector = elbow(Point::new(0.0, 0.0), Point::new(100.0, 100.0));
+        let base = connector.clone();
+        // Level `2.0` is within the merge margin of the first run's level, so
+        // the step disappears and the plain two-bend route comes back.
+        connector.drag_elbow_section(&base, 0, Point::new(25.0, 2.0));
+        assert_eq!(connector.route_points(), base.route_points());
+        assert!(connector.elbow_bends.is_empty());
+
+        // Dropping it onto the far run's level merges the detour into a single
+        // bend instead of leaving two parallel runs side by side.
+        connector.drag_elbow_section(&base, 0, Point::new(25.0, 98.0));
+        let route = connector.route_points();
+        assert_eq!(
+            route,
+            vec![
+                Point::new(0.0, 0.0),
+                Point::new(25.0, 0.0),
+                Point::new(25.0, 100.0),
+                Point::new(100.0, 100.0),
+            ]
+        );
+    }
+
+    #[test]
+    fn shaped_bends_follow_moved_endpoints() {
+        let mut connector = elbow(Point::new(0.0, 0.0), Point::new(100.0, 100.0));
+        let base = connector.clone();
+        connector.drag_elbow_section(&base, 0, Point::new(25.0, 40.0));
+
+        connector.points[0] = Point::new(0.0, 20.0);
+        connector.points[1] = Point::new(120.0, 120.0);
+        let route = connector.route_points();
+        assert_eq!(route.first(), Some(&Point::new(0.0, 20.0)));
+        assert_eq!(route.last(), Some(&Point::new(120.0, 120.0)));
+        assert!(route
+            .windows(2)
+            .all(|pair| pair[0].x == pair[1].x || pair[0].y == pair[1].y));
+        assert!(route.len() > 4, "the hand-shaped step should survive");
     }
 
     #[test]

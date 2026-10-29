@@ -327,6 +327,7 @@ mod tests {
             end_binding: Some(ConnectionEnd::new(2, 6)),
             curve_bend: None,
             elbow_split: None,
+            elbow_bends: Vec::new(),
         });
 
         let bindings = take_connector_bindings(&mut element);

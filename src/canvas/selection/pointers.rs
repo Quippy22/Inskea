@@ -74,7 +74,7 @@ fn route_handle_at(el: &Element, world: Point) -> Option<RouteHandle> {
 fn route_drag_operation(kind: RouteHandle) -> DragOperation {
     match kind {
         RouteHandle::Curve => DragOperation::CurveBend,
-        RouteHandle::Elbow => DragOperation::ElbowSplit,
+        RouteHandle::Elbow(section) => DragOperation::ElbowSection(section),
     }
 }
 
@@ -739,6 +739,37 @@ fn do_route_handle_drag(
     st.drag.last_world.set(Some(world));
 }
 
+/// Reshape an elbow from the section the pointer grabbed. Every move rebuilds
+/// from the connector captured at pointer-down, so the route follows the
+/// pointer without accumulating steps.
+#[inline]
+fn do_elbow_drag(world: Point, st: &mut CanvasState, props: &mut CanvasInputs, section: usize) {
+    let Some(&id) = st.selected_ids.get().first() else {
+        return;
+    };
+    let Some(base) = st
+        .drag
+        .drag_originals
+        .get()
+        .into_iter()
+        .find_map(|el| match el {
+            Element::Connector(connector) if connector.data.id == id => Some(connector),
+            _ => None,
+        })
+    else {
+        return;
+    };
+    props.scene.update(|s| {
+        if let Some(mut el) = s.element_by_id_mut(id) {
+            if let Element::Connector(connector) = &mut *el {
+                connector.drag_elbow_section(&base, section, world);
+            }
+        }
+    });
+    st.drag.moving_anchor.set(Some(world));
+    st.drag.last_world.set(Some(world));
+}
+
 /// Re-pin connectors bound to any moved shape. Drag frames restore every
 /// selected element from its original before re-applying the transform, so a
 /// selected connector is written after (or before) the shape it follows and
@@ -1022,9 +1053,7 @@ pub fn select_pointer_move(
             Some(DragOperation::CurveBend) => {
                 do_route_handle_drag(world, st, props, Connector::set_curve_bend)
             }
-            Some(DragOperation::ElbowSplit) => {
-                do_route_handle_drag(world, st, props, Connector::set_elbow_split)
-            }
+            Some(DragOperation::ElbowSection(section)) => do_elbow_drag(world, st, props, section),
             _ => do_move(world, anchor, st, props),
         }
     }

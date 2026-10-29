@@ -41,7 +41,7 @@ pub fn cursor_style(
             DragOperation::PathPoint(_)
             | DragOperation::PathMidpoint(_)
             | DragOperation::CurveBend
-            | DragOperation::ElbowSplit => "pointer".to_string(),
+            | DragOperation::ElbowSection(_) => "pointer".to_string(),
         };
     }
 
@@ -53,7 +53,7 @@ pub fn cursor_style(
             DragOperation::PathPoint(_)
             | DragOperation::PathMidpoint(_)
             | DragOperation::CurveBend
-            | DragOperation::ElbowSplit => "pointer".to_string(),
+            | DragOperation::ElbowSection(_) => "pointer".to_string(),
         };
     }
 

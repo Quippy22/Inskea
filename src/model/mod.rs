@@ -1825,6 +1825,7 @@ mod tests {
             end_binding: None,
             curve_bend: None,
             elbow_split: None,
+            elbow_bends: Vec::new(),
         }));
         s.clear_pending();
         s
@@ -1894,6 +1895,7 @@ mod tests {
             end_binding: Some(ConnectionEnd::new(2, 3)),
             curve_bend: None,
             elbow_split: None,
+            elbow_bends: Vec::new(),
         }));
         s.clear_pending();
 
@@ -1983,6 +1985,7 @@ mod tests {
             end_binding: None,
             curve_bend: None,
             elbow_split: None,
+            elbow_bends: Vec::new(),
         }));
 
         let view = Rect::new(-4000.0, -4000.0, 8000.0, 8000.0);
