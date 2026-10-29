@@ -1154,6 +1154,24 @@ mod tests {
     }
 
     #[test]
+    fn aligned_interior_runs_merge_into_one_bend() {
+        let mut connector = elbow(Point::new(0.0, 0.0), Point::new(100.0, 100.0));
+        let base = connector.clone();
+        connector.drag_elbow_section(&base, 0, Point::new(25.0, 40.0));
+        assert_eq!(connector.elbow_handles().len(), 5);
+
+        // Slide the step's run back onto the first run's level. Within the
+        // margin it snaps, the two runs merge, and the route is the plain
+        // two-bend elbow again with one handle in the middle.
+        let stepped = connector.clone();
+        connector.drag_elbow_section(&stepped, 2, Point::new(37.5, 0.5));
+        assert_eq!(connector.route_points(), base.route_points());
+        let handles = connector.elbow_handles();
+        assert_eq!(handles.len(), 3);
+        assert_eq!(handles[1], (1, Point::new(50.0, 50.0)));
+    }
+
+    #[test]
     fn direct_routes_offer_no_extra_handles() {
         let mut connector = connector(Point::new(0.0, 0.0), Point::new(100.0, 100.0));
         assert!(connector.route_handles().is_empty());
