@@ -690,7 +690,7 @@ dependencies = [
 
 [[package]]
 name = "inskea"
-version = "1.4.1"
+version = "1.5.0"
 dependencies = [
  "console_error_panic_hook",
  "js-sys",
