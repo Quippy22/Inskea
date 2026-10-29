@@ -33,6 +33,7 @@ pub(crate) const EDIT_SHORTCUTS: &[(&str, &str)] = &[
     ("Ctrl+C", "Copy"),
     ("Ctrl+V", "Paste"),
     ("Ctrl+D", "Duplicate"),
+    ("Ctrl+T", "Add or edit element text"),
     ("Ctrl+G", "Group"),
     ("Ctrl+Shift+G", "Ungroup"),
     ("Ctrl+Alt+←/→/↑/↓", "Align selection"),
@@ -103,7 +104,7 @@ fn is_browser_shortcut(key: &str, ctrl: bool, alt: bool) -> bool {
     matches!(key, "Delete" | "Backspace")
 }
 
-fn is_text_input(target: &web_sys::EventTarget) -> bool {
+pub(crate) fn is_text_input(target: &web_sys::EventTarget) -> bool {
     let node = target.clone().dyn_into::<web_sys::Node>();
     if let Ok(node) = node {
         if let Some(el) = node.dyn_ref::<web_sys::HtmlElement>() {

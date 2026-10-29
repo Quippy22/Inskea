@@ -44,14 +44,41 @@ fn handle_text_double_click(
         Some(id) => id,
         None => return false,
     };
-    if let Some(Element::Text(text_elem)) = nearby.iter().find(|e| e.id() == id) {
-        st.text_edit.editing_id.set(Some(id));
-        st.text_edit
-            .edit_text
-            .set(text_elem.wrapped.raw.to_string());
-        return true;
+    let Some(element) = nearby.iter().find(|e| e.id() == id) else {
+        return false;
+    };
+    match element {
+        Element::Text(text_elem) => {
+            st.text_edit.editing_id.set(Some(id));
+            st.text_edit.editing_embedded.set(false);
+            st.text_edit.editing_new.set(false);
+            st.text_edit
+                .edit_text
+                .set(text_elem.wrapped.raw.to_string());
+            true
+        }
+        element if element.supports_embedded_text() => {
+            let Some(label) = element.data().embedded_text.as_ref() else {
+                return false;
+            };
+            let Some(layout) = crate::model::elements::embedded_text::layout_for_element(element)
+            else {
+                return false;
+            };
+            let local = Point::unrotate(world, layout.center.x, layout.center.y, layout.rotation);
+            if (local.x - layout.center.x).abs() > layout.width / 2.0 + HIT_MARGIN
+                || (local.y - layout.center.y).abs() > layout.height / 2.0 + HIT_MARGIN
+            {
+                return false;
+            }
+            st.text_edit.editing_id.set(Some(id));
+            st.text_edit.editing_embedded.set(true);
+            st.text_edit.editing_new.set(false);
+            st.text_edit.edit_text.set(label.wrapped.raw.to_string());
+            true
+        }
+        _ => false,
     }
-    false
 }
 
 /// Route handle of a connector under the pointer, if any.
