@@ -79,20 +79,12 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-          # Minor/major bumps release automatically. Patch bumps are left for a
-          # manual workflow dispatch.
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag already exists; skipping."
             echo "should_release=false" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual run; releasing $tag."
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
-          elif [ "${version##*.}" = "0" ]; then
-            echo "New minor or major version; releasing $tag."
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Patch version $tag requires a manual workflow run; skipping."
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "New version; releasing $tag."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
           fi
 
   clippy:
