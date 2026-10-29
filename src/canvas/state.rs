@@ -113,7 +113,7 @@ impl TextEditState {
 }
 
 pub type CropExportCallback = Rc<dyn Fn(Rect)>;
-pub type OpenEmbeddedText = Rc<dyn Fn(ElementId)>;
+pub type OpenEmbeddedText = Rc<dyn Fn()>;
 
 /// Tracks an in-progress draw operation.
 #[derive(Clone)]

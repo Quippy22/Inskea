@@ -166,12 +166,16 @@ pub fn Canvas(
         let theme_open = props.theme_open;
         let export_crop_active = props.export_crop_active;
         let push_snapshot = props.push_snapshot.clone();
-        props.open_embedded_text.set(Some(Rc::new(move |id| {
+        props.open_embedded_text.set(Some(Rc::new(move || {
+            let ids = selected_ids.get_untracked();
+            if ids.len() != 1 {
+                return;
+            }
+            let id = ids[0];
             if text_edit.editing_id.get_untracked().is_some()
                 || modal_open.get_untracked()
                 || theme_open.get_untracked()
                 || export_crop_active.get_untracked()
-                || selected_ids.get_untracked().as_slice() != [id]
             {
                 return;
             }

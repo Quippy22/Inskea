@@ -227,20 +227,8 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
                 if ctx.shortcuts_open.get_untracked() {
                     return;
                 }
-                let ids = ctx.doc.selected_ids.get_untracked();
-                if ids.len() != 1 {
-                    return;
-                }
-                let id = ids[0];
-                let supported = ctx.doc.scene.with_untracked(|scene| {
-                    scene
-                        .element_by_id(id)
-                        .is_some_and(|element| element.supports_embedded_text())
-                });
-                if supported {
-                    if let Some(open) = ctx.open_embedded_text.get_untracked() {
-                        open(id);
-                    }
+                if let Some(open) = ctx.open_embedded_text.get_untracked() {
+                    open();
                 }
             }
             (false, "?") => ctx.shortcuts_open.update(|v| *v = !*v),
