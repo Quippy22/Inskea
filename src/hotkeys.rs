@@ -1,4 +1,4 @@
-use crate::canvas::{CanvasMode, OpenEmbeddedText};
+use crate::canvas::CanvasMode;
 use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::edit_ops::{self, Clipboard};
 use crate::model::{Alignment, Distribution, Point};
@@ -58,8 +58,6 @@ pub struct HotkeysContext {
     pub clipboard: RwSignal<Clipboard>,
     pub cursor_world: RwSignal<Point>,
     pub shortcuts_open: RwSignal<bool>,
-    /// Canvas callback that opens an embedded text editor for an element.
-    pub open_embedded_text: RwSignal<Option<OpenEmbeddedText>>,
     /// A blocking dialog is open; canvas shortcuts stay quiet.
     pub modal_open: Signal<bool>,
     pub push_snapshot: Rc<dyn Fn()>,
@@ -224,12 +222,8 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
                 }
             }
             (true, "t") | (true, "T") => {
-                if ctx.shortcuts_open.get_untracked() {
-                    return;
-                }
-                if let Some(open) = ctx.open_embedded_text.get_untracked() {
-                    open();
-                }
+                // The canvas owns the text-edit state and opens the editor.
+                // This match arm claims Ctrl+T so the browser cannot open a tab.
             }
             (false, "?") => ctx.shortcuts_open.update(|v| *v = !*v),
             (false, "e") => ctx.canvas_mode.set(CanvasMode::Erase),

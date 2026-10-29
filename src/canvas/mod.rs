@@ -18,7 +18,6 @@ pub use state::CanvasInputs;
 pub use state::CanvasMode;
 pub use state::CropExportCallback;
 pub use state::DragOperation;
-pub use state::OpenEmbeddedText;
 use state::{hit_and_erase, CanvasState};
 
 use crate::model::*;
@@ -159,26 +158,27 @@ pub fn Canvas(
         }
     });
     {
-        let text_edit = st.text_edit;
-        let selected_ids = st.selected_ids;
+        let st = st;
+        let props = props.clone();
         let scene = props.scene;
-        let modal_open = props.modal_open;
-        let theme_open = props.theme_open;
-        let export_crop_active = props.export_crop_active;
-        let push_snapshot = props.push_snapshot.clone();
-        props.open_embedded_text.set(Some(Rc::new(move || {
-            let ids = selected_ids.get_untracked();
+        let shortcuts_open = shortcuts_open;
+        let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
+            if !(ev.ctrl_key() || ev.meta_key()) || !matches!(ev.key().as_str(), "t" | "T") {
+                return;
+            }
+            if st.text_edit.editing_id.get_untracked().is_some()
+                || shortcuts_open.get_untracked()
+                || props.modal_open.get_untracked()
+                || props.theme_open.get_untracked()
+                || props.export_crop_active.get_untracked()
+            {
+                return;
+            }
+            let ids = st.selected_ids.get_untracked();
             if ids.len() != 1 {
                 return;
             }
             let id = ids[0];
-            if text_edit.editing_id.get_untracked().is_some()
-                || modal_open.get_untracked()
-                || theme_open.get_untracked()
-                || export_crop_active.get_untracked()
-            {
-                return;
-            }
             let eligible = scene.with_untracked(|scene| {
                 scene
                     .element_by_id(id)
@@ -187,46 +187,29 @@ pub fn Canvas(
             if !eligible {
                 return;
             }
+            ev.prevent_default();
             let already_has_text = scene.with_untracked(|scene| {
                 scene
                     .element_by_id(id)
                     .is_some_and(|element| element.data().embedded_text.is_some())
             });
-            if !already_has_text {
-                push_snapshot();
-            }
-            let mut text = None;
-            scene.update(|scene| {
-                let Some(mut element) = scene.element_by_id_mut(id) else {
-                    return;
-                };
-                if element.data().embedded_text.is_none() {
-                    let Some((width, height)) =
-                        crate::model::elements::embedded_text::reference_size_for_element(&element)
-                    else {
-                        return;
-                    };
-                    let (color, font_size) = {
-                        let data = element.data();
-                        (data.style.stroke_color, data.style.font_size)
-                    };
-                    element.data_mut().embedded_text = Some(crate::model::EmbeddedText::new(
-                        color, font_size, width, height,
-                    ));
-                }
-                text = element
-                    .data()
-                    .embedded_text
-                    .as_ref()
-                    .map(|label| label.wrapped.raw.to_string());
+            let text = scene.with_untracked(|scene| {
+                scene
+                    .element_by_id(id)
+                    .and_then(|element| {
+                        element
+                            .data()
+                            .embedded_text
+                            .as_ref()
+                            .map(|label| label.wrapped.raw.to_string())
+                    })
+                    .unwrap_or_default()
             });
-            if let Some(text) = text {
-                text_edit.editing_id.set(Some(id));
-                text_edit.editing_embedded.set(true);
-                text_edit.editing_new.set(!already_has_text);
-                text_edit.edit_text.set(text);
-            }
-        })));
+            st.text_edit.editing_id.set(Some(id));
+            st.text_edit.editing_embedded.set(true);
+            st.text_edit.editing_new.set(!already_has_text);
+            st.text_edit.edit_text.set(text);
+        });
     }
 
     // Esc: cancel the most recent interaction, in priority order: open

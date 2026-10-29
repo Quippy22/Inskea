@@ -1,6 +1,6 @@
 use super::viewport::Viewport;
 use crate::model::elements::text::{natural_line_width, FONT_FAMILY, FONT_STACK, MIN_FONT_SIZE};
-use crate::model::{Element, ElementId, Point, Scene};
+use crate::model::{Element, ElementId, EmbeddedText, Point, Scene};
 use leptos::*;
 use std::rc::Rc;
 
@@ -280,17 +280,31 @@ pub fn make_commit_edit(
                 }
                 _ => false,
             });
-            if edited {
+            if edited || (embedded && is_new && !text.is_empty()) {
                 push_snapshot();
             }
             scene.update(|s| {
                 if embedded {
                     if let Some(mut element) = s.element_by_id_mut(id) {
-                        let embedded_text = &mut element.data_mut().embedded_text;
                         if text.is_empty() {
-                            *embedded_text = None;
-                        } else if let Some(label) = embedded_text {
+                            element.data_mut().embedded_text = None;
+                        } else if let Some(label) = element.data_mut().embedded_text.as_mut() {
                             label.set_content(&text);
+                        } else {
+                            let Some((width, height)) =
+                                crate::model::elements::embedded_text::reference_size_for_element(
+                                    &element,
+                                )
+                            else {
+                                return;
+                            };
+                            let (color, font_size) = {
+                                let data = element.data();
+                                (data.style.stroke_color, data.style.font_size)
+                            };
+                            let mut label = EmbeddedText::new(color, font_size, width, height);
+                            label.set_content(&text);
+                            element.data_mut().embedded_text = Some(label);
                         }
                     }
                 } else if text.is_empty() {
@@ -353,9 +367,22 @@ pub fn text_edit_overlay(
             .with_untracked(|s| {
                 let element = s.element_by_id(id)?;
                 if embedded {
-                    let label = element.data().embedded_text.as_ref()?;
+                    let label = element.data().embedded_text.clone().or_else(|| {
+                        let (width, height) =
+                            crate::model::elements::embedded_text::reference_size_for_element(
+                                &element,
+                            )?;
+                        Some(EmbeddedText::new(
+                            element.data().style.stroke_color,
+                            element.data().style.font_size,
+                            width,
+                            height,
+                        ))
+                    })?;
+                    let mut layout_element = element.clone();
+                    layout_element.data_mut().embedded_text = Some(label.clone());
                     let layout =
-                        crate::model::elements::embedded_text::layout_for_element(&element)?;
+                        crate::model::elements::embedded_text::layout_for_element(&layout_element)?;
                     Some((
                         Point::new(
                             layout.center.x - layout.width / 2.0,
