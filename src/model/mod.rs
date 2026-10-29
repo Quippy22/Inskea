@@ -287,8 +287,16 @@ impl DerefMut for ElementMut<'_> {
 impl Drop for ElementMut<'_> {
     fn drop(&mut self) {
         if let Some(mut element) = self.element.take() {
+            let updates_connections =
+                crate::model::elements::connector::connection_points(&element).is_some();
             element.data_mut().id = self.id;
             self.scene.put_element(element, self.order);
+            // A shape that can be attached to may have moved. Keep its bound
+            // connectors on their connection points as part of the same
+            // journal entry, so undo restores both together.
+            if updates_connections {
+                self.scene.refresh_connectors_for(self.id);
+            }
         }
     }
 }
@@ -387,6 +395,7 @@ impl Scene {
         scene.groups = file.groups;
         scene.next_group_id = file.next_group_id;
         scene.replace_all(file.elements);
+        scene.sync_all_connectors();
         scene
     }
 
@@ -399,7 +408,7 @@ impl Scene {
                 let origin = chunk_origin(*key);
                 chunk.elements.iter().map(move |stored| {
                     let mut element = stored.element.clone();
-                    element.offset(origin.x, origin.y);
+                    element.translate_storage(origin.x, origin.y);
                     (stored.order, element)
                 })
             })
@@ -477,7 +486,7 @@ impl Scene {
             .into_iter()
             .map(|visible| {
                 let mut element = visible.element.clone();
-                element.offset(visible.origin.x, visible.origin.y);
+                element.translate_storage(visible.origin.x, visible.origin.y);
                 element
             })
             .collect()
@@ -565,7 +574,7 @@ impl Scene {
             .element
             .clone();
         let origin = chunk_origin(key);
-        element.offset(origin.x, origin.y);
+        element.translate_storage(origin.x, origin.y);
         Some(element)
     }
 
@@ -778,6 +787,7 @@ impl Scene {
                 next_id.before
             };
         }
+        self.sync_all_connectors();
     }
 
     fn apply_snapshot(&mut self, id: ElementId, snapshot: &ElementSnapshot) {
@@ -828,7 +838,7 @@ impl Scene {
         }
         let origin = chunk_origin(key);
         let mut element = stored.element;
-        element.offset(origin.x, origin.y);
+        element.translate_storage(origin.x, origin.y);
         if is_oversized(element_bounds(&element)) {
             self.oversized.retain(|candidate| *candidate != id);
         }
@@ -848,7 +858,7 @@ impl Scene {
         let bounds = element_bounds(&element);
         let home = chunk_of(bounds.center());
         let origin = chunk_origin(home);
-        element.offset(-origin.x, -origin.y);
+        element.translate_storage(-origin.x, -origin.y);
         self.chunks
             .entry(home)
             .or_insert_with(|| SceneChunk {
@@ -922,6 +932,7 @@ impl Scene {
         for group in &mut self.groups {
             group.members.retain(|member| !ids.contains(member));
         }
+        self.detach_connectors_from(ids);
         self.normalize_groups();
     }
 
@@ -1094,6 +1105,256 @@ impl Scene {
             }
         }
     }
+
+    /// Connectors attached to `shape_id`, found without cloning their geometry.
+    fn connector_ids_bound_to(&self, shape_id: ElementId) -> Vec<ElementId> {
+        let mut ids = Vec::new();
+        for chunk in self.chunks.values() {
+            for stored in &chunk.elements {
+                let Element::Connector(connector) = &stored.element else {
+                    continue;
+                };
+                let bound = connector
+                    .start_binding
+                    .is_some_and(|binding| binding.element == shape_id)
+                    || connector
+                        .end_binding
+                        .is_some_and(|binding| binding.element == shape_id);
+                if bound {
+                    ids.push(connector.data.id);
+                }
+            }
+        }
+        ids
+    }
+
+    /// Re-pin both endpoints of a connector to the shapes they name, dropping
+    /// bindings whose shape or point is gone. `None` when nothing moved.
+    ///
+    /// Each endpoint resolves against its own binding: a connector between two
+    /// shapes must keep one end on each, even when only one of them moved.
+    fn repinned(&self, connector: Connector) -> Option<Connector> {
+        let mut updated = connector;
+        let mut changed = false;
+
+        for start in [true, false] {
+            let Some(binding) = updated.binding(start) else {
+                continue;
+            };
+            let point = self
+                .element_by_id(binding.element)
+                .and_then(|element| connector::binding_point(&element, binding));
+            match point {
+                Some(point) => {
+                    let slot = if start {
+                        updated.points.first_mut()
+                    } else {
+                        updated.points.last_mut()
+                    };
+                    if let Some(slot) = slot {
+                        if *slot != point {
+                            *slot = point;
+                            changed = true;
+                        }
+                    }
+                }
+                None => {
+                    updated.set_binding(start, None);
+                    changed = true;
+                }
+            }
+        }
+
+        changed.then_some(updated)
+    }
+
+    /// Move every connector endpoint attached to `shape_id` onto its current
+    /// connection point, leaving the endpoint held by another shape alone.
+    /// Detaches endpoints whose shape or point no longer exists. Changes go
+    /// through the journal so undo sees them.
+    pub fn refresh_connectors_for(&mut self, shape_id: ElementId) {
+        for id in self.connector_ids_bound_to(shape_id) {
+            let Some(Element::Connector(current)) = self.element_by_id(id) else {
+                continue;
+            };
+            let Some(updated) = self.repinned(current) else {
+                continue;
+            };
+            if let Some(mut element) = self.element_by_id_mut(id) {
+                *element = Element::Connector(updated);
+            }
+        }
+    }
+
+    /// Resolve every connector binding without journaling. Used after undo,
+    /// redo, and loading, where snapshots already carry the intended geometry.
+    pub fn sync_all_connectors(&mut self) {
+        let connector_ids: Vec<ElementId> = self
+            .ordered()
+            .into_iter()
+            .filter_map(|(_, id)| {
+                self.element_by_id(id)
+                    .filter(|element| matches!(element, Element::Connector(_)))
+                    .map(|_| id)
+            })
+            .collect();
+
+        for id in connector_ids {
+            let Some(Element::Connector(current)) = self.element_by_id(id) else {
+                continue;
+            };
+            let Some(updated) = self.repinned(current) else {
+                continue;
+            };
+            if let Some(order) = self.element_order(id) {
+                let _ = self.take_element_raw(id);
+                self.put_element_raw(Element::Connector(updated), order);
+            }
+        }
+    }
+
+    /// The nearest connection point to `point`, if one lies within
+    /// `threshold` world units. Only nearby chunks are searched.
+    pub fn snap_connection(
+        &self,
+        point: Point,
+        threshold: f64,
+        exclude: Option<ElementId>,
+    ) -> Option<(Point, connector::ConnectionEnd)> {
+        let view = Rect::new(
+            point.x - threshold,
+            point.y - threshold,
+            threshold * 2.0,
+            threshold * 2.0,
+        );
+        let nearby = self.elements_in_view(view);
+        connector::nearest_connection_point(&nearby, point, threshold, exclude)
+    }
+
+    /// Bind an endpoint to the nearest connection point. The tight snap radius
+    /// wins first; if no point is that close, the shape under the cursor
+    /// provides its nearest point so dropping an arrow anywhere on a shape
+    /// attaches instead of requiring pixel-perfect aim.
+    pub fn bind_connection(
+        &self,
+        point: Point,
+        threshold: f64,
+        exclude: Option<ElementId>,
+    ) -> Option<(Point, ConnectionEnd)> {
+        if let Some(snap) = self.snap_connection(point, threshold, exclude) {
+            return Some(snap);
+        }
+        let shape = self.connection_shape_at(point, exclude)?;
+        let points = connector::connection_points(&shape)?;
+        let (index, target) = nearest_connection(&points, point)?;
+        Some((target, ConnectionEnd::new(shape.id(), index)))
+    }
+
+    /// The topmost shape (an element with connection points) under `point`.
+    ///
+    /// Uses the shape's bounds rather than its stroke hit test so dropping an
+    /// arrow inside a hollow shape still attaches to it.
+    fn connection_shape_at(&self, point: Point, exclude: Option<ElementId>) -> Option<Element> {
+        let margin = interaction::HIT_MARGIN;
+        let nearby = self.elements_in_view(Rect::new(
+            point.x - margin,
+            point.y - margin,
+            margin * 2.0,
+            margin * 2.0,
+        ));
+        nearby.into_iter().rev().find(|element| {
+            if exclude == Some(element.id()) || connector::connection_points(element).is_none() {
+                return false;
+            }
+            let bounds = element.bounds();
+            point.x >= bounds.x - margin
+                && point.x <= bounds.x + bounds.w + margin
+                && point.y >= bounds.y - margin
+                && point.y <= bounds.y + bounds.h + margin
+        })
+    }
+
+    /// The connection grid of the shape nearest to `point`, for the hover
+    /// overlay. Shows whenever the cursor is over a shape, and highlights the
+    /// point a release would bind to.
+    pub fn connection_guide_at(
+        &self,
+        point: Point,
+        threshold: f64,
+    ) -> Option<(
+        ElementId,
+        [Point; connector::CONNECTION_POINT_COUNT],
+        Option<usize>,
+    )> {
+        let view = Rect::new(
+            point.x - threshold,
+            point.y - threshold,
+            threshold * 2.0,
+            threshold * 2.0,
+        );
+        let nearby = self.elements_in_view(view);
+        if let Some(guide) = connector::connection_guide(&nearby, point, threshold) {
+            return Some(guide);
+        }
+        let shape = self.connection_shape_at(point, None)?;
+        let points = connector::connection_points(&shape)?;
+        let (index, _) = nearest_connection(&points, point)?;
+        Some((shape.id(), points, Some(index)))
+    }
+
+    /// Drop bindings that point at elements that are about to disappear.
+    fn detach_connectors_from(&mut self, removed: &[ElementId]) {
+        let connector_ids: Vec<ElementId> = self
+            .ordered()
+            .into_iter()
+            .filter_map(|(_, id)| {
+                let element = self.element_by_id(id)?;
+                let Element::Connector(connector) = element else {
+                    return None;
+                };
+                let touched = connector
+                    .start_binding
+                    .is_some_and(|binding| removed.contains(&binding.element))
+                    || connector
+                        .end_binding
+                        .is_some_and(|binding| removed.contains(&binding.element));
+                touched.then_some(id)
+            })
+            .collect();
+
+        for id in connector_ids {
+            let Some(Element::Connector(mut connector)) = self.element_by_id(id) else {
+                continue;
+            };
+            for start in [true, false] {
+                if connector
+                    .binding(start)
+                    .is_some_and(|binding| removed.contains(&binding.element))
+                {
+                    connector.set_binding(start, None);
+                }
+            }
+            if let Some(mut element) = self.element_by_id_mut(id) {
+                *element = Element::Connector(connector);
+            }
+        }
+    }
+}
+
+/// Index and position of the connection point closest to `point`.
+fn nearest_connection(
+    points: &[Point; connector::CONNECTION_POINT_COUNT],
+    point: Point,
+) -> Option<(usize, Point)> {
+    points
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| {
+            let da = (a.x - point.x).hypot(a.y - point.y);
+            let db = (b.x - point.x).hypot(b.y - point.y);
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(index, candidate)| (index, *candidate))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1544,5 +1805,207 @@ mod tests {
         let mut s = scene_with_three();
         let _ = s.element_by_id_mut(1).unwrap();
         assert!(s.seal_pending().is_none());
+    }
+
+    fn connector_scene() -> Scene {
+        let mut s = Scene::new();
+        let mut rd = ElementData::new(0);
+        rd.world_point = Point::new(0.0, 0.0);
+        rd.width = 100.0;
+        rd.height = 100.0;
+        s.add_element(Element::Rectangle(Rectangle { data: rd }));
+
+        let corner = connector::connection_points(&s.element_by_id(1).unwrap()).unwrap()[2];
+        s.add_element(Element::Connector(Connector {
+            data: ElementData::new(0),
+            points: vec![corner, Point::new(300.0, 0.0)].into_boxed_slice(),
+            line_style: LineStyle::default(),
+            variant: ConnectorVariant::Direct,
+            start_binding: Some(ConnectionEnd::new(1, 2)),
+            end_binding: None,
+            curve_bend: None,
+            elbow_split: None,
+            elbow_bends: Vec::new(),
+        }));
+        s.clear_pending();
+        s
+    }
+
+    #[test]
+    fn moving_a_shape_refreshes_its_bound_connector() {
+        let mut s = connector_scene();
+        if let Some(mut shape) = s.element_by_id_mut(1) {
+            shape.offset(50.0, 20.0);
+        }
+
+        let Some(Element::Connector(connector)) = s.element_by_id(2) else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.points[0], Point::new(150.0, 20.0));
+        assert_eq!(connector.points[1], Point::new(300.0, 0.0));
+    }
+
+    #[test]
+    fn deleting_a_shape_detaches_its_connector() {
+        let mut s = connector_scene();
+        s.remove_elements(&[1]);
+
+        let Some(Element::Connector(connector)) = s.element_by_id(2) else {
+            panic!("connector should survive");
+        };
+        assert_eq!(connector.start_binding, None);
+        assert_eq!(connector.points[0], Point::new(100.0, 0.0));
+    }
+
+    #[test]
+    fn undo_restores_shape_position_and_connector_together() {
+        let mut s = connector_scene();
+        if let Some(mut shape) = s.element_by_id_mut(1) {
+            shape.offset(50.0, 20.0);
+        }
+        let changes = s.seal_pending().expect("move should be recorded");
+
+        s.apply_change_set(&changes, false);
+        let Some(Element::Connector(connector)) = s.element_by_id(2) else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.points[0], Point::new(100.0, 0.0));
+    }
+
+    /// A connector between two shapes holds one endpoint on each. Moving one
+    /// shape must not drag the other endpoint onto the shape that moved.
+    #[test]
+    fn moving_one_shape_leaves_the_other_end_on_its_own_shape() {
+        let mut s = Scene::new();
+        for x in [0.0, 400.0] {
+            let mut rd = ElementData::new(0);
+            rd.world_point = Point::new(x, 0.0);
+            rd.width = 100.0;
+            rd.height = 100.0;
+            s.add_element(Element::Rectangle(Rectangle { data: rd }));
+        }
+        let a = connector::connection_points(&s.element_by_id(1).unwrap()).unwrap();
+        let b = connector::connection_points(&s.element_by_id(2).unwrap()).unwrap();
+        s.add_element(Element::Connector(Connector {
+            data: ElementData::new(0),
+            points: vec![a[5], b[3]].into_boxed_slice(),
+            line_style: LineStyle::default(),
+            variant: ConnectorVariant::Direct,
+            start_binding: Some(ConnectionEnd::new(1, 5)),
+            end_binding: Some(ConnectionEnd::new(2, 3)),
+            curve_bend: None,
+            elbow_split: None,
+            elbow_bends: Vec::new(),
+        }));
+        s.clear_pending();
+
+        if let Some(mut shape) = s.element_by_id_mut(1) {
+            shape.offset(50.0, 60.0);
+        }
+        s.refresh_connectors_for(1);
+
+        let Some(Element::Connector(connector)) = s.element_by_id(3) else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.points[0], Point::new(150.0, 110.0));
+        assert_eq!(connector.points[1], Point::new(400.0, 50.0));
+    }
+
+    #[test]
+    fn dropping_on_a_shape_binds_to_its_nearest_connection_point() {
+        let mut s = Scene::new();
+        let mut rd = ElementData::new(0);
+        rd.world_point = Point::new(0.0, 0.0);
+        rd.width = 100.0;
+        rd.height = 100.0;
+        s.add_element(Element::Rectangle(Rectangle { data: rd }));
+
+        // Inside the shape but nowhere near a grid point: the shape under the
+        // cursor still provides a target.
+        let (point, binding) = s
+            .bind_connection(Point::new(15.0, 12.0), 0.5, None)
+            .expect("the shape should bind");
+        assert_eq!(binding, ConnectionEnd::new(1, 0));
+        assert_eq!(point, Point::new(0.0, 0.0));
+
+        assert!(s
+            .bind_connection(Point::new(500.0, 500.0), 14.0, None)
+            .is_none());
+    }
+
+    #[test]
+    fn a_point_within_the_snap_radius_wins_over_the_shape_fallback() {
+        let mut s = Scene::new();
+        let mut rd = ElementData::new(0);
+        rd.world_point = Point::new(0.0, 0.0);
+        rd.width = 100.0;
+        rd.height = 100.0;
+        s.add_element(Element::Rectangle(Rectangle { data: rd }));
+
+        let (point, binding) = s
+            .bind_connection(Point::new(52.0, 3.0), 14.0, None)
+            .expect("nearby point should bind");
+        assert_eq!(binding, ConnectionEnd::new(1, 1));
+        assert_eq!(point, Point::new(50.0, 0.0));
+    }
+
+    #[test]
+    fn hovering_a_shape_shows_its_connection_grid() {
+        let mut s = Scene::new();
+        let mut rd = ElementData::new(0);
+        rd.world_point = Point::new(0.0, 0.0);
+        rd.width = 100.0;
+        rd.height = 100.0;
+        s.add_element(Element::Rectangle(Rectangle { data: rd }));
+
+        let (id, points, highlight) = s
+            .connection_guide_at(Point::new(15.0, 12.0), 0.5)
+            .expect("hovering the shape should show its grid");
+        assert_eq!(id, 1);
+        assert_eq!(points[0], Point::new(0.0, 0.0));
+        assert_eq!(highlight, Some(0));
+    }
+
+    #[test]
+    fn a_bound_connector_keeps_its_world_position_across_chunks() {
+        let mut s = Scene::new();
+        let mut rd = ElementData::new(0);
+        rd.world_point = Point::new(-2048.0, -2048.0);
+        rd.width = 100.0;
+        rd.height = 100.0;
+        s.add_element(Element::Rectangle(Rectangle { data: rd }));
+
+        let anchor = connector::connection_points(&s.element_by_id(1).unwrap()).unwrap()[5];
+        s.add_element(Element::Connector(Connector {
+            data: ElementData::new(0),
+            points: vec![anchor, Point::new(-1800.0, -1998.0)].into_boxed_slice(),
+            line_style: LineStyle::default(),
+            variant: ConnectorVariant::Direct,
+            start_binding: Some(ConnectionEnd::new(1, 5)),
+            end_binding: None,
+            curve_bend: None,
+            elbow_split: None,
+            elbow_bends: Vec::new(),
+        }));
+
+        let view = Rect::new(-4000.0, -4000.0, 8000.0, 8000.0);
+        let visible = s.visible_elements(view);
+        let element = visible
+            .iter()
+            .find(|visible| visible.element.id() == 2)
+            .expect("connector should be visible");
+        let Element::Connector(connector) = element.element else {
+            panic!("expected connector");
+        };
+        // Rendering translates the stored geometry by the chunk origin, so the
+        // held endpoint has to be stored in the same space as the other one.
+        assert_eq!(
+            connector.points[0].x + element.origin.x,
+            anchor.x,
+            "bound endpoint must not be displaced by the chunk origin"
+        );
+        assert_eq!(connector.points[0].y + element.origin.y, anchor.y);
+        assert_eq!(connector.points[1].x + element.origin.x, -1800.0);
+        assert_eq!(connector.points[1].y + element.origin.y, -1998.0);
     }
 }

@@ -103,6 +103,11 @@ lucide_icons! {
     line_curved => "spline.svg",
     edge_sharp => "square.svg",
     edge_rounded => "squircle.svg",
+
+    // Connector routing.
+    connector_direct => "minus.svg",
+    connector_curved => "spline.svg",
+    connector_straight => "corner-down-right.svg",
 }
 
 /// Small chevrons for the number-slider stepper.

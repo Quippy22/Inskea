@@ -259,6 +259,40 @@ fn el_svg(el: &Element) -> String {
             }
             out
         }
+        Element::Connector(c) => {
+            let opacity = c.data.style.opacity;
+            let linejoin = c.data.style.edge_style.stroke_linejoin();
+            let linecap = match c.data.style.edge_style {
+                crate::model::elements::EdgeStyle::Sharp => "butt",
+                crate::model::elements::EdgeStyle::Rounded => "round",
+            };
+            let dash = c.data.style.stroke_style.stroke_dasharray();
+            let attrs = format!(
+                r#"stroke-linecap="{linecap}" stroke-linejoin="{linejoin}" stroke-dasharray="{dash}""#
+            );
+            let mut out = format!(
+                r#"<path d="{}" fill="none" stroke="{}" stroke-width="{}" {attrs} opacity="{}"/>"#,
+                c.path_d(),
+                c.data.style.stroke_color.to_hex(),
+                c.data.style.stroke_width,
+                opacity,
+            );
+            let sw = c.data.style.stroke_width;
+            let (start_arrow, end_arrow) = c.arrowheads(sw);
+            for pts in [start_arrow, end_arrow].into_iter().flatten() {
+                if !pts.is_empty() {
+                    let _ = write!(
+                        out,
+                        r#"<polyline points="{}" fill="none" stroke="{}" stroke-width="{}" {attrs} opacity="{}"/>"#,
+                        pts,
+                        c.data.style.stroke_color.to_hex(),
+                        sw,
+                        opacity,
+                    );
+                }
+            }
+            out
+        }
         Element::Text(t) => {
             let anchor = t.align.anchor();
             let anchor_x = match t.align {

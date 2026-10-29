@@ -1,6 +1,7 @@
 mod alignment;
 mod arrow;
 mod color;
+mod connector;
 mod edit;
 mod fill;
 mod float_picker;
@@ -13,6 +14,7 @@ mod utils;
 use self::alignment::alignment_section;
 use self::arrow::arrow_section;
 use self::color::{color_section, ColorSlot};
+use self::connector::connector_section;
 use self::edit::edit_section;
 use self::fill::fill_section;
 use self::float_picker::float_picker;
@@ -21,15 +23,16 @@ use self::layers::layers_section;
 use self::sliders::sliders_section;
 use self::style::style_section;
 use self::utils::{
-    read_panel_state, selected_text_align, single_selected_element, uniform_icon_seg,
+    read_panel_state, selected_connector_variant, selected_text_align, single_selected_element,
+    uniform_icon_seg,
 };
 use crate::canvas::settings::CanvasSettings;
 use crate::canvas::CanvasMode;
 use crate::edit_ops;
 use crate::edit_ops::Clipboard;
 use crate::model::{
-    Color, CurveMode, EdgeStyle, Element, ElementId, ElementStyle, LineStyle, Point, Scene,
-    StrokeStyle, StylingKind, TextAlign,
+    Color, Connector, ConnectorVariant, CurveMode, EdgeStyle, Element, ElementId, ElementStyle,
+    LineStyle, Point, Scene, StrokeStyle, StylingKind, TextAlign,
 };
 use crate::ui::dock::Tool;
 use crate::ui::{icon, styles};
@@ -66,6 +69,7 @@ pub struct StylingPanelContext {
     pub selected_tool: RwSignal<Tool>,
     pub default_style: RwSignal<ElementStyle>,
     pub default_line_style: RwSignal<LineStyle>,
+    pub default_connector_variant: RwSignal<ConnectorVariant>,
     pub clipboard: RwSignal<Clipboard>,
     pub push_snapshot: Rc<dyn Fn()>,
     pub canvas_mode: RwSignal<CanvasMode>,
@@ -96,6 +100,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         selected_tool,
         default_style,
         default_line_style,
+        default_connector_variant,
         clipboard,
         push_snapshot,
         canvas_mode,
@@ -112,17 +117,25 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
     });
 
     let is_text = Signal::derive(move || styling_kind.get() == StylingKind::Text);
-    let is_line = Signal::derive(move || {
-        styling_kind.get() == StylingKind::Line || styling_kind.get() == StylingKind::Arrow
+    let is_line = Signal::derive(move || styling_kind.get() == StylingKind::Line);
+    let is_connector = Signal::derive(move || styling_kind.get() == StylingKind::Connector);
+    let is_arrow = Signal::derive(move || {
+        matches!(
+            styling_kind.get(),
+            StylingKind::Arrow | StylingKind::Connector
+        )
     });
-    let is_arrow = Signal::derive(move || styling_kind.get() == StylingKind::Arrow);
     let is_rect = Signal::derive(move || styling_kind.get() == StylingKind::Rectangle);
     let is_freehand = Signal::derive(move || styling_kind.get() == StylingKind::Freehand);
     let is_image = Signal::derive(move || styling_kind.get() == StylingKind::Image);
     // Images keep only the opacity slider; stroke and fill do nothing to them.
     let hide_stroke = Signal::derive(move || is_text.get() || is_image.get());
     let base_kind = Signal::derive(move || {
-        !is_text.get() && !is_line.get() && !is_freehand.get() && !is_image.get()
+        !is_text.get()
+            && !is_line.get()
+            && !is_connector.get()
+            && !is_freehand.get()
+            && !is_image.get()
     });
 
     let (init_style, init_line_style) = read_panel_state(
@@ -135,6 +148,11 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
 
     let local_style = create_rw_signal(init_style);
     let local_line_style = create_rw_signal(init_line_style);
+    let local_connector_variant = create_rw_signal(selected_connector_variant(
+        &scene.get_untracked(),
+        &selected_ids.get_untracked(),
+        default_connector_variant.get_untracked(),
+    ));
 
     let stroke_size = create_rw_signal(local_style.get_untracked().stroke_width);
     let text_size = create_rw_signal(local_style.get_untracked().font_size);
@@ -172,6 +190,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         // re-runs on every drag step).
         scene.with(|_| ());
         let _dls = default_line_style.get();
+        let _dcv = default_connector_variant.get();
         let (new_style, new_line_style) = leptos::untrack(|| {
             read_panel_state(
                 &scene.get_untracked(),
@@ -191,6 +210,11 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         opacity.set(new_style.opacity * 100.0);
         local_style.set(new_style);
         local_line_style.set(new_line_style);
+        local_connector_variant.set(selected_connector_variant(
+            &scene.get_untracked(),
+            &selected_ids.get_untracked(),
+            default_connector_variant.get_untracked(),
+        ));
     });
 
     let update_style: UpdateStyle = Rc::new({
@@ -218,10 +242,10 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         move |f: &dyn Fn(&mut LineStyle)| {
             let ids = selected_ids.get_untracked();
             if !ids.is_empty() {
-                mutate_selected_elements(scene, &ids, &push_snapshot, |element| {
-                    if let Element::Line(line) = element {
-                        f(&mut line.line_style);
-                    }
+                mutate_selected_elements(scene, &ids, &push_snapshot, |element| match element {
+                    Element::Line(line) => f(&mut line.line_style),
+                    Element::Connector(connector) => f(&mut connector.line_style),
+                    _ => {}
                 });
             } else {
                 default_line_style.update(|ls| f(ls));
@@ -301,6 +325,36 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         move |v| {
             local_line_style.update(|ls| ls.curve_mode = v);
             update_line_style(&|ls| ls.curve_mode = v);
+        }
+    });
+
+    let set_connector_variant: Rc<dyn Fn(ConnectorVariant)> = Rc::new({
+        let local_connector_variant = local_connector_variant;
+        let default_connector_variant = default_connector_variant;
+        let scene = scene;
+        let selected_ids = selected_ids;
+        let push_snapshot = push_snapshot.clone();
+        move |variant| {
+            local_connector_variant.set(variant);
+            let ids = selected_ids.get_untracked();
+            if !ids.is_empty() {
+                mutate_selected_elements(scene, &ids, &push_snapshot, |element| match element {
+                    Element::Connector(connector) => connector.variant = variant,
+                    // Older arrows are plain lines. Routing is meaningless for
+                    // a line, so choosing a route promotes it to a connector.
+                    Element::Line(line) => {
+                        *element = Element::Connector(Connector::from_line(
+                            line.clone(),
+                            variant,
+                            None,
+                            None,
+                        ));
+                    }
+                    _ => {}
+                });
+            } else {
+                default_connector_variant.set(variant);
+            }
         }
     });
 
@@ -432,6 +486,10 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 is_line,
                 is_rect,
                 is_rounded,
+            )} {connector_section(
+                is_connector,
+                local_connector_variant,
+                set_connector_variant,
             )} {color_section(
                 local_style,
                 set_color,

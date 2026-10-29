@@ -10,6 +10,7 @@ mod smart_guides;
 mod state;
 mod text_edit;
 
+use crate::model::elements::connector::SNAP_SCREEN_PX;
 pub use crate::model::interaction::combined_bounds;
 use modes::{cancel_drawing, draw_pointer_down, draw_pointer_up, finish_freehand};
 use selection::{cancel_drag, select_pointer_down, select_pointer_move, select_pointer_up};
@@ -671,32 +672,85 @@ pub fn Canvas(
                 return None;
             }
             let world = props.cursor_world.get();
-            let dx = world.x - state.anchor.0;
-            let dy = world.y - state.anchor.1;
-            if dx.hypot(dy) < MIN_DRAG_DIST {
-                return None;
-            }
             let shift = st.shift_pressed.get();
             let anchor = Point::from(state.anchor);
-            let world_pt = world;
-            let mut el: Element = match state.tool {
-                Tool::Rectangle => {
-                    Rectangle::from_drag(anchor, world_pt, state.color, shift).into()
-                }
-                Tool::Ellipse => Ellipse::from_drag(anchor, world_pt, state.color, shift).into(),
-                Tool::Line => Line::from_drag(anchor, world_pt, state.color, shift).into(),
-                Tool::Arrow => {
-                    let line = Line::from_drag(anchor, world_pt, state.color, shift);
-                    Element::Line(line)
-                }
-                Tool::Text => Text::from_drag(anchor, world_pt, state.color, shift).into(),
-                Tool::Freehand => Freehand::from_drag(anchor, world_pt, state.color, shift).into(),
+            let (end, end_binding) = if modes::snaps_to_shapes(state.tool) {
+                modes::snap_draw_point(world, &props)
+            } else {
+                (world, None)
             };
-            el.data_mut().style = props.default_style.get();
-            if let Element::Line(ref mut l) = el {
-                l.line_style = props.default_line_style.get();
+            if (end.x - anchor.x).hypot(end.y - anchor.y) < MIN_DRAG_DIST {
+                return None;
             }
+            let mut el = modes::build_drag_element(
+                state.tool,
+                anchor,
+                end,
+                state.color,
+                shift,
+                props.default_connector_variant.get(),
+                state.start_binding,
+                end_binding,
+            );
+            modes::apply_draw_style(&mut el, &props);
             Some(view! { <g stroke-dasharray=DASH_PREVIEW>{el.render(props.viewport.get().zoom)}</g> }.into_view())
+        }
+    };
+
+    // Connection points of the shape near the cursor, shown while a line-like
+    // tool is active. The nearest point rings larger so the pull is obvious
+    // before the pointer is released.
+    let connection_overlay = {
+        let st = st;
+        let props = props.clone();
+        move || {
+            let drawing = props.canvas_mode.get() == CanvasMode::Draw
+                && modes::snaps_to_shapes(props.selected_tool.get());
+            let dragging_connector = st
+                .drag
+                .drag_action
+                .get()
+                .is_some_and(|action| matches!(action, DragOperation::PathPoint(_)))
+                && props.scene.with_untracked(|scene| {
+                    props
+                        .selected_ids
+                        .get_untracked()
+                        .first()
+                        .and_then(|id| scene.element_by_id(*id))
+                        .is_some_and(|el| matches!(el, Element::Line(_) | Element::Connector(_)))
+                });
+            if !drawing && !dragging_connector {
+                return None;
+            }
+            let world = props.cursor_world.get();
+            let zoom = props.viewport.get().zoom.max(0.01);
+            let threshold = SNAP_SCREEN_PX / zoom;
+            let accent = props.settings.get().theme.accent();
+            props.scene.with(|scene| {
+                let (_, points, highlight) = scene.connection_guide_at(world, threshold)?;
+                let dots = points
+                    .iter()
+                    .enumerate()
+                    .map(|(index, point)| {
+                        let active = highlight == Some(index);
+                        let radius = if active { 5.0 } else { 3.0 };
+                        let fill = if active { accent } else { "none" };
+                        view! {
+                            <circle
+                                cx=point.x
+                                cy=point.y
+                                r=radius
+                                fill=fill
+                                stroke=accent
+                                stroke-width="1.5"
+                                pointer-events="none"
+                            />
+                        }
+                        .into_view()
+                    })
+                    .collect_view();
+                Some(view! { <g>{dots}</g> }.into_view())
+            })
         }
     };
 
@@ -786,6 +840,7 @@ pub fn Canvas(
             }
 
             {drawing_preview}
+            {connection_overlay}
             {smart_guides::guide_overlay(
                 st.drag.smart_guides,
                 props.viewport,

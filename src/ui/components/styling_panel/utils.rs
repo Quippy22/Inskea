@@ -1,4 +1,6 @@
-use crate::model::{Color, Element, ElementId, ElementStyle, LineStyle, Scene, TextAlign};
+use crate::model::{
+    Color, ConnectorVariant, Element, ElementId, ElementStyle, LineStyle, Scene, TextAlign,
+};
 use crate::ui::dock::Tool;
 use crate::ui::styles;
 use leptos::*;
@@ -14,15 +16,29 @@ pub fn read_panel_state(
     if let Some(id) = ids.first() {
         if let Some(el) = scene.element_by_id(*id) {
             let d = el.data();
-            let ls = if let Element::Line(l) = &el {
-                l.line_style.clone()
-            } else {
-                LineStyle::default()
+            let ls = match &el {
+                Element::Line(l) => l.line_style.clone(),
+                Element::Connector(c) => c.line_style.clone(),
+                _ => LineStyle::default(),
             };
             return (d.style.clone(), ls);
         }
     }
     (default_style.clone(), default_line_style.clone())
+}
+
+/// Routing of the first selected connector, or the draw-mode default.
+pub fn selected_connector_variant(
+    scene: &Scene,
+    ids: &[ElementId],
+    default: ConnectorVariant,
+) -> ConnectorVariant {
+    if let Some(id) = ids.first() {
+        if let Some(Element::Connector(c)) = scene.element_by_id(*id) {
+            return c.variant;
+        }
+    }
+    default
 }
 
 pub fn single_selected_element(scene: Scene, ids: Vec<ElementId>) -> Option<Element> {

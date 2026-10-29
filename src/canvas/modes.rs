@@ -1,9 +1,10 @@
 use super::state::{CanvasInputs, CanvasState, DrawingState};
 use super::MIN_DRAG_DIST;
+use crate::model::elements::connector::SNAP_SCREEN_PX;
 use crate::model::elements::text::WrappedText;
 use crate::model::{
-    Element, ElementData, Ellipse, Freehand, FromDrag, Line, Point, Rectangle, Text, TextAlign,
-    UpdateDrag,
+    Color, ConnectionEnd, Connector, ConnectorVariant, Element, ElementData, Ellipse, Freehand,
+    FromDrag, Line, Point, Rectangle, Text, TextAlign, UpdateDrag,
 };
 use crate::ui::dock::Tool;
 use leptos::{
@@ -73,6 +74,80 @@ pub(crate) fn cancel_drawing(st: &mut CanvasState, props: &mut CanvasInputs) {
     }
 }
 
+/// Tools whose endpoints can attach to shape connection points.
+pub(crate) fn snaps_to_shapes(tool: Tool) -> bool {
+    matches!(tool, Tool::Line | Tool::Arrow)
+}
+
+/// Snap a world point to the nearest connection point within the screen-space
+/// threshold, scaled by zoom so the pull feels the same at every zoom level.
+pub(crate) fn snap_draw_point(
+    world: Point,
+    props: &CanvasInputs,
+) -> (Point, Option<ConnectionEnd>) {
+    let zoom = props.viewport.get_untracked().zoom.max(0.01);
+    let threshold = SNAP_SCREEN_PX / zoom;
+    props
+        .scene
+        .with_untracked(|scene| scene.bind_connection(world, threshold, None))
+        .map_or((world, None), |(point, binding)| (point, Some(binding)))
+}
+
+/// Construct the element a drag would produce. Line-like tools stay plain
+/// lines/arrows until either endpoint lands on a shape connection point; then
+/// they become connectors.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_drag_element(
+    tool: Tool,
+    anchor: Point,
+    current: Point,
+    color: Color,
+    shift: bool,
+    variant: ConnectorVariant,
+    start_binding: Option<ConnectionEnd>,
+    end_binding: Option<ConnectionEnd>,
+) -> Element {
+    match tool {
+        Tool::Rectangle => Rectangle::from_drag(anchor, current, color, shift).into(),
+        Tool::Ellipse => Ellipse::from_drag(anchor, current, color, shift).into(),
+        Tool::Line | Tool::Arrow => {
+            let line = Line::from_drag(anchor, current, color, shift);
+            if start_binding.is_none() && end_binding.is_none() {
+                return Element::Line(line);
+            }
+            let connector = Connector::from_line(line, variant, start_binding, end_binding);
+            Element::Connector(bound_endpoints(connector, anchor, current))
+        }
+        Tool::Text => Text::from_drag(anchor, current, color, shift).into(),
+        Tool::Freehand => Freehand::from_drag(anchor, current, color, shift).into(),
+    }
+}
+
+/// Snap the endpoint geometry onto the exact connection points it bound to.
+fn bound_endpoints(mut connector: Connector, anchor: Point, current: Point) -> Connector {
+    if connector.start_binding.is_some() {
+        connector.points[0] = anchor;
+    }
+    if connector.end_binding.is_some() {
+        if let Some(last) = connector.points.last_mut() {
+            *last = current;
+        }
+    }
+    connector
+}
+
+/// Apply the panel's defaults to a freshly built element.
+pub(crate) fn apply_draw_style(el: &mut Element, props: &CanvasInputs) {
+    el.data_mut().style = props.default_style.get();
+    match el {
+        Element::Line(line) => line.line_style = props.default_line_style.get(),
+        Element::Connector(connector) => {
+            connector.line_style = props.default_line_style.get();
+        }
+        _ => {}
+    }
+}
+
 /// Handle a pointer-down event while in `Draw` mode.
 ///
 /// **Behaviour by tool:**
@@ -131,15 +206,22 @@ pub fn draw_pointer_down(world: Point, st: &mut CanvasState, props: &mut CanvasI
             tool,
             color,
             element_id: Some(id),
+            start_binding: None,
         }));
         return;
     }
 
+    let (anchor, start_binding) = if snaps_to_shapes(tool) {
+        snap_draw_point(world, props)
+    } else {
+        (world, None)
+    };
     st.drawing.set(Some(DrawingState {
-        anchor: (world.x, world.y),
+        anchor: (anchor.x, anchor.y),
         tool,
         color,
         element_id: None,
+        start_binding,
     }));
 }
 
@@ -169,43 +251,83 @@ pub fn draw_pointer_up(
             return;
         }
 
-        let dx = world.x - state.anchor.0;
-        let dy = world.y - state.anchor.1;
+        let anchor = Point::from(state.anchor);
+        let (end, end_binding) = if snaps_to_shapes(state.tool) {
+            snap_draw_point(world, props)
+        } else {
+            (world, None)
+        };
+        let dx = end.x - anchor.x;
+        let dy = end.y - anchor.y;
         if dx.hypot(dy) < MIN_DRAG_DIST {
             st.drawing.set(None);
             return;
         }
-        let anchor = Point::from(state.anchor);
-        let world_pt = world;
-        let mut el: Element = match state.tool {
-            Tool::Rectangle => {
-                Rectangle::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into()
-            }
-            Tool::Ellipse => {
-                Ellipse::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into()
-            }
-            Tool::Line => {
-                Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into()
-            }
-            Tool::Arrow => {
-                let line = Line::from_drag(anchor, world_pt, state.color, st.shift_pressed.get());
-                Element::Line(line)
-            }
-            Tool::Text => {
-                Text::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into()
-            }
-            Tool::Freehand => {
-                Freehand::from_drag(anchor, world_pt, state.color, st.shift_pressed.get()).into()
-            }
-        };
-        el.data_mut().style = props.default_style.get();
-        if let Element::Line(ref mut l) = el {
-            l.line_style = props.default_line_style.get();
-        }
+        let mut el = build_drag_element(
+            state.tool,
+            anchor,
+            end,
+            state.color,
+            st.shift_pressed.get(),
+            props.default_connector_variant.get_untracked(),
+            state.start_binding,
+            end_binding,
+        );
+        apply_draw_style(&mut el, props);
         (props.push_snapshot)();
         props.scene.update(|s| {
             s.add_element(el);
         });
         st.drawing.set(None);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn drag(tool: Tool, start: Option<ConnectionEnd>, end: Option<ConnectionEnd>) -> Element {
+        build_drag_element(
+            tool,
+            Point::new(0.0, 0.0),
+            Point::new(100.0, 0.0),
+            Color::new(Color::WHITE),
+            false,
+            ConnectorVariant::Direct,
+            start,
+            end,
+        )
+    }
+
+    #[test]
+    fn unbound_line_stays_a_line() {
+        assert!(matches!(drag(Tool::Line, None, None), Element::Line(_)));
+    }
+
+    #[test]
+    fn a_bound_line_becomes_a_connector() {
+        let Element::Connector(connector) = drag(Tool::Line, None, Some(ConnectionEnd::new(7, 4)))
+        else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.end_binding, Some(ConnectionEnd::new(7, 4)));
+        assert_eq!(connector.start_binding, None);
+        assert_eq!(connector.points[1], Point::new(100.0, 0.0));
+    }
+
+    #[test]
+    fn unbound_arrow_stays_a_line() {
+        assert!(matches!(drag(Tool::Arrow, None, None), Element::Line(_)));
+    }
+
+    #[test]
+    fn a_bound_arrow_becomes_a_connector() {
+        let Element::Connector(connector) = drag(Tool::Arrow, None, Some(ConnectionEnd::new(7, 4)))
+        else {
+            panic!("expected connector");
+        };
+        assert_eq!(connector.start_binding, None);
+        assert_eq!(connector.end_binding, Some(ConnectionEnd::new(7, 4)));
+        assert_eq!(connector.points[1], Point::new(100.0, 0.0));
     }
 }

@@ -1,3 +1,4 @@
+pub mod connector;
 pub mod ellipse;
 pub mod freehand;
 pub mod image;
@@ -7,6 +8,7 @@ pub mod rect;
 pub(crate) mod text;
 pub(crate) mod utils;
 
+pub use connector::{ConnectionEnd, Connector, ConnectorVariant};
 pub use ellipse::Ellipse;
 pub use freehand::Freehand;
 pub use image::Image;
@@ -99,6 +101,7 @@ pub enum StylingKind {
     Ellipse,
     Line,
     Arrow,
+    Connector,
     Text,
     Freehand,
     Image,
@@ -149,6 +152,8 @@ pub enum Element {
     Ellipse(Ellipse),
     /// A [`Line`] segment (optionally with an arrowhead).
     Line(Line),
+    /// A [`Connector`] that can stay attached to two shapes.
+    Connector(Connector),
     /// A [`Text`] label with word-wrapping.
     Text(Text),
     /// A [`Freehand`] stroke made of sampled points.
@@ -171,6 +176,7 @@ impl Element {
             Element::Rectangle(e) => &e.data,
             Element::Ellipse(e) => &e.data,
             Element::Line(e) => &e.data,
+            Element::Connector(e) => &e.data,
             Element::Text(e) => &e.data,
             Element::Freehand(e) => &e.data,
             Element::Image(e) => &e.data,
@@ -183,9 +189,24 @@ impl Element {
             Element::Rectangle(e) => &mut e.data,
             Element::Ellipse(e) => &mut e.data,
             Element::Line(e) => &mut e.data,
+            Element::Connector(e) => &mut e.data,
             Element::Text(e) => &mut e.data,
             Element::Freehand(e) => &mut e.data,
             Element::Image(e) => &mut e.data,
+        }
+    }
+
+    /// Translate every coordinate, including connector endpoints held by a
+    /// shape.
+    ///
+    /// `Offset::offset` deliberately leaves bound endpoints where they are
+    /// (they follow their shape instead), which is wrong when an element moves
+    /// between scene chunks: the chunk translation has to apply to the whole
+    /// geometry or the stored copy drifts by one chunk.
+    pub fn translate_storage(&mut self, dx: f64, dy: f64) {
+        match self {
+            Element::Connector(e) => e.translate_all(dx, dy),
+            other => other.offset(dx, dy),
         }
     }
 
@@ -201,6 +222,7 @@ impl Element {
                     StylingKind::Line
                 }
             }
+            Element::Connector(_) => StylingKind::Connector,
             Element::Text(_) => StylingKind::Text,
             Element::Freehand(_) => StylingKind::Freehand,
             Element::Image(_) => StylingKind::Image,
@@ -223,6 +245,7 @@ macro_rules! impl_into_element {
 impl_into_element!(Rectangle);
 impl_into_element!(Ellipse);
 impl_into_element!(Line);
+impl_into_element!(Connector);
 impl_into_element!(Text);
 impl_into_element!(Freehand);
 impl_into_element!(Image);
@@ -304,6 +327,10 @@ pub trait PathPoints {
     fn curve_mode(&self) -> CurveMode {
         CurveMode::Straight
     }
+    /// Whether the overlay may offer ghost handles for inserting new bends.
+    fn editable_midpoints(&self) -> bool {
+        true
+    }
 }
 
 /// Path storage operations used by node editing. A line is normally just two
@@ -357,12 +384,14 @@ impl PathPoints for Element {
     fn path_points(&self) -> Option<&[Point]> {
         match self {
             Element::Line(e) => Some(e.points.as_ref()),
+            Element::Connector(e) => Some(e.points.as_ref()),
             _ => None,
         }
     }
     fn path_points_mut(&mut self) -> Option<&mut dyn EditablePathPoints> {
         match self {
             Element::Line(e) => Some(&mut e.points),
+            Element::Connector(e) => Some(&mut e.points),
             _ => None,
         }
     }
@@ -371,6 +400,9 @@ impl PathPoints for Element {
             Element::Line(e) => e.line_style.curve_mode,
             _ => CurveMode::Straight,
         }
+    }
+    fn editable_midpoints(&self) -> bool {
+        !matches!(self, Element::Connector(_))
     }
 }
 
@@ -406,6 +438,7 @@ macro_rules! dispatch_element {
                     Element::Rectangle(e) => e.$method($($arg),*),
                     Element::Ellipse(e) => e.$method($($arg),*),
                     Element::Line(e) => e.$method($($arg),*),
+                    Element::Connector(e) => e.$method($($arg),*),
                     Element::Text(e) => e.$method($($arg),*),
                     Element::Freehand(e) => e.$method($($arg),*),
                     Element::Image(e) => e.$method($($arg),*),
@@ -420,6 +453,7 @@ macro_rules! dispatch_element {
                     Element::Rectangle(e) => e.$method($($arg),*),
                     Element::Ellipse(e) => e.$method($($arg),*),
                     Element::Line(e) => e.$method($($arg),*),
+                    Element::Connector(e) => e.$method($($arg),*),
                     Element::Text(e) => e.$method($($arg),*),
                     Element::Freehand(e) => e.$method($($arg),*),
                     Element::Image(e) => e.$method($($arg),*),
