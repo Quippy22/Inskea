@@ -205,10 +205,12 @@ pub fn Canvas(
                     })
                     .unwrap_or_default()
             });
-            st.text_edit.editing_id.set(Some(id));
             st.text_edit.editing_embedded.set(true);
             st.text_edit.editing_new.set(!already_has_text);
             st.text_edit.edit_text.set(text);
+            // `text_edit_overlay` tracks editing_id and reads the mode/content
+            // untracked, so publish the ID only after those values are ready.
+            st.text_edit.editing_id.set(Some(id));
         });
     }
 
@@ -855,8 +857,10 @@ pub fn Canvas(
             {
                 let props = props.clone();
                 let editing_id = st.text_edit.editing_id;
+                let editing_embedded = st.text_edit.editing_embedded;
                 move || {
                     let editing = editing_id.get();
+                    let embedded = editing_embedded.get();
                     let visible = props
                         .viewport
                         .get()
@@ -870,7 +874,7 @@ pub fn Canvas(
                             .visible_elements(visible)
                             .into_iter()
                             .filter(|visible| {
-                                Some(visible.element.id()) != editing
+                                Some(visible.element.id()) != editing || embedded
                             })
                             .map(|visible| {
                                 // Chunk-stored geometry is relative to its

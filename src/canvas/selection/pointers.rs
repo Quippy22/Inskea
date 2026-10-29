@@ -71,10 +71,10 @@ fn handle_text_double_click(
             {
                 return false;
             }
-            st.text_edit.editing_id.set(Some(id));
             st.text_edit.editing_embedded.set(true);
             st.text_edit.editing_new.set(false);
             st.text_edit.edit_text.set(label.wrapped.raw.to_string());
+            st.text_edit.editing_id.set(Some(id));
             true
         }
         _ => false,
