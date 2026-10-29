@@ -89,10 +89,17 @@ pub fn guide_textarea(
         let content_height = raw.scroll_height().max(1) as f64;
         let _ = style.set_property("height", &format!("{content_height}px"));
         let shift_up = EDIT_BASELINE_SHIFT * font_size * zoom;
-        let _ = style.set_property(
-            "top",
-            &format!("{}px", screen_center.y - content_height / 2.0 - shift_up),
-        );
+        // Keep the first line anchored where the label started. Centering the
+        // textarea by its growing content height moves every existing line up
+        // on Enter and can push it out of the host shape.
+        let initial_height = layout.height * zoom;
+        let top = screen_center.y - initial_height / 2.0 - shift_up;
+        let _ = style.set_property("top", &format!("{top}px"));
+        let band_bottom = (ss.y - EDIT_PAD).max(EDIT_PAD);
+        let overflow = top + content_height - band_bottom;
+        if overflow > 0.5 {
+            pan_viewport_y(top, top - overflow, &viewport);
+        }
         if let Some((deg, ox, oy)) = rotation_css(
             layout.rotation,
             layout.width,
@@ -435,6 +442,7 @@ pub fn text_edit_overlay(
 
         let ce_blur = commit.clone();
         let ce_esc = commit.clone();
+        let ce_finish = commit.clone();
         let blur_id = id;
         // Sized (~resized) boxes keep their wrap width while editing and
         // soft-wrap words at it. Fresh text grows with its content and
@@ -496,9 +504,10 @@ pub fn text_edit_overlay(
                             ev.stop_propagation();
                             ce_esc();
                         }
-                        if ev.key() == "Enter" && ev.shift_key() {
+                        if ev.key() == "Enter" && (ev.ctrl_key() || ev.meta_key()) {
                             ev.prevent_default();
-                            ce_esc();
+                            ev.stop_propagation();
+                            ce_finish();
                         }
                         if ev.key() == "Tab" {
                             ev.prevent_default();
