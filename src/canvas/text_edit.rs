@@ -21,6 +21,28 @@ const PAN_SMOOTHING: f64 = 0.3;
 /// exactly where they were before the edit started (seamless transition).
 const EDIT_BASELINE_SHIFT: f64 = 0.06;
 
+fn embedded_edit_layout(
+    element: &Element,
+) -> Option<(
+    EmbeddedText,
+    crate::model::elements::embedded_text::EmbeddedTextLayout,
+)> {
+    let label = element.data().embedded_text.clone().or_else(|| {
+        let (width, height) =
+            crate::model::elements::embedded_text::reference_size_for_element(element)?;
+        Some(EmbeddedText::new(
+            element.data().style.stroke_color,
+            element.data().style.font_size,
+            width,
+            height,
+        ))
+    })?;
+    let mut layout_element = element.clone();
+    layout_element.data_mut().embedded_text = Some(label.clone());
+    let layout = crate::model::elements::embedded_text::layout_for_element(&layout_element)?;
+    Some((label, layout))
+}
+
 /// Focus the textarea and place the caret at the end of its content, once it
 /// exists in the DOM. The textarea is inserted reactively after an edit opens,
 /// so the first attempt happens on the next animation frame; if the element is
@@ -67,9 +89,8 @@ pub fn guide_textarea(
     let raw: &web_sys::HtmlTextAreaElement = &ta;
     if editing_embedded.get() {
         let layout = scene.with(|s| {
-            s.element_by_id(id).and_then(|element| {
-                crate::model::elements::embedded_text::layout_for_element(&element)
-            })
+            s.element_by_id(id)
+                .and_then(|element| embedded_edit_layout(&element).map(|(_, layout)| layout))
         });
         let Some(layout) = layout else { return };
         let ss = screen_size.get();
@@ -88,6 +109,7 @@ pub fn guide_textarea(
         let _ = style.set_property("height", "auto");
         let content_height = raw.scroll_height().max(1) as f64;
         let _ = style.set_property("height", &format!("{content_height}px"));
+        raw.set_scroll_top(0);
         let shift_up = EDIT_BASELINE_SHIFT * font_size * zoom;
         // Keep the first line anchored where the label started. Centering the
         // textarea by its growing content height moves every existing line up
@@ -374,22 +396,7 @@ pub fn text_edit_overlay(
             .with_untracked(|s| {
                 let element = s.element_by_id(id)?;
                 if embedded {
-                    let label = element.data().embedded_text.clone().or_else(|| {
-                        let (width, height) =
-                            crate::model::elements::embedded_text::reference_size_for_element(
-                                &element,
-                            )?;
-                        Some(EmbeddedText::new(
-                            element.data().style.stroke_color,
-                            element.data().style.font_size,
-                            width,
-                            height,
-                        ))
-                    })?;
-                    let mut layout_element = element.clone();
-                    layout_element.data_mut().embedded_text = Some(label.clone());
-                    let layout =
-                        crate::model::elements::embedded_text::layout_for_element(&layout_element)?;
+                    let (label, layout) = embedded_edit_layout(&element)?;
                     Some((
                         Point::new(
                             layout.center.x - layout.width / 2.0,
