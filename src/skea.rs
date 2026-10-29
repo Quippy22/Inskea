@@ -8,8 +8,8 @@ use crate::model::Scene;
 ///
 /// Version 7 added embedded images; version 8 added connectors; version 9
 /// added adjustable connector routes; version 10 added hand-shaped elbow
-/// bends.
-pub const FORMAT_VERSION: u32 = 10;
+/// bends; version 11 added text labels attached to elements.
+pub const FORMAT_VERSION: u32 = 11;
 
 /// Oldest format this build still reads.
 const MIN_FORMAT_VERSION: u32 = 6;
@@ -57,9 +57,10 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
 /// Bring a scene written by an older supported build up to the current layout.
 ///
 /// v7 added embedded images, v8 added connectors, v9 added the optional
-/// route-tuning fields on connectors, and v10 added hand-shaped elbow bends;
-/// none changed how existing elements serialize, so older scenes need no field
-/// rewriting. Connector endpoints are stored next to their bindings, though, so
+/// route-tuning fields on connectors, v10 added hand-shaped elbow bends, and
+/// v11 added optional embedded text. Older elements deserialize that text as
+/// `None` through `ElementData`'s serde default, so no scene rewriting is
+/// needed. Connector endpoints are stored next to their bindings, though, so
 /// every load re-pins them from the
 /// bound shape and drops bindings whose shape or connection point no longer
 /// exists. That repairs early-v8 files saved before the two were kept in sync,
@@ -318,6 +319,60 @@ mod tests {
         let loaded = load_from_str(&saved).unwrap();
         assert_eq!(scene, loaded);
         assert_eq!(save_to_string(&loaded).unwrap(), saved);
+    }
+
+    #[test]
+    fn round_trip_embedded_element_text() {
+        use crate::model::EmbeddedText;
+
+        let mut scene = Scene::new();
+        let mut data = ElementData::new(0);
+        data.width = 180.0;
+        data.height = 90.0;
+        let mut label = EmbeddedText::new(Color::new(Color::RED), 18.0, 180.0, 90.0);
+        label.set_content("A bound label");
+        data.embedded_text = Some(label);
+        scene.add_element(Element::Rectangle(Rectangle { data }));
+
+        let saved = save_to_string(&scene).unwrap();
+        let loaded = load_from_str(&saved).unwrap();
+        assert_eq!(scene, loaded);
+        assert_eq!(save_to_string(&loaded).unwrap(), saved);
+    }
+
+    #[test]
+    fn older_elements_load_without_embedded_text_fields() {
+        let mut scene = Scene::new();
+        scene.add_element(Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        }));
+        let mut raw: serde_json::Value =
+            serde_json::from_str(&save_to_string(&scene).unwrap()).unwrap();
+        raw["format_version"] = serde_json::json!(10);
+
+        fn remove_embedded_text(value: &mut serde_json::Value) {
+            match value {
+                serde_json::Value::Object(object) => {
+                    object.remove("embedded_text");
+                    for value in object.values_mut() {
+                        remove_embedded_text(value);
+                    }
+                }
+                serde_json::Value::Array(array) => {
+                    for value in array {
+                        remove_embedded_text(value);
+                    }
+                }
+                _ => {}
+            }
+        }
+        remove_embedded_text(&mut raw);
+
+        let loaded = load_from_str(&serde_json::to_string(&raw).unwrap()).unwrap();
+        assert!(loaded
+            .elements()
+            .iter()
+            .all(|element| element.data().embedded_text.is_none()));
     }
 
     #[test]
