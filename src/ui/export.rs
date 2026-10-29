@@ -381,6 +381,9 @@ fn el_svg(el: &Element) -> String {
     let Some(label) = el.data().embedded_text.as_ref() else {
         return body;
     };
+    if label.wrapped.raw.is_empty() {
+        return body;
+    }
     let Some(layout) = crate::model::elements::embedded_text::layout_for_element(el) else {
         return body;
     };

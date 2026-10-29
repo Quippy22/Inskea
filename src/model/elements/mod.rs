@@ -477,7 +477,6 @@ macro_rules! dispatch_element {
 }
 
 dispatch_element!(Render, render(&self, zoom: f64) -> leptos::View);
-dispatch_element!(Bounds, bounds(&self) -> Rect);
 dispatch_element!(Offset, offset(&mut self, dx: f64, dy: f64));
 dispatch_element!(Rotate, rotate_around(&mut self, point: Point, delta: f64));
 dispatch_element!(Resize, resize(&mut self, ctx: &ResizeContext));
@@ -502,6 +501,33 @@ impl HitTest for Element {
             Element::Freehand(e) => e.hit_test(point, margin),
             Element::Image(e) => e.hit_test(point, margin),
         }
+    }
+}
+
+impl Bounds for Element {
+    fn bounds(&self) -> Rect {
+        let base = match self {
+            Element::Rectangle(e) => e.bounds(),
+            Element::Ellipse(e) => e.bounds(),
+            Element::Line(e) => e.bounds(),
+            Element::Connector(e) => e.bounds(),
+            Element::Text(e) => e.bounds(),
+            Element::Freehand(e) => e.bounds(),
+            Element::Image(e) => e.bounds(),
+        };
+        let Some(layout) = embedded_text::layout_for_element(self) else {
+            return base;
+        };
+        if layout.path_bounds.is_none() {
+            return base;
+        }
+        let x = layout.center.x - layout.width / 2.0;
+        let y = layout.center.y - layout.height / 2.0;
+        let left = base.x.min(x);
+        let top = base.y.min(y);
+        let right = (base.x + base.w).max(x + layout.width);
+        let bottom = (base.y + base.h).max(y + layout.height);
+        Rect::new(left, top, right - left, bottom - top)
     }
 }
 

@@ -138,6 +138,9 @@ impl Render for Line {
         let Some(label) = self.data.embedded_text.as_ref() else {
             return base;
         };
+        if label.wrapped.raw.is_empty() {
+            return base;
+        }
         let Some(layout) =
             super::embedded_text::layout_line(&self.data, &self.points, self.line_style.curve_mode)
         else {

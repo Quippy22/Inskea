@@ -1,6 +1,6 @@
 use crate::model::elements::path::{eval_cubic_bezier, segment_cubic_bezier};
 use crate::model::elements::text::{
-    measure_text_width, EmbeddedText, WrappedText, FONT_FAMILY, FONT_STACK, TEXT_ASCENT_RATIO,
+    measure_text_width, EmbeddedText, FONT_FAMILY, FONT_STACK, TEXT_ASCENT_RATIO,
 };
 use crate::model::elements::{CurveMode, Element, ElementData};
 use crate::model::{Point, Rect};
@@ -83,16 +83,17 @@ pub fn layout_box(
     let width = (data.width.abs() * width_ratio).max(1.0);
     let available_height = (data.height.abs() * height_ratio).max(1.0);
     let mut font_size = scaled_font_size(label, data.width, data.height);
-    let mut wrapped = WrappedText::new(label.wrapped.raw.as_str());
+    let mut lines;
     for _ in 0..24 {
-        wrapped.rebuild(width, font_size, FONT_FAMILY);
-        let height = wrapped.lines.len().max(1) as f64 * font_size * 1.2;
+        lines = wrap_text(label.wrapped.raw.as_str(), width, font_size);
+        let height = lines.len().max(1) as f64 * font_size * 1.2;
         if height <= available_height || font_size <= MIN_EMBEDDED_FONT_SIZE {
             break;
         }
         font_size = (font_size * 0.9).max(MIN_EMBEDDED_FONT_SIZE);
     }
-    let height = wrapped.lines.len().max(1) as f64 * font_size * 1.2;
+    lines = wrap_text(label.wrapped.raw.as_str(), width, font_size);
+    let height = lines.len().max(1) as f64 * font_size * 1.2;
     Some(EmbeddedTextLayout {
         center: Point::new(
             data.world_point.x + data.width / 2.0,
@@ -102,7 +103,7 @@ pub fn layout_box(
         height,
         font_size,
         rotation: data.rotation,
-        lines: wrapped.lines.into_vec(),
+        lines,
         path_bounds: None,
         mask_width: 0.0,
     })
@@ -116,11 +117,9 @@ pub fn layout_path(data: &ElementData, points: &[Point]) -> Option<EmbeddedTextL
     }
     let width = (route_length * 0.5).max(1.0);
     let font_size = scaled_font_size(label, route_length, route_length);
-    let mut wrapped = WrappedText::new(label.wrapped.raw.as_str());
-    wrapped.rebuild(width, font_size, FONT_FAMILY);
-    let height = wrapped.lines.len().max(1) as f64 * font_size * 1.2;
-    let widest = wrapped
-        .lines
+    let lines = wrap_text(label.wrapped.raw.as_str(), width, font_size);
+    let height = lines.len().max(1) as f64 * font_size * 1.2;
+    let widest = lines
         .iter()
         .map(|line| measure_text_width(line, font_size, FONT_FAMILY))
         .fold(0.0, f64::max);
@@ -133,10 +132,57 @@ pub fn layout_path(data: &ElementData, points: &[Point]) -> Option<EmbeddedTextL
         height,
         font_size,
         rotation: 0.0,
-        lines: wrapped.lines.into_vec(),
+        lines,
         path_bounds: Some(path_bounds),
         mask_width,
     })
+}
+
+fn wrap_text(raw: &str, max_width: f64, font_size: f64) -> Vec<String> {
+    raw.split('\n')
+        .flat_map(|line| wrap_line(line, max_width, font_size))
+        .collect()
+}
+
+fn wrap_line(line: &str, max_width: f64, font_size: f64) -> Vec<String> {
+    if line.is_empty() {
+        return vec![String::new()];
+    }
+    let mut result = Vec::new();
+    let mut current = String::new();
+    for word in line.split_whitespace() {
+        let candidate = if current.is_empty() {
+            word.to_string()
+        } else {
+            format!("{current} {word}")
+        };
+        if measure_text_width(&candidate, font_size, FONT_FAMILY) <= max_width {
+            current = candidate;
+            continue;
+        }
+        if !current.is_empty() {
+            result.push(std::mem::take(&mut current));
+        }
+        let mut part = String::new();
+        for character in word.chars() {
+            let mut candidate = part.clone();
+            candidate.push(character);
+            if !part.is_empty()
+                && measure_text_width(&candidate, font_size, FONT_FAMILY) > max_width
+            {
+                result.push(std::mem::take(&mut part));
+            }
+            part.push(character);
+        }
+        current = part;
+    }
+    if !current.is_empty() {
+        result.push(current);
+    }
+    if result.is_empty() {
+        result.push(String::new());
+    }
+    result
 }
 
 fn scaled_font_size(label: &EmbeddedText, width: f64, height: f64) -> f64 {
@@ -296,5 +342,47 @@ pub fn render_label(
         let cx = layout.center.x;
         let cy = layout.center.y;
         view! { <g transform=format!("rotate({deg} {cx} {cy})")>{text}</g> }.into_view()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Color;
+
+    fn path_data(raw: &str) -> ElementData {
+        let mut data = ElementData::new(1);
+        let mut label = EmbeddedText::new(Color::new(Color::RED), 18.0, 300.0, 300.0);
+        label.set_content(raw);
+        data.embedded_text = Some(label);
+        data
+    }
+
+    #[test]
+    fn path_label_sits_halfway_along_a_multi_segment_route() {
+        let data = path_data("route label");
+        let points = [
+            Point::new(0.0, 0.0),
+            Point::new(100.0, 0.0),
+            Point::new(100.0, 200.0),
+        ];
+        let layout = layout_path(&data, &points).unwrap();
+
+        assert_eq!(layout.center, Point::new(100.0, 50.0));
+        assert_eq!(layout.width, 150.0);
+    }
+
+    #[test]
+    fn long_words_wrap_within_the_half_route_limit() {
+        let data = path_data("averylongunbrokenword");
+        let points = [Point::new(0.0, 0.0), Point::new(100.0, 0.0)];
+        let layout = layout_path(&data, &points).unwrap();
+
+        assert!(layout.lines.len() > 1);
+        assert!(layout.lines.iter().all(|line| measure_text_width(
+            line,
+            layout.font_size,
+            FONT_FAMILY
+        ) <= layout.width));
     }
 }

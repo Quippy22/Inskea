@@ -675,6 +675,9 @@ impl Render for Connector {
         let Some(label) = self.data.embedded_text.as_ref() else {
             return base;
         };
+        if label.wrapped.raw.is_empty() {
+            return base;
+        }
         let route = self.route_points();
         let Some(layout) = super::embedded_text::layout_path(&self.data, &route) else {
             return base;
