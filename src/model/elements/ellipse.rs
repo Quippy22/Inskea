@@ -49,7 +49,7 @@ impl Render for Ellipse {
         let dash = self.data.style.stroke_style.stroke_dasharray();
         let linejoin = self.data.style.edge_style.stroke_linejoin();
         let opacity = self.data.style.opacity;
-        if self.data.rotation == 0.0 {
+        let shape = if self.data.rotation == 0.0 {
             leptos::view! {
                 <ellipse
                     cx=cx
@@ -84,7 +84,15 @@ impl Render for Ellipse {
                 </g>
             }
             .into_view()
-        }
+        };
+        let Some(label) = self.data.embedded_text.as_ref() else {
+            return shape;
+        };
+        let Some(layout) = super::embedded_text::layout_ellipse(&self.data) else {
+            return shape;
+        };
+        let text = super::embedded_text::render_label(label, &layout, opacity);
+        leptos::view! { <g>{shape}{text}</g> }.into_view()
     }
 }
 

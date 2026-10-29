@@ -656,7 +656,7 @@ impl Render for Connector {
         let sw2 = sw;
         let (start_arrow, end_arrow) = self.arrowheads(sw2);
 
-        leptos::view! {
+        let base = leptos::view! {
             <g
                 stroke=stroke
                 stroke-width=sw
@@ -671,7 +671,19 @@ impl Render for Connector {
                 {end_arrow.map(|p| leptos::view! { <polyline points=p /> })}
             </g>
         }
-        .into_view()
+        .into_view();
+        let Some(label) = self.data.embedded_text.as_ref() else {
+            return base;
+        };
+        let route = self.route_points();
+        let Some(layout) = super::embedded_text::layout_path(&self.data, &route) else {
+            return base;
+        };
+        let mask = super::embedded_text::render_mask(&self.data, &layout);
+        let mask_id = super::embedded_text::mask_id(&self.data);
+        let masked = leptos::view! { <g mask=format!("url(#{mask_id})")>{base}</g> };
+        let text = super::embedded_text::render_label(label, &layout, opacity);
+        leptos::view! { <g>{mask}{masked}{text}</g> }.into_view()
     }
 }
 

@@ -130,7 +130,7 @@ fn svg_body(elements: &[Element], selected: Option<&[ElementId]>) -> String {
 
 fn el_svg(el: &Element) -> String {
     use std::fmt::Write;
-    match el {
+    let body = match el {
         Element::Rectangle(r) => {
             let fill = r
                 .data
@@ -377,6 +377,56 @@ fn el_svg(el: &Element) -> String {
                 format!(r#"<g transform="rotate({deg} {cx} {cy})">{image}</g>"#)
             }
         }
+    };
+    let Some(label) = el.data().embedded_text.as_ref() else {
+        return body;
+    };
+    let Some(layout) = crate::model::elements::embedded_text::layout_for_element(el) else {
+        return body;
+    };
+    let mut text = format!(
+        r#"<text x="{}" y="{}" text-anchor="middle" font-size="{}" font-family="{}" fill="{}" opacity="{}">"#,
+        layout.center.x,
+        layout.center.y - layout.height / 2.0
+            + layout.font_size * crate::model::elements::text::TEXT_ASCENT_RATIO,
+        layout.font_size,
+        crate::model::elements::text::FONT_STACK,
+        label.color.to_hex(),
+        el.data().style.opacity,
+    );
+    for (index, line) in layout.lines.iter().enumerate() {
+        let dy = if index == 0 { "0" } else { "1.2em" };
+        let _ = write!(
+            text,
+            r#"<tspan x="{}" dy="{}">{}</tspan>"#,
+            layout.center.x,
+            dy,
+            escape_xml_text(line),
+        );
+    }
+    text.push_str("</text>");
+    let text = if layout.rotation == 0.0 {
+        text
+    } else {
+        let deg = layout.rotation.to_degrees();
+        let cx = layout.center.x;
+        let cy = layout.center.y;
+        format!(r#"<g transform="rotate({deg} {cx} {cy})">{text}</g>"#)
+    };
+    if let Some(bounds) = layout.path_bounds {
+        let id = crate::model::elements::embedded_text::mask_id(el.data());
+        let margin = 16.0;
+        let (x, y) = (bounds.x - margin, bounds.y - margin);
+        let (width, height) = (bounds.w + margin * 2.0, bounds.h + margin * 2.0);
+        let mask_x = layout.center.x - layout.mask_width / 2.0;
+        let mask_y = layout.center.y - layout.height / 2.0;
+        let mask_height = layout.height + layout.font_size * 0.35;
+        format!(
+            r#"<defs><mask id="{id}" maskUnits="userSpaceOnUse" x="{x}" y="{y}" width="{width}" height="{height}"><rect x="{x}" y="{y}" width="{width}" height="{height}" fill="white"/><rect x="{mask_x}" y="{mask_y}" width="{}" height="{mask_height}" fill="black"/></mask></defs><g mask="url(#{id})">{body}</g>{text}"#,
+            layout.mask_width,
+        )
+    } else {
+        format!("{body}{text}")
     }
 }
 

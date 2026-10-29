@@ -177,6 +177,7 @@ pub fn resize_from_handle(
         height: new_h,
         rotation: original.rotation,
         style: original.style.clone(),
+        embedded_text: original.embedded_text.clone(),
         ..*original
     }
 }

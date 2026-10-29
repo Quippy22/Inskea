@@ -55,7 +55,7 @@ impl Render for Rectangle {
             super::EdgeStyle::Sharp => (0.0, 0.0),
         };
         let opacity = self.data.style.opacity;
-        if self.data.rotation == 0.0 {
+        let shape = if self.data.rotation == 0.0 {
             leptos::view! {
                 <rect
                     x=x
@@ -96,7 +96,15 @@ impl Render for Rectangle {
                 </g>
             }
             .into_view()
-        }
+        };
+        let Some(label) = self.data.embedded_text.as_ref() else {
+            return shape;
+        };
+        let Some(layout) = super::embedded_text::layout_rectangle(&self.data) else {
+            return shape;
+        };
+        let text = super::embedded_text::render_label(label, &layout, opacity);
+        leptos::view! { <g>{shape}{text}</g> }.into_view()
     }
 }
 

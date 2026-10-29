@@ -1,5 +1,6 @@
 pub mod connector;
 pub mod ellipse;
+pub(crate) mod embedded_text;
 pub mod freehand;
 pub mod image;
 pub(crate) mod line;
@@ -15,7 +16,7 @@ pub use image::Image;
 #[allow(unused_imports)]
 pub use line::{Line, LineStyle};
 pub use rect::Rectangle;
-pub use text::{Text, TextAlign};
+pub use text::{EmbeddedText, Text, TextAlign};
 
 use crate::model::{Color, Point, Rect};
 pub use path::CurveMode;
@@ -126,6 +127,9 @@ pub struct ElementData {
     pub rotation: f64,
     /// Shared appearance properties (stroke, fill, etc.).
     pub style: ElementStyle,
+    /// Optional text label attached to a shape, line, or connector.
+    #[serde(default)]
+    pub embedded_text: Option<EmbeddedText>,
 }
 
 impl ElementData {
@@ -138,6 +142,7 @@ impl ElementData {
             height: 100.0,
             rotation: 0.0,
             style: ElementStyle::default(),
+            embedded_text: None,
         }
     }
 }
@@ -227,6 +232,14 @@ impl Element {
             Element::Freehand(_) => StylingKind::Freehand,
             Element::Image(_) => StylingKind::Image,
         }
+    }
+
+    /// Whether this element type can host an attached text label.
+    pub fn supports_embedded_text(&self) -> bool {
+        matches!(
+            self,
+            Element::Rectangle(_) | Element::Ellipse(_) | Element::Line(_) | Element::Connector(_)
+        )
     }
 }
 
@@ -464,12 +477,33 @@ macro_rules! dispatch_element {
 }
 
 dispatch_element!(Render, render(&self, zoom: f64) -> leptos::View);
-dispatch_element!(HitTest, hit_test(&self, point: Point, margin: f64) -> bool);
 dispatch_element!(Bounds, bounds(&self) -> Rect);
 dispatch_element!(Offset, offset(&mut self, dx: f64, dy: f64));
 dispatch_element!(Rotate, rotate_around(&mut self, point: Point, delta: f64));
 dispatch_element!(Resize, resize(&mut self, ctx: &ResizeContext));
 dispatch_element!(UpdateDrag, update_drag(&mut self, current: Point, anchor: Point, shift: bool, zoom: f64));
+
+impl HitTest for Element {
+    fn hit_test(&self, point: Point, margin: f64) -> bool {
+        if let Some(layout) = embedded_text::layout_for_element(self) {
+            let query = Point::unrotate(point, layout.center.x, layout.center.y, layout.rotation);
+            if (query.x - layout.center.x).abs() <= layout.width / 2.0 + margin
+                && (query.y - layout.center.y).abs() <= layout.height / 2.0 + margin
+            {
+                return true;
+            }
+        }
+        match self {
+            Element::Rectangle(e) => e.hit_test(point, margin),
+            Element::Ellipse(e) => e.hit_test(point, margin),
+            Element::Line(e) => e.hit_test(point, margin),
+            Element::Connector(e) => e.hit_test(point, margin),
+            Element::Text(e) => e.hit_test(point, margin),
+            Element::Freehand(e) => e.hit_test(point, margin),
+            Element::Image(e) => e.hit_test(point, margin),
+        }
+    }
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────
 

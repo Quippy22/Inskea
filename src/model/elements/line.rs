@@ -103,7 +103,7 @@ impl Render for Line {
 
         let has_any_arrow = start_arrow.is_some() || end_arrow.is_some();
 
-        if has_any_arrow {
+        let base = if has_any_arrow {
             leptos::view! {
                 <g
                     stroke=stroke
@@ -134,7 +134,20 @@ impl Render for Line {
                 />
             }
             .into_view()
-        }
+        };
+        let Some(label) = self.data.embedded_text.as_ref() else {
+            return base;
+        };
+        let Some(layout) =
+            super::embedded_text::layout_line(&self.data, &self.points, self.line_style.curve_mode)
+        else {
+            return base;
+        };
+        let mask = super::embedded_text::render_mask(&self.data, &layout);
+        let mask_id = super::embedded_text::mask_id(&self.data);
+        let masked = leptos::view! { <g mask=format!("url(#{mask_id})")>{base}</g> };
+        let text = super::embedded_text::render_label(label, &layout, opacity);
+        leptos::view! { <g>{mask}{masked}{text}</g> }.into_view()
     }
 }
 
