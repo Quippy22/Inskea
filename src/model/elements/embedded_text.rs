@@ -112,11 +112,11 @@ pub fn layout_box(
 pub fn layout_path(data: &ElementData, points: &[Point]) -> Option<EmbeddedTextLayout> {
     let label = data.embedded_text.as_ref()?;
     let route_length = polyline_length(points);
-    if route_length <= f64::EPSILON || points.len() < 2 {
+    if points.is_empty() {
         return None;
     }
-    let width = (route_length * 0.5).max(1.0);
     let font_size = scaled_font_size(label, route_length, route_length);
+    let width = (route_length * 0.5).max(font_size * 2.0);
     let lines = wrap_text(label.wrapped.raw.as_str(), width, font_size);
     let height = lines.len().max(1) as f64 * font_size * 1.2;
     let widest = lines
@@ -124,7 +124,11 @@ pub fn layout_path(data: &ElementData, points: &[Point]) -> Option<EmbeddedTextL
         .map(|line| measure_text_width(line, font_size, FONT_FAMILY))
         .fold(0.0, f64::max);
     let mask_width = (widest + font_size * 0.5).min(width).max(1.0);
-    let center = point_at_distance(points, route_length / 2.0)?;
+    let center = if route_length <= f64::EPSILON {
+        points[0]
+    } else {
+        point_at_distance(points, route_length / 2.0)?
+    };
     let path_bounds = bounds_of_points(points);
     Some(EmbeddedTextLayout {
         center,

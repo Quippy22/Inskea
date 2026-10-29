@@ -358,6 +358,7 @@ mod tests {
                 roundness: 6.0,
                 opacity: 1.0,
             },
+            embedded_text: None,
         }
     }
 
@@ -546,6 +547,7 @@ mod tests {
                 roundness: 6.0,
                 opacity: 1.0,
             },
+            embedded_text: None,
         };
         let orig = ElementData {
             id: 1,
@@ -563,6 +565,7 @@ mod tests {
                 roundness: 6.0,
                 opacity: 1.0,
             },
+            embedded_text: None,
         };
         resize_scale_element(
             &mut data,
@@ -598,6 +601,7 @@ mod tests {
                 roundness: 6.0,
                 opacity: 1.0,
             },
+            embedded_text: None,
         };
         let orig = ElementData {
             id: 1,
@@ -615,6 +619,7 @@ mod tests {
                 roundness: 6.0,
                 opacity: 1.0,
             },
+            embedded_text: None,
         };
         resize_scale_element(
             &mut data,

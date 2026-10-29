@@ -329,6 +329,7 @@ pub fn make_commit_edit(
 
 /// Returns a closure that renders the invisible text-editing textarea overlay.
 /// No border or background — only the caret and the typed text are visible.
+#[allow(clippy::too_many_arguments)]
 pub fn text_edit_overlay(
     editing_id: RwSignal<Option<ElementId>>,
     editing_embedded: RwSignal<bool>,
