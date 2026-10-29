@@ -197,6 +197,8 @@ pub struct CanvasInputs {
     /// canvas or the current selection.
     pub theme_open: RwSignal<bool>,
     pub modal_open: Signal<bool>,
+    /// Shared Ctrl+T request produced by the global shortcut handler.
+    pub embedded_text_request: RwSignal<Option<ElementId>>,
 }
 
 // ── Helper functions used by pointer event handlers ──────────────────────

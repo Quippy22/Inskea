@@ -63,6 +63,7 @@ pub fn App() -> impl IntoView {
     let selected_ids = create_rw_signal(Vec::<ElementId>::new());
     let eraser_active = create_rw_signal(false);
     let shortcuts_open = create_rw_signal(false);
+    let embedded_text_request = create_rw_signal::<Option<ElementId>>(None);
     let theme_open = create_rw_signal(false);
 
     let export_crop_active = create_rw_signal(false);
@@ -420,6 +421,7 @@ pub fn App() -> impl IntoView {
         clipboard,
         cursor_world,
         shortcuts_open,
+        embedded_text_request,
         modal_open,
         push_snapshot: push_snapshot.clone(),
         do_undo: Rc::new(do_undo),
@@ -660,6 +662,7 @@ pub fn App() -> impl IntoView {
                     default_connector_variant,
                     theme_open,
                     modal_open,
+                    embedded_text_request,
                 }
                 on_text_commit=on_text_commit
                 shortcuts_open=shortcuts_open

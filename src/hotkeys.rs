@@ -1,7 +1,7 @@
 use crate::canvas::CanvasMode;
 use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::edit_ops::{self, Clipboard};
-use crate::model::{Alignment, Distribution, Point};
+use crate::model::{Alignment, Distribution, ElementId, Point};
 use crate::ui::dock::Tool;
 use crate::ui::{file_ops, icon, notify};
 use leptos::ev;
@@ -58,6 +58,8 @@ pub struct HotkeysContext {
     pub clipboard: RwSignal<Clipboard>,
     pub cursor_world: RwSignal<Point>,
     pub shortcuts_open: RwSignal<bool>,
+    /// Requests that the canvas open the selected element's embedded text editor.
+    pub embedded_text_request: RwSignal<Option<ElementId>>,
     /// A blocking dialog is open; canvas shortcuts stay quiet.
     pub modal_open: Signal<bool>,
     pub push_snapshot: Rc<dyn Fn()>,
@@ -99,12 +101,14 @@ fn is_browser_shortcut(key: &str, ctrl: bool, alt: bool) -> bool {
                 | "C"
                 | "v"
                 | "V"
+                | "t"
+                | "T"
         ) || (alt && matches!(key, "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown"));
     }
     matches!(key, "Delete" | "Backspace")
 }
 
-pub(crate) fn is_text_input(target: &web_sys::EventTarget) -> bool {
+fn is_text_input(target: &web_sys::EventTarget) -> bool {
     let node = target.clone().dyn_into::<web_sys::Node>();
     if let Ok(node) = node {
         if let Some(el) = node.dyn_ref::<web_sys::HtmlElement>() {
@@ -217,6 +221,24 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
                     file_ops::file_save_as(ctx.doc.clone());
                 } else {
                     file_ops::file_save(ctx.doc.clone());
+                }
+            }
+            (true, "t") | (true, "T") => {
+                if ctx.shortcuts_open.get_untracked() {
+                    return;
+                }
+                let ids = ctx.doc.selected_ids.get_untracked();
+                if ids.len() != 1 {
+                    return;
+                }
+                let id = ids[0];
+                let supported = ctx.doc.scene.with_untracked(|scene| {
+                    scene
+                        .element_by_id(id)
+                        .is_some_and(|element| element.supports_embedded_text())
+                });
+                if supported {
+                    ctx.embedded_text_request.set(Some(id));
                 }
             }
             (false, "?") => ctx.shortcuts_open.update(|v| *v = !*v),

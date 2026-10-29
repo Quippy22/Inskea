@@ -160,30 +160,19 @@ pub fn Canvas(
     {
         let st = st;
         let props = props.clone();
-        let shortcuts_open = shortcuts_open;
-        let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
-            if !(ev.ctrl_key() || ev.meta_key()) || !matches!(ev.key().as_str(), "t" | "T") {
+        create_effect(move |_| {
+            let Some(id) = props.embedded_text_request.get() else {
                 return;
-            }
+            };
+            props.embedded_text_request.set(None);
             if st.text_edit.editing_id.get_untracked().is_some()
-                || shortcuts_open.get_untracked()
                 || props.modal_open.get_untracked()
                 || props.theme_open.get_untracked()
                 || props.export_crop_active.get_untracked()
+                || st.selected_ids.get_untracked().as_slice() != [id]
             {
                 return;
             }
-            if ev
-                .target()
-                .is_some_and(|target| crate::hotkeys::is_text_input(&target))
-            {
-                return;
-            }
-            let ids = st.selected_ids.get_untracked();
-            if ids.len() != 1 {
-                return;
-            }
-            let id = ids[0];
             let eligible = props.scene.with_untracked(|scene| {
                 scene
                     .element_by_id(id)
@@ -192,7 +181,6 @@ pub fn Canvas(
             if !eligible {
                 return;
             }
-            ev.prevent_default();
             let already_has_text = props.scene.with_untracked(|scene| {
                 scene
                     .element_by_id(id)
