@@ -23,23 +23,14 @@ const EDIT_BASELINE_SHIFT: f64 = 0.06;
 
 fn embedded_edit_layout(
     element: &Element,
+    text: &str,
 ) -> Option<(
     EmbeddedText,
     crate::model::elements::embedded_text::EmbeddedTextLayout,
 )> {
-    let label = element.data().embedded_text.clone().or_else(|| {
-        let (width, height) =
-            crate::model::elements::embedded_text::reference_size_for_element(element)?;
-        Some(EmbeddedText::new(
-            element.data().style.stroke_color,
-            element.data().style.font_size,
-            width,
-            height,
-        ))
-    })?;
-    let mut layout_element = element.clone();
-    layout_element.data_mut().embedded_text = Some(label.clone());
-    let layout = crate::model::elements::embedded_text::layout_for_element(&layout_element)?;
+    let live = crate::model::elements::embedded_text::with_live_text(element, text)?;
+    let label = live.data().embedded_text.clone()?;
+    let layout = crate::model::elements::embedded_text::layout_for_element(&live)?;
     Some((label, layout))
 }
 
@@ -79,6 +70,7 @@ pub fn focus_textarea(textarea_ref: NodeRef<leptos::html::Textarea>) {
 pub fn guide_textarea(
     editing_id: RwSignal<Option<ElementId>>,
     editing_embedded: RwSignal<bool>,
+    edit_text: RwSignal<String>,
     textarea_ref: NodeRef<leptos::html::Textarea>,
     scene: RwSignal<Scene>,
     viewport: RwSignal<Viewport>,
@@ -88,9 +80,10 @@ pub fn guide_textarea(
     let Some(ta) = textarea_ref.get() else { return };
     let raw: &web_sys::HtmlTextAreaElement = &ta;
     if editing_embedded.get() {
+        let text = edit_text.get_untracked();
         let layout = scene.with(|s| {
             s.element_by_id(id)
-                .and_then(|element| embedded_edit_layout(&element).map(|(_, layout)| layout))
+                .and_then(|element| embedded_edit_layout(&element, &text).map(|(_, layout)| layout))
         });
         let Some(layout) = layout else { return };
         let ss = screen_size.get();
@@ -391,11 +384,12 @@ pub fn text_edit_overlay(
         // untracked and re-applied imperatively by `guide_textarea` each frame.
         let id = editing_id.get()?;
         let embedded = editing_embedded.get_untracked();
+        let edit_value = edit_text.get_untracked();
         let (world_point, width, height, rotation, font_size, fill, align, keep_width) = scene
             .with_untracked(|s| {
                 let element = s.element_by_id(id)?;
                 if embedded {
-                    let (label, layout) = embedded_edit_layout(&element)?;
+                    let (label, layout) = embedded_edit_layout(&element, &edit_value)?;
                     Some((
                         Point::new(
                             layout.center.x - layout.width / 2.0,

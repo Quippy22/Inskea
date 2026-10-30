@@ -341,6 +341,7 @@ pub fn Canvas(
                 scene.with(|_| ());
                 let editing_id = editing_id;
                 let editing_embedded = editing_embedded;
+                let edit_text = edit_text;
                 let textarea_ref = textarea_ref;
                 let scene = scene;
                 let viewport = viewport;
@@ -349,6 +350,7 @@ pub fn Canvas(
                     text_edit::guide_textarea(
                         editing_id,
                         editing_embedded,
+                        edit_text,
                         textarea_ref,
                         scene,
                         viewport,
@@ -858,6 +860,7 @@ pub fn Canvas(
                 let props = props.clone();
                 let editing_id = st.text_edit.editing_id;
                 let editing_embedded = st.text_edit.editing_embedded;
+                let edit_text = st.text_edit.edit_text;
                 move || {
                     let editing = editing_id.get();
                     let embedded = editing_embedded.get();
@@ -884,6 +887,30 @@ pub fn Canvas(
                                     "translate({} {})",
                                     visible.origin.x, visible.origin.y
                                 );
+                                // The element being labelled is rendered
+                                // reactively so its label — and the gap it cuts
+                                // in a line or connector — follows the typed
+                                // text, without mutating the scene until the
+                                // edit is committed. Only this one element
+                                // re-renders per keystroke.
+                                if Some(visible.element.id()) == editing && embedded {
+                                    let element = visible.element.clone();
+                                    let fallback = element.clone();
+                                    return view! {
+                                        <g transform=transform pointer-events="none">
+                                            {move || {
+                                                let text = edit_text.get();
+                                                crate::model::elements::embedded_text::with_live_text(
+                                                        &element,
+                                                        &text,
+                                                    )
+                                                    .map(|live| live.render_label_mask())
+                                                    .unwrap_or_else(|| fallback.render(1.0))
+                                            }}
+                                        </g>
+                                    }
+                                    .into_view();
+                                }
                                 view! {
                                     <g transform=transform pointer-events="none">
                                         {visible.element.render(1.0)}

@@ -269,6 +269,17 @@ impl_into_element!(Image);
 pub trait Render {
     /// Produce an SVG view for this element, scaled by `zoom`.
     fn render(&self, zoom: f64) -> leptos::View;
+
+    /// Render the element with its embedded label's glyphs hidden but its
+    /// masking gap kept.
+    ///
+    /// While a label is being edited the textarea is the only visible copy of
+    /// the text, so the SVG copy cannot lag behind it and appear doubled. The
+    /// mask still has to follow the live text, so line and connector hosts keep
+    /// the gap cut by the label's current layout.
+    fn render_label_mask(&self) -> leptos::View {
+        self.render(1.0)
+    }
 }
 
 /// Hit-testing: check if a world-space point intersects the element within a margin.
@@ -476,7 +487,30 @@ macro_rules! dispatch_element {
     };
 }
 
-dispatch_element!(Render, render(&self, zoom: f64) -> leptos::View);
+impl Render for Element {
+    fn render(&self, zoom: f64) -> leptos::View {
+        match self {
+            Element::Rectangle(e) => e.render(zoom),
+            Element::Ellipse(e) => e.render(zoom),
+            Element::Line(e) => e.render(zoom),
+            Element::Connector(e) => e.render(zoom),
+            Element::Text(e) => e.render(zoom),
+            Element::Freehand(e) => e.render(zoom),
+            Element::Image(e) => e.render(zoom),
+        }
+    }
+
+    fn render_label_mask(&self) -> leptos::View {
+        match self {
+            Element::Rectangle(e) => e.render_label_mask(),
+            Element::Ellipse(e) => e.render_label_mask(),
+            Element::Line(e) => e.render_label_mask(),
+            Element::Connector(e) => e.render_label_mask(),
+            other => other.render(1.0),
+        }
+    }
+}
+
 dispatch_element!(Offset, offset(&mut self, dx: f64, dy: f64));
 dispatch_element!(Rotate, rotate_around(&mut self, point: Point, delta: f64));
 dispatch_element!(Resize, resize(&mut self, ctx: &ResizeContext));

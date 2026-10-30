@@ -39,6 +39,16 @@ impl UpdateDrag for Ellipse {
 
 impl Render for Ellipse {
     fn render(&self, _zoom: f64) -> leptos::View {
+        self.render_inner(true)
+    }
+
+    fn render_label_mask(&self) -> leptos::View {
+        self.render_inner(false)
+    }
+}
+
+impl Ellipse {
+    fn render_inner(&self, show_label: bool) -> leptos::View {
         let cx = self.data.world_point.x + self.data.width / 2.0;
         let cy = self.data.world_point.y + self.data.height / 2.0;
         let rx = self.data.width / 2.0;
@@ -85,6 +95,9 @@ impl Render for Ellipse {
             }
             .into_view()
         };
+        if !show_label {
+            return shape;
+        }
         let Some(label) = self.data.embedded_text.as_ref() else {
             return shape;
         };

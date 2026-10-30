@@ -643,6 +643,16 @@ impl UpdateDrag for Connector {
 
 impl Render for Connector {
     fn render(&self, _zoom: f64) -> leptos::View {
+        self.render_inner(true)
+    }
+
+    fn render_label_mask(&self) -> leptos::View {
+        self.render_inner(false)
+    }
+}
+
+impl Connector {
+    fn render_inner(&self, show_label: bool) -> leptos::View {
         let sw = self.data.style.stroke_width;
         let stroke = self.data.style.stroke_color.to_hex();
         let dash = self.data.style.stroke_style.stroke_dasharray();
@@ -685,7 +695,7 @@ impl Render for Connector {
         let mask = super::embedded_text::render_mask(&self.data, &layout);
         let mask_id = super::embedded_text::mask_id(&self.data);
         let masked = leptos::view! { <g mask=format!("url(#{mask_id})")>{base}</g> };
-        let text = super::embedded_text::render_label(label, &layout, opacity);
+        let text = show_label.then(|| super::embedded_text::render_label(label, &layout, opacity));
         leptos::view! { <g>{mask}{masked}{text}</g> }.into_view()
     }
 }

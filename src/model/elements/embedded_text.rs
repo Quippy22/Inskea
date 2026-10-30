@@ -39,6 +39,31 @@ pub fn layout_for_element(element: &Element) -> Option<EmbeddedTextLayout> {
     }
 }
 
+/// A copy of `element` whose embedded label holds `text`.
+///
+/// When the host has no label yet, one is created from its style and reference
+/// size, so a label being typed for the first time lays out — and masks its
+/// host — exactly as it will after the edit is committed. This lets the canvas
+/// render the live editing state without writing to the scene on every
+/// keystroke.
+pub fn with_live_text(element: &Element, text: &str) -> Option<Element> {
+    let mut live = element.clone();
+    match live.data_mut().embedded_text.as_mut() {
+        Some(label) => label.set_content(text),
+        None => {
+            let (width, height) = reference_size_for_element(&live)?;
+            let (color, font_size) = {
+                let data = live.data();
+                (data.style.stroke_color, data.style.font_size)
+            };
+            let mut label = EmbeddedText::new(color, font_size, width, height);
+            label.set_content(text);
+            live.data_mut().embedded_text = Some(label);
+        }
+    }
+    Some(live)
+}
+
 pub fn reference_size_for_element(element: &Element) -> Option<(f64, f64)> {
     match element {
         Element::Rectangle(_) | Element::Ellipse(_) => Some((
@@ -83,16 +108,15 @@ pub fn layout_box(
     let width = (data.width.abs() * width_ratio).max(1.0);
     let available_height = (data.height.abs() * height_ratio).max(1.0);
     let mut font_size = scaled_font_size(label, data.width, data.height);
-    let mut lines;
+    let mut lines = wrap_text(label.wrapped.raw.as_str(), width, font_size);
     for _ in 0..24 {
-        lines = wrap_text(label.wrapped.raw.as_str(), width, font_size);
         let height = lines.len().max(1) as f64 * font_size * 1.2;
         if height <= available_height || font_size <= MIN_EMBEDDED_FONT_SIZE {
             break;
         }
         font_size = (font_size * 0.9).max(MIN_EMBEDDED_FONT_SIZE);
+        lines = wrap_text(label.wrapped.raw.as_str(), width, font_size);
     }
-    lines = wrap_text(label.wrapped.raw.as_str(), width, font_size);
     let height = lines.len().max(1) as f64 * font_size * 1.2;
     Some(EmbeddedTextLayout {
         center: Point::new(
@@ -315,7 +339,6 @@ pub fn render_label(
     let font_size = layout.font_size;
     let fill = label.color.to_hex();
     let font_family = FONT_STACK;
-    let lines = layout.lines.clone();
     let text = view! {
         <text
             x=x
@@ -328,7 +351,8 @@ pub fn render_label(
             style="user-select: none; -webkit-user-select: none;"
             opacity=opacity
         >
-            {lines
+            {layout
+                .lines
                 .iter()
                 .enumerate()
                 .map(|(index, line)| {
@@ -352,7 +376,8 @@ pub fn render_label(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Color;
+    use crate::model::elements::rect::Rectangle;
+    use crate::model::{Color, Line, LineStyle};
 
     fn path_data(raw: &str) -> ElementData {
         let mut data = ElementData::new(1);
@@ -360,6 +385,43 @@ mod tests {
         label.set_content(raw);
         data.embedded_text = Some(label);
         data
+    }
+
+    fn line_element() -> Element {
+        Element::Line(Line {
+            data: ElementData::new(1),
+            points: vec![Point::new(0.0, 0.0), Point::new(300.0, 0.0)].into_boxed_slice(),
+            line_style: LineStyle::default(),
+        })
+    }
+
+    #[test]
+    fn live_text_creates_a_label_for_a_host_without_one() {
+        let mut data = ElementData::new(1);
+        data.width = 200.0;
+        data.height = 100.0;
+        let element = Element::Rectangle(Rectangle { data });
+
+        let live = with_live_text(&element, "typed").expect("rectangle supports labels");
+        let label = live.data().embedded_text.as_ref().unwrap();
+
+        assert_eq!(label.wrapped.raw.as_str(), "typed");
+        // Embedded labels lay out from the raw text; they do not keep a
+        // duplicate display-line copy.
+        assert!(label.wrapped.lines.is_empty());
+        assert!(element.data().embedded_text.is_none());
+    }
+
+    #[test]
+    fn live_text_resizes_a_path_mask_as_the_label_grows() {
+        let element = line_element();
+        let short = with_live_text(&element, "a").unwrap();
+        let long = with_live_text(&element, "a much longer label").unwrap();
+
+        let short_layout = layout_for_element(&short).unwrap();
+        let long_layout = layout_for_element(&long).unwrap();
+
+        assert!(long_layout.mask_width > short_layout.mask_width);
     }
 
     #[test]
