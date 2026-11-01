@@ -193,14 +193,17 @@ fn wrap_line(line: &str, max_width: f64, font_size: f64) -> Vec<String> {
         }
         let mut part = String::new();
         for character in word.chars() {
-            let mut candidate = part.clone();
-            candidate.push(character);
-            if !part.is_empty()
-                && measure_text_width(&candidate, font_size, FONT_FAMILY) > max_width
-            {
-                result.push(std::mem::take(&mut part));
+            if part.is_empty() {
+                part.push(character);
+                continue;
             }
             part.push(character);
+            if measure_text_width(&part, font_size, FONT_FAMILY) > max_width {
+                // The character that overflowed starts the next part.
+                let last = part.pop().expect("a character was just pushed");
+                result.push(std::mem::take(&mut part));
+                part.push(last);
+            }
         }
         current = part;
     }
