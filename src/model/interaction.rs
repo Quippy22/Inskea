@@ -34,7 +34,15 @@ pub fn guide_corners(element: &Element) -> [Point; 4] {
     if rotation == 0.0 {
         return bounds.corners();
     }
-    rotated_corners(bounds, layout_bounds(element).center(), rotation)
+    // Text rotates around its layout column, which its glyph box does not
+    // share. Every other element's visible box *is* its layout box, so its
+    // centre is already `bounds.center()` — recomputing the bounds would wrap
+    // a path label a second time.
+    let center = match element {
+        Element::Text(text) => text.bounds().center(),
+        _ => bounds.center(),
+    };
+    rotated_corners(bounds, center, rotation)
 }
 
 /// Axis-aligned envelope of the visible content after rotation. Multi-element
