@@ -68,6 +68,7 @@ The shortcuts are chosen for one-handed use, so your other hand can stay on the 
 | Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` |
 | Copy / paste / duplicate | `Ctrl+C` / `Ctrl+V` / `Ctrl+D` |
 | Group / ungroup | `Ctrl+G` / `Ctrl+Shift+G` |
+| Add / edit text inside a shape| `Ctrl+T`|
 | Delete selection | `Delete` or `Backspace` |
 | New / open / save / save as | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` |
 | Cancel, deselect, or leave a group | `Esc` |
