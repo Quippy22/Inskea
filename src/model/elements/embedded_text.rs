@@ -295,18 +295,15 @@ pub fn mask_id(data: &ElementData) -> String {
     format!("embedded-text-mask-{}", data.id)
 }
 
-pub fn render_mask(data: &ElementData, layout: &EmbeddedTextLayout) -> leptos::View {
-    if data
-        .embedded_text
-        .as_ref()
-        .is_none_or(|label| label.wrapped.raw.is_empty())
-    {
-        return ().into_view();
-    }
+/// Cut the label's gap out of `base` for a path host, returning the mask
+/// definition and the masked body together.
+///
+/// The caller passes the id it already built, so the mask id and its `url(...)`
+/// reference are formatted once per render instead of twice.
+pub fn mask_path(base: leptos::View, layout: &EmbeddedTextLayout, id: String) -> leptos::View {
     let Some(bounds) = layout.path_bounds else {
-        return ().into_view();
+        return base;
     };
-    let id = mask_id(data);
     let margin = 16.0;
     let x = bounds.x - margin;
     let y = bounds.y - margin;
@@ -315,6 +312,7 @@ pub fn render_mask(data: &ElementData, layout: &EmbeddedTextLayout) -> leptos::V
     let label_x = layout.center.x - layout.mask_width / 2.0;
     let label_y = layout.center.y - layout.height / 2.0;
     let label_h = layout.height + layout.font_size * 0.35;
+    let url = format!("url(#{id})");
     view! {
         <defs>
             <mask id=id maskUnits="userSpaceOnUse" x=x y=y width=width height=height>
@@ -328,6 +326,7 @@ pub fn render_mask(data: &ElementData, layout: &EmbeddedTextLayout) -> leptos::V
                 />
             </mask>
         </defs>
+        <g mask=url>{base}</g>
     }
     .into_view()
 }

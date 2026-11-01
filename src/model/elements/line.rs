@@ -156,11 +156,10 @@ impl Line {
         else {
             return base;
         };
-        let mask = super::embedded_text::render_mask(&self.data, &layout);
         let mask_id = super::embedded_text::mask_id(&self.data);
-        let masked = leptos::view! { <g mask=format!("url(#{mask_id})")>{base}</g> };
+        let masked = super::embedded_text::mask_path(base, &layout, mask_id);
         let text = show_label.then(|| super::embedded_text::render_label(label, &layout, opacity));
-        leptos::view! { <g>{mask}{masked}{text}</g> }.into_view()
+        leptos::view! { <g>{masked}{text}</g> }.into_view()
     }
 }
 
