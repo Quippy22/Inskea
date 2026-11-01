@@ -31,9 +31,7 @@ pub fn layout_for_element(element: &Element) -> Option<EmbeddedTextLayout> {
     match element {
         Element::Rectangle(_) => layout_box(data, SHAPE_WIDTH_RATIO, SHAPE_HEIGHT_RATIO),
         Element::Ellipse(_) => layout_box(data, ELLIPSE_WIDTH_RATIO, ELLIPSE_HEIGHT_RATIO),
-        Element::Line(line) => {
-            layout_path(data, &sample_path(&line.points, line.line_style.curve_mode))
-        }
+        Element::Line(line) => layout_line(data, &line.points, line.line_style.curve_mode),
         Element::Connector(connector) => layout_path(data, &connector.route_points()),
         _ => None,
     }
@@ -46,8 +44,8 @@ pub fn reference_size_for_element(element: &Element) -> Option<(f64, f64)> {
             element.data().height.abs().max(1.0),
         )),
         Element::Line(line) => {
-            let sampled = sample_path(&line.points, line.line_style.curve_mode);
-            let length = polyline_length(&sampled).max(1.0);
+            let route = line_route(&line.points, line.line_style.curve_mode);
+            let length = polyline_length(&route).max(1.0);
             Some((length, length))
         }
         Element::Connector(connector) => {
@@ -71,7 +69,17 @@ pub fn layout_line(
     points: &[Point],
     mode: CurveMode,
 ) -> Option<EmbeddedTextLayout> {
-    layout_path(data, &sample_path(points, mode))
+    layout_path(data, &line_route(points, mode))
+}
+
+/// The route a line's label is laid along: the raw points for a straight line,
+/// a sampled polyline only when the curve mode needs one.
+fn line_route<'a>(points: &'a [Point], mode: CurveMode) -> std::borrow::Cow<'a, [Point]> {
+    if mode == CurveMode::Straight {
+        std::borrow::Cow::Borrowed(points)
+    } else {
+        std::borrow::Cow::Owned(sample_path(points, mode))
+    }
 }
 
 pub fn layout_box(
@@ -202,7 +210,7 @@ pub fn layout_with_text(element: &Element, text: &str) -> Option<EmbeddedTextLay
         Element::Line(line) => layout_path_raw(
             label,
             text,
-            &sample_path(&line.points, line.line_style.curve_mode),
+            &line_route(&line.points, line.line_style.curve_mode),
         ),
         Element::Connector(connector) => layout_path_raw(label, text, &connector.route_points()),
         _ => None,
