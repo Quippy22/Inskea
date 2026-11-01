@@ -549,12 +549,15 @@ impl Bounds for Element {
             Element::Freehand(e) => e.bounds(),
             Element::Image(e) => e.bounds(),
         };
+        // Only path hosts grow their bounds to fit the label; a box label is
+        // laid out inside its host. Skip the wrap for boxes instead of
+        // computing a layout whose only path-relevant field is `None`.
+        if !matches!(self, Element::Line(_) | Element::Connector(_)) {
+            return base;
+        }
         let Some(layout) = embedded_text::layout_for_element(self) else {
             return base;
         };
-        if layout.path_bounds.is_none() {
-            return base;
-        }
         let x = layout.center.x - layout.width / 2.0;
         let y = layout.center.y - layout.height / 2.0;
         let left = base.x.min(x);
