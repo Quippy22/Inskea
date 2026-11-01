@@ -177,6 +177,7 @@ pub fn resize_from_handle(
         height: new_h,
         rotation: original.rotation,
         style: original.style.clone(),
+        embedded_text: original.embedded_text.clone(),
         ..*original
     }
 }
@@ -357,6 +358,7 @@ mod tests {
                 roundness: 6.0,
                 opacity: 1.0,
             },
+            embedded_text: None,
         }
     }
 
@@ -545,6 +547,7 @@ mod tests {
                 roundness: 6.0,
                 opacity: 1.0,
             },
+            embedded_text: None,
         };
         let orig = ElementData {
             id: 1,
@@ -562,6 +565,7 @@ mod tests {
                 roundness: 6.0,
                 opacity: 1.0,
             },
+            embedded_text: None,
         };
         resize_scale_element(
             &mut data,
@@ -597,6 +601,7 @@ mod tests {
                 roundness: 6.0,
                 opacity: 1.0,
             },
+            embedded_text: None,
         };
         let orig = ElementData {
             id: 1,
@@ -614,6 +619,7 @@ mod tests {
                 roundness: 6.0,
                 opacity: 1.0,
             },
+            embedded_text: None,
         };
         resize_scale_element(
             &mut data,

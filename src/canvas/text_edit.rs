@@ -1,6 +1,6 @@
 use super::viewport::Viewport;
 use crate::model::elements::text::{natural_line_width, FONT_FAMILY, FONT_STACK, MIN_FONT_SIZE};
-use crate::model::{Element, ElementId, Point, Scene};
+use crate::model::{Element, ElementId, EmbeddedText, Point, Scene};
 use leptos::*;
 use std::rc::Rc;
 
@@ -20,6 +20,15 @@ const PAN_SMOOTHING: f64 = 0.3;
 /// the text. The textarea is shifted up by this fraction so glyphs land
 /// exactly where they were before the edit started (seamless transition).
 const EDIT_BASELINE_SHIFT: f64 = 0.06;
+
+/// Lay out the label `element` would have if it held `text`, without cloning
+/// the host. Used by the textarea guide and the overlay.
+fn embedded_edit_layout(
+    element: &Element,
+    text: &str,
+) -> Option<crate::model::elements::embedded_text::EmbeddedTextLayout> {
+    crate::model::elements::embedded_text::layout_with_text(element, text)
+}
 
 /// Focus the textarea and place the caret at the end of its content, once it
 /// exists in the DOM. The textarea is inserted reactively after an edit opens,
@@ -56,6 +65,8 @@ pub fn focus_textarea(textarea_ref: NodeRef<leptos::html::Textarea>) {
 /// caret instead of the textarea alone.
 pub fn guide_textarea(
     editing_id: RwSignal<Option<ElementId>>,
+    editing_embedded: RwSignal<bool>,
+    edit_text: RwSignal<String>,
     textarea_ref: NodeRef<leptos::html::Textarea>,
     scene: RwSignal<Scene>,
     viewport: RwSignal<Viewport>,
@@ -64,6 +75,56 @@ pub fn guide_textarea(
     let Some(id) = editing_id.get() else { return };
     let Some(ta) = textarea_ref.get() else { return };
     let raw: &web_sys::HtmlTextAreaElement = &ta;
+    if editing_embedded.get() {
+        let text = edit_text.get_untracked();
+        let layout = scene.with(|s| {
+            s.element_by_id(id)
+                .and_then(|element| embedded_edit_layout(&element, &text))
+        });
+        let Some(layout) = layout else { return };
+        let ss = screen_size.get();
+        let vp = viewport.get();
+        let screen_center = vp.world_to_screen(layout.center, ss);
+        let zoom = vp.zoom;
+        let font_size = layout.font_size;
+        let width = (layout.width * zoom).max(font_size * zoom);
+        let style = raw.style();
+        let _ = style.set_property("left", &format!("{}px", screen_center.x - width / 2.0));
+        let _ = style.set_property("width", &format!("{width}px"));
+        let _ = style.set_property("font-size", &format!("{}px", font_size * zoom));
+        let _ = style.set_property("white-space", "pre-wrap");
+        let _ = style.set_property("text-align", "center");
+        let _ = style.set_property("overflow-wrap", "anywhere");
+        let _ = style.set_property("height", "auto");
+        let content_height = raw.scroll_height().max(1) as f64;
+        let _ = style.set_property("height", &format!("{content_height}px"));
+        raw.set_scroll_top(0);
+        let shift_up = EDIT_BASELINE_SHIFT * font_size * zoom;
+        // Keep the whole block centered around the host as it grows. The
+        // textarea starts with one row, so its scroll height follows the
+        // actual text instead of an unused second default row.
+        let top = screen_center.y - content_height / 2.0 - shift_up;
+        let _ = style.set_property("top", &format!("{top}px"));
+        let band_bottom = (ss.y - EDIT_PAD).max(EDIT_PAD);
+        let overflow = top + content_height - band_bottom;
+        if overflow > 0.5 {
+            pan_viewport_y(top, top - overflow, &viewport);
+        }
+        if let Some((deg, ox, oy)) = rotation_css(
+            layout.rotation,
+            layout.width,
+            content_height / zoom,
+            zoom,
+            shift_up,
+        ) {
+            let _ = style.set_property("transform", &format!("rotate({deg}deg)"));
+            let _ = style.set_property("transform-origin", &format!("{ox}px {oy}px"));
+        } else {
+            let _ = style.remove_property("transform");
+            let _ = style.remove_property("transform-origin");
+        }
+        return;
+    }
     let Some(text) = scene.with(|s| s.element_by_id(id)) else {
         return;
     };
@@ -210,6 +271,8 @@ fn pan_and_reposition(
 /// Create the commit function that saves textarea content back to the element.
 pub fn make_commit_edit(
     editing_id: RwSignal<Option<ElementId>>,
+    editing_embedded: RwSignal<bool>,
+    editing_new: RwSignal<bool>,
     edit_text: RwSignal<String>,
     scene: RwSignal<Scene>,
     push_snapshot: Rc<dyn Fn()>,
@@ -218,21 +281,50 @@ pub fn make_commit_edit(
     Rc::new(move || {
         if let Some(id) = editing_id.get() {
             let text = edit_text.get();
+            let embedded = editing_embedded.get_untracked();
+            let is_new = editing_new.get_untracked();
             // Editing existing content is an undoable action; the journal
             // entry for a freshly created text was already opened when it was
             // made.
-            let edited = scene.with_untracked(|s| {
-                matches!(
-                    s.element_by_id(id),
-                    Some(Element::Text(t))
-                        if !t.wrapped.raw.is_empty() && t.wrapped.raw.as_str() != text
-                )
+            let edited = scene.with_untracked(|s| match s.element_by_id(id) {
+                Some(element) if embedded => {
+                    element.data().embedded_text.as_ref().is_some_and(|label| {
+                        !label.wrapped.raw.is_empty() && label.wrapped.raw.as_str() != text
+                    })
+                }
+                Some(Element::Text(t)) => {
+                    !t.wrapped.raw.is_empty() && t.wrapped.raw.as_str() != text
+                }
+                _ => false,
             });
-            if edited {
+            if edited || (embedded && is_new && !text.is_empty()) {
                 push_snapshot();
             }
             scene.update(|s| {
-                if text.is_empty() {
+                if embedded {
+                    if let Some(mut element) = s.element_by_id_mut(id) {
+                        if text.is_empty() {
+                            element.data_mut().embedded_text = None;
+                        } else if let Some(label) = element.data_mut().embedded_text.as_mut() {
+                            label.set_content(&text);
+                        } else {
+                            let Some((width, height)) =
+                                crate::model::elements::embedded_text::reference_size_for_element(
+                                    &element,
+                                )
+                            else {
+                                return;
+                            };
+                            let (color, font_size) = {
+                                let data = element.data();
+                                (data.style.stroke_color, data.style.font_size)
+                            };
+                            let mut label = EmbeddedText::new(color, font_size, width, height);
+                            label.set_content(&text);
+                            element.data_mut().embedded_text = Some(label);
+                        }
+                    }
+                } else if text.is_empty() {
                     s.remove_by_id(id);
                 } else if let Some(mut element) = s.element_by_id_mut(id) {
                     let Element::Text(text_elem) = &mut *element else {
@@ -253,13 +345,14 @@ pub fn make_commit_edit(
                     text_elem.data.width = new_w;
                 }
             });
-            if text.is_empty() {
-                // Dismissing a box that was never given content removes the
-                // element and collapses the creation journal entry to nothing.
-                // Clearing out an existing text keeps its undo entry.
+            if text.is_empty() && is_new {
+                // Dismissing a newly-created text box or label collapses its
+                // creation journal entry to nothing.
                 discard_snapshot();
             }
             editing_id.set(None);
+            editing_embedded.set(false);
+            editing_new.set(false);
             edit_text.set(String::new());
         }
     })
@@ -267,8 +360,10 @@ pub fn make_commit_edit(
 
 /// Returns a closure that renders the invisible text-editing textarea overlay.
 /// No border or background — only the caret and the typed text are visible.
+#[allow(clippy::too_many_arguments)]
 pub fn text_edit_overlay(
     editing_id: RwSignal<Option<ElementId>>,
+    editing_embedded: RwSignal<bool>,
     edit_text: RwSignal<String>,
     textarea_ref: NodeRef<leptos::html::Textarea>,
     scene: RwSignal<Scene>,
@@ -284,59 +379,82 @@ pub fn text_edit_overlay(
         // (show/hide) is tracked here; every sizing/positioning/style read is
         // untracked and re-applied imperatively by `guide_textarea` each frame.
         let id = editing_id.get()?;
-        let text_elem = scene.with_untracked(|s| {
-            s.element_by_id(id).and_then(|e| {
-                if let Element::Text(t) = e {
-                    Some(t.clone())
+        let embedded = editing_embedded.get_untracked();
+        let edit_value = edit_text.get_untracked();
+        let (world_point, width, height, rotation, font_size, fill, align, keep_width) = scene
+            .with_untracked(|s| {
+                let element = s.element_by_id(id)?;
+                if embedded {
+                    let layout = embedded_edit_layout(&element, &edit_value)?;
+                    let color = element
+                        .data()
+                        .embedded_text
+                        .as_ref()
+                        .map_or(element.data().style.stroke_color, |label| label.color);
+                    Some((
+                        Point::new(
+                            layout.center.x - layout.width / 2.0,
+                            layout.center.y - layout.height / 2.0,
+                        ),
+                        layout.width,
+                        layout.height,
+                        layout.rotation,
+                        layout.font_size,
+                        color.to_hex(),
+                        crate::model::TextAlign::Center,
+                        true,
+                    ))
+                } else if let Element::Text(text) = element {
+                    Some((
+                        text.data.world_point,
+                        text.data.width,
+                        text.data.height,
+                        text.data.rotation,
+                        text.data.style.font_size.max(MIN_FONT_SIZE),
+                        text.data.style.stroke_color.to_hex(),
+                        text.align,
+                        text.data.width > 0.0,
+                    ))
                 } else {
                     None
                 }
-            })
-        })?;
+            })?;
         let vp = viewport.get_untracked();
-        let font_size = text_elem.data.style.font_size.max(MIN_FONT_SIZE);
         let ss = screen_size.get_untracked();
-        let screen_pos = vp.world_to_screen(
-            Point::new(text_elem.data.world_point.x, text_elem.data.world_point.y),
-            ss,
-        );
+        let screen_pos = vp.world_to_screen(world_point, ss);
         let (sx, sy) = (screen_pos.x, screen_pos.y);
         let shift_up = EDIT_BASELINE_SHIFT * font_size * vp.zoom;
-        let fill = text_elem.data.style.stroke_color.to_hex();
-        let rotation_style = rotation_css(
-            text_elem.data.rotation,
-            text_elem.data.width,
-            text_elem.data.height,
-            vp.zoom,
-            shift_up,
-        )
-        .map(|(deg, ox, oy)| format!("transform:rotate({deg}deg);transform-origin:{ox}px {oy}px;"))
-        .unwrap_or_default();
+        let rotation_style = rotation_css(rotation, width, height, vp.zoom, shift_up)
+            .map(|(deg, ox, oy)| {
+                format!("transform:rotate({deg}deg);transform-origin:{ox}px {oy}px;")
+            })
+            .unwrap_or_default();
 
-        let ta_w = if text_elem.data.width > 0.0 {
-            text_elem.data.width * vp.zoom
+        let ta_w = if width > 0.0 {
+            width * vp.zoom
         } else {
             font_size * vp.zoom
         };
-        let ta_h = if text_elem.data.height > 0.0 {
-            text_elem.data.height * vp.zoom
+        let ta_h = if height > 0.0 {
+            height * vp.zoom
         } else {
             font_size * vp.zoom * 1.2
         };
 
         let ce_blur = commit.clone();
         let ce_esc = commit.clone();
+        let ce_finish = commit.clone();
         let blur_id = id;
         // Sized (~resized) boxes keep their wrap width while editing and
         // soft-wrap words at it. Fresh text grows with its content and
         // must not wrap until it has a width — that only happens on commit.
-        let keep_width = text_elem.data.width > 0.0;
         let white_space = if keep_width { "pre-wrap" } else { "pre" };
 
         Some(
             view! {
                 <textarea
                     _ref=textarea_ref
+                    rows="1"
                     on:focus=move |ev| {
                         let ta = event_target::<web_sys::HtmlTextAreaElement>(&ev);
                         let ta2 = ta.clone();
@@ -369,7 +487,7 @@ pub fn text_edit_overlay(
                         FONT_STACK,
                         fill,
                         white_space,
-                        text_elem.align.css(),
+                        align.css(),
                         rotation_style,
                     )
                     prop:value=move || edit_text.get()
@@ -388,9 +506,10 @@ pub fn text_edit_overlay(
                             ev.stop_propagation();
                             ce_esc();
                         }
-                        if ev.key() == "Enter" && ev.shift_key() {
+                        if ev.key() == "Enter" && (ev.ctrl_key() || ev.meta_key()) {
                             ev.prevent_default();
-                            ce_esc();
+                            ev.stop_propagation();
+                            ce_finish();
                         }
                         if ev.key() == "Tab" {
                             ev.prevent_default();

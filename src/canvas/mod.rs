@@ -157,6 +157,62 @@ pub fn Canvas(
             }
         }
     });
+    {
+        let st = st;
+        let props = props.clone();
+        let scene = props.scene;
+        let shortcuts_open = shortcuts_open;
+        let _ = window_event_listener(ev::keydown, move |ev: ev::KeyboardEvent| {
+            if !(ev.ctrl_key() || ev.meta_key()) || !matches!(ev.key().as_str(), "t" | "T") {
+                return;
+            }
+            if st.text_edit.editing_id.get_untracked().is_some()
+                || shortcuts_open.get_untracked()
+                || props.modal_open.get_untracked()
+                || props.theme_open.get_untracked()
+                || props.export_crop_active.get_untracked()
+            {
+                return;
+            }
+            let ids = st.selected_ids.get_untracked();
+            if ids.len() != 1 {
+                return;
+            }
+            let id = ids[0];
+            let eligible = scene.with_untracked(|scene| {
+                scene
+                    .element_by_id(id)
+                    .is_some_and(|element| element.supports_embedded_text())
+            });
+            if !eligible {
+                return;
+            }
+            ev.prevent_default();
+            let already_has_text = scene.with_untracked(|scene| {
+                scene
+                    .element_by_id(id)
+                    .is_some_and(|element| element.data().embedded_text.is_some())
+            });
+            let text = scene.with_untracked(|scene| {
+                scene
+                    .element_by_id(id)
+                    .and_then(|element| {
+                        element
+                            .data()
+                            .embedded_text
+                            .as_ref()
+                            .map(|label| label.wrapped.raw.to_string())
+                    })
+                    .unwrap_or_default()
+            });
+            st.text_edit.editing_embedded.set(true);
+            st.text_edit.editing_new.set(!already_has_text);
+            st.text_edit.edit_text.set(text);
+            // `text_edit_overlay` tracks editing_id and reads the mode/content
+            // untracked, so publish the ID only after those values are ready.
+            st.text_edit.editing_id.set(Some(id));
+        });
+    }
 
     // Esc: cancel the most recent interaction, in priority order: open
     // shortcuts modal, crop export, text edit (the textarea commits it),
@@ -238,6 +294,8 @@ pub fn Canvas(
 
     let commit_edit = text_edit::make_commit_edit(
         st.text_edit.editing_id,
+        st.text_edit.editing_embedded,
+        st.text_edit.editing_new,
         st.text_edit.edit_text,
         props.scene,
         props.push_snapshot.clone(),
@@ -268,6 +326,7 @@ pub fn Canvas(
     // the canvas pan, the screen size, or the scene changes while editing.
     {
         let editing_id = st.text_edit.editing_id;
+        let editing_embedded = st.text_edit.editing_embedded;
         let edit_text = st.text_edit.edit_text;
         let textarea_ref = st.text_edit.textarea_ref;
         let scene = props.scene;
@@ -281,6 +340,8 @@ pub fn Canvas(
                 let _ = screen_size.get();
                 scene.with(|_| ());
                 let editing_id = editing_id;
+                let editing_embedded = editing_embedded;
+                let edit_text = edit_text;
                 let textarea_ref = textarea_ref;
                 let scene = scene;
                 let viewport = viewport;
@@ -288,6 +349,8 @@ pub fn Canvas(
                 leptos::leptos_dom::helpers::request_animation_frame(move || {
                     text_edit::guide_textarea(
                         editing_id,
+                        editing_embedded,
+                        edit_text,
                         textarea_ref,
                         scene,
                         viewport,
@@ -350,14 +413,8 @@ pub fn Canvas(
                     let mut st = _st;
                     let mut props = _props.clone();
                     finish_freehand(&mut st, &mut props, None);
-                    if let Some(id) = _st.text_edit.editing_id.get_untracked() {
-                        if _st.text_edit.edit_text.get_untracked().is_empty() {
-                            _props.scene.update(|s| s.remove_by_id(id));
-                            _st.text_edit.editing_id.set(None);
-                            _st.text_edit.edit_text.set(String::new());
-                        } else {
-                            _commit_edit();
-                        }
+                    if _st.text_edit.editing_id.get_untracked().is_some() {
+                        _commit_edit();
                     }
                 }
             }
@@ -802,8 +859,11 @@ pub fn Canvas(
             {
                 let props = props.clone();
                 let editing_id = st.text_edit.editing_id;
+                let editing_embedded = st.text_edit.editing_embedded;
+                let edit_text = st.text_edit.edit_text;
                 move || {
                     let editing = editing_id.get();
+                    let embedded = editing_embedded.get();
                     let visible = props
                         .viewport
                         .get()
@@ -817,7 +877,7 @@ pub fn Canvas(
                             .visible_elements(visible)
                             .into_iter()
                             .filter(|visible| {
-                                Some(visible.element.id()) != editing
+                                Some(visible.element.id()) != editing || embedded
                             })
                             .map(|visible| {
                                 // Chunk-stored geometry is relative to its
@@ -827,6 +887,39 @@ pub fn Canvas(
                                     "translate({} {})",
                                     visible.origin.x, visible.origin.y
                                 );
+                                // The element being labelled is rendered
+                                // reactively so its label — and the gap it cuts
+                                // in a line or connector — follows the typed
+                                // text, without mutating the scene until the
+                                // edit is committed. Only this one element
+                                // re-renders per keystroke.
+                                if Some(visible.element.id()) == editing && embedded {
+                                    let element = visible.element.clone();
+                                    return view! {
+                                        <g transform=transform pointer-events="none">
+                                            {move || {
+                                                let text = edit_text.get();
+                                                if text.is_empty() {
+                                                    return element.render_label_mask();
+                                                }
+                                                // Lay out the live text without
+                                                // cloning the host, then cut
+                                                // its gap from the unchanged
+                                                // shape.
+                                                match crate::model::elements::embedded_text::layout_with_text(
+                                                    &element,
+                                                    &text,
+                                                ) {
+                                                    Some(layout) => {
+                                                        element.render_with_label_layout(&layout)
+                                                    }
+                                                    None => element.render_label_mask(),
+                                                }
+                                            }}
+                                        </g>
+                                    }
+                                    .into_view();
+                                }
                                 view! {
                                     <g transform=transform pointer-events="none">
                                         {visible.element.render(1.0)}
@@ -855,11 +948,13 @@ pub fn Canvas(
                 st.drag.overlay_freeze,
                 st.drag.rotation_delta,
                 props.settings,
+                st.text_edit.editing_id,
             )}
         </svg>
 
         {text_edit::text_edit_overlay(
             st.text_edit.editing_id,
+            st.text_edit.editing_embedded,
             st.text_edit.edit_text,
             st.text_edit.textarea_ref,
             props.scene,

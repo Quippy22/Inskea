@@ -13,7 +13,7 @@ mod utils;
 
 use self::alignment::alignment_section;
 use self::arrow::arrow_section;
-use self::color::{color_section, ColorSlot};
+use self::color::{color_section, embedded_text_color_section, ColorSlot};
 use self::connector::connector_section;
 use self::edit::edit_section;
 use self::fill::fill_section;
@@ -117,7 +117,9 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
     });
 
     let is_text = Signal::derive(move || styling_kind.get() == StylingKind::Text);
-    let is_line = Signal::derive(move || styling_kind.get() == StylingKind::Line);
+    let is_line_or_arrow = Signal::derive(move || {
+        matches!(styling_kind.get(), StylingKind::Line | StylingKind::Arrow)
+    });
     let is_connector = Signal::derive(move || styling_kind.get() == StylingKind::Connector);
     let is_arrow = Signal::derive(move || {
         matches!(
@@ -132,7 +134,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
     let hide_stroke = Signal::derive(move || is_text.get() || is_image.get());
     let base_kind = Signal::derive(move || {
         !is_text.get()
-            && !is_line.get()
+            && !is_line_or_arrow.get()
             && !is_connector.get()
             && !is_freehand.get()
             && !is_image.get()
@@ -148,6 +150,18 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
 
     let local_style = create_rw_signal(init_style);
     let local_line_style = create_rw_signal(init_line_style);
+    let local_embedded_text_color = create_rw_signal(Color::default());
+    let has_embedded_text = Signal::derive(move || {
+        let ids = selected_ids.get();
+        if ids.len() != 1 {
+            return false;
+        }
+        scene.with(|scene| {
+            scene
+                .element_by_id(ids[0])
+                .is_some_and(|element| element.data().embedded_text.is_some())
+        })
+    });
     let local_connector_variant = create_rw_signal(selected_connector_variant(
         &scene.get_untracked(),
         &selected_ids.get_untracked(),
@@ -210,6 +224,14 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         opacity.set(new_style.opacity * 100.0);
         local_style.set(new_style);
         local_line_style.set(new_line_style);
+        let embedded_color = scene.with_untracked(|scene| {
+            selected_ids
+                .get_untracked()
+                .first()
+                .and_then(|id| scene.element_by_id(*id))
+                .and_then(|element| element.data().embedded_text.as_ref().map(|text| text.color))
+        });
+        local_embedded_text_color.set(embedded_color.unwrap_or_default());
         local_connector_variant.set(selected_connector_variant(
             &scene.get_untracked(),
             &selected_ids.get_untracked(),
@@ -271,8 +293,27 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         }
     });
 
+    let set_embedded_text_color: Rc<dyn Fn(Color)> = Rc::new({
+        let local_color = local_embedded_text_color;
+        let scene = scene;
+        let selected_ids = selected_ids;
+        let push_snapshot = push_snapshot.clone();
+        move |color| {
+            local_color.set(color);
+            let ids = selected_ids.get_untracked();
+            if !ids.is_empty() {
+                mutate_selected_elements(scene, &ids, &push_snapshot, |element| {
+                    if let Some(label) = &mut element.data_mut().embedded_text {
+                        label.color = color;
+                    }
+                });
+            }
+        }
+    });
+
     let picker_set_color = set_color.clone();
     let picker_set_fill = set_fill.clone();
+    let picker_set_embedded_text_color = set_embedded_text_color.clone();
 
     let picker_color = Signal::derive(move || {
         let hex_str = match active_slot.get() {
@@ -282,6 +323,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 .fill_color
                 .as_ref()
                 .map_or_else(|| Color::new(Color::WHITE).to_hex(), |c| c.to_hex()),
+            Some(ColorSlot::EmbeddedText) => local_embedded_text_color.get().to_hex(),
             _ => String::new(),
         };
         LpcColor::from_html(&hex_str).unwrap_or_default()
@@ -297,6 +339,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         match active_slot.get() {
             Some(ColorSlot::Stroke) => picker_set_color(c),
             Some(ColorSlot::Fill) => picker_set_fill(Some(c)),
+            Some(ColorSlot::EmbeddedText) => picker_set_embedded_text_color(c),
             None => {}
         }
     });
@@ -483,7 +526,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 roundness,
                 roundness_cb,
                 hide_stroke,
-                is_line,
+                is_line_or_arrow,
                 is_rect,
                 is_rounded,
             )} {connector_section(
@@ -496,6 +539,12 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 active_slot,
                 color_swatches,
                 hide_stroke,
+            )} {embedded_text_color_section(
+                local_embedded_text_color,
+                set_embedded_text_color,
+                active_slot,
+                color_swatches,
+                has_embedded_text,
             )}
             {fill_section(local_style, set_fill, active_slot, base_kind, color_swatches)}
             {arrow_section(is_arrow, local_line_style, set_start_arrowhead, set_end_arrowhead)}

@@ -186,6 +186,8 @@ pub fn draw_pointer_down(world: Point, st: &mut CanvasState, props: &mut CanvasI
             }));
         });
         st.text_edit.editing_id.set(Some(id));
+        st.text_edit.editing_embedded.set(false);
+        st.text_edit.editing_new.set(true);
         st.text_edit.edit_text.set(String::new());
         return;
     }

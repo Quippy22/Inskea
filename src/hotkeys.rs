@@ -33,6 +33,7 @@ pub(crate) const EDIT_SHORTCUTS: &[(&str, &str)] = &[
     ("Ctrl+C", "Copy"),
     ("Ctrl+V", "Paste"),
     ("Ctrl+D", "Duplicate"),
+    ("Ctrl+T", "Add or edit element text"),
     ("Ctrl+G", "Group"),
     ("Ctrl+Shift+G", "Ungroup"),
     ("Ctrl+Alt+←/→/↑/↓", "Align selection"),
@@ -98,6 +99,8 @@ fn is_browser_shortcut(key: &str, ctrl: bool, alt: bool) -> bool {
                 | "C"
                 | "v"
                 | "V"
+                | "t"
+                | "T"
         ) || (alt && matches!(key, "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown"));
     }
     matches!(key, "Delete" | "Backspace")
@@ -218,6 +221,10 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
                     file_ops::file_save(ctx.doc.clone());
                 }
             }
+            (true, "t") | (true, "T") => {
+                // The canvas owns the text-edit state and opens the editor.
+                // This match arm claims Ctrl+T so the browser cannot open a tab.
+            }
             (false, "?") => ctx.shortcuts_open.update(|v| *v = !*v),
             (false, "e") => ctx.canvas_mode.set(CanvasMode::Erase),
             (false, "1") => {
@@ -288,16 +295,16 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
             }
             return;
         }
-        if let Some(target) = ev.target() {
-            if is_text_input(&target) {
-                return;
-            }
-        }
         let key = ev.key();
         // Cmd on macOS, Ctrl elsewhere.
         let ctrl = ev.ctrl_key() || ev.meta_key();
         let shift = ev.shift_key();
         let alt = ev.alt_key();
+        if ev.target().is_some_and(|target| is_text_input(&target))
+            && !(ctrl && matches!(key.as_str(), "t" | "T"))
+        {
+            return;
+        }
         if is_browser_shortcut(&key, ctrl, alt) {
             ev.prevent_default();
         }

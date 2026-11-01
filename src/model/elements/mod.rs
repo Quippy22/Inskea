@@ -1,5 +1,6 @@
 pub mod connector;
 pub mod ellipse;
+pub(crate) mod embedded_text;
 pub mod freehand;
 pub mod image;
 pub(crate) mod line;
@@ -15,7 +16,7 @@ pub use image::Image;
 #[allow(unused_imports)]
 pub use line::{Line, LineStyle};
 pub use rect::Rectangle;
-pub use text::{Text, TextAlign};
+pub use text::{EmbeddedText, Text, TextAlign};
 
 use crate::model::{Color, Point, Rect};
 pub use path::CurveMode;
@@ -126,6 +127,9 @@ pub struct ElementData {
     pub rotation: f64,
     /// Shared appearance properties (stroke, fill, etc.).
     pub style: ElementStyle,
+    /// Optional text label attached to a shape, line, or connector.
+    #[serde(default)]
+    pub embedded_text: Option<EmbeddedText>,
 }
 
 impl ElementData {
@@ -138,6 +142,7 @@ impl ElementData {
             height: 100.0,
             rotation: 0.0,
             style: ElementStyle::default(),
+            embedded_text: None,
         }
     }
 }
@@ -228,6 +233,14 @@ impl Element {
             Element::Image(_) => StylingKind::Image,
         }
     }
+
+    /// Whether this element type can host an attached text label.
+    pub fn supports_embedded_text(&self) -> bool {
+        matches!(
+            self,
+            Element::Rectangle(_) | Element::Ellipse(_) | Element::Line(_) | Element::Connector(_)
+        )
+    }
 }
 
 // ── Into<Element> conversions ─────────────────────────────────────────
@@ -256,6 +269,31 @@ impl_into_element!(Image);
 pub trait Render {
     /// Produce an SVG view for this element, scaled by `zoom`.
     fn render(&self, zoom: f64) -> leptos::View;
+
+    /// Render the element with its embedded label's glyphs hidden but its
+    /// masking gap kept.
+    ///
+    /// While a label is being edited the textarea is the only visible copy of
+    /// the text, so the SVG copy cannot lag behind it and appear doubled. The
+    /// mask still has to follow the live text, so line and connector hosts keep
+    /// the gap cut by the label's current layout.
+    fn render_label_mask(&self) -> leptos::View {
+        self.render(1.0)
+    }
+
+    /// Render the element with the gap for `layout` cut out and the label's
+    /// glyphs hidden.
+    ///
+    /// While a label is being edited the textarea is the only visible copy of
+    /// the text. A path host still has to cut its gap from the live layout, but
+    /// its own geometry does not change, so the host is not cloned to render
+    /// it.
+    fn render_with_label_layout(
+        &self,
+        _layout: &embedded_text::EmbeddedTextLayout,
+    ) -> leptos::View {
+        self.render_label_mask()
+    }
 }
 
 /// Hit-testing: check if a world-space point intersects the element within a margin.
@@ -463,13 +501,94 @@ macro_rules! dispatch_element {
     };
 }
 
-dispatch_element!(Render, render(&self, zoom: f64) -> leptos::View);
-dispatch_element!(HitTest, hit_test(&self, point: Point, margin: f64) -> bool);
-dispatch_element!(Bounds, bounds(&self) -> Rect);
+impl Render for Element {
+    fn render(&self, zoom: f64) -> leptos::View {
+        match self {
+            Element::Rectangle(e) => e.render(zoom),
+            Element::Ellipse(e) => e.render(zoom),
+            Element::Line(e) => e.render(zoom),
+            Element::Connector(e) => e.render(zoom),
+            Element::Text(e) => e.render(zoom),
+            Element::Freehand(e) => e.render(zoom),
+            Element::Image(e) => e.render(zoom),
+        }
+    }
+
+    fn render_label_mask(&self) -> leptos::View {
+        match self {
+            Element::Rectangle(e) => e.render_label_mask(),
+            Element::Ellipse(e) => e.render_label_mask(),
+            Element::Line(e) => e.render_label_mask(),
+            Element::Connector(e) => e.render_label_mask(),
+            other => other.render(1.0),
+        }
+    }
+
+    fn render_with_label_layout(&self, layout: &embedded_text::EmbeddedTextLayout) -> leptos::View {
+        match self {
+            Element::Line(e) => e.render_with_label_layout(layout),
+            Element::Connector(e) => e.render_with_label_layout(layout),
+            other => other.render_label_mask(),
+        }
+    }
+}
+
 dispatch_element!(Offset, offset(&mut self, dx: f64, dy: f64));
 dispatch_element!(Rotate, rotate_around(&mut self, point: Point, delta: f64));
 dispatch_element!(Resize, resize(&mut self, ctx: &ResizeContext));
 dispatch_element!(UpdateDrag, update_drag(&mut self, current: Point, anchor: Point, shift: bool, zoom: f64));
+
+impl HitTest for Element {
+    fn hit_test(&self, point: Point, margin: f64) -> bool {
+        if let Some(layout) = embedded_text::layout_for_element(self) {
+            let query = Point::unrotate(point, layout.center.x, layout.center.y, layout.rotation);
+            if (query.x - layout.center.x).abs() <= layout.width / 2.0 + margin
+                && (query.y - layout.center.y).abs() <= layout.height / 2.0 + margin
+            {
+                return true;
+            }
+        }
+        match self {
+            Element::Rectangle(e) => e.hit_test(point, margin),
+            Element::Ellipse(e) => e.hit_test(point, margin),
+            Element::Line(e) => e.hit_test(point, margin),
+            Element::Connector(e) => e.hit_test(point, margin),
+            Element::Text(e) => e.hit_test(point, margin),
+            Element::Freehand(e) => e.hit_test(point, margin),
+            Element::Image(e) => e.hit_test(point, margin),
+        }
+    }
+}
+
+impl Bounds for Element {
+    fn bounds(&self) -> Rect {
+        let base = match self {
+            Element::Rectangle(e) => e.bounds(),
+            Element::Ellipse(e) => e.bounds(),
+            Element::Line(e) => e.bounds(),
+            Element::Connector(e) => e.bounds(),
+            Element::Text(e) => e.bounds(),
+            Element::Freehand(e) => e.bounds(),
+            Element::Image(e) => e.bounds(),
+        };
+        // Only path hosts grow their bounds to fit the label; a box label is
+        // laid out inside its host. Skip the wrap for boxes instead of
+        // computing a layout whose only path-relevant field is `None`.
+        if !matches!(self, Element::Line(_) | Element::Connector(_)) {
+            return base;
+        }
+        let Some(layout) = embedded_text::layout_for_element(self) else {
+            return base;
+        };
+        let x = layout.center.x - layout.width / 2.0;
+        let y = layout.center.y - layout.height / 2.0;
+        let left = base.x.min(x);
+        let top = base.y.min(y);
+        let right = (base.x + base.w).max(x + layout.width);
+        let bottom = (base.y + base.h).max(y + layout.height);
+        Rect::new(left, top, right - left, bottom - top)
+    }
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────
 

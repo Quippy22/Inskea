@@ -68,7 +68,7 @@ pub fn style_section(
     roundness: RwSignal<f64>,
     roundness_cb: Rc<dyn Fn(f64)>,
     hide_stroke: Signal<bool>,
-    is_line: Signal<bool>,
+    is_line_or_arrow: Signal<bool>,
     is_rect: Signal<bool>,
     is_rounded: Signal<bool>,
 ) -> impl IntoView {
@@ -101,7 +101,7 @@ pub fn style_section(
             </div>
         </div>
         <div class:hidden=move || hide_stroke.get()>
-            <div class:hidden=move || !is_line.get()>
+            <div class:hidden=move || !is_line_or_arrow.get()>
                 <div>
                     <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                         "Line style"

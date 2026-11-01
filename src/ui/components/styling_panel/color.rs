@@ -9,6 +9,33 @@ use std::rc::Rc;
 pub enum ColorSlot {
     Stroke,
     Fill,
+    EmbeddedText,
+}
+
+pub fn embedded_text_color_section(
+    local_color: RwSignal<Color>,
+    set_color: Rc<dyn Fn(Color)>,
+    active_slot: RwSignal<Option<ColorSlot>>,
+    color_swatches: &'static [&'static str],
+    has_text: Signal<bool>,
+) -> impl IntoView {
+    view! {
+        <div class:hidden=move || !has_text.get()>
+            <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
+                "Text color"
+            </div>
+            <div class="flex gap-1 items-center flex-wrap">
+                {swatch_row(
+                    color_swatches,
+                    Rc::new(move |c| local_color.get() == *c),
+                    Rc::new(move |c| set_color(c)),
+                )}
+                <ColorPickerButton on_click=Rc::new(move || {
+                    active_slot.set(Some(ColorSlot::EmbeddedText))
+                }) />
+            </div>
+        </div>
+    }
 }
 
 pub fn color_section(

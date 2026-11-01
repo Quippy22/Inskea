@@ -105,12 +105,51 @@ impl TextAlign {
 /// `raw` holds the actual content (including any hard `\n` breaks the user
 /// typed). `lines` holds what is rendered as one `<tspan>` per entry: the hard
 /// breaks, plus any soft breaks introduced by side-resize word wrapping.
+///
+/// Embedded labels keep only `raw`: their wrap depends on the host geometry,
+/// so they derive display lines on every layout instead of storing a second
+/// copy of the text (see [`WrappedText::raw_only`]).
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct WrappedText {
     /// Raw text with hard line breaks (from user Enter presses).
     pub raw: Box<InlineText>,
     /// Display lines: hard breaks plus soft word-wrap breaks, one per `<tspan>`.
     pub lines: Box<[String]>,
+}
+
+/// Text attached to a shape or path. Its position and wrapping are derived
+/// from the host element, so the label follows every transform automatically.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct EmbeddedText {
+    pub wrapped: WrappedText,
+    pub color: Color,
+    /// Font size before scaling with the host element.
+    pub font_size: f64,
+    /// Host size when the label was first created, used as the scale baseline.
+    #[serde(default = "default_reference_size")]
+    pub reference_width: f64,
+    #[serde(default = "default_reference_size")]
+    pub reference_height: f64,
+}
+
+fn default_reference_size() -> f64 {
+    1.0
+}
+
+impl EmbeddedText {
+    pub fn new(color: Color, font_size: f64, width: f64, height: f64) -> Self {
+        Self {
+            wrapped: WrappedText::raw_only(""),
+            color,
+            font_size: font_size.max(MIN_FONT_SIZE),
+            reference_width: width.abs().max(1.0),
+            reference_height: height.abs().max(1.0),
+        }
+    }
+
+    pub fn set_content(&mut self, text: &str) {
+        self.wrapped.set_raw_only(text);
+    }
 }
 
 impl WrappedText {
@@ -122,10 +161,29 @@ impl WrappedText {
         }
     }
 
+    /// Build a `WrappedText` without the derived display lines.
+    ///
+    /// Embedded labels wrap against their host geometry on every render, so
+    /// their `lines` copy would only duplicate the raw text in memory (and in
+    /// `.skea` files). They keep `raw` only.
+    pub fn raw_only(raw: &str) -> Self {
+        WrappedText {
+            raw: Box::new(InlineText::new(raw)),
+            lines: Box::new([]),
+        }
+    }
+
     /// Replace the raw content and re-split the lines.
     pub fn set_raw(&mut self, raw: &str) {
         self.raw.set(raw);
         self.lines = Self::split_lines(raw).into_boxed_slice();
+    }
+
+    /// Replace the raw content without deriving display lines (see
+    /// [`WrappedText::raw_only`]).
+    pub fn set_raw_only(&mut self, raw: &str) {
+        self.raw.set(raw);
+        self.lines = Box::new([]);
     }
 
     fn split_lines(raw: &str) -> Vec<String> {
@@ -200,7 +258,7 @@ fn soft_wrap_line(line: &str, max_width: f64, font_size: f64, font_family: &str)
 /// Under wasm this measures against `canvas 2d` with the real font, which
 /// matches the SVG rendering. Natively (unit tests) there is no DOM, so a
 /// deterministic per-char heuristic is used instead.
-fn measure_text_width(text: &str, font_size: f64, font_family: &str) -> f64 {
+pub(crate) fn measure_text_width(text: &str, font_size: f64, font_family: &str) -> f64 {
     #[cfg(target_arch = "wasm32")]
     {
         if let Some(ctx) = canvas_context() {

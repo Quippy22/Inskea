@@ -659,6 +659,7 @@ pub fn App() -> impl IntoView {
                     default_line_style,
                     default_connector_variant,
                     theme_open,
+                    modal_open,
                 }
                 on_text_commit=on_text_commit
                 shortcuts_open=shortcuts_open

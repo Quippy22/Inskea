@@ -94,6 +94,8 @@ impl DragState {
 #[derive(Clone, Copy)]
 pub struct TextEditState {
     pub editing_id: RwSignal<Option<ElementId>>,
+    pub editing_embedded: RwSignal<bool>,
+    pub editing_new: RwSignal<bool>,
     pub edit_text: RwSignal<String>,
     pub textarea_ref: NodeRef<leptos::html::Textarea>,
 }
@@ -102,6 +104,8 @@ impl TextEditState {
     pub fn new() -> Self {
         Self {
             editing_id: create_rw_signal(None),
+            editing_embedded: create_rw_signal(false),
+            editing_new: create_rw_signal(false),
             edit_text: create_rw_signal(String::new()),
             textarea_ref: create_node_ref(),
         }
@@ -192,6 +196,7 @@ pub struct CanvasInputs {
     /// The theme picker modal is open; Escape closes it before touching the
     /// canvas or the current selection.
     pub theme_open: RwSignal<bool>,
+    pub modal_open: Signal<bool>,
 }
 
 // ── Helper functions used by pointer event handlers ──────────────────────
