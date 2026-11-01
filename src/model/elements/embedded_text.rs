@@ -105,20 +105,36 @@ pub fn layout_box(
     height_ratio: f64,
 ) -> Option<EmbeddedTextLayout> {
     let label = data.embedded_text.as_ref()?;
+    Some(layout_box_raw(
+        data,
+        label,
+        label.wrapped.raw.as_str(),
+        width_ratio,
+        height_ratio,
+    ))
+}
+
+fn layout_box_raw(
+    data: &ElementData,
+    label: &EmbeddedText,
+    raw: &str,
+    width_ratio: f64,
+    height_ratio: f64,
+) -> EmbeddedTextLayout {
     let width = (data.width.abs() * width_ratio).max(1.0);
     let available_height = (data.height.abs() * height_ratio).max(1.0);
     let mut font_size = scaled_font_size(label, data.width, data.height);
-    let mut lines = wrap_text(label.wrapped.raw.as_str(), width, font_size);
+    let mut lines = wrap_text(raw, width, font_size);
     for _ in 0..24 {
         let height = lines.len().max(1) as f64 * font_size * 1.2;
         if height <= available_height || font_size <= MIN_EMBEDDED_FONT_SIZE {
             break;
         }
         font_size = (font_size * 0.9).max(MIN_EMBEDDED_FONT_SIZE);
-        lines = wrap_text(label.wrapped.raw.as_str(), width, font_size);
+        lines = wrap_text(raw, width, font_size);
     }
     let height = lines.len().max(1) as f64 * font_size * 1.2;
-    Some(EmbeddedTextLayout {
+    EmbeddedTextLayout {
         center: Point::new(
             data.world_point.x + data.width / 2.0,
             data.world_point.y + data.height / 2.0,
@@ -130,18 +146,26 @@ pub fn layout_box(
         lines,
         path_bounds: None,
         mask_width: 0.0,
-    })
+    }
 }
 
 pub fn layout_path(data: &ElementData, points: &[Point]) -> Option<EmbeddedTextLayout> {
     let label = data.embedded_text.as_ref()?;
-    let route_length = polyline_length(points);
+    layout_path_raw(label, label.wrapped.raw.as_str(), points)
+}
+
+fn layout_path_raw(
+    label: &EmbeddedText,
+    raw: &str,
+    points: &[Point],
+) -> Option<EmbeddedTextLayout> {
     if points.is_empty() {
         return None;
     }
+    let route_length = polyline_length(points);
     let font_size = scaled_font_size(label, route_length, route_length);
     let width = (route_length * 0.5).max(font_size * 2.0);
-    let lines = wrap_text(label.wrapped.raw.as_str(), width, font_size);
+    let lines = wrap_text(raw, width, font_size);
     let height = lines.len().max(1) as f64 * font_size * 1.2;
     let widest = lines
         .iter()
@@ -164,6 +188,50 @@ pub fn layout_path(data: &ElementData, points: &[Point]) -> Option<EmbeddedTextL
         path_bounds: Some(path_bounds),
         mask_width,
     })
+}
+
+/// Lay out `element` as if its embedded label held `text`, without cloning the
+/// host.
+///
+/// A host that has no label yet is laid out with a synthesized one, so the
+/// live editing state matches what the label will look like once committed.
+/// This is the cheap path for per-keystroke and per-frame layout; use
+/// [`with_live_text`] only when the host itself has to be rendered.
+pub fn layout_with_text(element: &Element, text: &str) -> Option<EmbeddedTextLayout> {
+    let data = element.data();
+    let synthesized;
+    let label = match data.embedded_text.as_ref() {
+        Some(label) => label,
+        None => {
+            let (width, height) = reference_size_for_element(element)?;
+            synthesized =
+                EmbeddedText::new(data.style.stroke_color, data.style.font_size, width, height);
+            &synthesized
+        }
+    };
+    match element {
+        Element::Rectangle(_) => Some(layout_box_raw(
+            data,
+            label,
+            text,
+            SHAPE_WIDTH_RATIO,
+            SHAPE_HEIGHT_RATIO,
+        )),
+        Element::Ellipse(_) => Some(layout_box_raw(
+            data,
+            label,
+            text,
+            ELLIPSE_WIDTH_RATIO,
+            ELLIPSE_HEIGHT_RATIO,
+        )),
+        Element::Line(line) => layout_path_raw(
+            label,
+            text,
+            &sample_path(&line.points, line.line_style.curve_mode),
+        ),
+        Element::Connector(connector) => layout_path_raw(label, text, &connector.route_points()),
+        _ => None,
+    }
 }
 
 fn wrap_text(raw: &str, max_width: f64, font_size: f64) -> Vec<String> {

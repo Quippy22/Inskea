@@ -21,17 +21,13 @@ const PAN_SMOOTHING: f64 = 0.3;
 /// exactly where they were before the edit started (seamless transition).
 const EDIT_BASELINE_SHIFT: f64 = 0.06;
 
+/// Lay out the label `element` would have if it held `text`, without cloning
+/// the host. Used by the textarea guide and the overlay.
 fn embedded_edit_layout(
     element: &Element,
     text: &str,
-) -> Option<(
-    EmbeddedText,
-    crate::model::elements::embedded_text::EmbeddedTextLayout,
-)> {
-    let live = crate::model::elements::embedded_text::with_live_text(element, text)?;
-    let label = live.data().embedded_text.clone()?;
-    let layout = crate::model::elements::embedded_text::layout_for_element(&live)?;
-    Some((label, layout))
+) -> Option<crate::model::elements::embedded_text::EmbeddedTextLayout> {
+    crate::model::elements::embedded_text::layout_with_text(element, text)
 }
 
 /// Focus the textarea and place the caret at the end of its content, once it
@@ -83,7 +79,7 @@ pub fn guide_textarea(
         let text = edit_text.get_untracked();
         let layout = scene.with(|s| {
             s.element_by_id(id)
-                .and_then(|element| embedded_edit_layout(&element, &text).map(|(_, layout)| layout))
+                .and_then(|element| embedded_edit_layout(&element, &text))
         });
         let Some(layout) = layout else { return };
         let ss = screen_size.get();
@@ -389,7 +385,12 @@ pub fn text_edit_overlay(
             .with_untracked(|s| {
                 let element = s.element_by_id(id)?;
                 if embedded {
-                    let (label, layout) = embedded_edit_layout(&element, &edit_value)?;
+                    let layout = embedded_edit_layout(&element, &edit_value)?;
+                    let color = element
+                        .data()
+                        .embedded_text
+                        .as_ref()
+                        .map_or(element.data().style.stroke_color, |label| label.color);
                     Some((
                         Point::new(
                             layout.center.x - layout.width / 2.0,
@@ -399,7 +400,7 @@ pub fn text_edit_overlay(
                         layout.height,
                         layout.rotation,
                         layout.font_size,
-                        label.color.to_hex(),
+                        color.to_hex(),
                         crate::model::TextAlign::Center,
                         true,
                     ))
