@@ -895,17 +895,26 @@ pub fn Canvas(
                                 // re-renders per keystroke.
                                 if Some(visible.element.id()) == editing && embedded {
                                     let element = visible.element.clone();
-                                    let fallback = element.clone();
                                     return view! {
                                         <g transform=transform pointer-events="none">
                                             {move || {
                                                 let text = edit_text.get();
-                                                crate::model::elements::embedded_text::with_live_text(
-                                                        &element,
-                                                        &text,
-                                                    )
-                                                    .map(|live| live.render_label_mask())
-                                                    .unwrap_or_else(|| fallback.render(1.0))
+                                                if text.is_empty() {
+                                                    return element.render_label_mask();
+                                                }
+                                                // Lay out the live text without
+                                                // cloning the host, then cut
+                                                // its gap from the unchanged
+                                                // shape.
+                                                match crate::model::elements::embedded_text::layout_with_text(
+                                                    &element,
+                                                    &text,
+                                                ) {
+                                                    Some(layout) => {
+                                                        element.render_with_label_layout(&layout)
+                                                    }
+                                                    None => element.render_label_mask(),
+                                                }
                                             }}
                                         </g>
                                     }

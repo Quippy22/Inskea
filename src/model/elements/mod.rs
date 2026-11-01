@@ -280,6 +280,20 @@ pub trait Render {
     fn render_label_mask(&self) -> leptos::View {
         self.render(1.0)
     }
+
+    /// Render the element with the gap for `layout` cut out and the label's
+    /// glyphs hidden.
+    ///
+    /// While a label is being edited the textarea is the only visible copy of
+    /// the text. A path host still has to cut its gap from the live layout, but
+    /// its own geometry does not change, so the host is not cloned to render
+    /// it.
+    fn render_with_label_layout(
+        &self,
+        _layout: &embedded_text::EmbeddedTextLayout,
+    ) -> leptos::View {
+        self.render_label_mask()
+    }
 }
 
 /// Hit-testing: check if a world-space point intersects the element within a margin.
@@ -507,6 +521,14 @@ impl Render for Element {
             Element::Line(e) => e.render_label_mask(),
             Element::Connector(e) => e.render_label_mask(),
             other => other.render(1.0),
+        }
+    }
+
+    fn render_with_label_layout(&self, layout: &embedded_text::EmbeddedTextLayout) -> leptos::View {
+        match self {
+            Element::Line(e) => e.render_with_label_layout(layout),
+            Element::Connector(e) => e.render_with_label_layout(layout),
+            other => other.render_label_mask(),
         }
     }
 }

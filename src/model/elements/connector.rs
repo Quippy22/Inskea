@@ -649,10 +649,32 @@ impl Render for Connector {
     fn render_label_mask(&self) -> leptos::View {
         self.render_inner(false)
     }
+
+    fn render_with_label_layout(
+        &self,
+        layout: &super::embedded_text::EmbeddedTextLayout,
+    ) -> leptos::View {
+        self.render_masked(layout, None)
+    }
 }
 
 impl Connector {
     fn render_inner(&self, show_label: bool) -> leptos::View {
+        let Some(label) = self.data.embedded_text.as_ref() else {
+            return self.shape();
+        };
+        if label.wrapped.raw.is_empty() {
+            return self.shape();
+        }
+        let route = self.route_points();
+        let Some(layout) = super::embedded_text::layout_path(&self.data, &route) else {
+            return self.shape();
+        };
+        self.render_masked(&layout, show_label.then_some(label))
+    }
+
+    /// The bare route and arrowheads, with no label gap.
+    fn shape(&self) -> leptos::View {
         let sw = self.data.style.stroke_width;
         let stroke = self.data.style.stroke_color.to_hex();
         let dash = self.data.style.stroke_style.stroke_dasharray();
@@ -666,7 +688,7 @@ impl Connector {
         let sw2 = sw;
         let (start_arrow, end_arrow) = self.arrowheads(sw2);
 
-        let base = leptos::view! {
+        leptos::view! {
             <g
                 stroke=stroke
                 stroke-width=sw
@@ -681,20 +703,21 @@ impl Connector {
                 {end_arrow.map(|p| leptos::view! { <polyline points=p /> })}
             </g>
         }
-        .into_view();
-        let Some(label) = self.data.embedded_text.as_ref() else {
-            return base;
-        };
-        if label.wrapped.raw.is_empty() {
-            return base;
-        }
-        let route = self.route_points();
-        let Some(layout) = super::embedded_text::layout_path(&self.data, &route) else {
-            return base;
-        };
+        .into_view()
+    }
+
+    /// The route with `layout`'s gap cut out, plus the glyphs when `label` is
+    /// given.
+    fn render_masked(
+        &self,
+        layout: &super::embedded_text::EmbeddedTextLayout,
+        label: Option<&super::text::EmbeddedText>,
+    ) -> leptos::View {
         let mask_id = super::embedded_text::mask_id(&self.data);
-        let masked = super::embedded_text::mask_path(base, &layout, mask_id);
-        let text = show_label.then(|| super::embedded_text::render_label(label, &layout, opacity));
+        let masked = super::embedded_text::mask_path(self.shape(), layout, mask_id);
+        let text = label.map(|label| {
+            super::embedded_text::render_label(label, layout, self.data.style.opacity)
+        });
         leptos::view! { <g>{masked}{text}</g> }.into_view()
     }
 }

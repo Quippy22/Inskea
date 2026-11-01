@@ -39,31 +39,6 @@ pub fn layout_for_element(element: &Element) -> Option<EmbeddedTextLayout> {
     }
 }
 
-/// A copy of `element` whose embedded label holds `text`.
-///
-/// When the host has no label yet, one is created from its style and reference
-/// size, so a label being typed for the first time lays out — and masks its
-/// host — exactly as it will after the edit is committed. This lets the canvas
-/// render the live editing state without writing to the scene on every
-/// keystroke.
-pub fn with_live_text(element: &Element, text: &str) -> Option<Element> {
-    let mut live = element.clone();
-    match live.data_mut().embedded_text.as_mut() {
-        Some(label) => label.set_content(text),
-        None => {
-            let (width, height) = reference_size_for_element(&live)?;
-            let (color, font_size) = {
-                let data = live.data();
-                (data.style.stroke_color, data.style.font_size)
-            };
-            let mut label = EmbeddedText::new(color, font_size, width, height);
-            label.set_content(text);
-            live.data_mut().embedded_text = Some(label);
-        }
-    }
-    Some(live)
-}
-
 pub fn reference_size_for_element(element: &Element) -> Option<(f64, f64)> {
     match element {
         Element::Rectangle(_) | Element::Ellipse(_) => Some((
@@ -466,30 +441,24 @@ mod tests {
     }
 
     #[test]
-    fn live_text_creates_a_label_for_a_host_without_one() {
+    fn live_layout_works_for_a_host_without_a_label() {
         let mut data = ElementData::new(1);
         data.width = 200.0;
         data.height = 100.0;
         let element = Element::Rectangle(Rectangle { data });
 
-        let live = with_live_text(&element, "typed").expect("rectangle supports labels");
-        let label = live.data().embedded_text.as_ref().unwrap();
+        let layout = layout_with_text(&element, "typed").expect("rectangle supports labels");
 
-        assert_eq!(label.wrapped.raw.as_str(), "typed");
-        // Embedded labels lay out from the raw text; they do not keep a
-        // duplicate display-line copy.
-        assert!(label.wrapped.lines.is_empty());
+        assert_eq!(layout.lines, vec!["typed".to_string()]);
+        // Laying out the live text must not write a label to the host.
         assert!(element.data().embedded_text.is_none());
     }
 
     #[test]
-    fn live_text_resizes_a_path_mask_as_the_label_grows() {
+    fn live_layout_resizes_a_path_mask_as_the_label_grows() {
         let element = line_element();
-        let short = with_live_text(&element, "a").unwrap();
-        let long = with_live_text(&element, "a much longer label").unwrap();
-
-        let short_layout = layout_for_element(&short).unwrap();
-        let long_layout = layout_for_element(&long).unwrap();
+        let short_layout = layout_with_text(&element, "a").unwrap();
+        let long_layout = layout_with_text(&element, "a much longer label").unwrap();
 
         assert!(long_layout.mask_width > short_layout.mask_width);
     }
