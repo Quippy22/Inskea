@@ -178,8 +178,7 @@ fn layout_path_raw(
 ///
 /// A host that has no label yet is laid out with a synthesized one, so the
 /// live editing state matches what the label will look like once committed.
-/// This is the cheap path for per-keystroke and per-frame layout; use
-/// [`with_live_text`] only when the host itself has to be rendered.
+/// This is the cheap path for per-keystroke and per-frame layout.
 pub fn layout_with_text(element: &Element, text: &str) -> Option<EmbeddedTextLayout> {
     let data = element.data();
     let synthesized;
