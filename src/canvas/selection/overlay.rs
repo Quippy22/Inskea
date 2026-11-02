@@ -1,6 +1,9 @@
-use super::utils::{selection_bounds, ROTATE_HANDLE_OFFSET, SELECT_PADDING};
+use super::utils::{
+    selection_bounds, HANDLE_RESIZE_RADIUS_PX, ROTATE_HANDLE_OFFSET_PX, SELECT_PADDING_PX,
+};
 use super::DASH_PREVIEW;
 use crate::canvas::settings::CanvasSettings;
+use crate::canvas::viewport::Viewport;
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{Bounds, PathPoints};
 use crate::model::interaction::layout_bounds;
@@ -51,12 +54,14 @@ fn render_path_element_overlay(
     el: &Element,
     hex: &'static str,
     fill: &'static str,
+    wpx: f64,
 ) -> Option<View> {
     let points = el.path_points()?;
     let n = points.len();
     let b = el.bounds();
     let mx = b.x + b.w / 2.0;
-    let my = b.y - 25.0;
+    let my = b.y - ROTATE_HANDLE_OFFSET_PX * wpx;
+    let dot_r = HANDLE_RESIZE_RADIUS_PX * wpx;
 
     let path_handles: Vec<_> = points
         .iter()
@@ -65,10 +70,11 @@ fn render_path_element_overlay(
                 <circle
                     cx=p.x
                     cy=p.y
-                    r="5"
+                    r=dot_r
                     fill=fill
                     stroke=hex
                     stroke-width="1.5"
+                    vector-effect="non-scaling-stroke"
                     pointer-events="none"
                 />
             }
@@ -77,6 +83,7 @@ fn render_path_element_overlay(
         .collect();
 
     let cm = el.curve_mode();
+    let ghost_r = 3.5 * wpx;
     let ghost_handles: Vec<View> = if el.editable_midpoints() {
         (0..n.saturating_sub(1))
             .filter_map(|i| {
@@ -86,10 +93,11 @@ fn render_path_element_overlay(
                         <circle
                             cx=gx
                             cy=gy
-                            r="3.5"
+                            r=ghost_r
                             fill="none"
                             stroke=hex
                             stroke-width="1"
+                            vector-effect="non-scaling-stroke"
                             pointer-events="none"
                         />
                     }
@@ -106,7 +114,10 @@ fn render_path_element_overlay(
             stroke=hex
             stroke-width="1.5"
             fill="none"
-            transform=format!("translate({} {}) scale(0.9375)", mx - 11.25, my - 11.25)
+            transform=format!(
+                "translate({} {}) scale({}) translate(-12 -12)",
+                mx, my, 0.9375 * wpx,
+            )
             pointer-events="none"
         >
             <path d="M12 3 L12 21 M3 12 L21 12" />
@@ -120,6 +131,7 @@ fn render_path_element_overlay(
     // Connectors route themselves, so their adjustable handles depend on the
     // variant: one bow point for curves, a dot on every elbow section, and
     // nothing extra for direct lines.
+    let route_r = 4.0 * wpx;
     let route_handles: Vec<View> = match el {
         Element::Connector(connector) => connector
             .route_handles()
@@ -129,10 +141,11 @@ fn render_path_element_overlay(
                     <circle
                         cx=p.x
                         cy=p.y
-                        r="4"
+                        r=route_r
                         fill=hex
                         stroke=hex
                         stroke-width="1"
+                        vector-effect="non-scaling-stroke"
                         pointer-events="none"
                     />
                 }
@@ -160,13 +173,14 @@ fn compute_padded_bounds(
     ids: &[ElementId],
     els: &[Element],
     overlay_freeze: RwSignal<Option<Rect>>,
+    wpx: f64,
 ) -> Rect {
     let mut b = if let Some(fb) = overlay_freeze.get() {
         fb
     } else {
         selection_bounds(ids, els).unwrap_or(Rect::new(0.0, 0.0, 0.0, 0.0))
     };
-    b = b.padded(SELECT_PADDING);
+    b = b.padded(SELECT_PADDING_PX * wpx);
     b
 }
 
@@ -214,10 +228,16 @@ fn compute_rotation(ids: &[ElementId], els: &[Element], rotation_delta: RwSignal
 /// Excludes path-based elements (Line, Arrow, Freehand).
 /// Each box is individually rotated to match its element's orientation.
 #[inline]
-fn render_multi_select_boxes(ids: &[ElementId], els: &[Element], hex: &'static str) -> Vec<View> {
+fn render_multi_select_boxes(
+    ids: &[ElementId],
+    els: &[Element],
+    hex: &'static str,
+    wpx: f64,
+) -> Vec<View> {
     if ids.len() <= 1 {
         return vec![];
     }
+    let pad = SELECT_PADDING_PX * wpx;
     els.iter()
         .filter(|el| ids.contains(&el.id()) && el.path_points().is_none())
         .map(|el| {
@@ -238,14 +258,15 @@ fn render_multi_select_boxes(ids: &[ElementId], els: &[Element], hex: &'static s
                 view! {
                     <g transform=format!("rotate({} {} {})", deg, cx, cy)>
                         <rect
-                            x=b.x - SELECT_PADDING
-                            y=b.y - SELECT_PADDING
-                            width=b.w + SELECT_PADDING * 2.0
-                            height=b.h + SELECT_PADDING * 2.0
+                            x=b.x - pad
+                            y=b.y - pad
+                            width=b.w + pad * 2.0
+                            height=b.h + pad * 2.0
                             fill="none"
                             stroke=hex
                             stroke-width="0.5"
                             stroke-dasharray="3 2"
+                            vector-effect="non-scaling-stroke"
                             pointer-events="none"
                         />
                     </g>
@@ -254,14 +275,15 @@ fn render_multi_select_boxes(ids: &[ElementId], els: &[Element], hex: &'static s
             } else {
                 view! {
                     <rect
-                        x=b.x - SELECT_PADDING
-                        y=b.y - SELECT_PADDING
-                        width=b.w + SELECT_PADDING * 2.0
-                        height=b.h + SELECT_PADDING * 2.0
+                        x=b.x - pad
+                        y=b.y - pad
+                        width=b.w + pad * 2.0
+                        height=b.h + pad * 2.0
                         fill="none"
                         stroke=hex
                         stroke-width="0.5"
                         stroke-dasharray="3 2"
+                        vector-effect="non-scaling-stroke"
                         pointer-events="none"
                     />
                 }
@@ -275,7 +297,15 @@ fn render_multi_select_boxes(ids: &[ElementId], els: &[Element], hex: &'static s
 /// box is drawn as 8 segments that stop short of every circle, so the lines
 /// never cross through a handle.
 #[inline]
-fn render_bbox_overlay(bx: f64, by: f64, bw: f64, bh: f64, hr: f64, hex: &'static str) -> View {
+fn render_bbox_overlay(
+    bx: f64,
+    by: f64,
+    bw: f64,
+    bh: f64,
+    hr: f64,
+    hex: &'static str,
+    wpx: f64,
+) -> View {
     let corners = [
         (bx, by),
         (bx + bw / 2.0, by),
@@ -289,7 +319,7 @@ fn render_bbox_overlay(bx: f64, by: f64, bw: f64, bh: f64, hr: f64, hex: &'stati
 
     // Distance from a handle centre where the box line must stop: the handle
     // radius plus clearance for the two strokes and a small visible gap.
-    let clear = hr + 2.0;
+    let clear = hr + 2.0 * wpx;
     let xs = [bx, bx + bw / 2.0, bx + bw];
     let ys = [by, by + bh / 2.0, by + bh];
 
@@ -321,6 +351,7 @@ fn render_bbox_overlay(bx: f64, by: f64, bw: f64, bh: f64, hr: f64, hex: &'stati
                         y2=y2
                         stroke=hex
                         stroke-width="1"
+                        vector-effect="non-scaling-stroke"
                         pointer-events="none"
                     />
                 }
@@ -338,6 +369,7 @@ fn render_bbox_overlay(bx: f64, by: f64, bw: f64, bh: f64, hr: f64, hex: &'stati
                         fill="none"
                         stroke=hex
                         stroke-width="1"
+                        vector-effect="non-scaling-stroke"
                         pointer-events="none"
                     />
                 }
@@ -354,6 +386,7 @@ pub fn selection_handle_overlay(
     overlay_freeze: RwSignal<Option<Rect>>,
     rotation_delta: RwSignal<f64>,
     settings: RwSignal<CanvasSettings>,
+    viewport: RwSignal<Viewport>,
     editing_id: RwSignal<Option<ElementId>>,
 ) -> impl Fn() -> Option<View> {
     move || {
@@ -365,6 +398,7 @@ pub fn selection_handle_overlay(
             return None;
         }
         let theme = settings.get().theme;
+        let wpx = viewport.get().world_per_px();
         // `with` instead of `get`: the overlay re-runs on every scene change
         // (including each drag step) and must not clone the document.
         scene.with(|s| {
@@ -374,24 +408,24 @@ pub fn selection_handle_overlay(
 
             if ids.len() == 1 {
                 if let Some(el) = els.iter().find(|el| el.id() == ids[0]) {
-                    if let Some(view) = render_path_element_overlay(el, hex, fill) {
+                    if let Some(view) = render_path_element_overlay(el, hex, fill, wpx) {
                         return Some(view);
                     }
                 }
             }
 
-            let b = compute_padded_bounds(&ids, &els, overlay_freeze);
-            let hr = 3.5;
+            let b = compute_padded_bounds(&ids, &els, overlay_freeze, wpx);
+            let hr = 3.5 * wpx;
             let pivot = selection_pivot(&ids, &els, b, overlay_freeze.get());
             let cx = pivot.x;
             let cy = pivot.y;
             let rx = cx;
-            let ry = b.y - ROTATE_HANDLE_OFFSET;
+            let ry = b.y - ROTATE_HANDLE_OFFSET_PX * wpx;
 
             let rot = compute_rotation(&ids, &els, rotation_delta);
-            let individual_boxes = render_multi_select_boxes(&ids, &els, hex);
-            let inner = render_bbox_overlay(b.x, b.y, b.w, b.h, hr, hex);
-            let icons = render_move_rotate_icons(hex, cx, cy, rx, ry);
+            let individual_boxes = render_multi_select_boxes(&ids, &els, hex, wpx);
+            let inner = render_bbox_overlay(b.x, b.y, b.w, b.h, hr, hex, wpx);
+            let icons = render_move_rotate_icons(hex, cx, cy, rx, ry, wpx);
 
             let content = if rot != 0.0 {
                 let deg = rot.to_degrees();
@@ -417,13 +451,23 @@ pub fn selection_handle_overlay(
 /// Move cross (centred on bbox) and rotation-arrow (above top edge) icons.
 /// Not interactive — hit-testing is analytic in `handle_selection_handles`.
 #[inline]
-fn render_move_rotate_icons(hex: &'static str, cx: f64, cy: f64, rx: f64, ry: f64) -> leptos::View {
+fn render_move_rotate_icons(
+    hex: &'static str,
+    cx: f64,
+    cy: f64,
+    rx: f64,
+    ry: f64,
+    wpx: f64,
+) -> leptos::View {
     let move_icon = view! {
         <g
             stroke=hex
             stroke-width="1.5"
             fill="none"
-            transform=format!("translate({} {}) scale(0.9375)", cx - 11.25, cy - 11.25)
+            transform=format!(
+                "translate({} {}) scale({}) translate(-12 -12)",
+                cx, cy, 0.9375 * wpx,
+            )
             pointer-events="none"
         >
             <path d="M12 3 L12 21 M3 12 L21 12" />
@@ -438,7 +482,10 @@ fn render_move_rotate_icons(hex: &'static str, cx: f64, cy: f64, rx: f64, ry: f6
             stroke=hex
             stroke-width="1.5"
             fill="none"
-            transform=format!("translate({} {}) scale(0.75)", rx - 9.0, ry - 9.0)
+            transform=format!(
+                "translate({} {}) scale({}) translate(-12 -12)",
+                rx, ry, 0.75 * wpx,
+            )
             pointer-events="none"
         >
             <path d="M12 4 A8 8 0 1 1 4 12" />

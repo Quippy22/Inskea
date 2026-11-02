@@ -2,12 +2,14 @@ use crate::canvas::combined_bounds;
 use crate::model::interaction::{layout_bounds, visual_bounds, visual_envelope};
 use crate::model::{Element, ElementId, Point, Rect};
 
-pub const HANDLE_RESIZE_RADIUS: f64 = 5.0;
-pub const HANDLE_MOVE_RADIUS: f64 = 6.0;
-pub const HANDLE_ROTATE_RADIUS: f64 = 7.0;
-pub const ROTATE_HANDLE_OFFSET: f64 = 25.0;
+/// Screen-pixel sizes of the selection affordances. Geometry and hit areas in
+/// world units are derived by multiplying these by `Viewport::world_per_px`.
+pub const HANDLE_RESIZE_RADIUS_PX: f64 = 5.0;
+pub const HANDLE_MOVE_RADIUS_PX: f64 = 6.0;
+pub const HANDLE_ROTATE_RADIUS_PX: f64 = 7.0;
+pub const ROTATE_HANDLE_OFFSET_PX: f64 = 25.0;
 pub const PATH_MERGE_DIST: f64 = 3.0;
-pub const SELECT_PADDING: f64 = 5.0;
+pub const SELECT_PADDING_PX: f64 = 5.0;
 
 pub fn selection_bounds(ids: &[ElementId], els: &[Element]) -> Option<Rect> {
     if ids.len() == 1 {
@@ -23,7 +25,7 @@ pub fn selection_bounds(ids: &[ElementId], els: &[Element]) -> Option<Rect> {
     }
 }
 
-pub fn handle_positions(bx: f64, by: f64, bw: f64, bh: f64) -> [Point; 10] {
+pub fn handle_positions(bx: f64, by: f64, bw: f64, bh: f64, rotate_offset: f64) -> [Point; 10] {
     [
         Point::new(bx, by),
         Point::new(bx + bw / 2.0, by),
@@ -34,7 +36,7 @@ pub fn handle_positions(bx: f64, by: f64, bw: f64, bh: f64) -> [Point; 10] {
         Point::new(bx + bw / 2.0, by + bh),
         Point::new(bx + bw, by + bh),
         Point::new(bx + bw / 2.0, by + bh / 2.0),
-        Point::new(bx + bw / 2.0, by - 25.0),
+        Point::new(bx + bw / 2.0, by - rotate_offset),
     ]
 }
 
@@ -72,6 +74,15 @@ mod tests {
         let un = unrotate_for_element(world, &el);
         assert!((un.x - local.x).abs() < 1e-9);
         assert!((un.y - local.y).abs() < 1e-9);
+    }
+
+    #[test]
+    fn handle_positions_place_the_rotate_handle_by_offset() {
+        let p = handle_positions(0.0, 0.0, 100.0, 50.0, 12.5);
+        assert_eq!(p[0], Point::new(0.0, 0.0));
+        assert_eq!(p[4], Point::new(100.0, 25.0));
+        assert_eq!(p[8], Point::new(50.0, 25.0));
+        assert_eq!(p[9], Point::new(50.0, -12.5));
     }
 
     #[test]

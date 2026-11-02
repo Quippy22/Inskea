@@ -948,6 +948,7 @@ pub fn Canvas(
                 st.drag.overlay_freeze,
                 st.drag.rotation_delta,
                 props.settings,
+                props.viewport,
                 st.text_edit.editing_id,
             )}
         </svg>

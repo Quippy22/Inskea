@@ -1,6 +1,7 @@
 use super::utils::{
-    handle_positions, selection_bounds, unrotate_for_element, HANDLE_MOVE_RADIUS,
-    HANDLE_RESIZE_RADIUS, HANDLE_ROTATE_RADIUS, PATH_MERGE_DIST, SELECT_PADDING,
+    handle_positions, selection_bounds, unrotate_for_element, HANDLE_MOVE_RADIUS_PX,
+    HANDLE_RESIZE_RADIUS_PX, HANDLE_ROTATE_RADIUS_PX, PATH_MERGE_DIST, ROTATE_HANDLE_OFFSET_PX,
+    SELECT_PADDING_PX,
 };
 use super::MIN_DRAG_DIST;
 use crate::canvas::smart_guides::{self, GuideBox, SmartGuideState};
@@ -81,18 +82,22 @@ fn handle_text_double_click(
     }
 }
 
+/// World units covered by one screen pixel at the current zoom.
+#[inline]
+fn world_per_px(props: &CanvasInputs) -> f64 {
+    props.viewport.get_untracked().world_per_px()
+}
+
 /// Route handle of a connector under the pointer, if any.
 #[inline]
-fn route_handle_at(el: &Element, world: Point) -> Option<RouteHandle> {
+fn route_handle_at(el: &Element, world: Point, radius: f64) -> Option<RouteHandle> {
     let Element::Connector(connector) = el else {
         return None;
     };
     connector
         .route_handles()
         .into_iter()
-        .find(|(_, p)| {
-            ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS
-        })
+        .find(|(_, p)| ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= radius)
         .map(|(kind, _)| kind)
 }
 
@@ -117,9 +122,11 @@ fn handle_path_point_hit(
     let Some(points) = el.path_points() else {
         return false;
     };
+    let wpx = world_per_px(props);
+    let radius = HANDLE_RESIZE_RADIUS_PX * wpx;
     for (i, p) in points.iter().enumerate() {
         let d = ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt();
-        if d <= HANDLE_RESIZE_RADIUS {
+        if d <= radius {
             (props.push_snapshot)();
             st.drag.drag_originals.set(vec![el.clone()]);
             st.drag.drag_action.set(Some(DragOperation::PathPoint(i)));
@@ -128,7 +135,7 @@ fn handle_path_point_hit(
             return true;
         }
     }
-    if let Some(kind) = route_handle_at(el, world) {
+    if let Some(kind) = route_handle_at(el, world, radius) {
         (props.push_snapshot)();
         st.drag.drag_originals.set(vec![el.clone()]);
         st.drag.drag_action.set(Some(route_drag_operation(kind)));
@@ -146,7 +153,7 @@ fn handle_path_point_hit(
             continue;
         };
         let d = ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt();
-        if d <= HANDLE_RESIZE_RADIUS {
+        if d <= radius {
             st.drag.drag_originals.set(vec![el.clone()]);
             st.drag
                 .drag_action
@@ -172,9 +179,10 @@ fn handle_path_move_icon(
         return false;
     }
     let b = el.bounds();
+    let wpx = world_per_px(props);
     let mx = b.x + b.w / 2.0;
-    let my = b.y - 25.0;
-    if ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+    let my = b.y - ROTATE_HANDLE_OFFSET_PX * wpx;
+    if ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS_PX * wpx {
         (props.push_snapshot)();
         st.drag.drag_action.set(Some(DragOperation::Move));
         st.drag.moving_anchor.set(Some(world));
@@ -200,14 +208,17 @@ fn hit_resize_handle(
     els: &[Element],
 ) -> bool {
     let (mut bx, mut by, mut bw, mut bh) = (bounds.x, bounds.y, bounds.w, bounds.h);
-    bx -= SELECT_PADDING;
-    by -= SELECT_PADDING;
-    bw += SELECT_PADDING * 2.0;
-    bh += SELECT_PADDING * 2.0;
-    let hpos = handle_positions(bx, by, bw, bh);
+    let wpx = world_per_px(props);
+    let pad = SELECT_PADDING_PX * wpx;
+    bx -= pad;
+    by -= pad;
+    bw += pad * 2.0;
+    bh += pad * 2.0;
+    let hpos = handle_positions(bx, by, bw, bh, ROTATE_HANDLE_OFFSET_PX * wpx);
 
     for (i, &p) in hpos[..8].iter().enumerate() {
-        if ((test.x - p.x).powi(2) + (test.y - p.y).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS {
+        if ((test.x - p.x).powi(2) + (test.y - p.y).powi(2)).sqrt() <= HANDLE_RESIZE_RADIUS_PX * wpx
+        {
             (props.push_snapshot)();
             st.drag
                 .drag_action
@@ -239,14 +250,16 @@ fn hit_move_handle(
     els: &[Element],
 ) -> bool {
     let (mut bx, mut by, mut bw, mut bh) = (bounds.x, bounds.y, bounds.w, bounds.h);
-    bx -= SELECT_PADDING;
-    by -= SELECT_PADDING;
-    bw += SELECT_PADDING * 2.0;
-    bh += SELECT_PADDING * 2.0;
-    let hpos = handle_positions(bx, by, bw, bh);
+    let wpx = world_per_px(props);
+    let pad = SELECT_PADDING_PX * wpx;
+    bx -= pad;
+    by -= pad;
+    bw += pad * 2.0;
+    bh += pad * 2.0;
+    let hpos = handle_positions(bx, by, bw, bh, ROTATE_HANDLE_OFFSET_PX * wpx);
     let hp = hpos[8];
 
-    if ((test.x - hp.x).powi(2) + (test.y - hp.y).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+    if ((test.x - hp.x).powi(2) + (test.y - hp.y).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS_PX * wpx {
         let Some(drag_bounds) = guide_union_bounds(ids, els) else {
             return false;
         };
@@ -280,14 +293,16 @@ fn hit_rotate_handle(
     els: &[Element],
 ) -> bool {
     let (mut bx, mut by, mut bw, mut bh) = (bounds.x, bounds.y, bounds.w, bounds.h);
-    bx -= SELECT_PADDING;
-    by -= SELECT_PADDING;
-    bw += SELECT_PADDING * 2.0;
-    bh += SELECT_PADDING * 2.0;
-    let hpos = handle_positions(bx, by, bw, bh);
+    let wpx = world_per_px(props);
+    let pad = SELECT_PADDING_PX * wpx;
+    bx -= pad;
+    by -= pad;
+    bw += pad * 2.0;
+    bh += pad * 2.0;
+    let hpos = handle_positions(bx, by, bw, bh, ROTATE_HANDLE_OFFSET_PX * wpx);
     let hp = hpos[9];
 
-    if ((test.x - hp.x).powi(2) + (test.y - hp.y).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
+    if ((test.x - hp.x).powi(2) + (test.y - hp.y).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS_PX * wpx {
         (props.push_snapshot)();
         let cx = bx + bw / 2.0;
         let cy = by + bh / 2.0;
@@ -495,6 +510,10 @@ fn detect_hovered_handle(
     }
     // `with` instead of `get`: hover runs on every pointer move and must
     // not deep-clone the whole scene.
+    let wpx = world_per_px(props);
+    let resize_radius = HANDLE_RESIZE_RADIUS_PX * wpx;
+    let move_radius = HANDLE_MOVE_RADIUS_PX * wpx;
+    let rotate_radius = HANDLE_ROTATE_RADIUS_PX * wpx;
     props.scene.with(|s| {
         let els = s.elements_for_ids(&ids);
 
@@ -503,20 +522,18 @@ fn detect_hovered_handle(
                 if let Some(points) = el.path_points() {
                     for (i, p) in points.iter().enumerate() {
                         if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt()
-                            <= HANDLE_RESIZE_RADIUS
+                            <= resize_radius
                         {
                             return Some(DragOperation::PathPoint(i));
                         }
                     }
-                    if let Some(kind) = route_handle_at(el, world) {
+                    if let Some(kind) = route_handle_at(el, world, resize_radius) {
                         return Some(route_drag_operation(kind));
                     }
                     let b = el.bounds();
                     let mx = b.x + b.w / 2.0;
-                    let my = b.y - 25.0;
-                    if ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt()
-                        <= HANDLE_MOVE_RADIUS
-                    {
+                    let my = b.y - ROTATE_HANDLE_OFFSET_PX * wpx;
+                    if ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt() <= move_radius {
                         return Some(DragOperation::Move);
                     }
                 }
@@ -524,24 +541,22 @@ fn detect_hovered_handle(
         }
 
         if let Some(mut b) = selection_bounds(&ids, &els) {
-            b = b.padded(SELECT_PADDING);
-            let hpos = handle_positions(b.x, b.y, b.w, b.h);
+            b = b.padded(SELECT_PADDING_PX * wpx);
+            let hpos = handle_positions(b.x, b.y, b.w, b.h, ROTATE_HANDLE_OFFSET_PX * wpx);
 
             for (i, &p) in hpos[..8].iter().enumerate() {
-                if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt()
-                    <= HANDLE_RESIZE_RADIUS
-                {
+                if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= resize_radius {
                     return Some(DragOperation::Resize(ResizeHandle::from(i)));
                 }
             }
 
             let p = hpos[8];
-            if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_MOVE_RADIUS {
+            if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= move_radius {
                 return Some(DragOperation::Move);
             }
 
             let p = hpos[9];
-            if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= HANDLE_ROTATE_RADIUS {
+            if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt() <= rotate_radius {
                 return Some(DragOperation::Rotate);
             }
         }
