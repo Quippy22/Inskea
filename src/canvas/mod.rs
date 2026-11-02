@@ -49,12 +49,42 @@ fn pan_viewport(ev: &ev::PointerEvent, st: &mut CanvasState, props: &mut CanvasI
     if let Some((ax, ay)) = st.pan_anchor.get() {
         let dx = ev.client_x() as f64 - ax;
         let dy = ev.client_y() as f64 - ay;
+        let zoom = props.viewport.get_untracked().zoom;
         props.viewport.update(|vp| {
             vp.offset_x -= dx / vp.zoom;
             vp.offset_y -= dy / vp.zoom;
         });
+        // A temporary pan moves the world under the pointer. Shift the drag
+        // origins with it so resuming does not snap a moving, resizing, or
+        // rotating selection back by the pan distance.
+        if st.temporary_pan.get() {
+            shift_interaction_origin(st, -dx / zoom, -dy / zoom);
+        }
         st.pan_anchor
             .set(Some((ev.client_x() as f64, ev.client_y() as f64)));
+    }
+}
+
+/// Move the drag's world-space reference points by a viewport pan delta.
+fn shift_interaction_origin(st: &mut CanvasState, dx: f64, dy: f64) {
+    let Some(old_anchor) = st.drag.moving_anchor.get() else {
+        return;
+    };
+    let anchor = Point::new(old_anchor.x + dx, old_anchor.y + dy);
+    st.drag.moving_anchor.set(Some(anchor));
+    if let Some(last) = st.drag.last_world.get() {
+        st.drag
+            .last_world
+            .set(Some(Point::new(last.x + dx, last.y + dy)));
+    }
+    // Rotation tracks the pointer angle around the drag bounds centre, so the
+    // stored start angle must move by the same angular offset.
+    if let (Some(angle), Some(b)) = (st.drag.drag_angle.get(), st.drag.drag_bounds.get()) {
+        let cx = b.x + b.w / 2.0;
+        let cy = b.y + b.h / 2.0;
+        let before = (old_anchor.y - cy).atan2(old_anchor.x - cx);
+        let after = (anchor.y - cy).atan2(anchor.x - cx);
+        st.drag.drag_angle.set(Some(angle + after - before));
     }
 }
 
