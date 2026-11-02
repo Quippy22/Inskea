@@ -139,6 +139,9 @@ pub struct CanvasState {
     pub shift_pressed: RwSignal<bool>,
     pub alt_pressed: RwSignal<bool>,
     pub pan_anchor: RwSignal<Option<(f64, f64)>>,
+    /// True while the middle mouse button holds a temporary pan. The action in
+    /// progress (draw, move, resize, …) is left intact and resumes on release.
+    pub temporary_pan: RwSignal<bool>,
     pub select_anchor: RwSignal<Option<Point>>,
     pub erasing: RwSignal<bool>,
     pub selected_ids: RwSignal<Vec<ElementId>>,
@@ -158,6 +161,7 @@ impl CanvasState {
             shift_pressed: create_rw_signal(false),
             alt_pressed: create_rw_signal(false),
             pan_anchor: create_rw_signal(None),
+            temporary_pan: create_rw_signal(false),
             select_anchor: create_rw_signal(None),
             erasing: create_rw_signal(false),
             selected_ids: create_rw_signal(Vec::new()),

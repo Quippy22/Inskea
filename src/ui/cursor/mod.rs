@@ -25,6 +25,10 @@ pub fn cursor_style(
 ) -> String {
     let stroke = theme.cursor();
 
+    if pan_dragging {
+        return "grabbing".to_string();
+    }
+
     if crop_active {
         return to_cursor(svgs::CROSSHAIR, 16, 16, "crosshair", stroke);
     }

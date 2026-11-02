@@ -44,6 +44,20 @@ pub(crate) const DASH_PREVIEW: &str = "4 2";
 
 // ────────────────────────────────────────────────────────────────────────────
 
+/// Pan the viewport by the pointer delta since the last pan anchor.
+fn pan_viewport(ev: &ev::PointerEvent, st: &mut CanvasState, props: &mut CanvasInputs) {
+    if let Some((ax, ay)) = st.pan_anchor.get() {
+        let dx = ev.client_x() as f64 - ax;
+        let dy = ev.client_y() as f64 - ay;
+        props.viewport.update(|vp| {
+            vp.offset_x -= dx / vp.zoom;
+            vp.offset_y -= dy / vp.zoom;
+        });
+        st.pan_anchor
+            .set(Some((ev.client_x() as f64, ev.client_y() as f64)));
+    }
+}
+
 /// Dispatch a pointer-down event to the handler for the active canvas mode.
 /// Extracted so pointer-down logic (including the `Text` editing path, which
 /// commits the active edit before dispatching) shares a single dispatch.
@@ -498,6 +512,17 @@ pub fn Canvas(
                 let _ = svg.set_pointer_capture(ev.pointer_id());
             }
 
+            // Middle-button drag pans temporarily without disturbing the
+            // interaction already in flight. The drawing or drag state stays
+            // untouched, so releasing the middle button lets the user carry on
+            // from where they were.
+            if ev.button() == 1 {
+                ev.prevent_default();
+                st.temporary_pan.set(true);
+                st.pan_anchor.set(Some(client));
+                return;
+            }
+
             if editing {
                 // A text edit is in progress: commit it, then handle this
                 // click synchronously. The textarea's blur is scoped to its
@@ -541,6 +566,14 @@ pub fn Canvas(
             let mode = props.canvas_mode.get();
             let world = update_world(&ev);
 
+            if st.temporary_pan.get() {
+                pan_viewport(&ev, &mut st, &mut props);
+                // Keep the reactive cursor/draw preview on the pointer while
+                // the viewport moves underneath it.
+                let _ = update_world(&ev);
+                return;
+            }
+
             if props.export_crop_active.get() {
                 st.drag.last_world.set(Some(world));
                 return;
@@ -554,16 +587,7 @@ pub fn Canvas(
 
             match mode {
                 CanvasMode::Pan => {
-                    if let Some((ax, ay)) = st.pan_anchor.get() {
-                        let dx = ev.client_x() as f64 - ax;
-                        let dy = ev.client_y() as f64 - ay;
-                        props.viewport.update(|vp| {
-                            vp.offset_x -= dx / vp.zoom;
-                            vp.offset_y -= dy / vp.zoom;
-                        });
-                        st.pan_anchor
-                            .set(Some((ev.client_x() as f64, ev.client_y() as f64)));
-                    }
+                    pan_viewport(&ev, &mut st, &mut props);
                 }
                 CanvasMode::Select => {
                     select_pointer_move(world, &ev, &mut st, &mut props);
@@ -623,6 +647,23 @@ pub fn Canvas(
         let mut props = props.clone();
         let update_world = update_world;
         move |ev: ev::PointerEvent| {
+            // A middle-button pan consumes its own release: the pending draw
+            // or drag must survive so it can continue afterwards.
+            if st.temporary_pan.get() {
+                if ev.button() == 1 {
+                    st.temporary_pan.set(false);
+                    st.pan_anchor.set(None);
+                    // Pointer capture is dropped on pointer-up. Re-acquire it
+                    // when the left button (the pending action) is still held.
+                    if ev.buttons() & 1 != 0 {
+                        if let Some(svg) = st.svg_ref.get() {
+                            let _ = svg.set_pointer_capture(ev.pointer_id());
+                        }
+                    }
+                }
+                return;
+            }
+
             if props.export_crop_active.get() {
                 if let Some(anchor) = st.select_anchor.get() {
                     let current = st.drag.last_world.get().unwrap_or(anchor);
@@ -821,6 +862,7 @@ pub fn Canvas(
         move |_ev: ev::PointerEvent| {
             st.erasing.set(false);
             st.pan_anchor.set(None);
+            st.temporary_pan.set(false);
             st.select_anchor.set(None);
             st.drag.last_world.set(None);
             if st.drag.moving_anchor.get().is_some() {
