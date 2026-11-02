@@ -34,6 +34,7 @@ pub fn selection_preview_overlay(
                     stroke=hex
                     stroke-width="1"
                     stroke-dasharray=DASH_PREVIEW
+                    vector-effect="non-scaling-stroke"
                     pointer-events="none"
                 />
             }
