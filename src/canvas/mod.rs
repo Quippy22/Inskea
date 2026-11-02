@@ -846,7 +846,7 @@ pub fn Canvas(
             on:pointercancel=on_pointer_cancel
             on:wheel=on_wheel
         >
-            {grid::grid_overlay(props.settings, props.hide_center)}
+            {grid::grid_overlay(props.settings, props.hide_center, props.viewport)}
 
             // NB: this is deliberately NOT a <For> loop keyed by ElementId.
             // Leptos's <For> only re-invokes `children` for a newly-inserted

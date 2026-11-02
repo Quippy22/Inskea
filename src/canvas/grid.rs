@@ -1,10 +1,12 @@
 use crate::canvas::settings::{CanvasSettings, CenterStyle, GridStyle};
+use crate::canvas::viewport::Viewport;
 use leptos::*;
 
 /// Returns a reactive closure that renders the grid pattern and centre indicator.
 pub fn grid_overlay(
     settings: RwSignal<CanvasSettings>,
     hide_center: RwSignal<bool>,
+    viewport: RwSignal<Viewport>,
 ) -> impl Fn() -> View {
     move || {
         let settings_state = settings.get();
@@ -71,20 +73,26 @@ pub fn grid_overlay(
         // nodes, or Leptos's delegated handler loses the event target and the
         // canvas never sees the click.
         let hidden = move || hide_center.get();
+        // The marker lives in world coordinates, so undo the viewport zoom to
+        // keep its arms and dot the same size on screen at every zoom level.
+        let center_scale = format!("scale({})", viewport.get().world_per_px());
         let center = match settings_state.center_style {
             CenterStyle::Crosshair => view! {
-                <path
-                    class:hidden=hidden
-                    d="M-12,0 L12,0 M0,-12 L0,12"
-                    stroke=theme.accent()
-                    stroke-width="2"
-                />
+                <g class:hidden=hidden transform=center_scale>
+                    <path
+                        d="M-12,0 L12,0 M0,-12 L0,12"
+                        stroke=theme.accent()
+                        stroke-width="2"
+                    />
+                </g>
             }
             .into_view(),
-            CenterStyle::Dot => {
-                view! { <circle class:hidden=hidden cx="0" cy="0" r="3" fill=theme.accent() /> }
-                    .into_view()
+            CenterStyle::Dot => view! {
+                <g class:hidden=hidden transform=center_scale>
+                    <circle cx="0" cy="0" r="3" fill=theme.accent() />
+                </g>
             }
+            .into_view(),
             CenterStyle::Off => view! {}.into_view(),
         };
 

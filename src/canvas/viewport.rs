@@ -18,13 +18,23 @@ impl Default for Viewport {
 }
 
 impl Viewport {
-    /// World rectangle the screen currently shows.
-    pub fn visible_rect(self, screen_size: Point) -> Rect {
-        let zoom = if self.zoom.is_finite() && self.zoom > 0.0 {
+    /// The zoom clamped to a finite positive value.
+    pub fn effective_zoom(self) -> f64 {
+        if self.zoom.is_finite() && self.zoom > 0.0 {
             self.zoom
         } else {
             1.0
-        };
+        }
+    }
+
+    /// World units covered by one screen pixel at the current zoom.
+    pub fn world_per_px(self) -> f64 {
+        1.0 / self.effective_zoom()
+    }
+
+    /// World rectangle the screen currently shows.
+    pub fn visible_rect(self, screen_size: Point) -> Rect {
+        let zoom = self.effective_zoom();
         let width = screen_size.x / zoom;
         let height = screen_size.y / zoom;
         Rect::new(
@@ -95,6 +105,21 @@ mod tests {
         };
         let view_box = vp.to_view_box(1000.0, 800.0);
         assert_eq!(view_box, "-500 -400 1000 800");
+    }
+
+    #[test]
+    fn world_per_px_inverts_zoom() {
+        let vp = Viewport {
+            zoom: 2.0,
+            ..Viewport::default()
+        };
+        assert!((vp.world_per_px() - 0.5).abs() < f64::EPSILON);
+
+        let invalid = Viewport {
+            zoom: 0.0,
+            ..Viewport::default()
+        };
+        assert_eq!(invalid.world_per_px(), 1.0);
     }
 
     #[test]
