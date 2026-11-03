@@ -610,17 +610,6 @@ impl Scene {
             .map(|stored| stored.revision)
     }
 
-    /// World-space bounds cached for `id` when it was last written.
-    pub fn element_bounds_by_id(&self, id: ElementId) -> Option<Rect> {
-        let key = self.locations.get(&id)?;
-        self.chunks
-            .get(key)?
-            .elements
-            .iter()
-            .find(|stored| stored.element.id() == id)
-            .map(|stored| stored.bounds)
-    }
-
     pub fn element_by_id_mut(&mut self, id: ElementId) -> Option<ElementMut<'_>> {
         let order = self.element_order(id)?;
         let element = self.take_element(id)?;
@@ -1674,21 +1663,6 @@ mod tests {
         assert_ne!(s.element_revision(1), Some(first));
         assert_eq!(s.element_revision(2), Some(second));
         assert_eq!(s.element_revision(99), None);
-    }
-
-    #[test]
-    fn cached_bounds_follow_the_element_after_a_move() {
-        let mut s = scene_with_three();
-        let before = s.element_bounds_by_id(1).unwrap();
-
-        {
-            let mut element = s.element_by_id_mut(1).unwrap();
-            element.data_mut().world_point.x += 50.0;
-        }
-
-        let after = s.element_bounds_by_id(1).unwrap();
-        assert_eq!(after.x, before.x + 50.0);
-        assert_eq!(after.w, before.w);
     }
 
     #[test]

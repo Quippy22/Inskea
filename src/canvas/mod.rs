@@ -902,6 +902,35 @@ pub fn Canvas(
         }
     };
 
+    // The visible set is recomputed when the viewport or the scene changes, but
+    // it is a plain `Vec<ElementId>` memo: keyed rendering below then only
+    // touches DOM for elements whose key entered/left/reordered, while each
+    // element's payload re-renders solely on its own revision. This keeps a
+    // drag of one element from rebuilding every visible SVG node.
+    let visible_ids = {
+        let props = props.clone();
+        let editing_id = st.text_edit.editing_id;
+        let editing_embedded = st.text_edit.editing_embedded;
+        let screen_size = st.screen_size;
+        create_memo(move |_| {
+            let editing = editing_id.get();
+            let embedded = editing_embedded.get();
+            let visible = props
+                .viewport
+                .get()
+                .visible_rect(screen_size.get())
+                .padded(2.0);
+            props.scene.with(|scene| {
+                scene
+                    .visible_elements(visible)
+                    .into_iter()
+                    .filter(|visible| Some(visible.element.id()) != editing || embedded)
+                    .map(|visible| visible.element.id())
+                    .collect::<Vec<_>>()
+            })
+        })
+    };
+
     // ── Template ─────────────────────────────────────────────────────────
     let svg_ref = st.svg_ref;
     view! {
@@ -920,84 +949,90 @@ pub fn Canvas(
         >
             {grid::grid_overlay(props.settings, props.hide_center, props.viewport)}
 
-            // NB: this is deliberately NOT a <For> loop keyed by ElementId.
-            // Leptos's <For> only re-invokes `children` for a newly-inserted
-            // key, not for an existing key whose data mutated in place — and
-            // every drag, resize, and text-commit in this app mutates an
-            // existing element by id without changing its key. A real
-            // fine-grained fix would need each element behind its own signal
-            // (e.g. Vec<RwSignal<Element>> instead of RwSignal<Scene>), which
-            // is a model restructuring, not a one-line change.
+            // Elements are keyed by id so z-order changes move nodes instead of
+            // recreating them. Each child also owns a revision memo, which is
+            // what lets an in-place mutation (drag, resize, text commit) update
+            // only the element that actually changed.
             {
                 let props = props.clone();
                 let editing_id = st.text_edit.editing_id;
                 let editing_embedded = st.text_edit.editing_embedded;
                 let edit_text = st.text_edit.edit_text;
-                move || {
-                    let editing = editing_id.get();
-                    let embedded = editing_embedded.get();
-                    let visible = props
-                        .viewport
-                        .get()
-                        .visible_rect(st.screen_size.get())
-                        .padded(2.0);
-                    props
-                        .scene
-                        .with(|scene| {
-                            scene
-                                .visible_elements(visible)
-                                .into_iter()
-                                .filter(|visible| {
-                                    Some(visible.element.id()) != editing || embedded
-                                })
-                                .map(|visible| {
-                                    let transform = format!(
-                                        "translate({} {})",
-                                        visible.origin.x,
-                                        visible.origin.y,
-                                    );
-                                    if Some(visible.element.id()) == editing && embedded {
-                                        let element = visible.element.clone();
-                                        return // The scene is read with `with` (not `get`) so this
-                                        // closure does not deep-clone the whole document on
-                                        // every drag step.
-                                        // Chunk-stored geometry is relative to its
-                                        // origin; translate the group instead of
-                                        // cloning and offsetting every element.
-                                        // The element being labelled is rendered
-                                        // reactively so its label — and the gap it cuts
-                                        // in a line or connector — follows the typed
-                                        // text, without mutating the scene until the
-                                        // edit is committed. Only this one element
-                                        // re-renders per keystroke.
-                                        view! {
-                                            <g transform=transform pointer-events="none">
-                                                {move || {
-                                                    let text = edit_text.get();
-                                                    if text.is_empty() {
-                                                        return element.render_label_mask();
+                view! {
+                    <For
+                        each=move || visible_ids.get()
+                        key=|id| *id
+                        children=move |id: ElementId| {
+                            let revision_scene = props.scene;
+                            let revision = create_memo(move |_| {
+                                revision_scene.with(|scene| scene.element_revision(id))
+                            });
+                            let props = props.clone();
+                            let editing_id = editing_id;
+                            let editing_embedded = editing_embedded;
+                            let edit_text = edit_text;
+                            view! {
+                                {move || {
+                                    let _ = revision.get();
+                                    let editing = editing_id.get() == Some(id);
+                                    let embedded = editing_embedded.get();
+                                    props
+                                        .scene
+                                        .with_untracked(|scene| {
+                                            // The scene is read with `with` (not `get`) so this
+                                            // closure does not deep-clone the whole document on
+                                            // every drag step. Chunk-stored geometry is relative
+                                            // to its origin; translate the group instead of
+                                            // cloning and offsetting every element.
+                                            let render = if editing && embedded {
+                                                // The element being labelled is rendered
+                                                // reactively so its label — and the gap it cuts
+                                                // in a line or connector — follows the typed
+                                                // text without mutating the scene until the edit
+                                                // is committed. Only this element re-renders per
+                                                // keystroke.
+                                                let text = edit_text.get();
+                                                scene.with_element(id, |element, origin| {
+                                                    let transform =
+                                                        format!("translate({} {})", origin.x, origin.y);
+                                                    let content = if text.is_empty() {
+                                                        element.render_label_mask()
+                                                    } else {
+                                                        match crate::model::elements::embedded_text::layout_with_text(
+                                                            element,
+                                                            &text,
+                                                        ) {
+                                                            Some(layout) => {
+                                                                element.render_with_label_layout(&layout)
+                                                            }
+                                                            None => element.render_label_mask(),
+                                                        }
+                                                    };
+                                                    view! {
+                                                        <g transform=transform pointer-events="none">
+                                                            {content}
+                                                        </g>
                                                     }
-                                                    match crate::model::elements::embedded_text::layout_with_text(
-                                                        &element,
-                                                        &text,
-                                                    ) {
-                                                        Some(layout) => element.render_with_label_layout(&layout),
-                                                        None => element.render_label_mask(),
+                                                        .into_view()
+                                                })
+                                            } else {
+                                                scene.with_element(id, |element, origin| {
+                                                    let transform =
+                                                        format!("translate({} {})", origin.x, origin.y);
+                                                    view! {
+                                                        <g transform=transform pointer-events="none">
+                                                            {element.render(1.0)}
+                                                        </g>
                                                     }
-                                                }}
-                                            </g>
-                                        }
-                                            .into_view();
-                                    }
-                                    view! {
-                                        <g transform=transform pointer-events="none">
-                                            {visible.element.render(1.0)}
-                                        </g>
-                                    }
-                                        .into_view()
-                                })
-                                .collect_view()
-                        })
+                                                        .into_view()
+                                                })
+                                            };
+                                            render.unwrap_or_else(|| ().into_view())
+                                        })
+                                }}
+                            }
+                        }
+                    />
                 }
             }
 
