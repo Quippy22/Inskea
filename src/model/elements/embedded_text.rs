@@ -367,13 +367,7 @@ pub fn mask_path(base: leptos::View, layout: &EmbeddedTextLayout, id: String) ->
         <defs>
             <mask id=id maskUnits="userSpaceOnUse" x=x y=y width=width height=height>
                 <rect x=x y=y width=width height=height fill="white" />
-                <rect
-                    x=label_x
-                    y=label_y
-                    width=layout.mask_width
-                    height=label_h
-                    fill="black"
-                />
+                <rect x=label_x y=label_y width=layout.mask_width height=label_h fill="black" />
             </mask>
         </defs>
         <g mask=url>{base}</g>
@@ -409,7 +403,11 @@ pub fn render_label(
                 .enumerate()
                 .map(|(index, line)| {
                     let dy = if index == 0 { "0" } else { "1.2em" };
-                    view! { <tspan x=x dy=dy>{line.clone()}</tspan> }
+                    view! {
+                        <tspan x=x dy=dy>
+                            {line.clone()}
+                        </tspan>
+                    }
                 })
                 .collect::<Vec<_>>()}
         </text>

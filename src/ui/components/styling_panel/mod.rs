@@ -529,24 +529,15 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 is_line_or_arrow,
                 is_rect,
                 is_rounded,
-            )} {connector_section(
-                is_connector,
-                local_connector_variant,
-                set_connector_variant,
-            )} {color_section(
-                local_style,
-                set_color,
-                active_slot,
-                color_swatches,
-                hide_stroke,
-            )} {embedded_text_color_section(
+            )} {connector_section(is_connector, local_connector_variant, set_connector_variant)}
+            {color_section(local_style, set_color, active_slot, color_swatches, hide_stroke)}
+            {embedded_text_color_section(
                 local_embedded_text_color,
                 set_embedded_text_color,
                 active_slot,
                 color_swatches,
                 has_embedded_text,
-            )}
-            {fill_section(local_style, set_fill, active_slot, base_kind, color_swatches)}
+            )} {fill_section(local_style, set_fill, active_slot, base_kind, color_swatches)}
             {arrow_section(is_arrow, local_line_style, set_start_arrowhead, set_end_arrowhead)}
             {edit_section(
                 scene,

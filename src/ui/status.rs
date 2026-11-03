@@ -38,17 +38,19 @@ pub fn CanvasStatus(scene: RwSignal<Scene>, viewport: RwSignal<Viewport>) -> imp
     view! {
         <div class=styles::CONTAINER_HUD>
             {move || {
-                nothing_in_view.get().then(|| {
-                    view! {
-                        <button
-                            class=styles::BTN_HUD
-                            on:click=go_to_elements
-                            title="Center the nearest element"
-                        >
-                            "To elements"
-                        </button>
-                    }
-                })
+                nothing_in_view
+                    .get()
+                    .then(|| {
+                        view! {
+                            <button
+                                class=styles::BTN_HUD
+                                on:click=go_to_elements
+                                title="Center the nearest element"
+                            >
+                                "To elements"
+                            </button>
+                        }
+                    })
             }}
             {move || {
                 let (elements, groups) = counts.get();
@@ -57,16 +59,13 @@ pub fn CanvasStatus(scene: RwSignal<Scene>, viewport: RwSignal<Viewport>) -> imp
                 }
                 let mut parts = Vec::new();
                 if elements > 0 {
-                    parts.push(format!(
-                        "{elements} element{}",
-                        if elements == 1 { "" } else { "s" }
-                    ));
+                    parts
+                        .push(
+                            format!("{elements} element{}", if elements == 1 { "" } else { "s" }),
+                        );
                 }
                 if groups > 0 {
-                    parts.push(format!(
-                        "{groups} group{}",
-                        if groups == 1 { "" } else { "s" }
-                    ));
+                    parts.push(format!("{groups} group{}", if groups == 1 { "" } else { "s" }));
                 }
                 Some(view! { <div class=styles::HUD_COUNTER>{parts.join(" · ")}</div> })
             }}

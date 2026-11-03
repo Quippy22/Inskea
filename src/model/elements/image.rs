@@ -58,15 +58,7 @@ impl Render for Image {
         let href = Rc::clone(&self.src);
         let opacity = self.data.style.opacity;
         let inner = leptos::view! {
-            <image
-                x=x
-                y=y
-                width=w
-                height=h
-                href=href
-                preserveAspectRatio="none"
-                opacity=opacity
-            />
+            <image x=x y=y width=w height=h href=href preserveAspectRatio="none" opacity=opacity />
         }
         .into_view();
         if self.data.rotation == 0.0 {
@@ -75,10 +67,8 @@ impl Render for Image {
             let cx = x + w / 2.0;
             let cy = y + h / 2.0;
             let deg = self.data.rotation.to_degrees();
-            leptos::view! {
-                <g transform=format!("rotate({} {} {})", deg, cx, cy)>{inner}</g>
-            }
-            .into_view()
+            leptos::view! { <g transform=format!("rotate({} {} {})", deg, cx, cy)>{inner}</g> }
+                .into_view()
         }
     }
 }

@@ -374,7 +374,9 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                                                             <td class="py-1 pr-5 font-mono text-accent whitespace-normal break-words align-top">
                                                                 {*key}
                                                             </td>
-                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">{*desc}</td>
+                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">
+                                                                {*desc}
+                                                            </td>
                                                         </tr>
                                                     }
                                                 })
@@ -396,7 +398,9 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                                                             <td class="py-1 pr-5 font-mono text-accent whitespace-normal break-words align-top">
                                                                 {*key}
                                                             </td>
-                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">{*desc}</td>
+                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">
+                                                                {*desc}
+                                                            </td>
                                                         </tr>
                                                     }
                                                 })
@@ -418,7 +422,9 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                                                             <td class="py-1 pr-5 font-mono text-accent whitespace-normal break-words align-top">
                                                                 {*key}
                                                             </td>
-                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">{*desc}</td>
+                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">
+                                                                {*desc}
+                                                            </td>
                                                         </tr>
                                                     }
                                                 })
@@ -440,7 +446,9 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                                                             <td class="py-1 pr-5 font-mono text-accent whitespace-normal break-words align-top">
                                                                 {*key}
                                                             </td>
-                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">{*desc}</td>
+                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">
+                                                                {*desc}
+                                                            </td>
                                                         </tr>
                                                     }
                                                 })

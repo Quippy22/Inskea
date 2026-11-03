@@ -634,10 +634,7 @@ pub fn App() -> impl IntoView {
     });
 
     view! {
-        <div
-            class="w-screen h-screen bg-bg text-fg"
-            data-theme=move || settings.get().theme.attr()
-        >
+        <div class="w-screen h-screen bg-bg text-fg" data-theme=move || settings.get().theme.attr()>
             <Canvas
                 inputs=crate::canvas::CanvasInputs {
                     selected_ids,
@@ -699,21 +696,19 @@ pub fn App() -> impl IntoView {
             >
                 <div class=styles::PANEL>
                     <div class="py-2 px-3">
-                        <StylingPanel
-                            context=StylingPanelContext {
-                                scene,
-                                selected_ids,
-                                selected_tool,
-                                default_style,
-                                default_line_style,
-                                default_connector_variant,
-                                clipboard,
-                                push_snapshot: push_snapshot.clone(),
-                                canvas_mode,
-                                cursor_world,
-                                settings,
-                            }
-                        />
+                        <StylingPanel context=StylingPanelContext {
+                            scene,
+                            selected_ids,
+                            selected_tool,
+                            default_style,
+                            default_line_style,
+                            default_connector_variant,
+                            clipboard,
+                            push_snapshot: push_snapshot.clone(),
+                            canvas_mode,
+                            cursor_world,
+                            settings,
+                        } />
                     </div>
                 </div>
             </div>

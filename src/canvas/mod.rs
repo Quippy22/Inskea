@@ -941,80 +941,75 @@ pub fn Canvas(
                         .get()
                         .visible_rect(st.screen_size.get())
                         .padded(2.0);
-                    // The scene is read with `with` (not `get`) so this
-                    // closure does not deep-clone the whole document on
-                    // every drag step.
-                    props.scene.with(|scene| {
-                        scene
-                            .visible_elements(visible)
-                            .into_iter()
-                            .filter(|visible| {
-                                Some(visible.element.id()) != editing || embedded
-                            })
-                            .map(|visible| {
-                                // Chunk-stored geometry is relative to its
-                                // origin; translate the group instead of
-                                // cloning and offsetting every element.
-                                let transform = format!(
-                                    "translate({} {})",
-                                    visible.origin.x, visible.origin.y
-                                );
-                                // The element being labelled is rendered
-                                // reactively so its label — and the gap it cuts
-                                // in a line or connector — follows the typed
-                                // text, without mutating the scene until the
-                                // edit is committed. Only this one element
-                                // re-renders per keystroke.
-                                if Some(visible.element.id()) == editing && embedded {
-                                    let element = visible.element.clone();
-                                    return view! {
-                                        <g transform=transform pointer-events="none">
-                                            {move || {
-                                                let text = edit_text.get();
-                                                if text.is_empty() {
-                                                    return element.render_label_mask();
-                                                }
-                                                // Lay out the live text without
-                                                // cloning the host, then cut
-                                                // its gap from the unchanged
-                                                // shape.
-                                                match crate::model::elements::embedded_text::layout_with_text(
-                                                    &element,
-                                                    &text,
-                                                ) {
-                                                    Some(layout) => {
-                                                        element.render_with_label_layout(&layout)
+                    props
+                        .scene
+                        .with(|scene| {
+                            scene
+                                .visible_elements(visible)
+                                .into_iter()
+                                .filter(|visible| {
+                                    Some(visible.element.id()) != editing || embedded
+                                })
+                                .map(|visible| {
+                                    let transform = format!(
+                                        "translate({} {})",
+                                        visible.origin.x,
+                                        visible.origin.y,
+                                    );
+                                    if Some(visible.element.id()) == editing && embedded {
+                                        let element = visible.element.clone();
+                                        return // The scene is read with `with` (not `get`) so this
+                                        // closure does not deep-clone the whole document on
+                                        // every drag step.
+                                        // Chunk-stored geometry is relative to its
+                                        // origin; translate the group instead of
+                                        // cloning and offsetting every element.
+                                        // The element being labelled is rendered
+                                        // reactively so its label — and the gap it cuts
+                                        // in a line or connector — follows the typed
+                                        // text, without mutating the scene until the
+                                        // edit is committed. Only this one element
+                                        // re-renders per keystroke.
+                                        view! {
+                                            <g transform=transform pointer-events="none">
+                                                {move || {
+                                                    let text = edit_text.get();
+                                                    if text.is_empty() {
+                                                        return element.render_label_mask();
                                                     }
-                                                    None => element.render_label_mask(),
-                                                }
-                                            }}
+                                                    match crate::model::elements::embedded_text::layout_with_text(
+                                                        &element,
+                                                        &text,
+                                                    ) {
+                                                        Some(layout) => element.render_with_label_layout(&layout),
+                                                        None => element.render_label_mask(),
+                                                    }
+                                                }}
+                                            </g>
+                                        }
+                                            .into_view();
+                                    }
+                                    view! {
+                                        <g transform=transform pointer-events="none">
+                                            {visible.element.render(1.0)}
                                         </g>
                                     }
-                                    .into_view();
-                                }
-                                view! {
-                                    <g transform=transform pointer-events="none">
-                                        {visible.element.render(1.0)}
-                                    </g>
-                                }
-                                .into_view()
-                            })
-                            .collect_view()
-                    })
+                                        .into_view()
+                                })
+                                .collect_view()
+                        })
                 }
             }
 
             {drawing_preview}
             {connection_overlay}
-            {smart_guides::guide_overlay(
-                st.drag.smart_guides,
-                props.viewport,
-                props.settings,
-            )} {selection::selection_preview_overlay(
+            {smart_guides::guide_overlay(st.drag.smart_guides, props.viewport, props.settings)}
+            {selection::selection_preview_overlay(
                 st.select_anchor,
                 props.cursor_world,
                 props.settings,
-            )} {selection::selection_handle_overlay(
+            )}
+            {selection::selection_handle_overlay(
                 st.selected_ids,
                 props.scene,
                 st.drag.overlay_freeze,

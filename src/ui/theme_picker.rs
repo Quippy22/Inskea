@@ -51,7 +51,8 @@ pub fn ThemePicker(open: RwSignal<bool>, settings: RwSignal<CanvasSettings>) -> 
                                     class="ml-auto h-3 w-3 rounded-full border"
                                     style=format!(
                                         "background:{};border-color:{}",
-                                        p.panel, p.border,
+                                        p.panel,
+                                        p.border,
                                     )
                                 ></span>
                             </div>
@@ -60,7 +61,8 @@ pub fn ThemePicker(open: RwSignal<bool>, settings: RwSignal<CanvasSettings>) -> 
                                     class="flex-1 rounded-md border p-2"
                                     style=format!(
                                         "background:{};border-color:{}",
-                                        p.panel, p.border,
+                                        p.panel,
+                                        p.border,
                                     )
                                 >
                                     <div
@@ -76,7 +78,8 @@ pub fn ThemePicker(open: RwSignal<bool>, settings: RwSignal<CanvasSettings>) -> 
                                     class="h-7 w-7 rounded-md border"
                                     style=format!(
                                         "background:{};border-color:{}",
-                                        p.canvas, p.accent,
+                                        p.canvas,
+                                        p.accent,
                                     )
                                 ></div>
                             </div>
@@ -101,10 +104,7 @@ pub fn ThemePicker(open: RwSignal<bool>, settings: RwSignal<CanvasSettings>) -> 
 
         view! {
             <>
-                <div
-                    class="fixed inset-0 z-[60] bg-black/40"
-                    on:click=move |_| close()
-                ></div>
+                <div class="fixed inset-0 z-[60] bg-black/40" on:click=move |_| close()></div>
                 <div class="fixed inset-0 z-[61] grid place-items-center pointer-events-none">
                     <div
                         class="pointer-events-auto w-full max-w-3xl mx-4 rounded-xl bg-panel/95 backdrop-blur-sm border border-border shadow-2xl p-6 max-h-[85vh] overflow-y-auto"
@@ -137,9 +137,7 @@ pub fn ThemePicker(open: RwSignal<bool>, settings: RwSignal<CanvasSettings>) -> 
                         </div>
 
                         <div class="mt-5 flex items-center justify-between gap-4">
-                            <span class="text-[11px] text-subtle">
-                                "Changes apply right away."
-                            </span>
+                            <span class="text-[11px] text-subtle">"Changes apply right away."</span>
                             <button class=styles::BTN_TEXT_ACTIVE on:click=move |_| close()>
                                 "Done"
                             </button>

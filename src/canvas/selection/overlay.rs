@@ -115,10 +115,7 @@ fn render_path_element_overlay(
             stroke=hex
             stroke-width="1.5"
             fill="none"
-            transform=format!(
-                "translate({} {}) scale({}) translate(-12 -12)",
-                mx, my, 0.9375 * wpx,
-            )
+            transform=format!("translate({} {}) scale({}) translate(-12 -12)", mx, my, 0.9375 * wpx)
             pointer-events="none"
         >
             <path d="M12 3 L12 21 M3 12 L21 12" />
@@ -465,10 +462,7 @@ fn render_move_rotate_icons(
             stroke=hex
             stroke-width="1.5"
             fill="none"
-            transform=format!(
-                "translate({} {}) scale({}) translate(-12 -12)",
-                cx, cy, 0.9375 * wpx,
-            )
+            transform=format!("translate({} {}) scale({}) translate(-12 -12)", cx, cy, 0.9375 * wpx)
             pointer-events="none"
         >
             <path d="M12 3 L12 21 M3 12 L21 12" />
@@ -483,10 +477,7 @@ fn render_move_rotate_icons(
             stroke=hex
             stroke-width="1.5"
             fill="none"
-            transform=format!(
-                "translate({} {}) scale({}) translate(-12 -12)",
-                rx, ry, 0.75 * wpx,
-            )
+            transform=format!("translate({} {}) scale({}) translate(-12 -12)", rx, ry, 0.75 * wpx)
             pointer-events="none"
         >
             <path d="M12 4 A8 8 0 1 1 4 12" />

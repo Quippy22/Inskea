@@ -57,11 +57,7 @@ pub fn WelcomeOverlay(welcome: RwSignal<bool>, generation: RwSignal<u32>) -> imp
                                 <path d="M121 30A8 8 0 1 1 110 41" />
                                 <path d="M107.8 40.6L110 38L112.2 40.6" />
                             </g>
-                            <g
-                                class=HANDLE_CLASS
-                                stroke-width="1.5"
-                                transform="rotate(-6 122 121)"
-                            >
+                            <g class=HANDLE_CLASS stroke-width="1.5" transform="rotate(-6 122 121)">
                                 <circle cx="38" cy="65" r="5" />
                                 <circle cx="206" cy="65" r="5" />
                                 <circle cx="38" cy="177" r="5" />
@@ -88,13 +84,7 @@ pub fn WelcomeOverlay(welcome: RwSignal<bool>, generation: RwSignal<u32>) -> imp
                             >
                                 <path d="M938 178C920 144 894 122 846 108" />
                                 <path d="M859 98L843 108L860 117" />
-                                <circle
-                                    cx="938"
-                                    cy="178"
-                                    r="3"
-                                    fill="currentColor"
-                                    stroke="none"
-                                />
+                                <circle cx="938" cy="178" r="3" fill="currentColor" stroke="none" />
                             </g>
 
                             // Freehand stroke with its path points.
@@ -172,7 +162,8 @@ pub fn WelcomeOverlay(welcome: RwSignal<bool>, generation: RwSignal<u32>) -> imp
                             style="font-family: Arial, 'Liberation Sans', 'Helvetica Neue', sans-serif;"
                             aria-label="Inskea"
                         >
-                            "INSKE"<span>"Λ"</span>
+                            "INSKE"
+                            <span>"Λ"</span>
                         </h1>
                     </div>
 

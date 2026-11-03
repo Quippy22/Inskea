@@ -53,8 +53,12 @@ pub fn Toasts(notifications: Notifications) -> impl IntoView {
             <For each=move || notifications.get() key=|notice| notice.id let:notice>
                 {
                     let class = match notice.kind {
-                        NoticeKind::Info => "rounded-lg border border-border bg-panel/95 px-3 py-2 text-xs text-fg shadow-lg backdrop-blur-sm",
-                        NoticeKind::Error => "rounded-lg border border-red/60 bg-panel/95 px-3 py-2 text-xs text-red shadow-lg backdrop-blur-sm",
+                        NoticeKind::Info => {
+                            "rounded-lg border border-border bg-panel/95 px-3 py-2 text-xs text-fg shadow-lg backdrop-blur-sm"
+                        }
+                        NoticeKind::Error => {
+                            "rounded-lg border border-red/60 bg-panel/95 px-3 py-2 text-xs text-red shadow-lg backdrop-blur-sm"
+                        }
                     };
                     view! { <div class=class>{notice.message}</div> }
                 }

@@ -188,15 +188,6 @@ pub fn guide_overlay(
             })
             .collect_view();
 
-        Some(
-            view! {
-                <g pointer-events="none">
-                    {markers}
-                    {lines}
-                    {labels}
-                </g>
-            }
-            .into_view(),
-        )
+        Some(view! { <g pointer-events="none">{markers} {lines} {labels}</g> }.into_view())
     }
 }

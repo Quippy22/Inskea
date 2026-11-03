@@ -79,11 +79,7 @@ pub fn grid_overlay(
         let center = match settings_state.center_style {
             CenterStyle::Crosshair => view! {
                 <g class:hidden=hidden transform=center_scale>
-                    <path
-                        d="M-12,0 L12,0 M0,-12 L0,12"
-                        stroke=theme.accent()
-                        stroke-width="2"
-                    />
+                    <path d="M-12,0 L12,0 M0,-12 L0,12" stroke=theme.accent() stroke-width="2" />
                 </g>
             }
             .into_view(),
