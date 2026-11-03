@@ -11,6 +11,30 @@ pub const ROTATE_HANDLE_OFFSET_PX: f64 = 25.0;
 pub const PATH_MERGE_DIST: f64 = 3.0;
 pub const SELECT_PADDING_PX: f64 = 5.0;
 
+/// World-space half-width of an element's rendered stroke. Text and images
+/// paint no outline of their own.
+pub fn stroke_radius(el: &Element) -> f64 {
+    match el {
+        Element::Text(_) | Element::Image(_) => 0.0,
+        _ => el.data().style.stroke_width.max(0.0) / 2.0,
+    }
+}
+
+/// Extra world-space padding that keeps the selection frame clear of the
+/// widest rendered stroke in the selection.
+pub fn selection_stroke_margin(ids: &[ElementId], els: &[Element]) -> f64 {
+    els.iter()
+        .filter(|el| ids.contains(&el.id()))
+        .map(stroke_radius)
+        .fold(0.0, f64::max)
+}
+
+/// Total padding for a selection frame: constant screen-space breathing room
+/// plus enough world-space clearance for the elements' strokes.
+pub fn selection_padding(ids: &[ElementId], els: &[Element], wpx: f64) -> f64 {
+    SELECT_PADDING_PX * wpx + selection_stroke_margin(ids, els)
+}
+
 pub fn selection_bounds(ids: &[ElementId], els: &[Element]) -> Option<Rect> {
     if ids.len() == 1 {
         els.iter()
@@ -83,6 +107,24 @@ mod tests {
         assert_eq!(p[4], Point::new(100.0, 25.0));
         assert_eq!(p[8], Point::new(50.0, 25.0));
         assert_eq!(p[9], Point::new(50.0, -12.5));
+    }
+
+    #[test]
+    fn selection_padding_clears_the_widest_stroke() {
+        let mut thick = Rectangle {
+            data: ElementData::new(1),
+        };
+        thick.data.style.stroke_width = 12.0;
+        let mut thin = Rectangle {
+            data: ElementData::new(2),
+        };
+        thin.data.style.stroke_width = 2.0;
+        let els = vec![Element::Rectangle(thick), Element::Rectangle(thin)];
+
+        // 5 screen px at zoom 2 is 2.5 world units; the thick stroke adds half
+        // of its 12-unit width on top.
+        assert!((selection_padding(&[1, 2], &els, 0.5) - 8.5).abs() < 1e-9);
+        assert!((selection_padding(&[2], &els, 0.5) - 3.5).abs() < 1e-9);
     }
 
     #[test]

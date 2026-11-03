@@ -1,5 +1,6 @@
 use super::utils::{
-    selection_bounds, HANDLE_RESIZE_RADIUS_PX, ROTATE_HANDLE_OFFSET_PX, SELECT_PADDING_PX,
+    selection_bounds, selection_padding, stroke_radius, HANDLE_RESIZE_RADIUS_PX,
+    ROTATE_HANDLE_OFFSET_PX, SELECT_PADDING_PX,
 };
 use super::DASH_PREVIEW;
 use crate::canvas::settings::CanvasSettings;
@@ -180,7 +181,7 @@ fn compute_padded_bounds(
     } else {
         selection_bounds(ids, els).unwrap_or(Rect::new(0.0, 0.0, 0.0, 0.0))
     };
-    b = b.padded(SELECT_PADDING_PX * wpx);
+    b = b.padded(selection_padding(ids, els, wpx));
     b
 }
 
@@ -237,7 +238,6 @@ fn render_multi_select_boxes(
     if ids.len() <= 1 {
         return vec![];
     }
-    let pad = SELECT_PADDING_PX * wpx;
     els.iter()
         .filter(|el| ids.contains(&el.id()) && el.path_points().is_none())
         .map(|el| {
@@ -246,6 +246,7 @@ fn render_multi_select_boxes(
             } else {
                 el.bounds()
             };
+            let pad = SELECT_PADDING_PX * wpx + stroke_radius(el);
             let rot = el.data().rotation;
             if rot != 0.0 {
                 // Spin around the element's own render pivot: a Text's tight

@@ -1,7 +1,7 @@
 use super::utils::{
-    handle_positions, selection_bounds, unrotate_for_element, HANDLE_MOVE_RADIUS_PX,
-    HANDLE_RESIZE_RADIUS_PX, HANDLE_ROTATE_RADIUS_PX, PATH_MERGE_DIST, ROTATE_HANDLE_OFFSET_PX,
-    SELECT_PADDING_PX,
+    handle_positions, selection_bounds, selection_padding, unrotate_for_element,
+    HANDLE_MOVE_RADIUS_PX, HANDLE_RESIZE_RADIUS_PX, HANDLE_ROTATE_RADIUS_PX, PATH_MERGE_DIST,
+    ROTATE_HANDLE_OFFSET_PX,
 };
 use super::MIN_DRAG_DIST;
 use crate::canvas::smart_guides::{self, GuideBox, SmartGuideState};
@@ -209,7 +209,7 @@ fn hit_resize_handle(
 ) -> bool {
     let (mut bx, mut by, mut bw, mut bh) = (bounds.x, bounds.y, bounds.w, bounds.h);
     let wpx = world_per_px(props);
-    let pad = SELECT_PADDING_PX * wpx;
+    let pad = selection_padding(ids, els, wpx);
     bx -= pad;
     by -= pad;
     bw += pad * 2.0;
@@ -251,7 +251,7 @@ fn hit_move_handle(
 ) -> bool {
     let (mut bx, mut by, mut bw, mut bh) = (bounds.x, bounds.y, bounds.w, bounds.h);
     let wpx = world_per_px(props);
-    let pad = SELECT_PADDING_PX * wpx;
+    let pad = selection_padding(ids, els, wpx);
     bx -= pad;
     by -= pad;
     bw += pad * 2.0;
@@ -294,7 +294,7 @@ fn hit_rotate_handle(
 ) -> bool {
     let (mut bx, mut by, mut bw, mut bh) = (bounds.x, bounds.y, bounds.w, bounds.h);
     let wpx = world_per_px(props);
-    let pad = SELECT_PADDING_PX * wpx;
+    let pad = selection_padding(ids, els, wpx);
     bx -= pad;
     by -= pad;
     bw += pad * 2.0;
@@ -541,7 +541,7 @@ fn detect_hovered_handle(
         }
 
         if let Some(mut b) = selection_bounds(&ids, &els) {
-            b = b.padded(SELECT_PADDING_PX * wpx);
+            b = b.padded(selection_padding(&ids, &els, wpx));
             let hpos = handle_positions(b.x, b.y, b.w, b.h, ROTATE_HANDLE_OFFSET_PX * wpx);
 
             for (i, &p) in hpos[..8].iter().enumerate() {
