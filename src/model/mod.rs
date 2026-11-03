@@ -40,6 +40,10 @@ pub struct Scene {
     chunks: HashMap<(i32, i32), SceneChunk>,
     locations: HashMap<ElementId, (i32, i32)>,
     oversized: Vec<ElementId>,
+    /// Shape id → connectors bound to it. Kept in sync with the stored element
+    /// payloads so refreshing a moved shape touches only its own connectors
+    /// instead of scanning every element in the document.
+    bindings: HashMap<ElementId, Vec<ElementId>>,
     next_order: u64,
     /// Monotonic counter handed to each stored element so renderers can tell
     /// whether that element's payload changed without cloning or comparing it.
@@ -59,6 +63,7 @@ impl Clone for Scene {
             chunks: self.chunks.clone(),
             locations: self.locations.clone(),
             oversized: self.oversized.clone(),
+            bindings: self.bindings.clone(),
             next_order: self.next_order,
             next_revision: self.next_revision,
             next_id: self.next_id,
@@ -384,6 +389,7 @@ impl Scene {
             chunks: HashMap::new(),
             locations: HashMap::new(),
             oversized: Vec::new(),
+            bindings: HashMap::new(),
             next_order: 0,
             next_revision: 0,
             next_id: 1,
@@ -854,6 +860,40 @@ impl Scene {
         self.next_id_before = None;
     }
 
+    /// Register the endpoints a connector holds, so refreshing the bound shape
+    /// can find it without walking the document.
+    fn index_bindings(&mut self, element: &Element) {
+        let Element::Connector(connector) = element else {
+            return;
+        };
+        for binding in [connector.start_binding, connector.end_binding]
+            .into_iter()
+            .flatten()
+        {
+            let connectors = self.bindings.entry(binding.element).or_default();
+            if !connectors.contains(&connector.data.id) {
+                connectors.push(connector.data.id);
+            }
+        }
+    }
+
+    fn unindex_bindings(&mut self, element: &Element) {
+        let Element::Connector(connector) = element else {
+            return;
+        };
+        for binding in [connector.start_binding, connector.end_binding]
+            .into_iter()
+            .flatten()
+        {
+            if let Some(connectors) = self.bindings.get_mut(&binding.element) {
+                connectors.retain(|id| *id != connector.data.id);
+                if connectors.is_empty() {
+                    self.bindings.remove(&binding.element);
+                }
+            }
+        }
+    }
+
     fn take_element_raw(&mut self, id: ElementId) -> Option<Element> {
         let key = self.locations.remove(&id)?;
         let (stored, empty) = {
@@ -868,10 +908,12 @@ impl Scene {
         if empty {
             self.chunks.remove(&key);
         }
+        let oversized = is_oversized(stored.bounds);
         let origin = chunk_origin(key);
         let mut element = stored.element;
+        self.unindex_bindings(&element);
         element.translate_storage(origin.x, origin.y);
-        if is_oversized(element_bounds(&element)) {
+        if oversized {
             self.oversized.retain(|candidate| *candidate != id);
         }
         Some(element)
@@ -890,6 +932,7 @@ impl Scene {
         let bounds = element_bounds(&element);
         let home = chunk_of(bounds.center());
         let origin = chunk_origin(home);
+        self.index_bindings(&element);
         element.translate_storage(-origin.x, -origin.y);
         let revision = self.next_revision;
         self.next_revision = self.next_revision.wrapping_add(1);
@@ -948,6 +991,7 @@ impl Scene {
         self.chunks.clear();
         self.locations.clear();
         self.oversized.clear();
+        self.bindings.clear();
         self.next_order = 0;
         for element in elements {
             let order = self.next_order;
@@ -1145,26 +1189,10 @@ impl Scene {
         }
     }
 
-    /// Connectors attached to `shape_id`, found without cloning their geometry.
+    /// Connectors attached to `shape_id`, found through the binding index
+    /// without cloning their geometry or scanning the document.
     fn connector_ids_bound_to(&self, shape_id: ElementId) -> Vec<ElementId> {
-        let mut ids = Vec::new();
-        for chunk in self.chunks.values() {
-            for stored in &chunk.elements {
-                let Element::Connector(connector) = &stored.element else {
-                    continue;
-                };
-                let bound = connector
-                    .start_binding
-                    .is_some_and(|binding| binding.element == shape_id)
-                    || connector
-                        .end_binding
-                        .is_some_and(|binding| binding.element == shape_id);
-                if bound {
-                    ids.push(connector.data.id);
-                }
-            }
-        }
-        ids
+        self.bindings.get(&shape_id).cloned().unwrap_or_default()
     }
 
     /// Re-pin both endpoints of a connector to the shapes they name, dropping
@@ -1682,6 +1710,60 @@ mod tests {
         assert!(origin_x > 0.0);
         assert_eq!(x + origin_x, 1500.0);
         assert!(s.with_element(99, |_, _| ()).is_none());
+    }
+
+    #[test]
+    fn binding_index_follows_rebinding_and_removal() {
+        let mut s = Scene::new();
+        let mut shape = Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        });
+        shape.data_mut().world_point = Point::new(0.0, 0.0);
+        s.add_element(shape);
+
+        let line = Line::from_drag(
+            Point::new(0.0, 0.0),
+            Point::new(100.0, 0.0),
+            Color::new(Color::WHITE),
+            false,
+        );
+        let connector = Connector::from_line(
+            line,
+            ConnectorVariant::Direct,
+            Some(ConnectionEnd::new(1, 0)),
+            Some(ConnectionEnd::new(1, 4)),
+        );
+        s.add_element(Element::Connector(connector));
+
+        assert_eq!(s.connector_ids_bound_to(1), vec![2]);
+
+        {
+            let mut element = s.element_by_id_mut(2).unwrap();
+            if let Element::Connector(connector) = &mut *element {
+                connector.set_binding(false, None);
+            }
+        }
+        assert_eq!(s.connector_ids_bound_to(1), vec![2]);
+
+        {
+            let mut element = s.element_by_id_mut(2).unwrap();
+            if let Element::Connector(connector) = &mut *element {
+                connector.set_binding(true, None);
+            }
+        }
+        assert!(s.connector_ids_bound_to(1).is_empty());
+
+        // Re-binding through a write updates the index again.
+        {
+            let mut element = s.element_by_id_mut(2).unwrap();
+            if let Element::Connector(connector) = &mut *element {
+                connector.set_binding(true, Some(ConnectionEnd::new(1, 2)));
+            }
+        }
+        assert_eq!(s.connector_ids_bound_to(1), vec![2]);
+
+        s.remove_by_id(2);
+        assert!(s.connector_ids_bound_to(1).is_empty());
     }
 
     #[test]
