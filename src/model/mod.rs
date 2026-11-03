@@ -41,6 +41,9 @@ pub struct Scene {
     locations: HashMap<ElementId, (i32, i32)>,
     oversized: Vec<ElementId>,
     next_order: u64,
+    /// Monotonic counter handed to each stored element so renderers can tell
+    /// whether that element's payload changed without cloning or comparing it.
+    next_revision: u64,
     pub(crate) next_id: u64,
     pub(crate) groups: Vec<Group>,
     pub(crate) next_group_id: GroupId,
@@ -57,6 +60,7 @@ impl Clone for Scene {
             locations: self.locations.clone(),
             oversized: self.oversized.clone(),
             next_order: self.next_order,
+            next_revision: self.next_revision,
             next_id: self.next_id,
             groups: self.groups.clone(),
             next_group_id: self.next_group_id,
@@ -124,13 +128,11 @@ fn bounds_intersect(a: Rect, b: Rect) -> bool {
     a.x <= b.right() && a.right() >= b.x && a.y <= b.bottom() && a.bottom() >= b.y
 }
 
-fn chunk_has_visible(chunk: &SceneChunk, origin: Point, view: Rect) -> bool {
-    chunk.elements.iter().any(|stored| {
-        let mut bounds = element_bounds(&stored.element);
-        bounds.x += origin.x;
-        bounds.y += origin.y;
-        bounds_intersect(bounds, view)
-    })
+fn chunk_has_visible(chunk: &SceneChunk, view: Rect) -> bool {
+    chunk
+        .elements
+        .iter()
+        .any(|stored| bounds_intersect(stored.bounds, view))
 }
 
 fn collect_visible_chunk<'a>(
@@ -145,10 +147,7 @@ fn collect_visible_chunk<'a>(
     }
     let origin = chunk_origin(key);
     for stored in &chunk.elements {
-        let mut bounds = element_bounds(&stored.element);
-        bounds.x += origin.x;
-        bounds.y += origin.y;
-        if bounds_intersect(bounds, view) {
+        if bounds_intersect(stored.bounds, view) {
             visible.push(VisibleElement {
                 element: &stored.element,
                 origin,
@@ -222,6 +221,13 @@ fn distance_to_bounds(bounds: Rect, point: Point) -> f64 {
 #[derive(Clone, Debug)]
 struct StoredElement {
     order: u64,
+    /// World-space interaction bounds, computed when the payload was stored.
+    /// Keeping them here means culling, hit-testing helpers, and overlays never
+    /// have to re-measure glyphs or re-walk path points for an unchanged element.
+    bounds: Rect,
+    /// Bumped whenever the payload changes, so renderers can skip unchanged
+    /// elements without cloning them for comparison.
+    revision: u64,
     element: Element,
 }
 
@@ -379,6 +385,7 @@ impl Scene {
             locations: HashMap::new(),
             oversized: Vec::new(),
             next_order: 0,
+            next_revision: 0,
             next_id: 1,
             groups: Vec::new(),
             next_group_id: 1,
@@ -517,13 +524,13 @@ impl Scene {
             return self
                 .chunks
                 .iter()
-                .any(|(key, chunk)| chunk_has_visible(chunk, chunk_origin(*key), view));
+                .any(|(_, chunk)| chunk_has_visible(chunk, view));
         }
 
         for x in x0..=x1 {
             for y in y0..=y1 {
                 if let Some(chunk) = self.chunks.get(&(x, y)) {
-                    if chunk_has_visible(chunk, chunk_origin((x, y)), view) {
+                    if chunk_has_visible(chunk, view) {
                         return true;
                     }
                 }
@@ -536,20 +543,16 @@ impl Scene {
             };
             self.chunks
                 .get(key)
-                .is_some_and(|chunk| chunk_has_visible(chunk, chunk_origin(*key), view))
+                .is_some_and(|chunk| chunk_has_visible(chunk, view))
         })
     }
 
     /// Center of the element whose visual bounds are nearest to `point`.
     pub fn nearest_element_center(&self, point: Point) -> Option<Point> {
         let mut nearest: Option<(f64, u64, Point)> = None;
-        for (key, chunk) in &self.chunks {
-            let origin = chunk_origin(*key);
+        for chunk in self.chunks.values() {
             for stored in &chunk.elements {
-                let mut bounds = element_bounds(&stored.element);
-                bounds.x += origin.x;
-                bounds.y += origin.y;
-                let distance = distance_to_bounds(bounds, point);
+                let distance = distance_to_bounds(stored.bounds, point);
                 let closer = nearest.is_none_or(|(best, best_order, _)| {
                     distance
                         .total_cmp(&best)
@@ -557,7 +560,7 @@ impl Scene {
                         .is_lt()
                 });
                 if closer {
-                    nearest = Some((distance, stored.order, bounds.center()));
+                    nearest = Some((distance, stored.order, stored.bounds.center()));
                 }
             }
         }
@@ -576,6 +579,46 @@ impl Scene {
         let origin = chunk_origin(key);
         element.translate_storage(origin.x, origin.y);
         Some(element)
+    }
+
+    /// Borrow one element's stored (chunk-relative) payload and the origin that
+    /// places it in world space. Avoids cloning for render paths that only need
+    /// to read the element once.
+    pub fn with_element<R>(
+        &self,
+        id: ElementId,
+        f: impl FnOnce(&Element, Point) -> R,
+    ) -> Option<R> {
+        let key = *self.locations.get(&id)?;
+        let chunk = self.chunks.get(&key)?;
+        let stored = chunk
+            .elements
+            .iter()
+            .find(|stored| stored.element.id() == id)?;
+        Some(f(&stored.element, chunk_origin(key)))
+    }
+
+    /// A counter that changes whenever `id`'s payload is written. Returns
+    /// `None` for an element that is not in the scene.
+    pub fn element_revision(&self, id: ElementId) -> Option<u64> {
+        let key = self.locations.get(&id)?;
+        self.chunks
+            .get(key)?
+            .elements
+            .iter()
+            .find(|stored| stored.element.id() == id)
+            .map(|stored| stored.revision)
+    }
+
+    /// World-space bounds cached for `id` when it was last written.
+    pub fn element_bounds_by_id(&self, id: ElementId) -> Option<Rect> {
+        let key = self.locations.get(&id)?;
+        self.chunks
+            .get(key)?
+            .elements
+            .iter()
+            .find(|stored| stored.element.id() == id)
+            .map(|stored| stored.bounds)
     }
 
     pub fn element_by_id_mut(&mut self, id: ElementId) -> Option<ElementMut<'_>> {
@@ -859,13 +902,20 @@ impl Scene {
         let home = chunk_of(bounds.center());
         let origin = chunk_origin(home);
         element.translate_storage(-origin.x, -origin.y);
+        let revision = self.next_revision;
+        self.next_revision = self.next_revision.wrapping_add(1);
         self.chunks
             .entry(home)
             .or_insert_with(|| SceneChunk {
                 elements: Vec::new(),
             })
             .elements
-            .push(StoredElement { order, element });
+            .push(StoredElement {
+                order,
+                bounds,
+                revision,
+                element,
+            });
         self.locations.insert(id, home);
         self.next_order = self.next_order.max(order.saturating_add(1));
 
@@ -1607,6 +1657,57 @@ mod tests {
             s.nearest_element_center(Point::new(0.0, 0.0)),
             Some(Point::new(500.0, 70.0))
         );
+    }
+
+    #[test]
+    fn element_revision_tracks_only_the_written_element() {
+        let mut s = scene_with_three();
+        let first = s.element_revision(1).unwrap();
+        let second = s.element_revision(2).unwrap();
+        assert_ne!(first, second);
+
+        {
+            let mut element = s.element_by_id_mut(1).unwrap();
+            element.data_mut().world_point.x += 10.0;
+        }
+
+        assert_ne!(s.element_revision(1), Some(first));
+        assert_eq!(s.element_revision(2), Some(second));
+        assert_eq!(s.element_revision(99), None);
+    }
+
+    #[test]
+    fn cached_bounds_follow_the_element_after_a_move() {
+        let mut s = scene_with_three();
+        let before = s.element_bounds_by_id(1).unwrap();
+
+        {
+            let mut element = s.element_by_id_mut(1).unwrap();
+            element.data_mut().world_point.x += 50.0;
+        }
+
+        let after = s.element_bounds_by_id(1).unwrap();
+        assert_eq!(after.x, before.x + 50.0);
+        assert_eq!(after.w, before.w);
+    }
+
+    #[test]
+    fn with_element_borrows_relative_geometry_and_its_origin() {
+        let mut s = Scene::new();
+        let mut element = Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        });
+        element.data_mut().world_point = Point::new(1500.0, 20.0);
+        s.add_element(element);
+
+        let (x, origin_x) = s
+            .with_element(1, |element, origin| {
+                (element.data().world_point.x, origin.x)
+            })
+            .unwrap();
+        assert!(origin_x > 0.0);
+        assert_eq!(x + origin_x, 1500.0);
+        assert!(s.with_element(99, |_, _| ()).is_none());
     }
 
     #[test]
