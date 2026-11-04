@@ -38,5 +38,12 @@ pub fn ensure_fonts_installed() {
             style.set_text_content(Some(&css));
             let _ = head.append_child(&style);
         }
+
+        // Text measured before this point used the fallback face, so ask the
+        // engine to finish loading and then drop those measurements.
+        if let Ok(ready) = doc.fonts().ready() {
+            let _ = wasm_bindgen_futures::JsFuture::from(ready).await;
+        }
+        crate::model::elements::text::invalidate_metrics_cache();
     });
 }
