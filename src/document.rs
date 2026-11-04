@@ -38,10 +38,11 @@ pub struct DocContext {
 
 impl DocContext {
     /// True when the in-memory scene differs from the last saved contents.
-    /// The comparison clones both scenes, so call this at user-paced moments
-    /// (action guards, close requests), not on every pointer move.
+    /// The comparison is done under the signal borrows, so neither scene is
+    /// cloned; it walks the z-ordered element list instead.
     pub fn is_dirty_now(&self) -> bool {
-        self.scene.get_untracked() != self.baseline.get_untracked()
+        self.scene
+            .with_untracked(|scene| self.baseline.with_untracked(|baseline| scene != baseline))
     }
 
     /// Replace the document with a freshly created or loaded scene.
@@ -98,7 +99,7 @@ impl DocContext {
         if let Some(path) = path {
             self.saved_path.set(Some(path));
         }
-        let unchanged = self.scene.get_untracked() == saved;
+        let unchanged = self.scene.with_untracked(|scene| scene == &saved);
         self.baseline.set(saved);
         self.dirty.set(!unchanged);
     }

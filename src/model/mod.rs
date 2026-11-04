@@ -267,10 +267,23 @@ impl<'de> Deserialize<'de> for Scene {
 
 impl PartialEq for Scene {
     fn eq(&self, other: &Self) -> bool {
-        self.elements() == other.elements()
-            && self.next_id == other.next_id
-            && self.groups == other.groups
-            && self.next_group_id == other.next_group_id
+        if self.next_id != other.next_id
+            || self.groups != other.groups
+            || self.next_group_id != other.next_group_id
+        {
+            return false;
+        }
+
+        // Compare the z-ordered payloads without cloning either document.
+        // Element equality includes the id, so this also rejects scenes that
+        // hold the same geometry under different identities.
+        let ours = self.ordered_stored();
+        let theirs = other.ordered_stored();
+        ours.len() == theirs.len()
+            && ours
+                .iter()
+                .zip(theirs.iter())
+                .all(|(left, right)| left.element == right.element)
     }
 }
 
@@ -596,24 +609,14 @@ impl Scene {
         f: impl FnOnce(&Element, Point) -> R,
     ) -> Option<R> {
         let key = *self.locations.get(&id)?;
-        let chunk = self.chunks.get(&key)?;
-        let stored = chunk
-            .elements
-            .iter()
-            .find(|stored| stored.element.id() == id)?;
+        let stored = self.stored_element(id)?;
         Some(f(&stored.element, chunk_origin(key)))
     }
 
     /// A counter that changes whenever `id`'s payload is written. Returns
     /// `None` for an element that is not in the scene.
     pub fn element_revision(&self, id: ElementId) -> Option<u64> {
-        let key = self.locations.get(&id)?;
-        self.chunks
-            .get(key)?
-            .elements
-            .iter()
-            .find(|stored| stored.element.id() == id)
-            .map(|stored| stored.revision)
+        self.stored_element(id).map(|stored| stored.revision)
     }
 
     pub fn element_by_id_mut(&mut self, id: ElementId) -> Option<ElementMut<'_>> {
@@ -628,13 +631,16 @@ impl Scene {
     }
 
     fn element_order(&self, id: ElementId) -> Option<u64> {
-        let key = *self.locations.get(&id)?;
+        self.stored_element(id).map(|stored| stored.order)
+    }
+
+    fn stored_element(&self, id: ElementId) -> Option<&StoredElement> {
+        let key = self.locations.get(&id)?;
         self.chunks
-            .get(&key)?
+            .get(key)?
             .elements
             .iter()
             .find(|stored| stored.element.id() == id)
-            .map(|stored| stored.order)
     }
 
     /// Element ids in canvas z-order, without cloning element geometry.
@@ -650,6 +656,17 @@ impl Scene {
             })
             .collect();
         ordered.sort_by_key(|(order, _)| *order);
+        ordered
+    }
+
+    /// Stored elements in canvas z-order, without cloning geometry.
+    fn ordered_stored(&self) -> Vec<&StoredElement> {
+        let mut ordered: Vec<_> = self
+            .chunks
+            .values()
+            .flat_map(|chunk| chunk.elements.iter())
+            .collect();
+        ordered.sort_by_key(|stored| stored.order);
         ordered
     }
 
@@ -1764,6 +1781,20 @@ mod tests {
 
         s.remove_by_id(2);
         assert!(s.connector_ids_bound_to(1).is_empty());
+    }
+
+    #[test]
+    fn scene_equality_compares_content_not_order_numbers() {
+        let mut original = scene_with_three();
+        // Give one element a sparse order value so a round trip has to
+        // renumber it while keeping the same visual stack.
+        original.reorder_selection(&[1], LayerOrder::Front);
+        let json = serde_json::to_string(&original).unwrap();
+        let restored: Scene = serde_json::from_str(&json).unwrap();
+        assert_eq!(original, restored);
+
+        original.reorder_selection(&[1], LayerOrder::Back);
+        assert_ne!(original, restored);
     }
 
     #[test]
