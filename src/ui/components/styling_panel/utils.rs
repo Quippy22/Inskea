@@ -41,7 +41,7 @@ pub fn selected_connector_variant(
     default
 }
 
-pub fn single_selected_element(scene: Scene, ids: Vec<ElementId>) -> Option<Element> {
+pub fn single_selected_element(scene: &Scene, ids: &[ElementId]) -> Option<Element> {
     let id = ids.first()?;
     scene.element_by_id(*id)
 }

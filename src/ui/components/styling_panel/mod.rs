@@ -109,7 +109,8 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
     } = context;
     let styling_kind = Signal::derive(move || {
         let ids = selected_ids.get();
-        let el = leptos::untrack(|| single_selected_element(scene.get_untracked(), ids));
+        let el =
+            leptos::untrack(|| scene.with_untracked(|scene| single_selected_element(scene, &ids)));
         if let Some(el) = el {
             return el.styling_kind();
         }
@@ -140,13 +141,15 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
             && !is_image.get()
     });
 
-    let (init_style, init_line_style) = read_panel_state(
-        &scene.get_untracked(),
-        &selected_ids.get_untracked(),
-        &default_style.get_untracked(),
-        &default_line_style.get_untracked(),
-        selected_tool.get_untracked(),
-    );
+    let (init_style, init_line_style) = scene.with_untracked(|scene| {
+        read_panel_state(
+            scene,
+            &selected_ids.get_untracked(),
+            &default_style.get_untracked(),
+            &default_line_style.get_untracked(),
+            selected_tool.get_untracked(),
+        )
+    });
 
     let local_style = create_rw_signal(init_style);
     let local_line_style = create_rw_signal(init_line_style);
@@ -162,18 +165,19 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 .is_some_and(|element| element.data().embedded_text.is_some())
         })
     });
-    let local_connector_variant = create_rw_signal(selected_connector_variant(
-        &scene.get_untracked(),
-        &selected_ids.get_untracked(),
-        default_connector_variant.get_untracked(),
-    ));
+    let local_connector_variant = create_rw_signal(scene.with_untracked(|scene| {
+        selected_connector_variant(
+            scene,
+            &selected_ids.get_untracked(),
+            default_connector_variant.get_untracked(),
+        )
+    }));
 
     let stroke_size = create_rw_signal(local_style.get_untracked().stroke_width);
     let text_size = create_rw_signal(local_style.get_untracked().font_size);
-    let text_align = create_rw_signal(selected_text_align(
-        &scene.get_untracked(),
-        &selected_ids.get_untracked(),
-    ));
+    let text_align = create_rw_signal(
+        scene.with_untracked(|scene| selected_text_align(scene, &selected_ids.get_untracked())),
+    );
     let roundness = create_rw_signal(local_style.get_untracked().roundness);
     let opacity = create_rw_signal(local_style.get_untracked().opacity * 100.0);
     let is_rounded = Signal::derive(move || local_style.get().edge_style == EdgeStyle::Rounded);
@@ -205,38 +209,40 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         scene.with(|_| ());
         let _dls = default_line_style.get();
         let _dcv = default_connector_variant.get();
-        let (new_style, new_line_style) = leptos::untrack(|| {
-            read_panel_state(
-                &scene.get_untracked(),
-                &selected_ids.get_untracked(),
-                &default_style.get_untracked(),
-                &default_line_style.get_untracked(),
-                selected_tool.get_untracked(),
-            )
+        let (new_style, new_line_style, align, embedded_color, variant) = leptos::untrack(|| {
+            scene.with_untracked(|scene| {
+                let ids = selected_ids.get_untracked();
+                let (style, line_style) = read_panel_state(
+                    scene,
+                    &ids,
+                    &default_style.get_untracked(),
+                    &default_line_style.get_untracked(),
+                    selected_tool.get_untracked(),
+                );
+                let align = selected_text_align(scene, &ids);
+                let embedded_color = ids
+                    .first()
+                    .and_then(|id| scene.element_by_id(*id))
+                    .and_then(|element| {
+                        element.data().embedded_text.as_ref().map(|text| text.color)
+                    });
+                let variant = selected_connector_variant(
+                    scene,
+                    &ids,
+                    default_connector_variant.get_untracked(),
+                );
+                (style, line_style, align, embedded_color, variant)
+            })
         });
         stroke_size.set(new_style.stroke_width);
         text_size.set(new_style.font_size);
-        text_align.set(selected_text_align(
-            &scene.get_untracked(),
-            &selected_ids.get_untracked(),
-        ));
+        text_align.set(align);
         roundness.set(new_style.roundness);
         opacity.set(new_style.opacity * 100.0);
         local_style.set(new_style);
         local_line_style.set(new_line_style);
-        let embedded_color = scene.with_untracked(|scene| {
-            selected_ids
-                .get_untracked()
-                .first()
-                .and_then(|id| scene.element_by_id(*id))
-                .and_then(|element| element.data().embedded_text.as_ref().map(|text| text.color))
-        });
         local_embedded_text_color.set(embedded_color.unwrap_or_default());
-        local_connector_variant.set(selected_connector_variant(
-            &scene.get_untracked(),
-            &selected_ids.get_untracked(),
-            default_connector_variant.get_untracked(),
-        ));
+        local_connector_variant.set(variant);
     });
 
     let update_style: UpdateStyle = Rc::new({
