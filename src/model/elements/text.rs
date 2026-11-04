@@ -285,19 +285,20 @@ struct GlyphMetrics {
 /// Keeps repeated layout and bounds passes from crossing into `canvas 2d` for
 /// the same words over and over (text bounds are recomputed on every edit and
 /// the selection outline measures each line). Bounded so a document with many
-/// unique strings cannot grow it without limit; a full cache is simply dropped.
+/// unique strings cannot grow it without limit; a full bucket is simply dropped.
 const METRICS_CACHE_LIMIT: usize = 8192;
 
-#[derive(PartialEq, Eq, Hash)]
-struct MetricsKey {
-    text: Box<str>,
-    family: Box<str>,
-    size_bits: u64,
-}
-
 thread_local! {
-    static METRICS_CACHE: std::cell::RefCell<std::collections::HashMap<MetricsKey, GlyphMetrics>> =
+    /// Family name to a small integer, so a cache hit never has to clone the
+    /// family name just to build a key.
+    static FONT_FAMILIES: std::cell::RefCell<std::collections::HashMap<Box<str>, u16>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
+    /// `(family, font size)` to the measurements of every run seen at that size.
+    /// The inner map is keyed by `Box<str>` but looked up by `&str`, so the
+    /// common case allocates nothing.
+    static METRICS_CACHE: std::cell::RefCell<
+        std::collections::HashMap<(u16, u64), std::collections::HashMap<Box<str>, GlyphMetrics>>,
+    > = std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
 /// Drop every cached measurement. A webfont that finishes loading after the
@@ -307,22 +308,31 @@ pub(crate) fn invalidate_metrics_cache() {
     METRICS_CACHE.with(|cache| cache.borrow_mut().clear());
 }
 
+fn family_id(font_family: &str) -> u16 {
+    FONT_FAMILIES.with(|families| {
+        let mut families = families.borrow_mut();
+        if let Some(id) = families.get(font_family) {
+            return *id;
+        }
+        let id = families.len() as u16 + 1;
+        families.insert(font_family.into(), id);
+        id
+    })
+}
+
 fn cached_metrics(text: &str, font_size: f64, font_family: &str) -> GlyphMetrics {
+    let family = family_id(font_family);
     METRICS_CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
-        let key = MetricsKey {
-            text: text.into(),
-            family: font_family.into(),
-            size_bits: font_size.to_bits(),
-        };
-        if let Some(metrics) = cache.get(&key) {
+        let by_size = cache.entry((family, font_size.to_bits())).or_default();
+        if let Some(metrics) = by_size.get(text) {
             return *metrics;
         }
         let metrics = measure_uncached(text, font_size, font_family);
-        if cache.len() >= METRICS_CACHE_LIMIT {
-            cache.clear();
+        if by_size.len() >= METRICS_CACHE_LIMIT {
+            by_size.clear();
         }
-        cache.insert(key, metrics);
+        by_size.insert(text.into(), metrics);
         metrics
     })
 }
