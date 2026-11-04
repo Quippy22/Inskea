@@ -189,6 +189,7 @@ fn handle_path_move_icon(
         st.drag.drag_bounds.set(Some(guide_bounds(el)));
         st.drag.smart_guide_frame.set(Some(guide_frame(el)));
         st.drag.last_world.set(Some(world));
+        st.drag.move_applied.set(Point::default());
         st.drag.drag_originals.set(vec![el.clone()]);
         capture_smart_guide_targets(st, &[el.id()], els);
         return true;
@@ -269,6 +270,7 @@ fn hit_move_handle(
         st.drag.drag_bounds.set(Some(drag_bounds));
         st.drag.smart_guide_frame.set(guide_union_frame(ids, els));
         st.drag.last_world.set(Some(world));
+        st.drag.move_applied.set(Point::default());
         st.drag.drag_originals.set(
             els.iter()
                 .filter(|el| ids.contains(&el.id()))
@@ -487,6 +489,7 @@ fn begin_move_drag(
     st.drag.drag_bounds.set(Some(bounds));
     st.drag.smart_guide_frame.set(guide_union_frame(ids, els));
     st.drag.last_world.set(Some(world));
+    st.drag.move_applied.set(Point::default());
     st.drag.drag_originals.set(
         els.iter()
             .filter(|el| ids.contains(&el.id()))
@@ -575,7 +578,6 @@ fn do_resize(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
         st.drag.last_world.set(Some(world));
         let ids = st.selected_ids.get();
         let multi = ids.len() > 1;
-        let originals = st.drag.drag_originals.get();
         let alt = st.alt_pressed.get();
         let shift = st.shift_pressed.get();
         let handle = match st.drag.drag_action.get() {
@@ -583,28 +585,30 @@ fn do_resize(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
             _ => return,
         };
         props.scene.update(|s| {
-            for id in &ids {
-                if let (Some(orig), Some(mut el)) = (
-                    originals.iter().find(|original| original.id() == *id),
-                    s.element_by_id_mut(*id),
-                ) {
-                    let ctx = ResizeContext {
-                        orig,
-                        handle,
-                        pointer_world: world,
-                        start_world,
-                        shift,
-                        alt,
-                        multi,
-                        bx: b.x,
-                        by: b.y,
-                        bw: b.w,
-                        bh: b.h,
-                    };
-                    el.resize(&ctx);
+            st.drag.drag_originals.with(|originals| {
+                for id in &ids {
+                    if let (Some(orig), Some(mut el)) = (
+                        originals.iter().find(|original| original.id() == *id),
+                        s.element_by_id_mut(*id),
+                    ) {
+                        let ctx = ResizeContext {
+                            orig,
+                            handle,
+                            pointer_world: world,
+                            start_world,
+                            shift,
+                            alt,
+                            multi,
+                            bx: b.x,
+                            by: b.y,
+                            bw: b.w,
+                            bh: b.h,
+                        };
+                        el.resize(&ctx);
+                    }
                 }
-            }
-            refresh_bound_connectors(s, &originals);
+                refresh_bound_connectors(s, originals);
+            });
         });
     }
 }
@@ -629,18 +633,19 @@ fn do_rotate(world: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
                 delta = (delta / step).round() * step;
             }
             let ids = st.selected_ids.get();
-            let originals = st.drag.drag_originals.get();
             props.scene.update(|s| {
-                for id in &ids {
-                    if let (Some(orig), Some(mut el)) = (
-                        originals.iter().find(|original| original.id() == *id),
-                        s.element_by_id_mut(*id),
-                    ) {
-                        *el = orig.clone();
-                        el.rotate_around(Point { x: cx, y: cy }, delta);
+                st.drag.drag_originals.with(|originals| {
+                    for id in &ids {
+                        if let (Some(orig), Some(mut el)) = (
+                            originals.iter().find(|original| original.id() == *id),
+                            s.element_by_id_mut(*id),
+                        ) {
+                            *el = orig.clone();
+                            el.rotate_around(Point { x: cx, y: cy }, delta);
+                        }
                     }
-                }
-                refresh_bound_connectors(s, &originals);
+                    refresh_bound_connectors(s, originals);
+                });
             });
             st.drag.rotation_delta.set(delta);
         }
@@ -837,7 +842,6 @@ fn grid_step(props: &CanvasInputs) -> f64 {
 #[inline]
 fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
     let ids = st.selected_ids.get();
-    let originals = st.drag.drag_originals.get();
     let Some(bounds) = st.drag.drag_bounds.get() else {
         return;
     };
@@ -885,18 +889,26 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
     };
     let dx = raw_dx + snap_dx;
     let dy = raw_dy + snap_dy;
-    props.scene.update(|s| {
-        for id in &ids {
-            if let (Some(orig), Some(mut el)) = (
-                originals.iter().find(|original| original.id() == *id),
-                s.element_by_id_mut(*id),
-            ) {
-                *el = orig.clone();
-                el.offset(dx, dy);
+    // Apply only the step since the last frame. Restoring every selected
+    // element from its captured original would deep-clone each payload on
+    // every pointer move, which is expensive for freehand strokes.
+    let applied = st.drag.move_applied.get_untracked();
+    let step = Point::new(dx - applied.x, dy - applied.y);
+    if step.x != 0.0 || step.y != 0.0 {
+        props.scene.update(|s| {
+            for id in &ids {
+                if let Some(mut el) = s.element_by_id_mut(*id) {
+                    el.offset(step.x, step.y);
+                }
             }
-        }
-        refresh_bound_connectors(s, &originals);
-    });
+            // Borrow the originals instead of cloning the whole drag snapshot
+            // just to find the shapes connectors can attach to.
+            st.drag.drag_originals.with(|originals| {
+                refresh_bound_connectors(s, originals);
+            });
+        });
+        st.drag.move_applied.set(Point::new(dx, dy));
+    }
     st.drag.smart_guides.set(next_guides);
 }
 
@@ -949,6 +961,7 @@ pub(crate) fn clear_drag_state(st: &mut CanvasState) {
     st.drag.overlay_freeze.set(None);
     st.drag.rotation_delta.set(0.0);
     st.drag.last_world.set(None);
+    st.drag.move_applied.set(Point::default());
     st.drag.drag_originals.set(Vec::new());
     st.drag.hovered_handle.set(None);
     st.drag.smart_guides.set(SmartGuideState::default());
