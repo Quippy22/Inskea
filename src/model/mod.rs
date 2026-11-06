@@ -630,6 +630,58 @@ impl Scene {
         })
     }
 
+    /// Translate one element in place. A move drag calls this on every pointer
+    /// frame, so it skips the take/put round trip — which would translate a
+    /// freehand's points twice and re-measure them — and shifts the cached
+    /// bounds alongside the payload instead.
+    pub fn translate_element(&mut self, id: ElementId, dx: f64, dy: f64) {
+        if dx == 0.0 && dy == 0.0 {
+            return;
+        }
+        let Some(&key) = self.locations.get(&id) else {
+            return;
+        };
+        let Some(stored) = self.stored_element(id) else {
+            return;
+        };
+        // A connector's bound end stays pinned, so its box does not simply
+        // translate; and crossing a chunk changes the payload's frame. Both
+        // cases go through the regular remove/reinsert path.
+        let center = stored.bounds.center();
+        let rehome = matches!(stored.element, Element::Connector(_))
+            || chunk_of(center) != chunk_of(Point::new(center.x + dx, center.y + dy));
+        if rehome {
+            let Some(order) = self.element_order(id) else {
+                return;
+            };
+            if let Some(mut element) = self.take_element(id) {
+                element.offset(dx, dy);
+                self.put_element_raw(element, order);
+            }
+            return;
+        }
+
+        self.record_before(id);
+        let revision = self.next_revision;
+        self.next_revision = self.next_revision.wrapping_add(1);
+        if let Some(chunk) = self.chunks.get_mut(&key) {
+            if let Some(stored) = chunk
+                .elements
+                .iter_mut()
+                .find(|stored| stored.element.id() == id)
+            {
+                stored.element.offset(dx, dy);
+                stored.bounds = Rect::new(
+                    stored.bounds.x + dx,
+                    stored.bounds.y + dy,
+                    stored.bounds.w,
+                    stored.bounds.h,
+                );
+                stored.revision = revision;
+            }
+        }
+    }
+
     fn element_order(&self, id: ElementId) -> Option<u64> {
         self.stored_element(id).map(|stored| stored.order)
     }
@@ -1781,6 +1833,54 @@ mod tests {
 
         s.remove_by_id(2);
         assert!(s.connector_ids_bound_to(1).is_empty());
+    }
+
+    /// Cached bounds of a stored element, recomputed from its payload and
+    /// expressed in world space (the payload itself is chunk-relative).
+    fn measured_world_bounds(s: &Scene, id: ElementId) -> Rect {
+        let key = *s.locations.get(&id).unwrap();
+        let origin = chunk_origin(key);
+        let stored = s.stored_element(id).unwrap();
+        let mut bounds = element_bounds(&stored.element);
+        bounds.x += origin.x;
+        bounds.y += origin.y;
+        bounds
+    }
+
+    #[test]
+    fn translating_an_element_moves_payload_and_cached_bounds() {
+        let mut s = scene_with_three();
+        let before = s.element_by_id(1).unwrap();
+        let before_revision = s.element_revision(1).unwrap();
+        s.translate_element(1, 40.0, -25.0);
+
+        let after = s.element_by_id(1).unwrap();
+        assert!((after.data().world_point.x - (before.data().world_point.x + 40.0)).abs() < 1e-9);
+        assert!((after.data().world_point.y - (before.data().world_point.y - 25.0)).abs() < 1e-9);
+        assert_ne!(s.element_revision(1).unwrap(), before_revision);
+
+        // The cached bounds must match what a fresh measurement would produce;
+        // culling and hit testing read the cached copy.
+        assert_eq!(
+            s.stored_element(1).unwrap().bounds,
+            measured_world_bounds(&s, 1)
+        );
+    }
+
+    #[test]
+    fn translating_across_a_chunk_moves_the_element_to_its_new_chunk() {
+        let mut s = scene_with_three();
+        s.translate_element(1, 5000.0, 3000.0);
+        let stored = s.stored_element(1).unwrap();
+        assert_eq!(
+            s.locations.get(&1).copied(),
+            Some(chunk_of(stored.bounds.center()))
+        );
+        assert_eq!(
+            s.stored_element(1).unwrap().bounds,
+            measured_world_bounds(&s, 1)
+        );
+        assert_eq!(s.element_count(), 3);
     }
 
     #[test]

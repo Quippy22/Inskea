@@ -897,9 +897,7 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
     if step.x != 0.0 || step.y != 0.0 {
         props.scene.update(|s| {
             for id in &ids {
-                if let Some(mut el) = s.element_by_id_mut(*id) {
-                    el.offset(step.x, step.y);
-                }
+                s.translate_element(*id, step.x, step.y);
             }
             // Borrow the originals instead of cloning the whole drag snapshot
             // just to find the shapes connectors can attach to.
