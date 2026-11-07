@@ -259,17 +259,7 @@ fn soft_wrap_line(line: &str, max_width: f64, font_size: f64, font_family: &str)
 /// matches the SVG rendering. Natively (unit tests) there is no DOM, so a
 /// deterministic per-char heuristic is used instead.
 pub(crate) fn measure_text_width(text: &str, font_size: f64, font_family: &str) -> f64 {
-    #[cfg(target_arch = "wasm32")]
-    {
-        if let Some(ctx) = canvas_context() {
-            ctx.set_font(&format!("{font_size}px {font_family}, sans-serif"));
-            if let Ok(metrics) = ctx.measure_text(text) {
-                return metrics.width();
-            }
-        }
-    }
-    let _ = font_family;
-    text.chars().count() as f64 * font_size * 0.55
+    cached_metrics(text, font_size, font_family).width
 }
 
 /// Tight glyph metrics (world units) of `text` at `font_size`: rendered width,
@@ -280,23 +270,96 @@ pub(crate) fn measure_text_width(text: &str, font_size: f64, font_family: &str) 
 /// hard-coded fraction of the font size (which drifts off for fonts whose
 /// ascender/descender differ from the guess). Natively a heuristic is used.
 fn measure_text_extent(text: &str, font_size: f64, font_family: &str) -> (f64, f64, f64) {
+    let metrics = cached_metrics(text, font_size, font_family);
+    (metrics.width, metrics.ascent, metrics.descent)
+}
+
+/// Glyph measurements for a single run of text.
+#[derive(Clone, Copy, Debug)]
+struct GlyphMetrics {
+    width: f64,
+    ascent: f64,
+    descent: f64,
+}
+
+/// Keeps repeated layout and bounds passes from crossing into `canvas 2d` for
+/// the same words over and over (text bounds are recomputed on every edit and
+/// the selection outline measures each line). Bounded so a document with many
+/// unique strings cannot grow it without limit; a full bucket is simply dropped.
+const METRICS_CACHE_LIMIT: usize = 8192;
+
+thread_local! {
+    /// Family name to a small integer, so a cache hit never has to clone the
+    /// family name just to build a key.
+    static FONT_FAMILIES: std::cell::RefCell<std::collections::HashMap<Box<str>, u16>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    /// `(family, font size)` to the measurements of every run seen at that size.
+    /// The inner map is keyed by `Box<str>` but looked up by `&str`, so the
+    /// common case allocates nothing.
+    static METRICS_CACHE: std::cell::RefCell<MetricsCache> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// `(family, font size bits)` to the runs measured at that size.
+type MetricsCache =
+    std::collections::HashMap<(u16, u64), std::collections::HashMap<Box<str>, GlyphMetrics>>;
+
+/// Drop every cached measurement. A webfont that finishes loading after the
+/// first paint invalidates all earlier values, which were measured against the
+/// fallback face.
+pub(crate) fn invalidate_metrics_cache() {
+    METRICS_CACHE.with(|cache| cache.borrow_mut().clear());
+}
+
+fn family_id(font_family: &str) -> u16 {
+    FONT_FAMILIES.with(|families| {
+        let mut families = families.borrow_mut();
+        if let Some(id) = families.get(font_family) {
+            return *id;
+        }
+        let id = families.len() as u16 + 1;
+        families.insert(font_family.into(), id);
+        id
+    })
+}
+
+fn cached_metrics(text: &str, font_size: f64, font_family: &str) -> GlyphMetrics {
+    let family = family_id(font_family);
+    METRICS_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        let by_size = cache.entry((family, font_size.to_bits())).or_default();
+        if let Some(metrics) = by_size.get(text) {
+            return *metrics;
+        }
+        let metrics = measure_uncached(text, font_size, font_family);
+        if by_size.len() >= METRICS_CACHE_LIMIT {
+            by_size.clear();
+        }
+        by_size.insert(text.into(), metrics);
+        metrics
+    })
+}
+
+fn measure_uncached(text: &str, font_size: f64, font_family: &str) -> GlyphMetrics {
     #[cfg(target_arch = "wasm32")]
     {
         if let Some(ctx) = canvas_context() {
             ctx.set_font(&format!("{font_size}px {font_family}, sans-serif"));
             if let Ok(metrics) = ctx.measure_text(text) {
-                let asc = metrics.actual_bounding_box_ascent();
-                let desc = metrics.actual_bounding_box_descent();
-                return (metrics.width(), asc, desc);
+                return GlyphMetrics {
+                    width: metrics.width(),
+                    ascent: metrics.actual_bounding_box_ascent(),
+                    descent: metrics.actual_bounding_box_descent(),
+                };
             }
         }
     }
     let _ = font_family;
-    (
-        text.chars().count() as f64 * font_size * 0.55,
-        font_size * 0.85,
-        font_size * 0.25,
-    )
+    GlyphMetrics {
+        width: text.chars().count() as f64 * font_size * 0.55,
+        ascent: font_size * 0.85,
+        descent: font_size * 0.25,
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -575,17 +638,19 @@ impl Text {
         // shorter than the column), and the vertical extent uses the glyphs'
         // own ascent/descent above and below the baseline instead of a fixed
         // fraction of the font size.
-        let metrics: Vec<_> = self
-            .wrapped
-            .lines
-            .iter()
-            .map(|l| measure_text_extent(l, fs, ff))
-            .collect();
+        let mut width = 0.0f64;
+        let mut ascent = 0.0f64;
+        let mut descent = 0.0f64;
+        let mut num_lines = 0usize;
+        for line in &self.wrapped.lines {
+            let (line_width, line_ascent, line_descent) = measure_text_extent(line, fs, ff);
+            width = width.max(line_width);
+            ascent = ascent.max(line_ascent);
+            descent = descent.max(line_descent);
+            num_lines += 1;
+        }
         let baseline = self.data.world_point.y + fs * TEXT_ASCENT_RATIO;
-        let width = metrics.iter().map(|m| m.0).fold(0.0, f64::max);
-        let ascent = metrics.iter().map(|m| m.1).fold(0.0, f64::max);
-        let descent = metrics.iter().map(|m| m.2).fold(0.0, f64::max);
-        let num_lines = metrics.len().max(1);
+        let num_lines = num_lines.max(1);
         let height = ascent + descent + (num_lines - 1) as f64 * fs * 1.2;
         // Alignment slides the widest line around inside the box column, so
         // the outline follows where the glyphs actually sit.
@@ -1068,5 +1133,15 @@ mod tests {
         t.data.rotation = std::f64::consts::FRAC_PI_2;
         assert!(!t.hit_test(Point::new(5.0, 2.0), 0.0));
         assert!(t.hit_test(Point::new(50.0, -30.0), 0.0));
+    }
+
+    #[test]
+    fn cached_metrics_match_a_fresh_measurement() {
+        let first = measure_text_width("wrap me", 18.0, FONT_FAMILY);
+        assert_eq!(first, measure_text_width("wrap me", 18.0, FONT_FAMILY));
+        invalidate_metrics_cache();
+        assert_eq!(first, measure_text_width("wrap me", 18.0, FONT_FAMILY));
+        let extent = measure_text_extent("wrap me", 18.0, FONT_FAMILY);
+        assert_eq!(extent.0, first);
     }
 }

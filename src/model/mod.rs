@@ -40,7 +40,14 @@ pub struct Scene {
     chunks: HashMap<(i32, i32), SceneChunk>,
     locations: HashMap<ElementId, (i32, i32)>,
     oversized: Vec<ElementId>,
+    /// Shape id → connectors bound to it. Kept in sync with the stored element
+    /// payloads so refreshing a moved shape touches only its own connectors
+    /// instead of scanning every element in the document.
+    bindings: HashMap<ElementId, Vec<ElementId>>,
     next_order: u64,
+    /// Monotonic counter handed to each stored element so renderers can tell
+    /// whether that element's payload changed without cloning or comparing it.
+    next_revision: u64,
     pub(crate) next_id: u64,
     pub(crate) groups: Vec<Group>,
     pub(crate) next_group_id: GroupId,
@@ -56,7 +63,9 @@ impl Clone for Scene {
             chunks: self.chunks.clone(),
             locations: self.locations.clone(),
             oversized: self.oversized.clone(),
+            bindings: self.bindings.clone(),
             next_order: self.next_order,
+            next_revision: self.next_revision,
             next_id: self.next_id,
             groups: self.groups.clone(),
             next_group_id: self.next_group_id,
@@ -124,13 +133,11 @@ fn bounds_intersect(a: Rect, b: Rect) -> bool {
     a.x <= b.right() && a.right() >= b.x && a.y <= b.bottom() && a.bottom() >= b.y
 }
 
-fn chunk_has_visible(chunk: &SceneChunk, origin: Point, view: Rect) -> bool {
-    chunk.elements.iter().any(|stored| {
-        let mut bounds = element_bounds(&stored.element);
-        bounds.x += origin.x;
-        bounds.y += origin.y;
-        bounds_intersect(bounds, view)
-    })
+fn chunk_has_visible(chunk: &SceneChunk, view: Rect) -> bool {
+    chunk
+        .elements
+        .iter()
+        .any(|stored| bounds_intersect(stored.bounds, view))
 }
 
 fn collect_visible_chunk<'a>(
@@ -145,10 +152,7 @@ fn collect_visible_chunk<'a>(
     }
     let origin = chunk_origin(key);
     for stored in &chunk.elements {
-        let mut bounds = element_bounds(&stored.element);
-        bounds.x += origin.x;
-        bounds.y += origin.y;
-        if bounds_intersect(bounds, view) {
+        if bounds_intersect(stored.bounds, view) {
             visible.push(VisibleElement {
                 element: &stored.element,
                 origin,
@@ -222,6 +226,13 @@ fn distance_to_bounds(bounds: Rect, point: Point) -> f64 {
 #[derive(Clone, Debug)]
 struct StoredElement {
     order: u64,
+    /// World-space interaction bounds, computed when the payload was stored.
+    /// Keeping them here means culling, hit-testing helpers, and overlays never
+    /// have to re-measure glyphs or re-walk path points for an unchanged element.
+    bounds: Rect,
+    /// Bumped whenever the payload changes, so renderers can skip unchanged
+    /// elements without cloning them for comparison.
+    revision: u64,
     element: Element,
 }
 
@@ -256,10 +267,23 @@ impl<'de> Deserialize<'de> for Scene {
 
 impl PartialEq for Scene {
     fn eq(&self, other: &Self) -> bool {
-        self.elements() == other.elements()
-            && self.next_id == other.next_id
-            && self.groups == other.groups
-            && self.next_group_id == other.next_group_id
+        if self.next_id != other.next_id
+            || self.groups != other.groups
+            || self.next_group_id != other.next_group_id
+        {
+            return false;
+        }
+
+        // Compare the z-ordered payloads without cloning either document.
+        // Element equality includes the id, so this also rejects scenes that
+        // hold the same geometry under different identities.
+        let ours = self.ordered_stored();
+        let theirs = other.ordered_stored();
+        ours.len() == theirs.len()
+            && ours
+                .iter()
+                .zip(theirs.iter())
+                .all(|(left, right)| left.element == right.element)
     }
 }
 
@@ -378,7 +402,9 @@ impl Scene {
             chunks: HashMap::new(),
             locations: HashMap::new(),
             oversized: Vec::new(),
+            bindings: HashMap::new(),
             next_order: 0,
+            next_revision: 0,
             next_id: 1,
             groups: Vec::new(),
             next_group_id: 1,
@@ -517,13 +543,13 @@ impl Scene {
             return self
                 .chunks
                 .iter()
-                .any(|(key, chunk)| chunk_has_visible(chunk, chunk_origin(*key), view));
+                .any(|(_, chunk)| chunk_has_visible(chunk, view));
         }
 
         for x in x0..=x1 {
             for y in y0..=y1 {
                 if let Some(chunk) = self.chunks.get(&(x, y)) {
-                    if chunk_has_visible(chunk, chunk_origin((x, y)), view) {
+                    if chunk_has_visible(chunk, view) {
                         return true;
                     }
                 }
@@ -536,20 +562,16 @@ impl Scene {
             };
             self.chunks
                 .get(key)
-                .is_some_and(|chunk| chunk_has_visible(chunk, chunk_origin(*key), view))
+                .is_some_and(|chunk| chunk_has_visible(chunk, view))
         })
     }
 
     /// Center of the element whose visual bounds are nearest to `point`.
     pub fn nearest_element_center(&self, point: Point) -> Option<Point> {
         let mut nearest: Option<(f64, u64, Point)> = None;
-        for (key, chunk) in &self.chunks {
-            let origin = chunk_origin(*key);
+        for chunk in self.chunks.values() {
             for stored in &chunk.elements {
-                let mut bounds = element_bounds(&stored.element);
-                bounds.x += origin.x;
-                bounds.y += origin.y;
-                let distance = distance_to_bounds(bounds, point);
+                let distance = distance_to_bounds(stored.bounds, point);
                 let closer = nearest.is_none_or(|(best, best_order, _)| {
                     distance
                         .total_cmp(&best)
@@ -557,7 +579,7 @@ impl Scene {
                         .is_lt()
                 });
                 if closer {
-                    nearest = Some((distance, stored.order, bounds.center()));
+                    nearest = Some((distance, stored.order, stored.bounds.center()));
                 }
             }
         }
@@ -578,6 +600,25 @@ impl Scene {
         Some(element)
     }
 
+    /// Borrow one element's stored (chunk-relative) payload and the origin that
+    /// places it in world space. Avoids cloning for render paths that only need
+    /// to read the element once.
+    pub fn with_element<R>(
+        &self,
+        id: ElementId,
+        f: impl FnOnce(&Element, Point) -> R,
+    ) -> Option<R> {
+        let key = *self.locations.get(&id)?;
+        let stored = self.stored_element(id)?;
+        Some(f(&stored.element, chunk_origin(key)))
+    }
+
+    /// A counter that changes whenever `id`'s payload is written. Returns
+    /// `None` for an element that is not in the scene.
+    pub fn element_revision(&self, id: ElementId) -> Option<u64> {
+        self.stored_element(id).map(|stored| stored.revision)
+    }
+
     pub fn element_by_id_mut(&mut self, id: ElementId) -> Option<ElementMut<'_>> {
         let order = self.element_order(id)?;
         let element = self.take_element(id)?;
@@ -589,14 +630,69 @@ impl Scene {
         })
     }
 
+    /// Translate one element in place. A move drag calls this on every pointer
+    /// frame, so it skips the take/put round trip — which would translate a
+    /// freehand's points twice and re-measure them — and shifts the cached
+    /// bounds alongside the payload instead.
+    pub fn translate_element(&mut self, id: ElementId, dx: f64, dy: f64) {
+        if dx == 0.0 && dy == 0.0 {
+            return;
+        }
+        let Some(&key) = self.locations.get(&id) else {
+            return;
+        };
+        let Some(stored) = self.stored_element(id) else {
+            return;
+        };
+        // A connector's bound end stays pinned, so its box does not simply
+        // translate; and crossing a chunk changes the payload's frame. Both
+        // cases go through the regular remove/reinsert path.
+        let center = stored.bounds.center();
+        let rehome = matches!(stored.element, Element::Connector(_))
+            || chunk_of(center) != chunk_of(Point::new(center.x + dx, center.y + dy));
+        if rehome {
+            let Some(order) = self.element_order(id) else {
+                return;
+            };
+            if let Some(mut element) = self.take_element(id) {
+                element.offset(dx, dy);
+                self.put_element_raw(element, order);
+            }
+            return;
+        }
+
+        self.record_before(id);
+        let revision = self.next_revision;
+        self.next_revision = self.next_revision.wrapping_add(1);
+        if let Some(chunk) = self.chunks.get_mut(&key) {
+            if let Some(stored) = chunk
+                .elements
+                .iter_mut()
+                .find(|stored| stored.element.id() == id)
+            {
+                stored.element.offset(dx, dy);
+                stored.bounds = Rect::new(
+                    stored.bounds.x + dx,
+                    stored.bounds.y + dy,
+                    stored.bounds.w,
+                    stored.bounds.h,
+                );
+                stored.revision = revision;
+            }
+        }
+    }
+
     fn element_order(&self, id: ElementId) -> Option<u64> {
-        let key = *self.locations.get(&id)?;
+        self.stored_element(id).map(|stored| stored.order)
+    }
+
+    fn stored_element(&self, id: ElementId) -> Option<&StoredElement> {
+        let key = self.locations.get(&id)?;
         self.chunks
-            .get(&key)?
+            .get(key)?
             .elements
             .iter()
             .find(|stored| stored.element.id() == id)
-            .map(|stored| stored.order)
     }
 
     /// Element ids in canvas z-order, without cloning element geometry.
@@ -612,6 +708,17 @@ impl Scene {
             })
             .collect();
         ordered.sort_by_key(|(order, _)| *order);
+        ordered
+    }
+
+    /// Stored elements in canvas z-order, without cloning geometry.
+    fn ordered_stored(&self) -> Vec<&StoredElement> {
+        let mut ordered: Vec<_> = self
+            .chunks
+            .values()
+            .flat_map(|chunk| chunk.elements.iter())
+            .collect();
+        ordered.sort_by_key(|stored| stored.order);
         ordered
     }
 
@@ -822,6 +929,40 @@ impl Scene {
         self.next_id_before = None;
     }
 
+    /// Register the endpoints a connector holds, so refreshing the bound shape
+    /// can find it without walking the document.
+    fn index_bindings(&mut self, element: &Element) {
+        let Element::Connector(connector) = element else {
+            return;
+        };
+        for binding in [connector.start_binding, connector.end_binding]
+            .into_iter()
+            .flatten()
+        {
+            let connectors = self.bindings.entry(binding.element).or_default();
+            if !connectors.contains(&connector.data.id) {
+                connectors.push(connector.data.id);
+            }
+        }
+    }
+
+    fn unindex_bindings(&mut self, element: &Element) {
+        let Element::Connector(connector) = element else {
+            return;
+        };
+        for binding in [connector.start_binding, connector.end_binding]
+            .into_iter()
+            .flatten()
+        {
+            if let Some(connectors) = self.bindings.get_mut(&binding.element) {
+                connectors.retain(|id| *id != connector.data.id);
+                if connectors.is_empty() {
+                    self.bindings.remove(&binding.element);
+                }
+            }
+        }
+    }
+
     fn take_element_raw(&mut self, id: ElementId) -> Option<Element> {
         let key = self.locations.remove(&id)?;
         let (stored, empty) = {
@@ -836,10 +977,12 @@ impl Scene {
         if empty {
             self.chunks.remove(&key);
         }
+        let oversized = is_oversized(stored.bounds);
         let origin = chunk_origin(key);
         let mut element = stored.element;
+        self.unindex_bindings(&element);
         element.translate_storage(origin.x, origin.y);
-        if is_oversized(element_bounds(&element)) {
+        if oversized {
             self.oversized.retain(|candidate| *candidate != id);
         }
         Some(element)
@@ -858,14 +1001,22 @@ impl Scene {
         let bounds = element_bounds(&element);
         let home = chunk_of(bounds.center());
         let origin = chunk_origin(home);
+        self.index_bindings(&element);
         element.translate_storage(-origin.x, -origin.y);
+        let revision = self.next_revision;
+        self.next_revision = self.next_revision.wrapping_add(1);
         self.chunks
             .entry(home)
             .or_insert_with(|| SceneChunk {
                 elements: Vec::new(),
             })
             .elements
-            .push(StoredElement { order, element });
+            .push(StoredElement {
+                order,
+                bounds,
+                revision,
+                element,
+            });
         self.locations.insert(id, home);
         self.next_order = self.next_order.max(order.saturating_add(1));
 
@@ -909,6 +1060,7 @@ impl Scene {
         self.chunks.clear();
         self.locations.clear();
         self.oversized.clear();
+        self.bindings.clear();
         self.next_order = 0;
         for element in elements {
             let order = self.next_order;
@@ -1106,26 +1258,10 @@ impl Scene {
         }
     }
 
-    /// Connectors attached to `shape_id`, found without cloning their geometry.
+    /// Connectors attached to `shape_id`, found through the binding index
+    /// without cloning their geometry or scanning the document.
     fn connector_ids_bound_to(&self, shape_id: ElementId) -> Vec<ElementId> {
-        let mut ids = Vec::new();
-        for chunk in self.chunks.values() {
-            for stored in &chunk.elements {
-                let Element::Connector(connector) = &stored.element else {
-                    continue;
-                };
-                let bound = connector
-                    .start_binding
-                    .is_some_and(|binding| binding.element == shape_id)
-                    || connector
-                        .end_binding
-                        .is_some_and(|binding| binding.element == shape_id);
-                if bound {
-                    ids.push(connector.data.id);
-                }
-            }
-        }
-        ids
+        self.bindings.get(&shape_id).cloned().unwrap_or_default()
     }
 
     /// Re-pin both endpoints of a connector to the shapes they name, dropping
@@ -1607,6 +1743,158 @@ mod tests {
             s.nearest_element_center(Point::new(0.0, 0.0)),
             Some(Point::new(500.0, 70.0))
         );
+    }
+
+    #[test]
+    fn element_revision_tracks_only_the_written_element() {
+        let mut s = scene_with_three();
+        let first = s.element_revision(1).unwrap();
+        let second = s.element_revision(2).unwrap();
+        assert_ne!(first, second);
+
+        {
+            let mut element = s.element_by_id_mut(1).unwrap();
+            element.data_mut().world_point.x += 10.0;
+        }
+
+        assert_ne!(s.element_revision(1), Some(first));
+        assert_eq!(s.element_revision(2), Some(second));
+        assert_eq!(s.element_revision(99), None);
+    }
+
+    #[test]
+    fn with_element_borrows_relative_geometry_and_its_origin() {
+        let mut s = Scene::new();
+        let mut element = Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        });
+        element.data_mut().world_point = Point::new(1500.0, 20.0);
+        s.add_element(element);
+
+        let (x, origin_x) = s
+            .with_element(1, |element, origin| {
+                (element.data().world_point.x, origin.x)
+            })
+            .unwrap();
+        assert!(origin_x > 0.0);
+        assert_eq!(x + origin_x, 1500.0);
+        assert!(s.with_element(99, |_, _| ()).is_none());
+    }
+
+    #[test]
+    fn binding_index_follows_rebinding_and_removal() {
+        let mut s = Scene::new();
+        let mut shape = Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        });
+        shape.data_mut().world_point = Point::new(0.0, 0.0);
+        s.add_element(shape);
+
+        let line = Line::from_drag(
+            Point::new(0.0, 0.0),
+            Point::new(100.0, 0.0),
+            Color::new(Color::WHITE),
+            false,
+        );
+        let connector = Connector::from_line(
+            line,
+            ConnectorVariant::Direct,
+            Some(ConnectionEnd::new(1, 0)),
+            Some(ConnectionEnd::new(1, 4)),
+        );
+        s.add_element(Element::Connector(connector));
+
+        assert_eq!(s.connector_ids_bound_to(1), vec![2]);
+
+        {
+            let mut element = s.element_by_id_mut(2).unwrap();
+            if let Element::Connector(connector) = &mut *element {
+                connector.set_binding(false, None);
+            }
+        }
+        assert_eq!(s.connector_ids_bound_to(1), vec![2]);
+
+        {
+            let mut element = s.element_by_id_mut(2).unwrap();
+            if let Element::Connector(connector) = &mut *element {
+                connector.set_binding(true, None);
+            }
+        }
+        assert!(s.connector_ids_bound_to(1).is_empty());
+
+        // Re-binding through a write updates the index again.
+        {
+            let mut element = s.element_by_id_mut(2).unwrap();
+            if let Element::Connector(connector) = &mut *element {
+                connector.set_binding(true, Some(ConnectionEnd::new(1, 2)));
+            }
+        }
+        assert_eq!(s.connector_ids_bound_to(1), vec![2]);
+
+        s.remove_by_id(2);
+        assert!(s.connector_ids_bound_to(1).is_empty());
+    }
+
+    /// Cached bounds of a stored element, recomputed from its payload and
+    /// expressed in world space (the payload itself is chunk-relative).
+    fn measured_world_bounds(s: &Scene, id: ElementId) -> Rect {
+        let key = *s.locations.get(&id).unwrap();
+        let origin = chunk_origin(key);
+        let stored = s.stored_element(id).unwrap();
+        let mut bounds = element_bounds(&stored.element);
+        bounds.x += origin.x;
+        bounds.y += origin.y;
+        bounds
+    }
+
+    #[test]
+    fn translating_an_element_moves_payload_and_cached_bounds() {
+        let mut s = scene_with_three();
+        let before = s.element_by_id(1).unwrap();
+        let before_revision = s.element_revision(1).unwrap();
+        s.translate_element(1, 40.0, -25.0);
+
+        let after = s.element_by_id(1).unwrap();
+        assert!((after.data().world_point.x - (before.data().world_point.x + 40.0)).abs() < 1e-9);
+        assert!((after.data().world_point.y - (before.data().world_point.y - 25.0)).abs() < 1e-9);
+        assert_ne!(s.element_revision(1).unwrap(), before_revision);
+
+        // The cached bounds must match what a fresh measurement would produce;
+        // culling and hit testing read the cached copy.
+        assert_eq!(
+            s.stored_element(1).unwrap().bounds,
+            measured_world_bounds(&s, 1)
+        );
+    }
+
+    #[test]
+    fn translating_across_a_chunk_moves_the_element_to_its_new_chunk() {
+        let mut s = scene_with_three();
+        s.translate_element(1, 5000.0, 3000.0);
+        let stored = s.stored_element(1).unwrap();
+        assert_eq!(
+            s.locations.get(&1).copied(),
+            Some(chunk_of(stored.bounds.center()))
+        );
+        assert_eq!(
+            s.stored_element(1).unwrap().bounds,
+            measured_world_bounds(&s, 1)
+        );
+        assert_eq!(s.element_count(), 3);
+    }
+
+    #[test]
+    fn scene_equality_compares_content_not_order_numbers() {
+        let mut original = scene_with_three();
+        // Give one element a sparse order value so a round trip has to
+        // renumber it while keeping the same visual stack.
+        original.reorder_selection(&[1], LayerOrder::Front);
+        let json = serde_json::to_string(&original).unwrap();
+        let restored: Scene = serde_json::from_str(&json).unwrap();
+        assert_eq!(original, restored);
+
+        original.reorder_selection(&[1], LayerOrder::Back);
+        assert_ne!(original, restored);
     }
 
     #[test]

@@ -53,6 +53,10 @@ pub struct DragState {
     pub drag_angle: RwSignal<Option<f64>>,
     pub last_world: RwSignal<Option<Point>>,
     pub drag_originals: RwSignal<Vec<Element>>,
+    /// Offset already applied to the selection by the current move drag. Each
+    /// pointer frame applies only the difference, so moving a large freehand
+    /// stroke never clones or rewrites its points from the originals.
+    pub move_applied: RwSignal<Point>,
     pub overlay_freeze: RwSignal<Option<Rect>>,
     pub rotation_delta: RwSignal<f64>,
     pub hovered_handle: RwSignal<Option<DragOperation>>,
@@ -79,6 +83,7 @@ impl DragState {
             drag_angle: create_rw_signal(None),
             last_world: create_rw_signal(None),
             drag_originals: create_rw_signal(Vec::new()),
+            move_applied: create_rw_signal(Point::default()),
             overlay_freeze: create_rw_signal(None),
             rotation_delta: create_rw_signal(0.0),
             hovered_handle: create_rw_signal(None),

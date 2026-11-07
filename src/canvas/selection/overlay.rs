@@ -170,10 +170,10 @@ fn render_path_element_overlay(
 fn compute_padded_bounds(
     ids: &[ElementId],
     els: &[Element],
-    overlay_freeze: RwSignal<Option<Rect>>,
+    frozen: Option<Rect>,
     wpx: f64,
 ) -> Rect {
-    let mut b = if let Some(fb) = overlay_freeze.get() {
+    let mut b = if let Some(fb) = frozen {
         fb
     } else {
         selection_bounds(ids, els).unwrap_or(Rect::new(0.0, 0.0, 0.0, 0.0))
@@ -400,49 +400,108 @@ pub fn selection_handle_overlay(
         // `with` instead of `get`: the overlay re-runs on every scene change
         // (including each drag step) and must not clone the document.
         scene.with(|s| {
-            let els = s.elements_for_ids(&ids);
             let hex = theme.accent();
             let fill = theme.canvas();
+            let frozen = overlay_freeze.get();
 
-            if ids.len() == 1 {
-                if let Some(el) = els.iter().find(|el| el.id() == ids[0]) {
-                    if let Some(view) = render_path_element_overlay(el, hex, fill, wpx) {
-                        return Some(view);
-                    }
-                }
+            // A single selection is the common case and also the expensive one
+            // to clone (a freehand drag would deep-copy every point on each
+            // frame). Read it in place and place the overlay through the same
+            // chunk-origin transform the scene uses. The frozen frame is in
+            // world space, so shift it into the element's local frame.
+            if let [id] = ids[..] {
+                return Some(
+                    s.with_element(id, |el, origin| {
+                        let els = std::slice::from_ref(el);
+                        let frozen = frozen
+                            .map(|fb| Rect::new(fb.x - origin.x, fb.y - origin.y, fb.w, fb.h));
+                        let content = selection_overlay_content(
+                            &ids,
+                            els,
+                            hex,
+                            fill,
+                            wpx,
+                            frozen,
+                            rotation_delta,
+                        );
+                        if origin.x == 0.0 && origin.y == 0.0 {
+                            content
+                        } else {
+                            view! {
+                                <g transform=format!("translate({} {})", origin.x, origin.y)>
+                                    {content}
+                                </g>
+                            }
+                            .into_view()
+                        }
+                    })
+                    .unwrap_or_else(|| {
+                        selection_overlay_content(&ids, &[], hex, fill, wpx, frozen, rotation_delta)
+                    }),
+                );
             }
 
-            let b = compute_padded_bounds(&ids, &els, overlay_freeze, wpx);
-            let hr = 3.5 * wpx;
-            let pivot = selection_pivot(&ids, &els, b, overlay_freeze.get());
-            let cx = pivot.x;
-            let cy = pivot.y;
-            let rx = cx;
-            let ry = b.y - ROTATE_HANDLE_OFFSET_PX * wpx;
-
-            let rot = compute_rotation(&ids, &els, rotation_delta);
-            let individual_boxes = render_multi_select_boxes(&ids, &els, hex, wpx);
-            let inner = render_bbox_overlay(b.x, b.y, b.w, b.h, hr, hex, wpx);
-            let icons = render_move_rotate_icons(hex, cx, cy, rx, ry, wpx);
-
-            let content = if rot != 0.0 {
-                let deg = rot.to_degrees();
-                view! {
-                    {individual_boxes}
-                    <g transform=format!("rotate({} {} {})", deg, cx, cy)>{inner}{icons}</g>
-                }
-                .into_view()
-            } else {
-                view! {
-                    {individual_boxes}
-                    {inner}
-                    {icons}
-                }
-                .into_view()
-            };
-
-            Some(content)
+            let els = s.elements_for_ids(&ids);
+            Some(selection_overlay_content(
+                &ids,
+                &els,
+                hex,
+                fill,
+                wpx,
+                frozen,
+                rotation_delta,
+            ))
         })
+    }
+}
+
+/// Handles, frame, and icons for the current selection, in whatever coordinate
+/// frame `els` are expressed in.
+#[allow(clippy::too_many_arguments)]
+fn selection_overlay_content(
+    ids: &[ElementId],
+    els: &[Element],
+    hex: &'static str,
+    fill: &'static str,
+    wpx: f64,
+    frozen: Option<Rect>,
+    rotation_delta: RwSignal<f64>,
+) -> View {
+    if ids.len() == 1 {
+        if let Some(el) = els.first() {
+            if let Some(view) = render_path_element_overlay(el, hex, fill, wpx) {
+                return view;
+            }
+        }
+    }
+
+    let b = compute_padded_bounds(ids, els, frozen, wpx);
+    let hr = 3.5 * wpx;
+    let pivot = selection_pivot(ids, els, b, frozen);
+    let cx = pivot.x;
+    let cy = pivot.y;
+    let rx = cx;
+    let ry = b.y - ROTATE_HANDLE_OFFSET_PX * wpx;
+
+    let rot = compute_rotation(ids, els, rotation_delta);
+    let individual_boxes = render_multi_select_boxes(ids, els, hex, wpx);
+    let inner = render_bbox_overlay(b.x, b.y, b.w, b.h, hr, hex, wpx);
+    let icons = render_move_rotate_icons(hex, cx, cy, rx, ry, wpx);
+
+    if rot != 0.0 {
+        let deg = rot.to_degrees();
+        view! {
+            {individual_boxes}
+            <g transform=format!("rotate({} {} {})", deg, cx, cy)>{inner}{icons}</g>
+        }
+        .into_view()
+    } else {
+        view! {
+            {individual_boxes}
+            {inner}
+            {icons}
+        }
+        .into_view()
     }
 }
 
