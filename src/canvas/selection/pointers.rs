@@ -9,7 +9,7 @@ use crate::canvas::state::{CanvasInputs, CanvasState, DragOperation};
 use crate::model::elements::connector::{self, ConnectionEnd, RouteHandle, SNAP_SCREEN_PX};
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{
-    Bounds, Connector, ConnectorVariant, CurveMode, Offset, PathPoints, Resize, Rotate,
+    Bounds, Connector, ConnectorVariant, CurveMode, PathPoints, Resize, Rotate,
 };
 use crate::model::interaction::{
     guide_bounds, guide_frame, guide_union_bounds, guide_union_frame, hit_test_topmost,
