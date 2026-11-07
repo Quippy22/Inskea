@@ -951,7 +951,10 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
         });
         st.drag.move_applied.set(Point::new(dx, dy));
     }
-    st.drag.smart_guides.set(next_guides);
+    // Guides are usually empty; only notify the overlay when they change.
+    if st.drag.smart_guides.with(|current| *current != next_guides) {
+        st.drag.smart_guides.set(next_guides);
+    }
 }
 
 /// On pointer-up, collapse a path point if it sits too close to its chord.
