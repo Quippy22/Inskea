@@ -1,7 +1,7 @@
 use super::utils::{
-    handle_positions, selection_bounds, selection_padding, unrotate_for_element,
+    handle_positions, selection_bounds, selection_padding, stroke_radius, unrotate_for_element,
     HANDLE_MOVE_RADIUS_PX, HANDLE_RESIZE_RADIUS_PX, HANDLE_ROTATE_RADIUS_PX, PATH_MERGE_DIST,
-    ROTATE_HANDLE_OFFSET_PX,
+    ROTATE_HANDLE_OFFSET_PX, SELECT_PADDING_PX,
 };
 use super::MIN_DRAG_DIST;
 use crate::canvas::smart_guides::{self, GuideBox, SmartGuideState};
@@ -13,7 +13,8 @@ use crate::model::elements::{
 };
 use crate::model::interaction::{
     guide_bounds, guide_frame, guide_union_bounds, guide_union_frame, hit_test_topmost,
-    point_inside_any_element, rect_fully_contains_element, GuideFrame, CLICK_MARGIN, HIT_MARGIN,
+    point_inside_any_element, rect_fully_contains_element, visual_bounds, GuideFrame, CLICK_MARGIN,
+    HIT_MARGIN,
 };
 use crate::model::resize::ResizeContext;
 use crate::model::resize::ResizeHandle;
@@ -518,30 +519,46 @@ fn detect_hovered_handle(
     let move_radius = HANDLE_MOVE_RADIUS_PX * wpx;
     let rotate_radius = HANDLE_ROTATE_RADIUS_PX * wpx;
     props.scene.with(|s| {
-        let els = s.elements_for_ids(&ids);
-
-        if ids.len() == 1 {
-            if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
-                if let Some(points) = el.path_points() {
-                    for (i, p) in points.iter().enumerate() {
-                        if ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt()
-                            <= resize_radius
-                        {
-                            return Some(DragOperation::PathPoint(i));
+        // A single selection is the common case, and hover runs on every
+        // pointer move: read the element in place rather than deep-cloning a
+        // large path (freehand/line) just to hit-test its handles. Chunk-stored
+        // geometry is read in its own frame, so the pointer is shifted into it.
+        if let [id] = ids[..] {
+            return s
+                .with_element(id, |el, origin| {
+                    let local = Point::new(world.x - origin.x, world.y - origin.y);
+                    if let Some(points) = el.path_points() {
+                        for (i, p) in points.iter().enumerate() {
+                            if ((local.x - p.x).powi(2) + (local.y - p.y).powi(2)).sqrt()
+                                <= resize_radius
+                            {
+                                return Some(DragOperation::PathPoint(i));
+                            }
+                        }
+                        if let Some(kind) = route_handle_at(el, local, resize_radius) {
+                            return Some(route_drag_operation(kind));
+                        }
+                        let b = el.bounds();
+                        let mx = b.x + b.w / 2.0;
+                        let my = b.y - ROTATE_HANDLE_OFFSET_PX * wpx;
+                        if ((local.x - mx).powi(2) + (local.y - my).powi(2)).sqrt() <= move_radius {
+                            return Some(DragOperation::Move);
                         }
                     }
-                    if let Some(kind) = route_handle_at(el, world, resize_radius) {
-                        return Some(route_drag_operation(kind));
-                    }
-                    let b = el.bounds();
-                    let mx = b.x + b.w / 2.0;
-                    let my = b.y - ROTATE_HANDLE_OFFSET_PX * wpx;
-                    if ((world.x - mx).powi(2) + (world.y - my).powi(2)).sqrt() <= move_radius {
-                        return Some(DragOperation::Move);
-                    }
-                }
-            }
+                    let b = visual_bounds(el).padded(SELECT_PADDING_PX * wpx + stroke_radius(el));
+                    single_selection_handle_at(
+                        b,
+                        local,
+                        resize_radius,
+                        move_radius,
+                        rotate_radius,
+                        wpx,
+                    )
+                })
+                .flatten();
         }
+
+        let els = s.elements_for_ids(&ids);
 
         if let Some(mut b) = selection_bounds(&ids, &els) {
             b = b.padded(selection_padding(&ids, &els, wpx));
@@ -566,6 +583,33 @@ fn detect_hovered_handle(
 
         None
     })
+}
+
+/// Which resize/move/rotate handle of a single selection is under `point`.
+#[inline]
+fn single_selection_handle_at(
+    b: Rect,
+    point: Point,
+    resize_radius: f64,
+    move_radius: f64,
+    rotate_radius: f64,
+    wpx: f64,
+) -> Option<DragOperation> {
+    let hpos = handle_positions(b.x, b.y, b.w, b.h, ROTATE_HANDLE_OFFSET_PX * wpx);
+    for (i, &p) in hpos[..8].iter().enumerate() {
+        if ((point.x - p.x).powi(2) + (point.y - p.y).powi(2)).sqrt() <= resize_radius {
+            return Some(DragOperation::Resize(ResizeHandle::from(i)));
+        }
+    }
+    let p = hpos[8];
+    if ((point.x - p.x).powi(2) + (point.y - p.y).powi(2)).sqrt() <= move_radius {
+        return Some(DragOperation::Move);
+    }
+    let p = hpos[9];
+    if ((point.x - p.x).powi(2) + (point.y - p.y).powi(2)).sqrt() <= rotate_radius {
+        return Some(DragOperation::Rotate);
+    }
+    None
 }
 
 /// Apply a resize drag to all selected elements, restoring from originals each frame.
