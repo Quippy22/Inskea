@@ -296,10 +296,13 @@ thread_local! {
     /// `(family, font size)` to the measurements of every run seen at that size.
     /// The inner map is keyed by `Box<str>` but looked up by `&str`, so the
     /// common case allocates nothing.
-    static METRICS_CACHE: std::cell::RefCell<
-        std::collections::HashMap<(u16, u64), std::collections::HashMap<Box<str>, GlyphMetrics>>,
-    > = std::cell::RefCell::new(std::collections::HashMap::new());
+    static METRICS_CACHE: std::cell::RefCell<MetricsCache> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
 }
+
+/// `(family, font size bits)` to the runs measured at that size.
+type MetricsCache =
+    std::collections::HashMap<(u16, u64), std::collections::HashMap<Box<str>, GlyphMetrics>>;
 
 /// Drop every cached measurement. A webfont that finishes loading after the
 /// first paint invalidates all earlier values, which were measured against the
