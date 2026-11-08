@@ -17,6 +17,9 @@ pub use rect::Rect;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
+use std::sync::atomic::{AtomicU32, Ordering};
+
+static NEXT_SCENE_RENDER_GENERATION: AtomicU32 = AtomicU32::new(0);
 
 /// A persistent group: a set of element ids that stay selected, move, and act together.
 pub type GroupId = u64;
@@ -48,6 +51,9 @@ pub struct Scene {
     /// Monotonic counter handed to each stored element so renderers can tell
     /// whether that element's payload changed without cloning or comparing it.
     next_revision: u64,
+    /// Distinguishes replacement scenes whose element ids and local revisions
+    /// happen to match the previous document.
+    render_generation: u32,
     pub(crate) next_id: u64,
     pub(crate) groups: Vec<Group>,
     pub(crate) next_group_id: GroupId,
@@ -66,6 +72,7 @@ impl Clone for Scene {
             bindings: self.bindings.clone(),
             next_order: self.next_order,
             next_revision: self.next_revision,
+            render_generation: self.render_generation,
             next_id: self.next_id,
             groups: self.groups.clone(),
             next_group_id: self.next_group_id,
@@ -405,6 +412,7 @@ impl Scene {
             bindings: HashMap::new(),
             next_order: 0,
             next_revision: 0,
+            render_generation: NEXT_SCENE_RENDER_GENERATION.fetch_add(1, Ordering::Relaxed),
             next_id: 1,
             groups: Vec::new(),
             next_group_id: 1,
@@ -617,6 +625,12 @@ impl Scene {
     /// `None` for an element that is not in the scene.
     pub fn element_revision(&self, id: ElementId) -> Option<u64> {
         self.stored_element(id).map(|stored| stored.revision)
+    }
+
+    /// Generation for render keys, changed whenever a new scene is created.
+    /// Clones retain it because they represent the same scene snapshot.
+    pub fn render_generation(&self) -> u32 {
+        self.render_generation
     }
 
     pub fn element_by_id_mut(&mut self, id: ElementId) -> Option<ElementMut<'_>> {

@@ -902,11 +902,10 @@ pub fn Canvas(
         }
     };
 
-    // The visible set is recomputed when the viewport or the scene changes, but
-    // it is a plain `Vec<ElementId>` memo: keyed rendering below then only
-    // touches DOM for elements whose key entered/left/reordered, while each
-    // element's payload re-renders solely on its own revision. This keeps a
-    // drag of one element from rebuilding every visible SVG node.
+    // The visible set is keyed by both identity and revision. Changing the key
+    // replaces only the SVG node whose payload changed, including every member
+    // of a multi-element transform. This keeps unchanged visible nodes intact
+    // without depending on nested child memos to observe a batch scene write.
     let visible_ids = {
         let props = props.clone();
         let editing_id = st.text_edit.editing_id;
@@ -925,7 +924,14 @@ pub fn Canvas(
                     .visible_elements(visible)
                     .into_iter()
                     .filter(|visible| Some(visible.element.id()) != editing || embedded)
-                    .map(|visible| visible.element.id())
+                    .map(|visible| {
+                        let id = visible.element.id();
+                        (
+                            id,
+                            scene.render_generation(),
+                            scene.element_revision(id).unwrap_or(0),
+                        )
+                    })
                     .collect::<Vec<_>>()
             })
         })
@@ -949,10 +955,10 @@ pub fn Canvas(
         >
             {grid::grid_overlay(props.settings, props.hide_center, props.viewport)}
 
-            // Elements are keyed by id so z-order changes move nodes instead of
-            // recreating them. Each child also owns a revision memo, which is
-            // what lets an in-place mutation (drag, resize, text commit) update
-            // only the element that actually changed.
+            // Elements are keyed by id and revision. Scene mutations give each
+            // changed payload a new revision, so all members of a batch edit
+            // (such as multi-select rotate/resize) get fresh SVG while
+            // unaffected nodes retain their DOM.
             {
                 let props = props.clone();
                 let editing_id = st.text_edit.editing_id;
@@ -961,19 +967,14 @@ pub fn Canvas(
                 view! {
                     <For
                         each=move || visible_ids.get()
-                        key=|id| *id
-                        children=move |id: ElementId| {
-                            let revision_scene = props.scene;
-                            let revision = create_memo(move |_| {
-                                revision_scene.with(|scene| scene.element_revision(id))
-                            });
+                        key=|(id, generation, revision)| (*id, *generation, *revision)
+                        children=move |(id, _generation, _revision): (ElementId, u32, u64)| {
                             let props = props.clone();
                             let editing_id = editing_id;
                             let editing_embedded = editing_embedded;
                             let edit_text = edit_text;
                             view! {
                                 {move || {
-                                    let _ = revision.get();
                                     let editing = editing_id.get() == Some(id);
                                     let embedded = editing_embedded.get();
                                     props
