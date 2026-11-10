@@ -14,7 +14,10 @@ static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 fn set_app_user_model_id(identifier: &str) {
     use windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
 
-    let app_id: Vec<u16> = identifier.encode_utf16().chain(std::iter::once(0)).collect();
+    let app_id: Vec<u16> = identifier
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
     // A failed call leaves the default process identity in place; startup continues.
     let _ = unsafe { SetCurrentProcessExplicitAppUserModelID(app_id.as_ptr()) };
 }
@@ -164,6 +167,24 @@ fn delete_catalogue_snippet(app_handle: tauri::AppHandle, id: String) -> Result<
     }
 }
 
+/// Show the global catalogue folder in the system file manager.
+#[tauri::command]
+fn open_catalogue_dir(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let dir = setup::catalogue_dir(&app_handle)?;
+    let program = if cfg!(target_os = "windows") {
+        "explorer"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(program)
+        .arg(&dir)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("failed to open {}: {e}", dir.display()))
+}
+
 /// Image formats the editor can embed, with the MIME type used in their data URL.
 const IMAGE_MIME_TYPES: &[(&str, &str)] = &[
     ("png", "image/png"),
@@ -190,8 +211,9 @@ fn read_image_data(path: String) -> Result<String, String> {
     use base64::Engine;
 
     let path = validate_file_path(&path)?;
-    let mime = image_mime(&path)
-        .ok_or_else(|| "unsupported image type (expected PNG, JPEG, GIF, WebP, SVG, or BMP)".to_string())?;
+    let mime = image_mime(&path).ok_or_else(|| {
+        "unsupported image type (expected PNG, JPEG, GIF, WebP, SVG, or BMP)".to_string()
+    })?;
     let bytes = fs::read(path).map_err(|e| format!("failed to read image: {e}"))?;
     let data = base64::engine::general_purpose::STANDARD.encode(bytes);
     Ok(format!("data:{mime};base64,{data}"))
@@ -200,8 +222,7 @@ fn read_image_data(path: String) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        image_mime, is_skea_arg, resolve_arg, validate_file_path, validate_snippet_id,
-        write_atomic,
+        image_mime, is_skea_arg, resolve_arg, validate_file_path, validate_snippet_id, write_atomic,
     };
     use std::path::Path;
 
@@ -246,7 +267,10 @@ mod tests {
     #[test]
     fn image_extensions_map_to_mime_types() {
         assert_eq!(image_mime(Path::new("/tmp/photo.PNG")), Some("image/png"));
-        assert_eq!(image_mime(Path::new("/tmp/logo.svg")), Some("image/svg+xml"));
+        assert_eq!(
+            image_mime(Path::new("/tmp/logo.svg")),
+            Some("image/svg+xml")
+        );
         assert_eq!(image_mime(Path::new("/tmp/scan.jpeg")), Some("image/jpeg"));
         assert_eq!(image_mime(Path::new("/tmp/drawing.skea")), None);
     }
@@ -405,6 +429,7 @@ pub fn run() {
             list_catalogue_snippets,
             save_catalogue_snippet,
             delete_catalogue_snippet,
+            open_catalogue_dir,
             read_image_data,
             set_window_title,
             close_window,

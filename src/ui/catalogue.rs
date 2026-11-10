@@ -125,6 +125,16 @@ impl CatalogueContext {
         });
     }
 
+    /// Reveal the global catalogue folder (desktop only).
+    pub fn open_folder(&self) {
+        let notifications = self.notifications;
+        spawn_local(async move {
+            if let Err(e) = crate::tauri_bridge::open_catalogue_dir().await {
+                notify::error(notifications, format!("Could not open the folder: {e}"));
+            }
+        });
+    }
+
     pub fn refresh_globals(&self) {
         self.loading.set(true);
         let context = self.clone();
@@ -297,15 +307,32 @@ pub fn Catalogue(context: CatalogueContext) -> impl IntoView {
                                 <span class="mr-1.5">{icon::save_snippet()}</span>
                                 "Save selection"
                             </button>
-                            <p class="mt-1.5 text-[10px] leading-snug text-subtle">
-                                {move || {
-                                    if tab.get() == CatalogueTab::Local {
-                                        "Local snippets travel with this drawing."
-                                    } else {
-                                        "Global snippets live in the Inskea catalogue folder."
-                                    }
-                                }}
-                            </p>
+                            <div class="mt-1.5 flex items-center justify-between gap-2">
+                                <p class="text-[10px] leading-snug text-subtle">
+                                    {move || {
+                                        if tab.get() == CatalogueTab::Local {
+                                            "Local snippets travel with this drawing."
+                                        } else {
+                                            "Global snippets live in the Inskea catalogue folder."
+                                        }
+                                    }}
+                                </p>
+                                <Show when=move || {
+                                    tab.get() == CatalogueTab::Global
+                                        && crate::tauri_bridge::is_tauri()
+                                }>
+                                    <button
+                                        class="shrink-0 text-subtle hover:text-fg transition-colors"
+                                        title="Open the catalogue folder"
+                                        on:click={
+                                            let context = context.clone();
+                                            move |_| context.open_folder()
+                                        }
+                                    >
+                                        {icon::folder_small()}
+                                    </button>
+                                </Show>
+                            </div>
                         </div>
                     </>
                 }

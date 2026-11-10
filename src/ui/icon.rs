@@ -124,6 +124,11 @@ pub fn trash_small() -> impl IntoView {
     svg(include_str!("icons/trash.svg"), "w-4 h-4")
 }
 
+/// Folder icon for revealing the global catalogue directory.
+pub fn folder_small() -> impl IntoView {
+    svg(include_str!("icons/folder-open.svg"), "w-4 h-4")
+}
+
 /// Small chevrons for the number-slider stepper.
 pub fn chevron_up() -> impl IntoView {
     svg(include_str!("icons/chevron-up.svg"), "w-3 h-3")

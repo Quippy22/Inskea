@@ -240,6 +240,16 @@ pub async fn delete_catalogue_snippet(id: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Show the global catalogue folder in the system file manager.
+pub async fn open_catalogue_dir() -> Result<(), String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({}))
+        .map_err(|e| format!("serialization error: {e}"))?;
+    invoke("open_catalogue_dir", args)
+        .await
+        .map_err(invoke_error)?;
+    Ok(())
+}
+
 /// Get the paths of the installed font files (regular + italic).
 /// The fonts are downloaded into the app-data dir on first launch.
 pub async fn get_font_paths() -> Result<Vec<String>, String> {
