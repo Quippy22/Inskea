@@ -17,11 +17,12 @@ It runs as a native desktop app and in the browser, with the same tools and the 
 
 - **Shapes.** Rectangles with sharp or rounded corners, ellipses, and lines that are straight or gently curved. Hold Shift while drawing for perfect squares and circles.
 - **Arrows.** Add an arrowhead to either end of a line, or both.
+- **Connectors.** Drop a line or arrow endpoint onto a shape and it binds there, then follows the shape when you move it. Choose direct, curved, or right-angled routing, and drag the route handles to adjust the path.
 - **Freehand.** Strokes are smoothed as you draw, which keeps hand-drawn lines from looking jittery.
 - **Images.** Import a PNG, JPEG, GIF, WebP, SVG, or BMP from Import → Image, or drop one onto the canvas. Images move, resize, and rotate like any other element, and the image data travels with the drawing.
-- **Text.** Click to place a cursor and type. Resize the box to set how the text wraps, change the font size, and align text left, center, or right.
+- **Text.** Click to place a cursor and type. Resize the box to set how the text wraps, change the font size, and align text left, center, or right. Select a shape and press `Ctrl+T` to add a label inside it.
 - **Eraser.** Drag across anything you want to remove.
-- **Point edits.** Reshape a line or arrow after the fact by dragging its points, or drag between two points to add a bend.
+- **Point edits.** Reshape a line, arrow, or connector after the fact by dragging its points, or drag between two points to add a bend.
 
 ### Style
 
@@ -42,7 +43,7 @@ It runs as a native desktop app and in the browser, with the same tools and the 
 ### Navigate
 
 - **Infinite pan and zoom.** Zoom with the scroll wheel from 10% up to 2000%, centered on your pointer, and drag with the Hand tool to move around.
-- **Reset view.** Click the zoom readout to jump back to 100%, centered.
+- **Reset view.** Click the zoom readout to return to 100% at the current center, or click the Home button to recenter on the origin.
 - **Grid.** Dots, lines, or off, with adjustable spacing. Alt-snapping follows the spacing you set.
 - **Center marker.** A crosshair or dot at the origin, so you can find your way back.
 - **Themes.** Storm, Tokyo Night, Mono, Paper, and Greenboard. Switch from the settings panel; the choice applies to the whole app and is remembered.
@@ -68,7 +69,7 @@ The shortcuts are chosen for one-handed use, so your other hand can stay on the 
 | Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` |
 | Copy / paste / duplicate | `Ctrl+C` / `Ctrl+V` / `Ctrl+D` |
 | Group / ungroup | `Ctrl+G` / `Ctrl+Shift+G` |
-| Add / edit text inside a shape| `Ctrl+T`|
+| Add / edit a shape label | `Ctrl+T` |
 | Delete selection | `Delete` or `Backspace` |
 | New / open / save / save as | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` |
 | Cancel, deselect, or leave a group | `Esc` |
