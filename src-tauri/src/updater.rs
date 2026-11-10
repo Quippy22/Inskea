@@ -266,7 +266,11 @@ pub fn check_for_update() -> Result<UpdateCheck, String> {
     let release: GithubRelease =
         serde_json::from_str(&body).map_err(|e| format!("invalid release JSON: {e}"))?;
 
-    let current_version = env!("CARGO_PKG_VERSION").to_string();
+    let current_version = env::var("INSKEA_CURRENT_VERSION")
+        .ok()
+        .map(|v| normalize_version(&v).to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
     let latest_version = normalize_version(&release.tag_name).to_string();
     let update_available = is_newer_version(&current_version, &latest_version);
 
