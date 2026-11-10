@@ -319,7 +319,7 @@ fn local_list(context: CatalogueContext) -> View {
     if context.tab.get() != CatalogueTab::Local {
         return view! {}.into_view();
     }
-    let snippets = context.scene.with(|scene| scene.snippets().to_vec());
+    let snippets = starred_first(context.scene.with(|scene| scene.snippets().to_vec()));
     if snippets.is_empty() {
         return empty_state("Save a selection to reuse it in this drawing.").into_view();
     }
@@ -340,7 +340,7 @@ fn global_list(context: CatalogueContext) -> View {
     if context.loading.get() {
         return empty_state("Loading the global catalogue…").into_view();
     }
-    let snippets = context.globals.get();
+    let snippets = starred_first(context.globals.get());
     if snippets.is_empty() {
         return empty_state("Save a selection to the global catalogue to use it across drawings.")
             .into_view();
@@ -353,6 +353,12 @@ fn global_list(context: CatalogueContext) -> View {
         </div>
     }
     .into_view()
+}
+
+/// Starred snippets float to the top; the rest keep their saved order.
+fn starred_first(mut snippets: Vec<Snippet>) -> Vec<Snippet> {
+    snippets.sort_by_key(|snippet| !snippet.starred);
+    snippets
 }
 
 fn snippet_row(snippet: Snippet, global: bool, context: CatalogueContext) -> impl IntoView {
@@ -621,5 +627,28 @@ pub fn SaveSnippetDialog(
                 </div>
             </div>
         </Show>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn named(id: &str, starred: bool) -> Snippet {
+        let mut snippet = Snippet::new(id, id, Vec::new(), Vec::new());
+        snippet.starred = starred;
+        snippet
+    }
+
+    #[test]
+    fn starred_snippets_sort_first_and_keep_their_order() {
+        let sorted = starred_first(vec![
+            named("a", false),
+            named("b", true),
+            named("c", false),
+            named("d", true),
+        ]);
+        let ids: Vec<&str> = sorted.iter().map(|snippet| snippet.id.as_str()).collect();
+        assert_eq!(ids, ["b", "d", "a", "c"]);
     }
 }
