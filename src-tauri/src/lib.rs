@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tauri::{Emitter, Manager};
 
 mod setup;
+mod updater;
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -396,6 +397,32 @@ fn get_font_data(app_handle: tauri::AppHandle) -> Result<Vec<String>, String> {
     Ok(fonts)
 }
 
+#[tauri::command]
+async fn check_for_update() -> Result<updater::UpdateCheck, String> {
+    tauri::async_runtime::spawn_blocking(updater::check_for_update)
+        .await
+        .map_err(|e| format!("update task failed: {e}"))?
+}
+
+#[tauri::command]
+async fn install_update(
+    release_url: String,
+    asset_name: Option<String>,
+    asset_url: Option<String>,
+) -> Result<updater::UpdateOutcome, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        updater::install_or_open(&release_url, asset_name.as_deref(), asset_url.as_deref())
+    })
+    .await
+    .map_err(|e| format!("update task failed: {e}"))?
+}
+
+#[tauri::command]
+fn relaunch_app(app_handle: tauri::AppHandle, state: tauri::State<CloseGuard>) {
+    state.confirmed.store(true, Ordering::SeqCst);
+    updater::relaunch(&app_handle);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let context = tauri::generate_context!();
@@ -439,7 +466,10 @@ pub fn run() {
             save_settings,
             load_settings,
             get_font_paths,
-            get_font_data
+            get_font_data,
+            check_for_update,
+            install_update,
+            relaunch_app
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
