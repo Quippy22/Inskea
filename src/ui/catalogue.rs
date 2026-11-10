@@ -135,8 +135,12 @@ impl CatalogueContext {
         });
     }
 
+    /// Re-read the global catalogue. The loading state only shows on the first
+    /// read, so reopening the panel does not flash an empty list.
     pub fn refresh_globals(&self) {
-        self.loading.set(true);
+        if self.globals.with_untracked(Vec::is_empty) {
+            self.loading.set(true);
+        }
         let context = self.clone();
         spawn_local(async move {
             match snippet_store::load_globals().await {
@@ -235,7 +239,18 @@ pub fn Catalogue(context: CatalogueContext) -> impl IntoView {
     let open = context.open;
     let tab = context.tab;
     let close = move || open.set(false);
-    let toggle = move || open.update(|value| *value = !*value);
+    // Each opening re-reads the folder, so files added or removed outside
+    // the app show up.
+    let toggle = {
+        let context = context.clone();
+        move || {
+            let opening = !open.get_untracked();
+            open.set(opening);
+            if opening {
+                context.refresh_globals();
+            }
+        }
+    };
 
     view! {
         <div class="relative">
