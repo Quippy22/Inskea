@@ -103,6 +103,67 @@ fn load_skea(path: String) -> Result<String, String> {
     fs::read_to_string(path).map_err(|e| format!("failed to read file: {e}"))
 }
 
+/// Snippet ids become file names, so they must not contain path separators.
+fn validate_snippet_id(id: &str) -> Result<(), String> {
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+    {
+        return Err("snippet id must contain only letters, digits, dashes, or underscores".into());
+    }
+    Ok(())
+}
+
+fn catalogue_file(app_handle: &tauri::AppHandle, id: &str) -> Result<PathBuf, String> {
+    validate_snippet_id(id)?;
+    let mut path = setup::catalogue_dir(app_handle)?;
+    path.push(format!("{id}.json"));
+    Ok(path)
+}
+
+/// Read every global snippet file. Broken files are skipped so one bad entry
+/// cannot hide the rest of the catalogue.
+#[tauri::command]
+fn list_catalogue_snippets(app_handle: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let dir = setup::catalogue_dir(&app_handle)?;
+    let entries = fs::read_dir(&dir).map_err(|e| format!("failed to read catalogue: {e}"))?;
+    let mut paths: Vec<PathBuf> = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+        })
+        .collect();
+    paths.sort();
+    Ok(paths
+        .into_iter()
+        .filter_map(|path| fs::read_to_string(path).ok())
+        .collect())
+}
+
+#[tauri::command]
+fn save_catalogue_snippet(
+    app_handle: tauri::AppHandle,
+    id: String,
+    content: String,
+) -> Result<(), String> {
+    let path = catalogue_file(&app_handle, &id)?;
+    write_atomic(&path, content.as_bytes())
+}
+
+#[tauri::command]
+fn delete_catalogue_snippet(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
+    let path = catalogue_file(&app_handle, &id)?;
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("failed to delete snippet: {error}")),
+    }
+}
+
 /// Image formats the editor can embed, with the MIME type used in their data URL.
 const IMAGE_MIME_TYPES: &[(&str, &str)] = &[
     ("png", "image/png"),
@@ -138,7 +199,10 @@ fn read_image_data(path: String) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{image_mime, is_skea_arg, resolve_arg, validate_file_path, write_atomic};
+    use super::{
+        image_mime, is_skea_arg, resolve_arg, validate_file_path, validate_snippet_id,
+        write_atomic,
+    };
     use std::path::Path;
 
     #[test]
@@ -168,6 +232,15 @@ mod tests {
             resolve_arg("file:///tmp/drawing.skea", None).as_deref(),
             Some("/tmp/drawing.skea")
         );
+    }
+
+    #[test]
+    fn snippet_ids_are_safe_file_names() {
+        assert!(validate_snippet_id("my-shape_2").is_ok());
+        assert!(validate_snippet_id("").is_err());
+        assert!(validate_snippet_id("../escape").is_err());
+        assert!(validate_snippet_id("with/slash").is_err());
+        assert!(validate_snippet_id("spaces here").is_err());
     }
 
     #[test]
@@ -329,6 +402,9 @@ pub fn run() {
             save_file_binary,
             save_skea,
             load_skea,
+            list_catalogue_snippets,
+            save_catalogue_snippet,
+            delete_catalogue_snippet,
             read_image_data,
             set_window_title,
             close_window,

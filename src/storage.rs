@@ -3,6 +3,7 @@
 
 const SETTINGS_KEY: &str = "inskea.settings";
 const AUTOSAVE_KEY: &str = "inskea.autosave";
+const CATALOGUE_KEY: &str = "inskea.catalogue";
 
 fn local_storage() -> Option<web_sys::Storage> {
     web_sys::window()?.local_storage().ok().flatten()
@@ -34,4 +35,16 @@ pub fn clear_autosave() {
     if let Some(storage) = local_storage() {
         let _ = storage.remove_item(AUTOSAVE_KEY);
     }
+}
+
+/// The browser's global-catalogue blob, or `None` before the first save.
+pub fn load_catalogue() -> Option<String> {
+    local_storage()?.get_item(CATALOGUE_KEY).ok().flatten()
+}
+
+/// Returns false when the browser refused the write.
+pub fn save_catalogue(content: &str) -> bool {
+    local_storage()
+        .and_then(|storage| storage.set_item(CATALOGUE_KEY, content).ok())
+        .is_some()
 }

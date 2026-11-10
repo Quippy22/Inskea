@@ -58,6 +58,14 @@ pub fn settings_file(handle: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+/// Resolve the global-snippet directory inside app-data, creating it if needed.
+pub fn catalogue_dir(handle: &AppHandle) -> Result<PathBuf, String> {
+    let mut dir = app_data_dir(handle)?;
+    dir.push("catalogue");
+    fs::create_dir_all(&dir).map_err(|e| format!("failed to create catalogue dir: {e}"))?;
+    Ok(dir)
+}
+
 /// Resolve the bundled-fonts directory inside app-data, creating it if needed.
 pub fn fonts_dir(handle: &AppHandle) -> Result<PathBuf, String> {
     let mut dir = app_data_dir(handle)?;
@@ -146,6 +154,7 @@ pub fn installed_font_paths(handle: &AppHandle) -> Result<Vec<PathBuf>, String> 
 pub fn run(handle: &AppHandle) -> Result<(), String> {
     documents_dir(handle)?;
     settings_file(handle)?;
+    catalogue_dir(handle)?;
     if let Err(e) = install_fonts(handle) {
         log::warn!("font install failed, falling back to system font: {e}");
     }

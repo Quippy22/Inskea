@@ -159,6 +159,60 @@ pub fn apply(
     selected_ids.set(new_ids);
 }
 
+// ── Global catalogue storage ───────────────────────────────────────────────
+
+fn browser_globals() -> Result<Vec<Snippet>, String> {
+    let Some(content) = crate::storage::load_catalogue() else {
+        return Ok(Vec::new());
+    };
+    serde_json::from_str(&content).map_err(|e| format!("failed to read the catalogue: {e}"))
+}
+
+fn save_browser_globals(snippets: &[Snippet]) -> Result<(), String> {
+    let content = serde_json::to_string(snippets)
+        .map_err(|e| format!("failed to serialize the catalogue: {e}"))?;
+    if crate::storage::save_catalogue(&content) {
+        Ok(())
+    } else {
+        Err("the browser refused to store the catalogue".into())
+    }
+}
+
+/// Load every global snippet: app-data files on desktop, localStorage in the
+/// browser. Individual malformed files are skipped.
+pub async fn load_globals() -> Result<Vec<Snippet>, String> {
+    if !crate::tauri_bridge::is_tauri() {
+        return browser_globals();
+    }
+    let files = crate::tauri_bridge::list_catalogue_snippets().await?;
+    Ok(files
+        .iter()
+        .filter_map(|content| from_json(content).ok())
+        .collect())
+}
+
+/// Store one global snippet under its id.
+pub async fn save_global(snippet: &Snippet) -> Result<(), String> {
+    if !crate::tauri_bridge::is_tauri() {
+        let mut snippets = browser_globals()?;
+        snippets.retain(|existing| existing.id != snippet.id);
+        snippets.push(snippet.clone());
+        return save_browser_globals(&snippets);
+    }
+    let content = to_json(snippet)?;
+    crate::tauri_bridge::save_catalogue_snippet(&snippet.id, &content).await
+}
+
+/// Remove one global snippet.
+pub async fn delete_global(id: &str) -> Result<(), String> {
+    if !crate::tauri_bridge::is_tauri() {
+        let mut snippets = browser_globals()?;
+        snippets.retain(|snippet| snippet.id != id);
+        return save_browser_globals(&snippets);
+    }
+    crate::tauri_bridge::delete_catalogue_snippet(id).await
+}
+
 /// A filesystem-friendly base name for a snippet.
 fn slug(name: &str) -> String {
     let mut out = String::new();

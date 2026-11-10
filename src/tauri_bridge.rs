@@ -207,6 +207,39 @@ pub async fn load_skea(path: &str) -> Result<String, String> {
         .ok_or_else(|| "failed to load file".into())
 }
 
+/// Read every global catalogue snippet file.
+pub async fn list_catalogue_snippets() -> Result<Vec<String>, String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({}))
+        .map_err(|e| format!("serialization error: {e}"))?;
+    let result = invoke("list_catalogue_snippets", args)
+        .await
+        .map_err(invoke_error)?;
+    serde_wasm_bindgen::from_value(result).map_err(|e| format!("parse error: {e}"))
+}
+
+/// Write one global catalogue snippet file.
+pub async fn save_catalogue_snippet(id: &str, content: &str) -> Result<(), String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({
+        "id": id,
+        "content": content,
+    }))
+    .map_err(|e| format!("serialization error: {e}"))?;
+    invoke("save_catalogue_snippet", args)
+        .await
+        .map_err(invoke_error)?;
+    Ok(())
+}
+
+/// Delete one global catalogue snippet file.
+pub async fn delete_catalogue_snippet(id: &str) -> Result<(), String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({ "id": id }))
+        .map_err(|e| format!("serialization error: {e}"))?;
+    invoke("delete_catalogue_snippet", args)
+        .await
+        .map_err(invoke_error)?;
+    Ok(())
+}
+
 /// Get the paths of the installed font files (regular + italic).
 /// The fonts are downloaded into the app-data dir on first launch.
 pub async fn get_font_paths() -> Result<Vec<String>, String> {
