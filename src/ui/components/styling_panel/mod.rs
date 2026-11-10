@@ -75,6 +75,7 @@ pub struct StylingPanelContext {
     pub canvas_mode: RwSignal<CanvasMode>,
     pub cursor_world: RwSignal<Point>,
     pub settings: RwSignal<CanvasSettings>,
+    pub on_save_snippet: Rc<dyn Fn()>,
 }
 
 fn mutate_selected_elements(
@@ -106,6 +107,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         canvas_mode,
         cursor_world,
         settings,
+        on_save_snippet,
     } = context;
     let styling_kind = Signal::derive(move || {
         let ids = selected_ids.get();
@@ -555,6 +557,19 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
             )} {group_section(scene, selected_ids, canvas_mode, push_snapshot.clone())}
             {alignment_section(scene, selected_ids, canvas_mode, push_snapshot.clone())}
             {layers_section(scene, selected_ids, push_snapshot.clone())}
+            <Show when=move || !selected_ids.get().is_empty()>
+                <button
+                    class=format!("{} w-full", styles::BTN_TEXT)
+                    on:click={
+                        let on_save_snippet = on_save_snippet.clone();
+                        move |_| on_save_snippet()
+                    }
+                    title="Save the selection as a reusable snippet"
+                >
+                    <span class="mr-1.5">{icon::save_snippet()}</span>
+                    "Save as snippet"
+                </button>
+            </Show>
         </div>
         {float_picker(active_slot, picker_color, picker_on_change, picker_ref, settings)}
     }

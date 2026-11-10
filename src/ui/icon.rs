@@ -108,6 +108,20 @@ lucide_icons! {
     connector_direct => "minus.svg",
     connector_curved => "spline.svg",
     connector_straight => "corner-down-right.svg",
+
+    // Catalogue.
+    catalogue => "library-big.svg",
+    save_snippet => "bookmark-plus.svg",
+}
+
+/// Small star shown beside a starred catalogue item.
+pub fn star_small() -> impl IntoView {
+    svg(include_str!("icons/star.svg"), "w-3.5 h-3.5 fill-current")
+}
+
+/// Trash icon sized for a context menu row.
+pub fn trash_small() -> impl IntoView {
+    svg(include_str!("icons/trash.svg"), "w-4 h-4")
 }
 
 /// Small chevrons for the number-slider stepper.

@@ -17,8 +17,8 @@ use crate::ui::notify::{self, Toasts};
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{
-    file_ops, CanvasStatus, SettingsPanel, ThemePicker, ToolBar, UnsavedChangesDialog,
-    WelcomeOverlay,
+    file_ops, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab,
+    SaveSnippetDialog, SettingsPanel, ThemePicker, ToolBar, UnsavedChangesDialog, WelcomeOverlay,
 };
 use crate::util::window_size;
 use leptos::*;
@@ -191,6 +191,28 @@ pub fn App() -> impl IntoView {
     let dirty = create_rw_signal(false);
     let notifications = create_rw_signal(Vec::new());
 
+    let catalogue = CatalogueContext {
+        open: create_rw_signal(false),
+        tab: create_rw_signal(CatalogueTab::Local),
+        scene,
+        selected_ids,
+        viewport,
+        push_snapshot: push_snapshot.clone(),
+        notifications,
+        settings,
+        pending: create_rw_signal(None),
+        pending_name: create_rw_signal(String::new()),
+        globals: create_rw_signal(Vec::new()),
+        loading: create_rw_signal(false),
+        menu: create_rw_signal(None),
+    };
+    catalogue.refresh_globals();
+
+    let on_save_snippet: Rc<dyn Fn()> = {
+        let catalogue = catalogue.clone();
+        Rc::new(move || catalogue.begin_save())
+    };
+
     let clear_autosave = Rc::new(|| {
         if !tauri_bridge::is_tauri() {
             crate::storage::clear_autosave();
@@ -359,18 +381,44 @@ pub fn App() -> impl IntoView {
     });
     let dialog_cancel = Callback::new(move |_: ()| pending_action.set(None));
 
-    // Escape dismisses the unsaved-changes dialog. Canvas shortcuts stay
-    // quiet while it is open. The theme picker joins it in `modal_open` below,
-    // but closes through the canvas Escape handler.
-    let modal_open = Signal::derive(move || pending_action.get().is_some() || theme_open.get());
+    // Escape dismisses the unsaved-changes and save-snippet dialogs. Canvas
+    // shortcuts stay quiet while either is open. The theme picker joins them
+    // in `modal_open` below, but closes through the canvas Escape handler.
+    let snippet_open = catalogue.pending;
+    let modal_open = Signal::derive(move || {
+        pending_action.get().is_some() || theme_open.get() || snippet_open.get().is_some()
+    });
     {
+        let catalogue_escape = catalogue.clone();
         let _ = window_event_listener(leptos::ev::keydown, move |ev: leptos::ev::KeyboardEvent| {
-            if ev.key() == "Escape" && pending_action.get_untracked().is_some() {
+            if ev.key() != "Escape" {
+                return;
+            }
+            if pending_action.get_untracked().is_some() {
                 ev.prevent_default();
                 dialog_cancel.call(());
+            } else if catalogue_escape.pending.get_untracked().is_some() {
+                ev.prevent_default();
+                catalogue_escape.cancel_save();
+            } else if catalogue_escape.menu.get_untracked().is_some() {
+                ev.prevent_default();
+                catalogue_escape.menu.set(None);
             }
         });
     }
+
+    let snippet_local = {
+        let catalogue = catalogue.clone();
+        Callback::new(move |_: ()| catalogue.save_local())
+    };
+    let snippet_global = {
+        let catalogue = catalogue.clone();
+        Callback::new(move |_: ()| catalogue.save_global())
+    };
+    let snippet_cancel = {
+        let catalogue = catalogue.clone();
+        Callback::new(move |_: ()| catalogue.cancel_save())
+    };
 
     // Window title: the file name plus a `*` while the scene differs from
     // what was last written to disk.
@@ -679,7 +727,7 @@ pub fn App() -> impl IntoView {
             />
             <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />
             <CanvasStatus scene=scene viewport=viewport />
-            <SettingsPanel settings=settings theme_open=theme_open />
+            <SettingsPanel settings=settings theme_open=theme_open catalogue=catalogue.clone() />
             <ThemePicker open=theme_open settings=settings />
             <ShortcutsModal shortcuts_open=shortcuts_open />
             <UnsavedChangesDialog
@@ -688,6 +736,14 @@ pub fn App() -> impl IntoView {
                 on_discard=dialog_discard
                 on_cancel=dialog_cancel
             />
+            <SaveSnippetDialog
+                pending=catalogue.pending
+                name=catalogue.pending_name
+                on_local=snippet_local
+                on_global=snippet_global
+                on_cancel=snippet_cancel
+            />
+            <CatalogueContextMenu context=catalogue.clone() />
             <Toasts notifications=notifications />
 
             <div
@@ -708,6 +764,7 @@ pub fn App() -> impl IntoView {
                             canvas_mode,
                             cursor_world,
                             settings,
+                            on_save_snippet: on_save_snippet.clone(),
                         } />
                     </div>
                 </div>

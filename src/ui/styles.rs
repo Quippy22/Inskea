@@ -78,6 +78,20 @@ pub const SETTINGS_WINDOW: &str = "absolute top-full right-0 mt-2 z-50 w-64 roun
 /// Settings section label.
 pub const SETTINGS_LABEL: &str = "text-xs text-subtle shrink-0";
 
+/// Catalogue dropdown anchored below the top-right tools island.
+pub const CATALOGUE_WINDOW: &str = "absolute top-full right-0 mt-2 z-50 w-80 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl p-3 pointer-events-auto select-none";
+
+/// Catalogue scope tab — active.
+pub const CATALOGUE_TAB_ACTIVE: &str =
+    "flex-1 h-7 rounded-md text-xs transition-colors bg-accent/10 text-accent";
+
+/// Catalogue scope tab — inactive.
+pub const CATALOGUE_TAB_INACTIVE: &str =
+    "flex-1 h-7 rounded-md text-xs transition-colors text-subtle hover:text-fg hover:bg-surface/50";
+
+/// One catalogue snippet row.
+pub const CATALOGUE_ITEM: &str = "flex items-center gap-2 w-full rounded-md border border-border bg-surface/30 p-1.5 text-left hover:border-subtle hover:bg-surface/60 transition-colors";
+
 /// Theme picker trigger in the settings window.
 pub const SETTINGS_THEME_BTN: &str = "flex items-center gap-1.5 h-8 px-2 text-xs rounded-md border border-border text-fg hover:bg-surface/50 transition-colors";
 

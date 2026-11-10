@@ -1,3 +1,4 @@
+mod catalogue;
 pub mod components;
 pub(crate) mod cursor;
 pub mod dock;
@@ -17,6 +18,7 @@ pub(crate) mod unsaved_dialog;
 mod welcome;
 mod welcome_tips;
 
+pub use catalogue::{CatalogueContext, CatalogueContextMenu, CatalogueTab, SaveSnippetDialog};
 pub use settings::SettingsPanel;
 pub use status::CanvasStatus;
 pub use theme_picker::ThemePicker;

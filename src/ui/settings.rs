@@ -1,4 +1,5 @@
 use crate::canvas::settings::{CanvasSettings, CenterStyle, GridSize, GridStyle, Theme};
+use crate::ui::catalogue::{Catalogue, CatalogueContext};
 use crate::ui::components::{IconButton, NumberSlider, SegmentedControl};
 use crate::ui::icon;
 use crate::ui::styles;
@@ -72,6 +73,7 @@ pub fn from_toml(content: &str) -> Option<(CenterStyle, GridStyle, GridSize, boo
 pub fn SettingsPanel(
     settings: RwSignal<CanvasSettings>,
     theme_open: RwSignal<bool>,
+    catalogue: CatalogueContext,
 ) -> impl IntoView {
     let open = create_rw_signal(false);
 
@@ -130,7 +132,8 @@ pub fn SettingsPanel(
     view! {
         <div class="fixed top-4 right-4 z-50 pointer-events-none">
             <div class="relative pointer-events-auto">
-                <div class=styles::PANEL>
+                <div class=format!("{} flex items-center", styles::PANEL)>
+                    <Catalogue context=catalogue />
                     <IconButton on_click=toggle title="Settings" class=styles::BTN_COLLAPSE>
                         {icon::gear()}
                     </IconButton>
