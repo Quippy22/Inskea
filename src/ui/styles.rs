@@ -95,6 +95,12 @@ pub const CATALOGUE_ITEM: &str = "flex items-center gap-2 w-full rounded-md bord
 /// Theme picker trigger in the settings window.
 pub const SETTINGS_THEME_BTN: &str = "flex items-center gap-1.5 h-8 px-2 text-xs rounded-md border border-border text-fg hover:bg-surface/50 transition-colors";
 
+/// Update action button in the settings window.
+pub const SETTINGS_UPDATE_BTN: &str = "flex items-center justify-center h-6 px-2 text-[11px] rounded-md border border-border text-fg hover:bg-surface/50 disabled:opacity-50 disabled:pointer-events-none transition-colors shrink-0 whitespace-nowrap";
+
+/// Update action button in the settings window when a new release is ready.
+pub const SETTINGS_UPDATE_BTN_ACTIVE: &str = "flex items-center justify-center h-6 px-2 text-[11px] rounded-md border border-accent text-accent bg-accent/10 hover:bg-surface/50 disabled:opacity-50 disabled:pointer-events-none transition-colors shrink-0 whitespace-nowrap";
+
 /// Segmented control button — active state.
 pub const SEG_BTN_ACTIVE: &str = "px-2.5 py-1 text-xs transition-colors bg-accent/10 text-accent";
 

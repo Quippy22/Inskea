@@ -737,7 +737,12 @@ pub fn App() -> impl IntoView {
             />
             <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />
             <CanvasStatus scene=scene viewport=viewport />
-            <SettingsPanel settings=settings theme_open=theme_open catalogue=catalogue.clone() />
+            <SettingsPanel
+                settings=settings
+                theme_open=theme_open
+                catalogue=catalogue.clone()
+                request_action=request_action.clone()
+            />
             <ThemePicker open=theme_open settings=settings />
             <ShortcutsModal shortcuts_open=shortcuts_open />
             <UnsavedChangesDialog
