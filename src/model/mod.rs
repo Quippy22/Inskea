@@ -14,6 +14,8 @@ pub use color::Color;
 pub use elements::*;
 pub use point::Point;
 pub use rect::Rect;
+
+use crate::catalogue::Snippet;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
@@ -57,6 +59,8 @@ pub struct Scene {
     pub(crate) next_id: u64,
     pub(crate) groups: Vec<Group>,
     pub(crate) next_group_id: GroupId,
+    /// Snippets saved with this document. Local to the open drawing.
+    catalogue: Vec<Snippet>,
     pending: Vec<PendingChange>,
     pending_index: HashMap<ElementId, usize>,
     groups_before: Option<GroupSnapshot>,
@@ -76,6 +80,7 @@ impl Clone for Scene {
             next_id: self.next_id,
             groups: self.groups.clone(),
             next_group_id: self.next_group_id,
+            catalogue: self.catalogue.clone(),
             // A clone is a baseline/snapshot of committed state; unsealed
             // journal entries belong only to the live scene.
             pending: Vec::new(),
@@ -251,6 +256,8 @@ struct SceneFile {
     groups: Vec<Group>,
     #[serde(default = "default_next_group_id")]
     next_group_id: GroupId,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    catalogue: Vec<Snippet>,
 }
 
 impl Serialize for Scene {
@@ -260,6 +267,7 @@ impl Serialize for Scene {
             next_id: self.next_id,
             groups: self.groups.clone(),
             next_group_id: self.next_group_id,
+            catalogue: self.catalogue.clone(),
         }
         .serialize(serializer)
     }
@@ -277,6 +285,7 @@ impl PartialEq for Scene {
         if self.next_id != other.next_id
             || self.groups != other.groups
             || self.next_group_id != other.next_group_id
+            || self.catalogue != other.catalogue
         {
             return false;
         }
@@ -416,6 +425,7 @@ impl Scene {
             next_id: 1,
             groups: Vec::new(),
             next_group_id: 1,
+            catalogue: Vec::new(),
             pending: Vec::new(),
             pending_index: HashMap::new(),
             groups_before: None,
@@ -428,6 +438,7 @@ impl Scene {
         scene.next_id = file.next_id;
         scene.groups = file.groups;
         scene.next_group_id = file.next_group_id;
+        scene.catalogue = file.catalogue;
         scene.replace_all(file.elements);
         scene.sync_all_connectors();
         scene
@@ -534,6 +545,29 @@ impl Scene {
     /// Number of persistent groups in the scene.
     pub fn group_count(&self) -> usize {
         self.groups.len()
+    }
+
+    /// Snippets saved with this document.
+    pub fn snippets(&self) -> &[Snippet] {
+        &self.catalogue
+    }
+
+    /// Add a document-local snippet.
+    pub fn add_snippet(&mut self, snippet: Snippet) {
+        self.catalogue.retain(|existing| existing.id != snippet.id);
+        self.catalogue.push(snippet);
+    }
+
+    /// Remove a document-local snippet.
+    pub fn remove_snippet(&mut self, id: &str) {
+        self.catalogue.retain(|snippet| snippet.id != id);
+    }
+
+    /// Toggle a document-local snippet's starred flag.
+    pub fn toggle_snippet_star(&mut self, id: &str) {
+        if let Some(snippet) = self.catalogue.iter_mut().find(|snippet| snippet.id == id) {
+            snippet.starred = !snippet.starred;
+        }
     }
 
     /// True when at least one element intersects the view. Stops at the first
