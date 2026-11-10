@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -359,4 +360,67 @@ pub fn on_file_drop(callback: impl Fn(Vec<String>, Option<(f64, f64)>) + 'static
         let _ = listen("tauri://drag-drop", handler.as_ref()).await;
         handler.forget();
     });
+}
+
+// ── Updates (desktop only) ──────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpdateCheck {
+    pub current_version: String,
+    pub latest_version: String,
+    pub update_available: bool,
+    pub release_url: String,
+    pub asset_name: Option<String>,
+    pub asset_url: Option<String>,
+    pub can_install: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UpdateOutcome {
+    ReadyToRelaunch,
+    OpenedPage,
+}
+
+/// Check the GitHub repository for a newer desktop release.
+pub async fn check_for_update() -> Result<UpdateCheck, String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({}))
+        .map_err(|e| format!("serialization error: {e}"))?;
+    let result = invoke("check_for_update", args)
+        .await
+        .map_err(invoke_error)?;
+    serde_wasm_bindgen::from_value(result).map_err(|e| format!("parse error: {e}"))
+}
+
+/// Install the discovered update in place when supported, or open the release
+/// page in the system browser.
+pub async fn install_update(check: &UpdateCheck) -> Result<UpdateOutcome, String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({
+        "releaseUrl": check.release_url,
+        "assetName": check.asset_name,
+        "assetUrl": check.asset_url,
+    }))
+    .map_err(|e| format!("serialization error: {e}"))?;
+    let result = invoke("install_update", args).await.map_err(invoke_error)?;
+    serde_wasm_bindgen::from_value(result).map_err(|e| format!("parse error: {e}"))
+}
+
+/// Restart the desktop app into the newly installed binary, bypassing the
+/// unsaved-changes intercept after the frontend has resolved it.
+pub fn relaunch_app() {
+    wasm_bindgen_futures::spawn_local(async move {
+        let args = JsValue::from(js_sys::Object::new());
+        let _ = invoke("relaunch_app", args).await;
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::with_skea_extension;
+
+    #[test]
+    fn appends_skea_extension_only_when_missing() {
+        assert_eq!(with_skea_extension("drawing"), "drawing.skea");
+        assert_eq!(with_skea_extension("drawing.skea"), "drawing.skea");
+        assert_eq!(with_skea_extension("drawing.SKEA"), "drawing.SKEA");
+    }
 }
