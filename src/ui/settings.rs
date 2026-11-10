@@ -96,6 +96,7 @@ pub fn SettingsPanel(
     let is_tauri = tauri_bridge::is_tauri();
     let open = create_rw_signal(false);
     let update_state = create_rw_signal(UpdateState::Idle);
+    let manual_checked = create_rw_signal(false);
     let relaunch_prompt = create_rw_signal::<Option<String>>(None);
     let notifications = catalogue.notifications;
 
@@ -108,6 +109,9 @@ pub fn SettingsPanel(
             UpdateState::Checking | UpdateState::Installing(_) | UpdateState::ReadyToRelaunch(_)
         ) {
             return;
+        }
+        if user_initiated {
+            manual_checked.set(true);
         }
         update_state.set(UpdateState::Checking);
         spawn_local(async move {
@@ -344,18 +348,6 @@ pub fn SettingsPanel(
                                                 }
                                                 let trigger_relaunch = trigger_relaunch.clone();
                                                 match update_state.get() {
-                                                    UpdateState::Checking => {
-                                                        view! {
-                                                            <button
-                                                                class=styles::SETTINGS_UPDATE_BTN
-                                                                disabled=true
-                                                                title="Checking GitHub for updates"
-                                                            >
-                                                                "Checking…"
-                                                            </button>
-                                                        }
-                                                            .into_view()
-                                                    }
                                                     UpdateState::Installing(_) => {
                                                         view! {
                                                             <button
@@ -411,18 +403,23 @@ pub fn SettingsPanel(
                                                             .into_view()
                                                     }
                                                     UpdateState::Idle
+                                                    | UpdateState::Checking
                                                     | UpdateState::UpToDate
                                                     | UpdateState::Failed => {
-                                                        view! {
-                                                            <button
-                                                                class=styles::SETTINGS_UPDATE_BTN
-                                                                title="Check for updates"
-                                                                on:click=move |_| run_update_check(true)
-                                                            >
-                                                                "Check for updates"
-                                                            </button>
+                                                        if manual_checked.get() {
+                                                            view! {}.into_view()
+                                                        } else {
+                                                            view! {
+                                                                <button
+                                                                    class=styles::SETTINGS_UPDATE_BTN
+                                                                    title="Check for updates"
+                                                                    on:click=move |_| run_update_check(true)
+                                                                >
+                                                                    "Check for updates"
+                                                                </button>
+                                                            }
+                                                                .into_view()
                                                         }
-                                                            .into_view()
                                                     }
                                                 }
                                             }}
