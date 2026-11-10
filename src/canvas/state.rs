@@ -206,6 +206,9 @@ pub struct CanvasInputs {
     /// canvas or the current selection.
     pub theme_open: RwSignal<bool>,
     pub modal_open: Signal<bool>,
+    /// Open the selection menu at these client coordinates after a shape was
+    /// right-clicked and selected.
+    pub on_context_menu: Rc<dyn Fn(f64, f64)>,
 }
 
 // ── Helper functions used by pointer event handlers ──────────────────────

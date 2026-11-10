@@ -18,7 +18,8 @@ use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{
     file_ops, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab,
-    SaveSnippetDialog, SettingsPanel, ThemePicker, ToolBar, UnsavedChangesDialog, WelcomeOverlay,
+    SaveSnippetDialog, SelectionContextMenu, SettingsPanel, ThemePicker, ToolBar,
+    UnsavedChangesDialog, WelcomeOverlay,
 };
 use crate::util::window_size;
 use leptos::*;
@@ -205,12 +206,17 @@ pub fn App() -> impl IntoView {
         globals: create_rw_signal(Vec::new()),
         loading: create_rw_signal(false),
         menu: create_rw_signal(None),
+        selection_menu: create_rw_signal(None),
     };
     catalogue.refresh_globals();
 
     let on_save_snippet: Rc<dyn Fn()> = {
         let catalogue = catalogue.clone();
         Rc::new(move || catalogue.begin_save())
+    };
+    let on_canvas_menu: Rc<dyn Fn(f64, f64)> = {
+        let selection_menu = catalogue.selection_menu;
+        Rc::new(move |x, y| selection_menu.set(Some((x, y))))
     };
 
     let clear_autosave = Rc::new(|| {
@@ -403,6 +409,9 @@ pub fn App() -> impl IntoView {
             } else if catalogue_escape.menu.get_untracked().is_some() {
                 ev.prevent_default();
                 catalogue_escape.menu.set(None);
+            } else if catalogue_escape.selection_menu.get_untracked().is_some() {
+                ev.prevent_default();
+                catalogue_escape.selection_menu.set(None);
             }
         });
     }
@@ -705,6 +714,7 @@ pub fn App() -> impl IntoView {
                     default_connector_variant,
                     theme_open,
                     modal_open,
+                    on_context_menu: on_canvas_menu.clone(),
                 }
                 on_text_commit=on_text_commit
                 shortcuts_open=shortcuts_open
@@ -744,6 +754,7 @@ pub fn App() -> impl IntoView {
                 on_cancel=snippet_cancel
             />
             <CatalogueContextMenu context=catalogue.clone() />
+            <SelectionContextMenu context=catalogue.clone() />
             <Toasts notifications=notifications />
 
             <div

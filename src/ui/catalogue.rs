@@ -43,6 +43,8 @@ pub struct CatalogueContext {
     pub globals: RwSignal<Vec<Snippet>>,
     pub loading: RwSignal<bool>,
     pub menu: RwSignal<Option<CatalogueMenu>>,
+    /// Client position of the canvas right-click menu for the selection.
+    pub selection_menu: RwSignal<Option<(f64, f64)>>,
 }
 
 impl CatalogueContext {
@@ -511,6 +513,52 @@ pub fn CatalogueContextMenu(context: CatalogueContext) -> impl IntoView {
                     <button class=styles::MENU_ITEM on:click=delete>
                         <span class="text-red">"Delete"</span>
                         <span class="text-red">{icon::trash_small()}</span>
+                    </button>
+                </div>
+            </>
+        }
+        .into_view()
+    }
+}
+
+/// The menu opened by right-clicking a shape on the canvas.
+#[component]
+pub fn SelectionContextMenu(context: CatalogueContext) -> impl IntoView {
+    let menu = context.selection_menu;
+    move || {
+        let Some((x, y)) = menu.get() else {
+            return view! {}.into_view();
+        };
+        let size = crate::util::window_size();
+        let left = x.min(size.x - 184.0).max(8.0);
+        let top = y.min(size.y - 48.0).max(8.0);
+        let close = move || menu.set(None);
+        let save = {
+            let context = context.clone();
+            move |_| {
+                close();
+                context.begin_save();
+            }
+        };
+
+        view! {
+            <>
+                <div
+                    class="fixed inset-0 z-[70]"
+                    on:click=move |_| close()
+                    on:contextmenu=move |ev| {
+                        ev.prevent_default();
+                        close();
+                    }
+                ></div>
+                <div
+                    class="fixed z-[71] w-44 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1"
+                    style=format!("left:{left}px; top:{top}px")
+                    role="menu"
+                >
+                    <button class=styles::MENU_ITEM on:click=save role="menuitem">
+                        <span>"Save as snippet"</span>
+                        <span class="text-subtle">{icon::save_snippet()}</span>
                     </button>
                 </div>
             </>

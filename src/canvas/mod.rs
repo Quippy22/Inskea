@@ -553,6 +553,12 @@ pub fn Canvas(
                 return;
             }
 
+            // Right-click is handled by `contextmenu`; do not start a drag or
+            // marquee from it in the meantime.
+            if ev.button() != 0 {
+                return;
+            }
+
             if editing {
                 // A text edit is in progress: commit it, then handle this
                 // click synchronously. The textarea's blur is scoped to its
@@ -691,6 +697,11 @@ pub fn Canvas(
                         }
                     }
                 }
+                return;
+            }
+
+            // Right-click releases belong to the context menu.
+            if ev.button() != 0 {
                 return;
             }
 
@@ -902,6 +913,57 @@ pub fn Canvas(
         }
     };
 
+    // ── Context menu ─────────────────────────────────────────────────────
+    // Right-clicking a shape selects its complete group (or just the shape)
+    // and opens the selection menu, which offers "Save as snippet" like the
+    // button in the styling panel.
+    let on_context_menu = {
+        let props = props.clone();
+        let st = st;
+        move |ev: ev::MouseEvent| {
+            ev.prevent_default();
+            if props.canvas_mode.get_untracked() != CanvasMode::Select
+                || props.export_crop_active.get_untracked()
+                || props.modal_open.get_untracked()
+            {
+                return;
+            }
+
+            let screen = Point::new(ev.offset_x() as f64, ev.offset_y() as f64);
+            let world = props
+                .viewport
+                .get_untracked()
+                .screen_to_world(screen, st.screen_size.get_untracked());
+
+            let hit = props.scene.with_untracked(|scene| {
+                let margin = crate::model::interaction::HIT_MARGIN;
+                let nearby = scene.elements_in_view(Rect::new(
+                    world.x - margin,
+                    world.y - margin,
+                    margin * 2.0,
+                    margin * 2.0,
+                ));
+                crate::model::interaction::hit_test_topmost(world, &nearby, margin)
+            });
+            let Some(id) = hit else {
+                return;
+            };
+            // Keep a multi-selection the user right-clicked inside; otherwise
+            // select the clicked shape together with its group.
+            let already_selected = props.selected_ids.with_untracked(|ids| ids.contains(&id));
+            if !already_selected {
+                let ids = props.scene.with_untracked(|scene| {
+                    scene
+                        .group_containing(id)
+                        .map(|group| group.members.clone())
+                        .unwrap_or_else(|| vec![id])
+                });
+                props.selected_ids.set(ids);
+            }
+            (props.on_context_menu)(ev.client_x() as f64, ev.client_y() as f64);
+        }
+    };
+
     // The visible set is keyed by both identity and revision. Changing the key
     // replaces only the SVG node whose payload changed, including every member
     // of a multi-element transform. This keeps unchanged visible nodes intact
@@ -951,6 +1013,7 @@ pub fn Canvas(
             on:pointermove=on_pointer_move
             on:pointerup=on_pointer_up
             on:pointercancel=on_pointer_cancel
+            on:contextmenu=on_context_menu
             on:wheel=on_wheel
         >
             {grid::grid_overlay(props.settings, props.hide_center, props.viewport)}
