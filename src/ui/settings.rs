@@ -195,6 +195,13 @@ pub fn SettingsPanel(
                                     <span class=styles::SETTINGS_LABEL>"Autosave"</span>
                                     <SegmentedControl options=toggle_opts active=autosave />
                                 </div>
+
+                                <div class="h-px bg-border/70 my-3"></div>
+
+                                <div class="flex items-center justify-between">
+                                    <span class=styles::SETTINGS_LABEL>"Version"</span>
+                                    <span class="text-xs text-subtle font-mono">{concat!("v", env!("CARGO_PKG_VERSION"))}</span>
+                                </div>
                             </div>
                         </>
                     }
