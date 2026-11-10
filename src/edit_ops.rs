@@ -107,6 +107,40 @@ fn restore_connector_bindings(
     connector.end_binding = bindings.1.and_then(remap);
 }
 
+/// Insert copies of `elements`, offset by `(dx, dy)`, giving each a fresh id.
+/// Groups among the copies are rebuilt and connector bindings are remapped, so
+/// a pasted or duplicated shape stays attached to the copies of its targets.
+/// Returns the new element ids in insertion order.
+pub(crate) fn insert_elements(
+    scene: &mut Scene,
+    elements: Vec<Element>,
+    groups: &[Group],
+    dx: f64,
+    dy: f64,
+) -> Vec<ElementId> {
+    let mut new_ids = Vec::new();
+    let mut id_map = Vec::new();
+    let mut pending_bindings = Vec::new();
+    for mut element in elements {
+        let old_id = element.id();
+        let bindings = take_connector_bindings(&mut element);
+        element.offset(dx, dy);
+        element.data_mut().id = 0;
+        scene.add_element(element);
+        let new_id = scene.next_id - 1;
+        new_ids.push(new_id);
+        id_map.push((old_id, new_id));
+        pending_bindings.push((new_id, bindings));
+    }
+    for (new_id, bindings) in pending_bindings {
+        if let Some(mut element) = scene.element_by_id_mut(new_id) {
+            restore_connector_bindings(&mut element, bindings, &id_map);
+        }
+    }
+    regroup_clones(scene, groups, &id_map);
+    new_ids
+}
+
 /// Clone every selected element, offset by 20px, and select the clones.
 /// Duplicates keep the group structure of the original selection.
 pub fn duplicate_selection(
@@ -119,30 +153,10 @@ pub fn duplicate_selection(
         return;
     }
     let mut new_ids = Vec::new();
-    let mut id_map = Vec::new();
-    let mut pending_bindings = Vec::new();
     mutate_scene(scene, push_snapshot, |s| {
         let elements = s.elements_for_ids(&ids);
         let groups = s.groups.clone();
-        for id in &ids {
-            if let Some(el) = elements.iter().find(|e| e.id() == *id) {
-                let mut clone = el.clone();
-                let bindings = take_connector_bindings(&mut clone);
-                clone.offset(20.0, 20.0);
-                clone.data_mut().id = 0;
-                s.add_element(clone);
-                let new_id = s.next_id - 1;
-                new_ids.push(new_id);
-                id_map.push((*id, new_id));
-                pending_bindings.push((new_id, bindings));
-            }
-        }
-        for (new_id, bindings) in pending_bindings {
-            if let Some(mut element) = s.element_by_id_mut(new_id) {
-                restore_connector_bindings(&mut element, bindings, &id_map);
-            }
-        }
-        regroup_clones(s, &groups, &id_map);
+        new_ids = insert_elements(s, elements, &groups, 20.0, 20.0);
     });
     selected_ids.set(new_ids);
 }
@@ -203,26 +217,8 @@ pub fn paste_clipboard(
     let dx = target.x - center.x;
     let dy = target.y - center.y;
     let mut new_ids = Vec::new();
-    let mut id_map = Vec::new();
-    let mut pending_bindings = Vec::new();
     mutate_scene(scene, push_snapshot, |s| {
-        for mut el in els {
-            let old_id = el.id();
-            let bindings = take_connector_bindings(&mut el);
-            el.offset(dx, dy);
-            el.data_mut().id = 0;
-            s.add_element(el);
-            let new_id = s.next_id - 1;
-            new_ids.push(new_id);
-            id_map.push((old_id, new_id));
-            pending_bindings.push((new_id, bindings));
-        }
-        for (new_id, bindings) in pending_bindings {
-            if let Some(mut element) = s.element_by_id_mut(new_id) {
-                restore_connector_bindings(&mut element, bindings, &id_map);
-            }
-        }
-        regroup_clones(s, &groups, &id_map);
+        new_ids = insert_elements(s, els, &groups, dx, dy);
     });
     selected_ids.set(new_ids);
 }
