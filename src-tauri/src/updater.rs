@@ -15,8 +15,10 @@ use serde::{Deserialize, Serialize};
 
 const GITHUB_LATEST_RELEASE_URL: &str =
     "https://api.github.com/repos/Quippy22/Inskea/releases/latest";
-const GITHUB_RELEASES_PAGE: &str = "https://github.com/Quippy22/Inskea/releases/latest";
+const NPM_LATEST_VERSION_URL: &str = "https://registry.npmjs.org/inskea/latest";
+const NPM_PACKAGE_PAGE: &str = "https://www.npmjs.com/package/inskea";
 const ALLOWED_GITHUB_PREFIX: &str = "https://github.com/Quippy22/Inskea/";
+const ALLOWED_NPM_PREFIX: &str = "https://www.npmjs.com/package/inskea";
 
 /// Path to a downloaded Windows NSIS installer waiting to run on relaunch.
 static STAGED_WINDOWS_INSTALLER: Mutex<Option<PathBuf>> = Mutex::new(None);
@@ -25,9 +27,12 @@ static STAGED_WINDOWS_INSTALLER: Mutex<Option<PathBuf>> = Mutex::new(None);
 struct GithubRelease {
     tag_name: String,
     #[serde(default)]
-    html_url: String,
-    #[serde(default)]
     assets: Vec<GithubAsset>,
+}
+
+#[derive(Deserialize)]
+struct NpmPackageMeta {
+    version: String,
 }
 
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -101,6 +106,10 @@ pub fn is_newer_version(current: &str, candidate: &str) -> bool {
 
 fn is_valid_github_url(url: &str) -> bool {
     url.starts_with(ALLOWED_GITHUB_PREFIX)
+}
+
+fn is_valid_npm_url(url: &str) -> bool {
+    url.starts_with(ALLOWED_NPM_PREFIX)
 }
 
 fn is_safe_asset_name(name: &str) -> bool {
@@ -292,7 +301,14 @@ fn try_npm_update() -> Result<UpdateOutcome, String> {
     #[cfg(windows)]
     {
         let mut cmd = Command::new("cmd");
-        cmd.args(["/C", "npm", "install", "-g", "inskea@latest"]);
+        cmd.args([
+            "/C",
+            "npm",
+            "install",
+            "-g",
+            "inskea@latest",
+            "--prefer-online",
+        ]);
         if let Some(prefix) = &prefix_arg {
             cmd.arg("--prefix").arg(prefix);
         }
@@ -309,7 +325,7 @@ fn try_npm_update() -> Result<UpdateOutcome, String> {
     {
         if can_overwrite_current_exe() {
             let mut cmd = Command::new("npm");
-            cmd.args(["install", "-g", "inskea@latest"]);
+            cmd.args(["install", "-g", "inskea@latest", "--prefer-online"]);
             if let Some(prefix) = &prefix_arg {
                 cmd.arg("--prefix").arg(prefix);
             }
@@ -324,7 +340,7 @@ fn try_npm_update() -> Result<UpdateOutcome, String> {
 
         if command_exists("pkexec") {
             let mut cmd = Command::new("pkexec");
-            cmd.args(["npm", "install", "-g", "inskea@latest"]);
+            cmd.args(["npm", "install", "-g", "inskea@latest", "--prefer-online"]);
             if let Some(prefix) = &prefix_arg {
                 cmd.arg("--prefix").arg(prefix);
             } else {
@@ -349,13 +365,45 @@ fn try_npm_update() -> Result<UpdateOutcome, String> {
     }
 }
 
-/// Fetch the latest GitHub release and compare it with the running version.
+/// Fetch the latest version and compare it with the running version.
 pub fn check_for_update() -> Result<UpdateCheck, String> {
     let agent = ureq::Agent::new_with_config(
         ureq::Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(15)))
             .build(),
     );
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+
+    if is_npm_installation() {
+        let mut resp = agent
+            .get(NPM_LATEST_VERSION_URL)
+            .header("Accept", "application/json")
+            .header("User-Agent", concat!("Inskea/", env!("CARGO_PKG_VERSION")))
+            .call()
+            .map_err(|e| format!("request failed: {e}"))?;
+
+        let body = resp
+            .body_mut()
+            .read_to_string()
+            .map_err(|e| format!("failed to read response: {e}"))?;
+
+        let meta: NpmPackageMeta =
+            serde_json::from_str(&body).map_err(|e| format!("invalid npm JSON: {e}"))?;
+
+        let latest_version = normalize_version(&meta.version).to_string();
+        let update_available = is_newer_version(&current_version, &latest_version);
+
+        return Ok(UpdateCheck {
+            current_version,
+            latest_version,
+            update_available,
+            release_url: NPM_PACKAGE_PAGE.to_string(),
+            asset_name: None,
+            asset_url: None,
+            can_install: command_exists("npm"),
+        });
+    }
+
     let mut resp = agent
         .get(GITHUB_LATEST_RELEASE_URL)
         .header("Accept", "application/vnd.github+json")
@@ -371,15 +419,8 @@ pub fn check_for_update() -> Result<UpdateCheck, String> {
     let release: GithubRelease =
         serde_json::from_str(&body).map_err(|e| format!("invalid release JSON: {e}"))?;
 
-    let current_version = env!("CARGO_PKG_VERSION").to_string();
     let latest_version = normalize_version(&release.tag_name).to_string();
     let update_available = is_newer_version(&current_version, &latest_version);
-
-    let release_url = if is_valid_github_url(&release.html_url) {
-        release.html_url.clone()
-    } else {
-        GITHUB_RELEASES_PAGE.to_string()
-    };
 
     let selected = select_asset_for_platform(
         &release.assets,
@@ -388,19 +429,15 @@ pub fn check_for_update() -> Result<UpdateCheck, String> {
         is_debian_linux(),
     );
 
-    let can_install = if is_npm_installation() {
-        command_exists("npm")
-    } else {
-        selected
-            .map(|asset| can_install_asset(&asset.name))
-            .unwrap_or(false)
-    };
+    let can_install = selected
+        .map(|asset| can_install_asset(&asset.name))
+        .unwrap_or(false);
 
     Ok(UpdateCheck {
         current_version,
         latest_version,
         update_available,
-        release_url,
+        release_url: NPM_PACKAGE_PAGE.to_string(),
         asset_name: selected.map(|a| a.name.clone()),
         asset_url: selected.map(|a| a.browser_download_url.clone()),
         can_install,
@@ -577,12 +614,12 @@ fn try_install_package(asset_name: &str, asset_url: &str) -> Result<UpdateOutcom
     }
 }
 
-/// Open a GitHub release page in the system browser.
+/// Open the npm package page in the system browser.
 pub fn open_release_url(url: &str) -> Result<(), String> {
-    let target = if is_valid_github_url(url) {
+    let target = if is_valid_npm_url(url) {
         url
     } else {
-        GITHUB_RELEASES_PAGE
+        NPM_PACKAGE_PAGE
     };
 
     #[cfg(target_os = "windows")]
@@ -611,8 +648,8 @@ pub fn open_release_url(url: &str) -> Result<(), String> {
         .map_err(|e| format!("failed to open release page: {e}"))
 }
 
-/// Install the update in place if supported, otherwise open the release page
-/// in the user's browser.
+/// Install the update in place if supported, otherwise open the npm package
+/// page in the user's browser.
 pub fn install_or_open(
     release_url: &str,
     asset_name: Option<&str>,
@@ -622,7 +659,9 @@ pub fn install_or_open(
         match try_npm_update() {
             Ok(outcome) => return Ok(outcome),
             Err(err) => {
-                log::warn!("npm update failed, trying direct package install: {err}");
+                log::warn!("npm update failed, opening npm package page instead: {err}");
+                open_release_url(release_url)?;
+                return Ok(UpdateOutcome::OpenedPage);
             }
         }
     }
@@ -661,8 +700,8 @@ pub fn relaunch(app_handle: &tauri::AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_newer_version, is_npm_path, is_safe_asset_name, is_valid_github_url, normalize_version,
-        select_asset_for_platform, GithubAsset,
+        is_newer_version, is_npm_path, is_safe_asset_name, is_valid_github_url, is_valid_npm_url,
+        normalize_version, select_asset_for_platform, GithubAsset,
     };
     use std::path::Path;
 
@@ -708,7 +747,9 @@ mod tests {
         assert!(is_valid_github_url(
             "https://github.com/Quippy22/Inskea/releases/tag/v2.0.0"
         ));
+        assert!(is_valid_npm_url("https://www.npmjs.com/package/inskea"));
         assert!(!is_valid_github_url("https://example.com/evil.exe"));
+        assert!(!is_valid_npm_url("https://example.com/evil.exe"));
     }
 
     #[test]

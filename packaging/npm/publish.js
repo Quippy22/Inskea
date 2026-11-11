@@ -215,9 +215,9 @@ const packagesToPublish = [
 for (const pkg of packagesToPublish) {
   console.log(`[npm-publish] Publishing ${pkg.name}@${version}...`);
   if (isDryRun) {
-    console.log(`[npm-publish] (dry run) Would run: npm publish ${pkg.dir} --access public`);
+    console.log(`[npm-publish] (dry run) Would run: npm publish ${pkg.dir} --access public --tag latest`);
   } else {
-    execSync(`npm publish "${pkg.dir}" --access public`, {
+    execSync(`npm publish "${pkg.dir}" --access public --tag latest`, {
       stdio: 'inherit'
     });
   }
