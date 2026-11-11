@@ -244,6 +244,71 @@ fn can_install_asset(asset_name: &str) -> bool {
     }
 }
 
+/// Check whether a file path points to an npm installation directory.
+pub fn is_npm_path(path: &Path) -> bool {
+    let s = path.to_string_lossy();
+    s.contains("node_modules") || s.contains(".npm")
+}
+
+/// Check if the currently running executable lives inside an npm installation
+/// (e.g., node_modules or global npm directory).
+pub fn is_npm_installation() -> bool {
+    let Ok(exe) = env::current_exe().and_then(fs::canonicalize) else {
+        return false;
+    };
+    is_npm_path(&exe)
+}
+
+fn try_npm_update() -> Result<UpdateOutcome, String> {
+    if !command_exists("npm") {
+        return Err("npm command not found in PATH".into());
+    }
+
+    #[cfg(windows)]
+    {
+        let status = Command::new("cmd")
+            .args(["/C", "npm", "update", "-g", "inskea"])
+            .status()
+            .map_err(|e| format!("failed to run npm update: {e}"))?;
+        if status.success() {
+            return Ok(UpdateOutcome::ReadyToRelaunch);
+        }
+        return Err(format!("npm update exited with status {status}"));
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if can_overwrite_current_exe() {
+            let status = Command::new("npm")
+                .args(["update", "-g", "inskea"])
+                .status()
+                .map_err(|e| format!("failed to run npm update: {e}"))?;
+            if status.success() {
+                return Ok(UpdateOutcome::ReadyToRelaunch);
+            }
+            log::warn!("direct npm update failed, checking pkexec: {status}");
+        }
+
+        if command_exists("pkexec") {
+            let status = Command::new("pkexec")
+                .args(["npm", "update", "-g", "inskea"])
+                .status()
+                .map_err(|e| format!("failed to run pkexec npm update: {e}"))?;
+            if status.success() {
+                return Ok(UpdateOutcome::ReadyToRelaunch);
+            }
+            return Err(format!("pkexec npm update exited with status {status}"));
+        }
+
+        Err("cannot update npm package: directory not writable and pkexec unavailable".into())
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        Err("npm update is not supported on this platform".into())
+    }
+}
+
 /// Fetch the latest GitHub release and compare it with the running version.
 pub fn check_for_update() -> Result<UpdateCheck, String> {
     let agent = ureq::Agent::new_with_config(
@@ -283,9 +348,13 @@ pub fn check_for_update() -> Result<UpdateCheck, String> {
         is_debian_linux(),
     );
 
-    let can_install = selected
-        .map(|asset| can_install_asset(&asset.name))
-        .unwrap_or(false);
+    let can_install = if is_npm_installation() {
+        command_exists("npm")
+    } else {
+        selected
+            .map(|asset| can_install_asset(&asset.name))
+            .unwrap_or(false)
+    };
 
     Ok(UpdateCheck {
         current_version,
@@ -509,7 +578,14 @@ pub fn install_or_open(
     asset_name: Option<&str>,
     asset_url: Option<&str>,
 ) -> Result<UpdateOutcome, String> {
-    if let (Some(name), Some(url)) = (asset_name, asset_url) {
+    if is_npm_installation() {
+        match try_npm_update() {
+            Ok(outcome) => return Ok(outcome),
+            Err(err) => {
+                log::warn!("npm update failed, opening release page instead: {err}");
+            }
+        }
+    } else if let (Some(name), Some(url)) = (asset_name, asset_url) {
         if can_install_asset(name) {
             match try_install_package(name, url) {
                 Ok(outcome) => return Ok(outcome),
@@ -543,9 +619,25 @@ pub fn relaunch(app_handle: &tauri::AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_newer_version, is_safe_asset_name, is_valid_github_url, normalize_version,
+        is_newer_version, is_npm_path, is_safe_asset_name, is_valid_github_url, normalize_version,
         select_asset_for_platform, GithubAsset,
     };
+    use std::path::Path;
+
+    #[test]
+    fn detects_npm_installation_paths() {
+        assert!(is_npm_path(Path::new(
+            "/usr/local/lib/node_modules/@quippy/inskea-linux-x64/bin/inskea"
+        )));
+        assert!(is_npm_path(Path::new(
+            "/home/user/.nvm/versions/node/v20.0.0/lib/node_modules/inskea/bin/inskea"
+        )));
+        assert!(is_npm_path(Path::new(
+            "C:\\Users\\User\\AppData\\Roaming\\npm\\node_modules\\@quippy\\inskea-win32-x64\\bin\\inskea.exe"
+        )));
+        assert!(!is_npm_path(Path::new("/usr/bin/inskea")));
+        assert!(!is_npm_path(Path::new("C:\\Program Files\\Inskea\\Inskea.exe")));
+    }
 
     #[test]
     fn normalizes_leading_v_prefix() {

@@ -295,6 +295,40 @@ jobs:
           path: arch-out/*.pkg.tar.zst
           if-no-files-found: error
           retention-days: 7
+      - name: Stage Windows binary for npm
+        if: matrix.artifact == 'windows'
+        shell: bash
+        run: |
+          mkdir -p npm-windows-bin
+          if [ -f src-tauri/target/release/inskea.exe ]; then
+            cp src-tauri/target/release/inskea.exe npm-windows-bin/
+          elif [ -f target/release/inskea.exe ]; then
+            cp target/release/inskea.exe npm-windows-bin/
+          fi
+      - uses: actions/upload-artifact@v4
+        if: matrix.artifact == 'windows'
+        with:
+          name: npm-windows-bin
+          path: npm-windows-bin/inskea.exe
+          if-no-files-found: error
+          retention-days: 1
+      - name: Stage Linux binary for npm
+        if: matrix.artifact == 'debian'
+        run: |
+          mkdir -p npm-linux-bin
+          if [ -f src-tauri/target/release/inskea ]; then
+            cp src-tauri/target/release/inskea npm-linux-bin/
+          elif [ -f target/release/inskea ]; then
+            cp target/release/inskea npm-linux-bin/
+          fi
+          strip npm-linux-bin/inskea
+      - uses: actions/upload-artifact@v4
+        if: matrix.artifact == 'debian'
+        with:
+          name: npm-linux-bin
+          path: npm-linux-bin/inskea
+          if-no-files-found: error
+          retention-days: 1
 
   release:
     name: Publish release
@@ -378,3 +412,29 @@ jobs:
             --title "Inskea $tag" \
             --notes-file release-notes.md \
             --verify-tag
+
+  npm-publish:
+    name: Publish to npm
+    needs: [version, build, release]
+    if: needs.version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-linux-bin
+          path: packaging/npm/dist-bin/linux
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-windows-bin
+          path: packaging/npm/dist-bin/windows
+      - name: Publish packages to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          node packaging/npm/publish.js "$VERSION"

@@ -23,3 +23,6 @@ node_modules/
 # Local launcher/desktop files (user-specific paths)
 /inskea.desktop
 /inskea.sh
+
+# npm distribution artifacts
+packaging/npm/dist-bin/

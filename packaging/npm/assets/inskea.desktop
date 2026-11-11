@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Inskea
+Comment=An infinite canvas for your ideas
+Exec=inskea %F
+Icon=inskea
+Terminal=false
+Categories=Graphics;Office;
+MimeType=application/x-inskea;
+StartupWMClass=inskea
