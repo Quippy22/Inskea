@@ -208,6 +208,22 @@ pub async fn load_skea(path: &str) -> Result<String, String> {
         .ok_or_else(|| "failed to load file".into())
 }
 
+/// Check whether a file exists at the given absolute path.
+pub async fn file_exists(path: &str) -> bool {
+    if !is_tauri() {
+        return false;
+    }
+    let Ok(args) = serde_wasm_bindgen::to_value(&serde_json::json!({
+        "path": path,
+    })) else {
+        return false;
+    };
+    invoke("file_exists", args)
+        .await
+        .map(|v| v.as_bool().unwrap_or(false))
+        .unwrap_or(false)
+}
+
 /// Read every global catalogue snippet file.
 pub async fn list_catalogue_snippets() -> Result<Vec<String>, String> {
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({}))

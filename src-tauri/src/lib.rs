@@ -107,6 +107,13 @@ fn load_skea(path: String) -> Result<String, String> {
     fs::read_to_string(path).map_err(|e| format!("failed to read file: {e}"))
 }
 
+#[tauri::command]
+fn file_exists(path: String) -> bool {
+    validate_file_path(&path)
+        .map(|p| p.is_file())
+        .unwrap_or(false)
+}
+
 /// Snippet ids become file names, so they must not contain path separators.
 fn validate_snippet_id(id: &str) -> Result<(), String> {
     if id.is_empty()
@@ -223,7 +230,8 @@ fn read_image_data(path: String) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        image_mime, is_skea_arg, resolve_arg, validate_file_path, validate_snippet_id, write_atomic,
+        file_exists, image_mime, is_skea_arg, resolve_arg, validate_file_path,
+        validate_snippet_id, write_atomic,
     };
     use std::path::Path;
 
@@ -233,6 +241,12 @@ mod tests {
         assert!(validate_file_path("/tmp/../drawing.skea").is_err());
         assert!(validate_file_path("/").is_err());
         assert!(validate_file_path("/tmp/drawing.skea").is_ok());
+    }
+
+    #[test]
+    fn file_exists_checks_existing_files() {
+        assert!(!file_exists("drawing.skea".into()));
+        assert!(!file_exists("/nonexistent/file/path/test.skea".into()));
     }
 
     #[test]
@@ -449,6 +463,7 @@ pub fn run() {
             armed: AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
+            file_exists,
             save_file,
             save_file_binary,
             save_skea,

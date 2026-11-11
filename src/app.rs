@@ -591,10 +591,35 @@ pub fn App() -> impl IntoView {
             autosave_prompted.set(false);
         }
         let autosave_on = settings.get().autosave;
-        // Turning autosave back on after cancelling the file prompt should
-        // ask for a file again.
+        // Turning autosave on when no file exists should prompt Save As immediately.
         if autosave_on && !autosave_was_on.get_untracked() {
             autosave_prompted.set(false);
+            if is_tauri {
+                let path_opt = saved_path.get_untracked();
+                let doc = autosave_doc.clone();
+                let settings = settings;
+                let notifications = doc.notifications;
+                spawn_local(async move {
+                    let file_exists = match path_opt.as_deref() {
+                        Some(p) => tauri_bridge::file_exists(p).await,
+                        None => false,
+                    };
+                    if !file_exists {
+                        file_ops::file_save_with(
+                            doc.clone(),
+                            Rc::new(move |saved| {
+                                if !saved {
+                                    settings.update(|s| s.autosave = false);
+                                    notify::error(
+                                        notifications,
+                                        "Autosave could not save this drawing.",
+                                    );
+                                }
+                            }),
+                        );
+                    }
+                });
+            }
         }
         autosave_was_on.set(autosave_on);
         if !autosave_on {
