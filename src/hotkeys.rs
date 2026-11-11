@@ -350,7 +350,7 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                         on:click=move |_| shortcuts_open.set(false)
                     ></div>
                     <div class="fixed inset-0 z-50 grid place-items-center pointer-events-none">
-                        <div class="pointer-events-auto rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-5 px-7 max-w-4xl w-full mx-4 max-h-[85vh] overflow-y-auto">
+                        <div class="relative pointer-events-auto rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-5 px-7 max-w-4xl w-full mx-4 max-h-[85vh] overflow-y-auto">
                             <button
                                 class="absolute top-3 right-3 text-subtle hover:text-fg transition-colors"
                                 on:click=move |_| shortcuts_open.set(false)
@@ -359,24 +359,22 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                                 {icon::close()}
                             </button>
                             <h2 class="text-lg font-semibold mb-4">"Keyboard Shortcuts"</h2>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-6">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:justify-between gap-x-8 gap-y-6">
                                 <div class="min-w-0">
                                     <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">
                                         "Shapes"
                                     </h3>
-                                    <table class="text-sm w-full table-fixed">
+                                    <table class="text-sm">
                                         <tbody>
                                             {TOOL_SHORTCUTS
                                                 .iter()
                                                 .map(|(key, desc)| {
                                                     view! {
                                                         <tr>
-                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-normal break-words align-top">
+                                                            <td class="py-1 pr-4 font-mono text-accent whitespace-nowrap align-top">
                                                                 {*key}
                                                             </td>
-                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">
-                                                                {*desc}
-                                                            </td>
+                                                            <td class="py-1 text-fg align-top">{*desc}</td>
                                                         </tr>
                                                     }
                                                 })
@@ -388,19 +386,17 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                                     <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">
                                         "Modes"
                                     </h3>
-                                    <table class="text-sm w-full table-fixed">
+                                    <table class="text-sm">
                                         <tbody>
                                             {MODE_SHORTCUTS
                                                 .iter()
                                                 .map(|(key, desc)| {
                                                     view! {
                                                         <tr>
-                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-normal break-words align-top">
+                                                            <td class="py-1 pr-4 font-mono text-accent whitespace-nowrap align-top">
                                                                 {*key}
                                                             </td>
-                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">
-                                                                {*desc}
-                                                            </td>
+                                                            <td class="py-1 text-fg align-top">{*desc}</td>
                                                         </tr>
                                                     }
                                                 })
@@ -412,19 +408,17 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                                     <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">
                                         "File"
                                     </h3>
-                                    <table class="text-sm w-full table-fixed">
+                                    <table class="text-sm">
                                         <tbody>
                                             {FILE_SHORTCUTS
                                                 .iter()
                                                 .map(|(key, desc)| {
                                                     view! {
                                                         <tr>
-                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-normal break-words align-top">
+                                                            <td class="py-1 pr-4 font-mono text-accent whitespace-nowrap align-top">
                                                                 {*key}
                                                             </td>
-                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">
-                                                                {*desc}
-                                                            </td>
+                                                            <td class="py-1 text-fg align-top">{*desc}</td>
                                                         </tr>
                                                     }
                                                 })
@@ -436,19 +430,17 @@ pub fn ShortcutsModal(shortcuts_open: RwSignal<bool>) -> impl IntoView {
                                     <h3 class="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">
                                         "Edit"
                                     </h3>
-                                    <table class="text-sm w-full table-fixed">
+                                    <table class="text-sm">
                                         <tbody>
                                             {EDIT_SHORTCUTS
                                                 .iter()
                                                 .map(|(key, desc)| {
                                                     view! {
                                                         <tr>
-                                                            <td class="py-1 pr-5 font-mono text-accent whitespace-normal break-words align-top">
+                                                            <td class="py-1 pr-4 font-mono text-accent whitespace-nowrap align-top">
                                                                 {*key}
                                                             </td>
-                                                            <td class="py-1 text-fg whitespace-normal break-words align-top">
-                                                                {*desc}
-                                                            </td>
+                                                            <td class="py-1 text-fg align-top">{*desc}</td>
                                                         </tr>
                                                     }
                                                 })
