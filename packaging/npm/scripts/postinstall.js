@@ -6,10 +6,14 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 function installLinux() {
-  const home = os.homedir();
-  const appsDir = path.join(home, '.local', 'share', 'applications');
-  const iconsDir = path.join(home, '.local', 'share', 'icons', 'hicolor', '128x128', 'apps');
-  const mimeDir = path.join(home, '.local', 'share', 'mime', 'packages');
+  // If running with root/sudo, install to standard system-wide /usr/local/share so it is available to ALL users on the machine.
+  // Otherwise, install to standard user-level ~/.local/share.
+  const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+  const baseDir = isRoot ? '/usr/local/share' : path.join(os.homedir(), '.local', 'share');
+
+  const appsDir = path.join(baseDir, 'applications');
+  const iconsDir = path.join(baseDir, 'icons', 'hicolor', '128x128', 'apps');
+  const mimeDir = path.join(baseDir, 'mime', 'packages');
 
   fs.mkdirSync(appsDir, { recursive: true });
   fs.mkdirSync(iconsDir, { recursive: true });
@@ -30,7 +34,7 @@ function installLinux() {
   if (fs.existsSync(mimeSrc)) {
     fs.copyFileSync(mimeSrc, mimeDest);
     try {
-      execSync(`update-mime-database "${path.join(home, '.local', 'share', 'mime')}"`, { stdio: 'ignore' });
+      execSync(`update-mime-database "${path.join(baseDir, 'mime')}"`, { stdio: 'ignore' });
     } catch (_) {}
   }
 
@@ -44,7 +48,7 @@ function installLinux() {
     } catch (_) {}
   }
 
-  console.log('[inskea] Registered desktop launcher and file associations in ~/.local/share');
+  console.log(`[inskea] Registered desktop launcher in ${appsDir}`);
 }
 
 function installWindows() {

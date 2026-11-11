@@ -148,6 +148,37 @@ pub fn installed_font_paths(handle: &AppHandle) -> Result<Vec<PathBuf>, String> 
         .collect())
 }
 
+#[cfg(target_os = "linux")]
+fn ensure_desktop_integration() {
+    let Ok(home) = std::env::var("HOME") else {
+        return;
+    };
+    let apps_dir = PathBuf::from(&home).join(".local/share/applications");
+    let desktop_file = apps_dir.join("inskea.desktop");
+
+    if desktop_file.exists() {
+        return;
+    }
+
+    let _ = fs::create_dir_all(&apps_dir);
+    let content = "[Desktop Entry]\n\
+Type=Application\n\
+Name=Inskea\n\
+Comment=An infinite canvas for your ideas\n\
+Exec=inskea %F\n\
+Icon=inskea\n\
+Terminal=false\n\
+Categories=Graphics;Office;\n\
+MimeType=application/x-inskea;\n\
+StartupWMClass=inskea\n";
+
+    if fs::write(&desktop_file, content).is_ok() {
+        let _ = std::process::Command::new("update-desktop-database")
+            .arg(&apps_dir)
+            .status();
+    }
+}
+
 /// Create any directories the app relies on, and install bundled fonts.
 /// Idempotent — safe on every launch. Font install is best-effort: a missing
 /// or failed download must not block the app (fallback font is used instead).
@@ -158,5 +189,7 @@ pub fn run(handle: &AppHandle) -> Result<(), String> {
     if let Err(e) = install_fonts(handle) {
         log::warn!("font install failed, falling back to system font: {e}");
     }
+    #[cfg(target_os = "linux")]
+    ensure_desktop_integration();
     Ok(())
 }

@@ -6,27 +6,33 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 function removeLinux() {
-  const home = os.homedir();
-  const desktopFile = path.join(home, '.local', 'share', 'applications', 'inskea.desktop');
-  const iconFile = path.join(home, '.local', 'share', 'icons', 'hicolor', '128x128', 'apps', 'inskea.png');
-  const mimeFile = path.join(home, '.local', 'share', 'mime', 'packages', 'inskea.xml');
+  const dirs = [
+    '/usr/local/share',
+    path.join(os.homedir(), '.local', 'share')
+  ];
 
-  if (fs.existsSync(desktopFile)) {
-    try {
-      fs.unlinkSync(desktopFile);
-      execSync(`update-desktop-database "${path.join(home, '.local', 'share', 'applications')}"`, { stdio: 'ignore' });
-    } catch (_) {}
-  }
+  for (const baseDir of dirs) {
+    const desktopFile = path.join(baseDir, 'applications', 'inskea.desktop');
+    const iconFile = path.join(baseDir, 'icons', 'hicolor', '128x128', 'apps', 'inskea.png');
+    const mimeFile = path.join(baseDir, 'mime', 'packages', 'inskea.xml');
 
-  if (fs.existsSync(iconFile)) {
-    try { fs.unlinkSync(iconFile); } catch (_) {}
-  }
+    if (fs.existsSync(desktopFile)) {
+      try {
+        fs.unlinkSync(desktopFile);
+        execSync(`update-desktop-database "${path.join(baseDir, 'applications')}"`, { stdio: 'ignore' });
+      } catch (_) {}
+    }
 
-  if (fs.existsSync(mimeFile)) {
-    try {
-      fs.unlinkSync(mimeFile);
-      execSync(`update-mime-database "${path.join(home, '.local', 'share', 'mime')}"`, { stdio: 'ignore' });
-    } catch (_) {}
+    if (fs.existsSync(iconFile)) {
+      try { fs.unlinkSync(iconFile); } catch (_) {}
+    }
+
+    if (fs.existsSync(mimeFile)) {
+      try {
+        fs.unlinkSync(mimeFile);
+        execSync(`update-mime-database "${path.join(baseDir, 'mime')}"`, { stdio: 'ignore' });
+      } catch (_) {}
+    }
   }
 }
 
