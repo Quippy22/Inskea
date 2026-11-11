@@ -9,7 +9,7 @@ use crate::canvas::state::{CanvasInputs, CanvasState, DragOperation};
 use crate::model::elements::connector::{self, ConnectionEnd, RouteHandle, SNAP_SCREEN_PX};
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{
-    Bounds, Connector, ConnectorVariant, CurveMode, PathPoints, Resize, Rotate,
+    Bounds, Connector, ConnectorVariant, CurveMode, Offset, PathPoints, Resize, Rotate,
 };
 use crate::model::interaction::{
     guide_bounds, guide_frame, guide_union_bounds, guide_union_frame, hit_test_topmost,
@@ -951,9 +951,94 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
         });
         st.drag.move_applied.set(Point::new(dx, dy));
     }
+
     // Guides are usually empty; only notify the overlay when they change.
     if st.drag.smart_guides.with(|current| *current != next_guides) {
         st.drag.smart_guides.set(next_guides);
+    }
+}
+
+/// Move the viewport camera and the active selection together by `(scroll_dx, scroll_dy)`.
+/// This keeps the moving shape pinned under the cursor while the camera auto-scrolls across the canvas.
+pub(crate) fn translate_moving_shape_and_camera(
+    st: &mut CanvasState,
+    props: &mut CanvasInputs,
+    scroll_dx: f64,
+    scroll_dy: f64,
+) {
+    if scroll_dx == 0.0 && scroll_dy == 0.0 {
+        return;
+    }
+
+    // 1. Update camera viewport
+    props.viewport.update(|v| {
+        v.offset_x += scroll_dx;
+        v.offset_y += scroll_dy;
+    });
+
+    // 2. Translate selected shapes in scene
+    let ids = st.selected_ids.get_untracked();
+    props.scene.update(|s| {
+        for id in &ids {
+            s.translate_element(*id, scroll_dx, scroll_dy);
+        }
+        st.drag.drag_originals.with(|originals| {
+            refresh_bound_connectors(s, originals);
+        });
+    });
+
+    // 3. Shift interaction origins and reference points
+    st.drag.moving_anchor.update(|a| {
+        if let Some(pt) = a {
+            *a = Some(Point::new(pt.x + scroll_dx, pt.y + scroll_dy));
+        }
+    });
+    st.drag.drag_bounds.update(|b| {
+        if let Some(rect) = b {
+            *b = Some(Rect::new(
+                rect.x + scroll_dx,
+                rect.y + scroll_dy,
+                rect.w,
+                rect.h,
+            ));
+        }
+    });
+    st.drag.drag_originals.update(|originals| {
+        for el in originals {
+            el.offset(scroll_dx, scroll_dy);
+        }
+    });
+    if let Some(last) = st.drag.last_world.get_untracked() {
+        st.drag
+            .last_world
+            .set(Some(Point::new(last.x + scroll_dx, last.y + scroll_dy)));
+    }
+    props.cursor_world.update(|w| {
+        w.x += scroll_dx;
+        w.y += scroll_dy;
+    });
+}
+
+/// Move the drag's world-space reference points by a viewport pan delta.
+pub(crate) fn shift_interaction_origin(st: &mut CanvasState, dx: f64, dy: f64) {
+    let Some(old_anchor) = st.drag.moving_anchor.get() else {
+        return;
+    };
+    let anchor = Point::new(old_anchor.x + dx, old_anchor.y + dy);
+    st.drag.moving_anchor.set(Some(anchor));
+    if let Some(last) = st.drag.last_world.get() {
+        st.drag
+            .last_world
+            .set(Some(Point::new(last.x + dx, last.y + dy)));
+    }
+    // Rotation tracks the pointer angle around the drag bounds centre, so the
+    // stored start angle must move by the same angular offset.
+    if let (Some(angle), Some(b)) = (st.drag.drag_angle.get(), st.drag.drag_bounds.get()) {
+        let cx = b.x + b.w / 2.0;
+        let cy = b.y + b.h / 2.0;
+        let before = (old_anchor.y - cy).atan2(old_anchor.x - cx);
+        let after = (anchor.y - cy).atan2(anchor.x - cx);
+        st.drag.drag_angle.set(Some(angle + after - before));
     }
 }
 

@@ -13,7 +13,10 @@ mod text_edit;
 use crate::model::elements::connector::SNAP_SCREEN_PX;
 pub use crate::model::interaction::combined_bounds;
 use modes::{cancel_drawing, draw_pointer_down, draw_pointer_up, finish_freehand};
-use selection::{cancel_drag, select_pointer_down, select_pointer_move, select_pointer_up};
+use selection::{
+    cancel_drag, select_pointer_down, select_pointer_move, select_pointer_up,
+    shift_interaction_origin, translate_moving_shape_and_camera,
+};
 pub use state::CanvasInputs;
 pub use state::CanvasMode;
 pub use state::CropExportCallback;
@@ -65,27 +68,38 @@ fn pan_viewport(ev: &ev::PointerEvent, st: &mut CanvasState, props: &mut CanvasI
     }
 }
 
-/// Move the drag's world-space reference points by a viewport pan delta.
-fn shift_interaction_origin(st: &mut CanvasState, dx: f64, dy: f64) {
-    let Some(old_anchor) = st.drag.moving_anchor.get() else {
-        return;
-    };
-    let anchor = Point::new(old_anchor.x + dx, old_anchor.y + dy);
-    st.drag.moving_anchor.set(Some(anchor));
-    if let Some(last) = st.drag.last_world.get() {
-        st.drag
-            .last_world
-            .set(Some(Point::new(last.x + dx, last.y + dy)));
-    }
-    // Rotation tracks the pointer angle around the drag bounds centre, so the
-    // stored start angle must move by the same angular offset.
-    if let (Some(angle), Some(b)) = (st.drag.drag_angle.get(), st.drag.drag_bounds.get()) {
-        let cx = b.x + b.w / 2.0;
-        let cy = b.y + b.h / 2.0;
-        let before = (old_anchor.y - cy).atan2(old_anchor.x - cx);
-        let after = (anchor.y - cy).atan2(anchor.x - cx);
-        st.drag.drag_angle.set(Some(angle + after - before));
-    }
+/// Continuous animation frame loop for edge follow when moving a shape.
+/// Keeps scrolling the viewport and moving the shape together while the cursor or shape
+/// remains at/past the edge or in the grace space, until the user moves away or releases.
+fn start_edge_follow_loop(mut st: CanvasState, mut props: CanvasInputs, running: RwSignal<bool>) {
+    leptos::leptos_dom::helpers::request_animation_frame(move || {
+        let is_moving = st.drag.moving_anchor.get_untracked().is_some()
+            && matches!(
+                st.drag.drag_action.get_untracked(),
+                Some(DragOperation::Move) | None
+            );
+        if !is_moving {
+            running.set(false);
+            return;
+        }
+
+        let ss = st.screen_size.get_untracked();
+        let (cx, cy) = props.cursor_screen.get_untracked();
+        let cursor_screen = Point::new(cx, cy);
+        let vp = props.viewport.get_untracked();
+        let shape_bounds = st.drag.drag_bounds.get_untracked().map(|b| {
+            let applied = st.drag.move_applied.get_untracked();
+            Rect::new(b.x + applied.x, b.y + applied.y, b.w, b.h)
+        });
+
+        if let Some(delta) =
+            crate::canvas::viewport::edge_follow_delta(cursor_screen, ss, shape_bounds, vp)
+        {
+            translate_moving_shape_and_camera(&mut st, &mut props, delta.x, delta.y);
+        }
+
+        start_edge_follow_loop(st, props, running);
+    });
 }
 
 /// Dispatch a pointer-down event to the handler for the active canvas mode.
@@ -483,6 +497,25 @@ pub fn Canvas(
             let theme = props.settings.get().theme;
             let cursor = cursor_style(mode, tool, handle, eraser, pan, crop, hovered, theme);
             st.cursor_style.set(cursor);
+        });
+    }
+
+    // ── Continuous Edge Follow ───────────────────────────────────────────
+    // When moving a shape and the cursor or shape enters the grace margin,
+    // touches the canvas edge, or goes out of view, continuously scroll the
+    // viewport and translate the shape together until the user moves away or releases.
+    {
+        let st = st;
+        let props = props.clone();
+        let edge_scroll_running = create_rw_signal(false);
+        create_effect(move |_| {
+            let anchor = st.drag.moving_anchor.get();
+            let action = st.drag.drag_action.get();
+            let is_moving = anchor.is_some() && matches!(action, Some(DragOperation::Move) | None);
+            if is_moving && !edge_scroll_running.get_untracked() {
+                edge_scroll_running.set(true);
+                start_edge_follow_loop(st, props.clone(), edge_scroll_running);
+            }
         });
     }
 

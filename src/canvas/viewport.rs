@@ -96,6 +96,69 @@ impl Viewport {
     }
 }
 
+pub const EDGE_GRACE_PX: f64 = 40.0;
+
+/// Compute the continuous camera follow delta when moving a shape.
+///
+/// Triggered when the cursor enters the edge grace space, touches the canvas edge,
+/// or when the moving shape is out of view.
+/// Uses the distance (`delta`) between the center of the view and the edge where the shape is,
+/// moving the camera continuously to follow the shape.
+pub fn edge_follow_delta(
+    cursor_screen: Point,
+    screen_size: Point,
+    shape_bounds: Option<Rect>,
+    viewport: Viewport,
+) -> Option<Point> {
+    if screen_size.x <= 0.0 || screen_size.y <= 0.0 {
+        return None;
+    }
+    let zoom = viewport.effective_zoom();
+    let delta_x = (screen_size.x / zoom) / 2.0;
+    let delta_y = (screen_size.y / zoom) / 2.0;
+
+    let view_left = viewport.offset_x - delta_x;
+    let view_right = viewport.offset_x + delta_x;
+    let view_top = viewport.offset_y - delta_y;
+    let view_bottom = viewport.offset_y + delta_y;
+
+    let (shape_left, shape_right, shape_top, shape_bottom) = if let Some(b) = shape_bounds {
+        (b.x, b.x + b.w, b.y, b.y + b.h)
+    } else {
+        let world = viewport.screen_to_world(cursor_screen, screen_size);
+        (world.x, world.x, world.y, world.y)
+    };
+
+    let mut scroll_dx = 0.0;
+    let mut scroll_dy = 0.0;
+
+    // Horizontal check: right edge (grace space, touching edge, or shape out of view)
+    if cursor_screen.x >= screen_size.x - EDGE_GRACE_PX || shape_right > view_right {
+        let factor =
+            ((cursor_screen.x - (screen_size.x - EDGE_GRACE_PX)) / EDGE_GRACE_PX).clamp(0.2, 3.0);
+        scroll_dx = (8.0 + factor * 10.0) / zoom;
+    } else if cursor_screen.x <= EDGE_GRACE_PX || shape_left < view_left {
+        let factor = ((EDGE_GRACE_PX - cursor_screen.x) / EDGE_GRACE_PX).clamp(0.2, 3.0);
+        scroll_dx = -(8.0 + factor * 10.0) / zoom;
+    }
+
+    // Vertical check: bottom edge (grace space, touching edge, or shape out of view)
+    if cursor_screen.y >= screen_size.y - EDGE_GRACE_PX || shape_bottom > view_bottom {
+        let factor =
+            ((cursor_screen.y - (screen_size.y - EDGE_GRACE_PX)) / EDGE_GRACE_PX).clamp(0.2, 3.0);
+        scroll_dy = (8.0 + factor * 10.0) / zoom;
+    } else if cursor_screen.y <= EDGE_GRACE_PX || shape_top < view_top {
+        let factor = ((EDGE_GRACE_PX - cursor_screen.y) / EDGE_GRACE_PX).clamp(0.2, 3.0);
+        scroll_dy = -(8.0 + factor * 10.0) / zoom;
+    }
+
+    if scroll_dx != 0.0 || scroll_dy != 0.0 {
+        Some(Point::new(scroll_dx, scroll_dy))
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,5 +265,71 @@ mod tests {
         assert!((screen_after.x - new_center.x).abs() < 1e-9);
         assert!((screen_after.y - new_center.y).abs() < 1e-9);
         assert!((vp.zoom - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn edge_follow_delta_triggers_on_grace_space_and_edges() {
+        let vp = Viewport {
+            offset_x: 0.0,
+            offset_y: 0.0,
+            zoom: 1.0,
+        };
+        let screen_size = Point::new(1000.0, 800.0);
+
+        // Center of screen: no scroll
+        let center = Point::new(500.0, 400.0);
+        assert_eq!(edge_follow_delta(center, screen_size, None, vp), None);
+
+        // Within right edge grace space (cx = 970 >= 1000 - 40)
+        let right_edge = Point::new(970.0, 400.0);
+        let delta = edge_follow_delta(right_edge, screen_size, None, vp);
+        assert!(delta.is_some());
+        assert!(delta.unwrap().x > 0.0);
+        assert_eq!(delta.unwrap().y, 0.0);
+
+        // Within left edge grace space (cx = 30 <= 40)
+        let left_edge = Point::new(30.0, 400.0);
+        let delta = edge_follow_delta(left_edge, screen_size, None, vp);
+        assert!(delta.is_some());
+        assert!(delta.unwrap().x < 0.0);
+        assert_eq!(delta.unwrap().y, 0.0);
+
+        // Within bottom edge grace space (cy = 770 >= 800 - 40)
+        let bottom_edge = Point::new(500.0, 770.0);
+        let delta = edge_follow_delta(bottom_edge, screen_size, None, vp);
+        assert!(delta.is_some());
+        assert_eq!(delta.unwrap().x, 0.0);
+        assert!(delta.unwrap().y > 0.0);
+
+        // Within top edge grace space (cy = 20 <= 40)
+        let top_edge = Point::new(500.0, 20.0);
+        let delta = edge_follow_delta(top_edge, screen_size, None, vp);
+        assert!(delta.is_some());
+        assert_eq!(delta.unwrap().x, 0.0);
+        assert!(delta.unwrap().y < 0.0);
+
+        // Shape out of view on right even if cursor is at center
+        let shape_past_right = Some(Rect::new(510.0, 0.0, 50.0, 50.0));
+        let delta = edge_follow_delta(center, screen_size, shape_past_right, vp);
+        assert!(delta.is_some());
+        assert!(delta.unwrap().x > 0.0);
+
+        // Shape out of view on left
+        let shape_past_left = Some(Rect::new(-560.0, 0.0, 50.0, 50.0));
+        let delta = edge_follow_delta(center, screen_size, shape_past_left, vp);
+        assert!(delta.is_some());
+        assert!(delta.unwrap().x < 0.0);
+
+        // Shape out of view on bottom
+        let shape_past_bottom = Some(Rect::new(0.0, 410.0, 50.0, 50.0));
+        let delta = edge_follow_delta(center, screen_size, shape_past_bottom, vp);
+        assert!(delta.is_some());
+        assert!(delta.unwrap().y > 0.0);
+
+        // Shape out of view on top
+        let shape_past_top = Some(Rect::new(0.0, -460.0, 50.0, 50.0));
+        let delta = edge_follow_delta(center, screen_size, shape_past_top, vp);
+        assert!(delta.is_some());
+        assert!(delta.unwrap().y < 0.0);
     }
 }
