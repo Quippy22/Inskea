@@ -542,6 +542,33 @@ pub fn Canvas(
                 let _ = svg.set_pointer_capture(ev.pointer_id());
             }
 
+            let is_touch = ev.pointer_type() == "touch";
+            if is_touch {
+                let pid = ev.pointer_id();
+                let client_pt = Point::new(ev.client_x() as f64, ev.client_y() as f64);
+                st.active_touches.update(|touches| {
+                    if let Some(existing) = touches.iter_mut().find(|(id, _)| *id == pid) {
+                        existing.1 = client_pt;
+                    } else {
+                        touches.push((pid, client_pt));
+                    }
+                });
+                if st.active_touches.with(|t| t.len() >= 2) {
+                    st.touch_pinching.set(true);
+                    st.last_touch_pinch.set(None);
+                    cancel_drawing(&mut st, &mut props);
+                    st.select_anchor.set(None);
+                    st.drag.last_world.set(None);
+                    if st.drag.moving_anchor.get().is_some() {
+                        selection::clear_drag_state(&mut st);
+                    }
+                    return;
+                }
+            }
+            if st.touch_pinching.get() {
+                return;
+            }
+
             // Middle-button drag pans temporarily without disturbing the
             // interaction already in flight. The drawing or drag state stays
             // untouched, so releasing the middle button lets the user carry on
@@ -601,6 +628,40 @@ pub fn Canvas(
         move |ev: ev::PointerEvent| {
             let mode = props.canvas_mode.get();
             let world = update_world(&ev);
+
+            let is_touch = ev.pointer_type() == "touch";
+            if is_touch {
+                let pid = ev.pointer_id();
+                let client_pt = Point::new(ev.client_x() as f64, ev.client_y() as f64);
+                st.active_touches.update(|touches| {
+                    if let Some(existing) = touches.iter_mut().find(|(id, _)| *id == pid) {
+                        existing.1 = client_pt;
+                    }
+                });
+            }
+
+            if st.touch_pinching.get() || (is_touch && st.active_touches.with(|t| t.len() >= 2)) {
+                st.touch_pinching.set(true);
+                let touches = st.active_touches.get();
+                if touches.len() >= 2 {
+                    let p1 = touches[0].1;
+                    let p2 = touches[1].1;
+                    let dist = (p2.x - p1.x).hypot(p2.y - p1.y);
+                    let center = Point::new((p1.x + p2.x) / 2.0, (p1.y + p2.y) / 2.0);
+
+                    if let Some((last_dist, last_center)) = st.last_touch_pinch.get() {
+                        if last_dist > 1.0 && dist > 1.0 {
+                            let factor = dist / last_dist;
+                            let ss = st.screen_size.get();
+                            props.viewport.update(|vp| {
+                                vp.pinch_zoom(factor, last_center, center, ss, ZOOM_MIN, ZOOM_MAX);
+                            });
+                        }
+                    }
+                    st.last_touch_pinch.set(Some((dist, center)));
+                }
+                return;
+            }
 
             if st.temporary_pan.get() {
                 pan_viewport(&ev, &mut st, &mut props);
@@ -700,6 +761,23 @@ pub fn Canvas(
                 return;
             }
 
+            let pid = ev.pointer_id();
+            let is_touch = ev.pointer_type() == "touch";
+            if is_touch {
+                st.active_touches.update(|touches| {
+                    touches.retain(|(id, _)| *id != pid);
+                });
+                if st.active_touches.with(|t| t.len() < 2) {
+                    st.last_touch_pinch.set(None);
+                }
+                if st.touch_pinching.get() {
+                    if st.active_touches.with(|t| t.is_empty()) {
+                        st.touch_pinching.set(false);
+                    }
+                    return;
+                }
+            }
+
             // Right-click releases belong to the context menu.
             if ev.button() != 0 {
                 return;
@@ -752,9 +830,9 @@ pub fn Canvas(
 
     // Zoom the viewport in/out centred on the cursor position.
     //
-    // `delta_y < 0` (scroll up) → zoom in by `ZOOM_FACTOR`.
-    // `delta_y > 0` (scroll down) → zoom out by `1 / ZOOM_FACTOR`.
-    //
+    // For trackpad pinch gestures (or Ctrl+wheel), zoom scales continuously
+    // based on delta_y. For standard scroll wheel steps, delta_y zooms in/out
+    // by discrete factor ZOOM_FACTOR.
     // The zoom is clamped to `ZOOM_MIN` / `ZOOM_MAX`.
     // After changing `zoom`, the offset is adjusted so the world-space point
     // under the cursor remains stationary (pinch-zoom-at-point behaviour).
@@ -763,18 +841,27 @@ pub fn Canvas(
         let props = props.clone();
         move |ev: ev::WheelEvent| {
             ev.prevent_default();
-            let screen = props.cursor_screen.get();
             let ss = st.screen_size.get();
-            let factor = if ev.delta_y() < 0.0 {
+            let screen_pos = {
+                let ox = ev.offset_x() as f64;
+                let oy = ev.offset_y() as f64;
+                if ox != 0.0 || oy != 0.0 {
+                    Point::new(ox, oy)
+                } else {
+                    let (cx, cy) = props.cursor_screen.get();
+                    Point::new(cx, cy)
+                }
+            };
+            let factor = if ev.ctrl_key() {
+                // Trackpad pinch-to-zoom (or Ctrl+wheel): smooth continuous zoom proportional to delta_y.
+                (-ev.delta_y() * 0.01).exp().clamp(0.5, 2.0)
+            } else if ev.delta_y() < 0.0 {
                 ZOOM_FACTOR
             } else {
                 1.0 / ZOOM_FACTOR
             };
             props.viewport.update(|vp| {
-                let world = vp.screen_to_world(Point::new(screen.0, screen.1), ss);
-                vp.zoom = (vp.zoom * factor).clamp(ZOOM_MIN, ZOOM_MAX);
-                vp.offset_x = world.x - (screen.0 - ss.x / 2.0) / vp.zoom;
-                vp.offset_y = world.y - (screen.1 - ss.y / 2.0) / vp.zoom;
+                vp.zoom_at_point(factor, screen_pos, ss, ZOOM_MIN, ZOOM_MAX);
             });
         }
     };
@@ -900,7 +987,20 @@ pub fn Canvas(
     let on_pointer_cancel = {
         let mut st = st;
         let mut props = props.clone();
-        move |_ev: ev::PointerEvent| {
+        move |ev: ev::PointerEvent| {
+            let pid = ev.pointer_id();
+            let is_touch = ev.pointer_type() == "touch";
+            if is_touch {
+                st.active_touches.update(|touches| {
+                    touches.retain(|(id, _)| *id != pid);
+                });
+                if st.active_touches.with(|t| t.len() < 2) {
+                    st.last_touch_pinch.set(None);
+                }
+                if st.active_touches.with(|t| t.is_empty()) {
+                    st.touch_pinching.set(false);
+                }
+            }
             st.erasing.set(false);
             st.pan_anchor.set(None);
             st.temporary_pan.set(false);
@@ -1006,7 +1106,7 @@ pub fn Canvas(
             node_ref=svg_ref
             width="100%"
             height="100%"
-            style="display: block; user-select: none; -webkit-user-select: none;"
+            style="display: block; user-select: none; -webkit-user-select: none; touch-action: none;"
             style:cursor=move || st.cursor_style.get()
             viewBox=view_box
             on:pointerdown=on_pointer_down

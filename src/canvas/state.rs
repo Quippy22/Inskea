@@ -155,6 +155,9 @@ pub struct CanvasState {
     pub cursor_style: RwSignal<String>,
     pub drag: DragState,
     pub text_edit: TextEditState,
+    pub active_touches: RwSignal<Vec<(i32, Point)>>,
+    pub touch_pinching: RwSignal<bool>,
+    pub last_touch_pinch: RwSignal<Option<(f64, Point)>>,
 }
 
 impl CanvasState {
@@ -174,6 +177,9 @@ impl CanvasState {
             cursor_style: create_rw_signal("default".to_string()),
             drag: DragState::new(),
             text_edit: TextEditState::new(),
+            active_touches: create_rw_signal(Vec::new()),
+            touch_pinching: create_rw_signal(false),
+            last_touch_pinch: create_rw_signal(None),
         }
     }
 }

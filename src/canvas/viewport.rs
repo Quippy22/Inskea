@@ -63,6 +63,37 @@ impl Viewport {
             (world.y - self.offset_y) * self.zoom + screen_size.y / 2.0,
         )
     }
+
+    /// Zoom the viewport by `factor` keeping the screen point `center_screen` stationary in world coordinates.
+    pub fn zoom_at_point(
+        &mut self,
+        factor: f64,
+        center_screen: Point,
+        screen_size: Point,
+        min_zoom: f64,
+        max_zoom: f64,
+    ) {
+        let world = self.screen_to_world(center_screen, screen_size);
+        self.zoom = (self.zoom * factor).clamp(min_zoom, max_zoom);
+        self.offset_x = world.x - (center_screen.x - screen_size.x / 2.0) / self.zoom;
+        self.offset_y = world.y - (center_screen.y - screen_size.y / 2.0) / self.zoom;
+    }
+
+    /// Zoom and pan the viewport from a two-finger pinch gesture.
+    pub fn pinch_zoom(
+        &mut self,
+        factor: f64,
+        prev_center: Point,
+        new_center: Point,
+        screen_size: Point,
+        min_zoom: f64,
+        max_zoom: f64,
+    ) {
+        let world = self.screen_to_world(prev_center, screen_size);
+        self.zoom = (self.zoom * factor).clamp(min_zoom, max_zoom);
+        self.offset_x = world.x - (new_center.x - screen_size.x / 2.0) / self.zoom;
+        self.offset_y = world.y - (new_center.y - screen_size.y / 2.0) / self.zoom;
+    }
 }
 
 #[cfg(test)]
@@ -133,5 +164,43 @@ mod tests {
             vp.visible_rect(Point::new(800.0, 400.0)),
             Rect::new(100.0 - 200.0, -50.0 - 100.0, 400.0, 200.0)
         );
+    }
+
+    #[test]
+    fn zoom_at_point_preserves_world_position_under_cursor() {
+        let mut vp = Viewport {
+            offset_x: 50.0,
+            offset_y: -30.0,
+            zoom: 1.0,
+        };
+        let screen_size = Point::new(1000.0, 800.0);
+        let cursor_screen = Point::new(350.0, 600.0);
+        let world_before = vp.screen_to_world(cursor_screen, screen_size);
+
+        vp.zoom_at_point(1.5, cursor_screen, screen_size, 0.1, 20.0);
+
+        let screen_after = vp.world_to_screen(world_before, screen_size);
+        assert!((screen_after.x - cursor_screen.x).abs() < 1e-9);
+        assert!((screen_after.y - cursor_screen.y).abs() < 1e-9);
+    }
+
+    #[test]
+    fn pinch_zoom_pans_and_zooms_around_gesture() {
+        let mut vp = Viewport {
+            offset_x: 0.0,
+            offset_y: 0.0,
+            zoom: 1.0,
+        };
+        let screen_size = Point::new(1000.0, 800.0);
+        let prev_center = Point::new(400.0, 400.0);
+        let new_center = Point::new(450.0, 420.0);
+        let world_at_prev = vp.screen_to_world(prev_center, screen_size);
+
+        vp.pinch_zoom(2.0, prev_center, new_center, screen_size, 0.1, 20.0);
+
+        let screen_after = vp.world_to_screen(world_at_prev, screen_size);
+        assert!((screen_after.x - new_center.x).abs() < 1e-9);
+        assert!((screen_after.y - new_center.y).abs() < 1e-9);
+        assert!((vp.zoom - 2.0).abs() < 1e-9);
     }
 }
