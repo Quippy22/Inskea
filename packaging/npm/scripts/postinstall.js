@@ -38,11 +38,14 @@ function installLinux() {
     } catch (_) {}
   }
 
-  // Copy .desktop file
+  // Write .desktop file pointing directly to this package's runner script
   const desktopSrc = path.join(assetsDir, 'inskea.desktop');
   const desktopDest = path.join(appsDir, 'inskea.desktop');
   if (fs.existsSync(desktopSrc)) {
-    fs.copyFileSync(desktopSrc, desktopDest);
+    const runnerScript = path.resolve(__dirname, '..', 'bin', 'inskea.js');
+    let desktopContent = fs.readFileSync(desktopSrc, 'utf8');
+    desktopContent = desktopContent.replace(/^Exec=inskea %F$/m, `Exec="${runnerScript}" %F`);
+    fs.writeFileSync(desktopDest, desktopContent, 'utf8');
     try {
       execSync(`update-desktop-database "${appsDir}"`, { stdio: 'ignore' });
     } catch (_) {}

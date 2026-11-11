@@ -160,17 +160,24 @@ fn ensure_desktop_integration() {
         return;
     }
 
+    let exec_cmd = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.to_str().map(|s| format!("\"{s}\"")))
+        .unwrap_or_else(|| "inskea".to_string());
+
     let _ = fs::create_dir_all(&apps_dir);
-    let content = "[Desktop Entry]\n\
+    let content = format!(
+        "[Desktop Entry]\n\
 Type=Application\n\
 Name=Inskea\n\
 Comment=An infinite canvas for your ideas\n\
-Exec=inskea %F\n\
+Exec={exec_cmd} %F\n\
 Icon=inskea\n\
 Terminal=false\n\
 Categories=Graphics;Office;\n\
 MimeType=application/x-inskea;\n\
-StartupWMClass=inskea\n";
+StartupWMClass=inskea\n"
+    );
 
     if fs::write(&desktop_file, content).is_ok() {
         let _ = std::process::Command::new("update-desktop-database")

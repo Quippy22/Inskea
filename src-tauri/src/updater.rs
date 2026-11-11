@@ -259,45 +259,84 @@ pub fn is_npm_installation() -> bool {
     is_npm_path(&exe)
 }
 
+/// Locate the global `node_modules` root containing this executable (e.g.
+/// `/usr/lib/node_modules` or `/home/user/.npm-global/lib/node_modules`) so
+/// `npm install -g --prefix <prefix>` updates the exact installation that is
+/// currently running.
+fn npm_global_prefix_for_current_exe() -> Option<PathBuf> {
+    let exe = env::current_exe().and_then(fs::canonicalize).ok()?;
+    let mut current = exe.parent();
+    let mut outermost_node_modules = None;
+    while let Some(dir) = current {
+        if dir.file_name().and_then(|n| n.to_str()) == Some("node_modules") {
+            outermost_node_modules = Some(dir);
+        }
+        current = dir.parent();
+    }
+    let nm = outermost_node_modules?;
+    let parent = nm.parent()?;
+    if parent.file_name().and_then(|n| n.to_str()) == Some("lib") {
+        parent.parent().map(Path::to_path_buf)
+    } else {
+        Some(parent.to_path_buf())
+    }
+}
+
 fn try_npm_update() -> Result<UpdateOutcome, String> {
     if !command_exists("npm") {
         return Err("npm command not found in PATH".into());
     }
 
+    let prefix_arg = npm_global_prefix_for_current_exe();
+
     #[cfg(windows)]
     {
-        let status = Command::new("cmd")
-            .args(["/C", "npm", "update", "-g", "inskea"])
+        let mut cmd = Command::new("cmd");
+        cmd.args(["/C", "npm", "install", "-g", "inskea@latest"]);
+        if let Some(prefix) = &prefix_arg {
+            cmd.arg("--prefix").arg(prefix);
+        }
+        let status = cmd
             .status()
-            .map_err(|e| format!("failed to run npm update: {e}"))?;
+            .map_err(|e| format!("failed to run npm install: {e}"))?;
         if status.success() {
             return Ok(UpdateOutcome::ReadyToRelaunch);
         }
-        return Err(format!("npm update exited with status {status}"));
+        return Err(format!("npm install exited with status {status}"));
     }
 
     #[cfg(target_os = "linux")]
     {
         if can_overwrite_current_exe() {
-            let status = Command::new("npm")
-                .args(["update", "-g", "inskea"])
+            let mut cmd = Command::new("npm");
+            cmd.args(["install", "-g", "inskea@latest"]);
+            if let Some(prefix) = &prefix_arg {
+                cmd.arg("--prefix").arg(prefix);
+            }
+            let status = cmd
                 .status()
-                .map_err(|e| format!("failed to run npm update: {e}"))?;
+                .map_err(|e| format!("failed to run npm install: {e}"))?;
             if status.success() {
                 return Ok(UpdateOutcome::ReadyToRelaunch);
             }
-            log::warn!("direct npm update failed, checking pkexec: {status}");
+            log::warn!("direct npm install failed, checking pkexec: {status}");
         }
 
         if command_exists("pkexec") {
-            let status = Command::new("pkexec")
-                .args(["npm", "update", "-g", "inskea"])
+            let mut cmd = Command::new("pkexec");
+            cmd.args(["npm", "install", "-g", "inskea@latest"]);
+            if let Some(prefix) = &prefix_arg {
+                cmd.arg("--prefix").arg(prefix);
+            } else {
+                cmd.args(["--prefix", "/usr"]);
+            }
+            let status = cmd
                 .status()
-                .map_err(|e| format!("failed to run pkexec npm update: {e}"))?;
+                .map_err(|e| format!("failed to run pkexec npm install: {e}"))?;
             if status.success() {
                 return Ok(UpdateOutcome::ReadyToRelaunch);
             }
-            return Err(format!("pkexec npm update exited with status {status}"));
+            return Err(format!("pkexec npm install exited with status {status}"));
         }
 
         Err("cannot update npm package: directory not writable and pkexec unavailable".into())
@@ -305,6 +344,7 @@ fn try_npm_update() -> Result<UpdateOutcome, String> {
 
     #[cfg(not(any(windows, target_os = "linux")))]
     {
+        let _ = prefix_arg;
         Err("npm update is not supported on this platform".into())
     }
 }
@@ -582,10 +622,12 @@ pub fn install_or_open(
         match try_npm_update() {
             Ok(outcome) => return Ok(outcome),
             Err(err) => {
-                log::warn!("npm update failed, opening release page instead: {err}");
+                log::warn!("npm update failed, trying direct package install: {err}");
             }
         }
-    } else if let (Some(name), Some(url)) = (asset_name, asset_url) {
+    }
+
+    if let (Some(name), Some(url)) = (asset_name, asset_url) {
         if can_install_asset(name) {
             match try_install_package(name, url) {
                 Ok(outcome) => return Ok(outcome),

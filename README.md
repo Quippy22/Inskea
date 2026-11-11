@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/inskea"><img src="https://img.shields.io/npm/v/inskea?style=flat-square&color=cb3837" alt="npm package"></a>
-  <img src="https://img.shields.io/badge/version-2.1.3-blue?style=flat-square" alt="Version 2.1.3">
+  <img src="https://img.shields.io/badge/version-2.1.4-blue?style=flat-square" alt="Version 2.1.4">
   <img src="https://img.shields.io/badge/platform-desktop%20%7C%20browser-blueviolet?style=flat-square" alt="Platform: desktop and browser">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
 </p>
