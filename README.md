@@ -3,74 +3,64 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
+  <a href="https://www.npmjs.com/package/inskea"><img src="https://img.shields.io/npm/v/inskea?style=flat-square&color=cb3837" alt="npm package"></a>
   <img src="https://img.shields.io/badge/version-2.1.1-blue?style=flat-square" alt="Version 2.1.1">
   <img src="https://img.shields.io/badge/platform-desktop%20%7C%20browser-blueviolet?style=flat-square" alt="Platform: desktop and browser">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
 </p>
 
 ---
 Inskea is a drawing app without edges. One canvas that never runs out of room, for sketching diagrams, drafting ideas, and drawing by hand. When you finish, save your work to a real file and pick it back up later.
 
-It runs as a native desktop app and in the browser, with the same tools and the same files either way.
+It runs as a native desktop app and in the browser, with the same tools and the same files either way. Designed for fluid one-handed use while drawing, so your other hand never has to leave the mouse or pen.
 
-### Draw
+<p align="center">
+  <img src="assets/app-preview.png" alt="Inskea Canvas" width="100%">
+</p>
 
-- **Shapes.** Rectangles with sharp or rounded corners, ellipses, and lines that are straight or gently curved. Hold Shift while drawing for perfect squares and circles.
-- **Arrows.** Add an arrowhead to either end of a line, or both.
-- **Connectors.** Drop a line or arrow endpoint onto a shape and it binds there, then follows the shape when you move it. Choose direct, curved, or right-angled routing, and drag the route handles to adjust the path.
-- **Freehand.** Strokes are smoothed as you draw, which keeps hand-drawn lines from looking jittery.
-- **Images.** Import a PNG, JPEG, GIF, WebP, SVG, or BMP from Import → Image, or drop one onto the canvas. Images move, resize, and rotate like any other element, and the image data travels with the drawing.
-- **Text.** Click to place a cursor and type. Resize the box to set how the text wraps, change the font size, and align text left, center, or right. Select a shape and press `Ctrl+T` to add a label inside it.
-- **Eraser.** Drag across anything you want to remove.
-- **Point edits.** Reshape a line, arrow, or connector after the fact by dragging its points, or drag between two points to add a bend.
 
-### Style
+## Features
 
-- **Colors.** Quick swatches or a full color picker for strokes, plus fills for rectangles and ellipses.
-- **Stroke options.** Solid, dashed, or dotted lines with adjustable width and opacity.
+### Draw & Style
+- **Shapes & Freehand** – Rectangles, ellipses, straight/curved lines, and smoothed freehand sketching.
+- **Smart Connectors** – Dynamic endpoints that snap to shapes, track movement, and route with direct, curved, or orthogonal paths.
+- **Images & Text** – Place and transform images (PNG, JPEG, GIF, WebP, SVG, BMP) or label shapes (`Ctrl+T`).
+- **Styling** – Color palettes, fills, stroke widths, opacity levels, and dashed/dotted lines.
 
-### Arrange
+### Arrange & Canvas
+- **Infinite Canvas** – Boundless pan and zoom (10% to 2000%) with customizable grid and center markers.
+- **Transform & Align** – Multi-selection, 8-handle resizing, live Alt-snapping, smart alignment guides, and even distribution.
+- **Groups & Layers** – Group elements with in-place nested editing and z-order layering.
+- **Themes** – Tokyo Night, Storm, Paper, Greenboard, and Mono.
 
-- **Selection.** Click an element, Shift-click to add or drop items, or drag a box to select everything inside.
-- **Move, resize, rotate.** Drag elements directly, resize from eight handles, and rotate from the top handle. Hold Shift to keep proportions or snap rotation to 15 degree steps, and Alt to resize around the center. While moving, hold Alt to snap the selection to the grid live, even with the grid hidden.
-- **Smart guides.** Hold Shift while moving elements and guides appear, snapping your selection to shared edges, centers, and even spacing.
-- **Groups.** Combine elements into a single unit, then double-click to step inside and edit one part.
-- **Alignment.** Align elements six ways, or distribute spacing evenly along either axis.
-- **Layering.** Move elements forward or backward, or jump straight to front or back.
-- **Copy, paste, duplicate.** Groups stay intact.
-- **Undo and redo.** Up to 100 steps of history.
+### Files & Export
+- **`.skea` Format** – Fully editable, non-destructive file format.
+- **Autosave** – Background autosaving to local files or browser storage.
+- **Export** – High-resolution PNG and clean vector SVG exports with crop area selection.
+- **Cross-Platform** – Seamless native desktop app (Linux, Windows) and web browser support.
 
-### Navigate
+## Installation
 
-- **Infinite pan and zoom.** Zoom with the scroll wheel from 10% up to 2000%, centered on your pointer, and drag with the Hand tool to move around.
-- **Reset view.** Click the zoom readout to return to 100% at the current center, or click the Home button to recenter on the origin.
-- **Grid.** Dots, lines, or off, with adjustable spacing. Alt-snapping follows the spacing you set.
-- **Center marker.** A crosshair or dot at the origin, so you can find your way back.
-- **Themes.** Storm, Tokyo Night, Mono, Paper, and Greenboard. Switch from the settings panel; the choice applies to the whole app and is remembered.
+### Via npm (Linux & Windows)
 
-### Files and export
+```bash
+npm install -g inskea
+```
+```bash
+npm update -g inskea
+```
 
-- **`.skea` files.** Inskea's own format. Reopen your work at any time and keep editing; nothing gets flattened to a picture.
-- **Save and open anywhere.** On the desktop, Open, Save, and Save As use native dialogs. In the browser, Save and Save As download a copy of the drawing, and Open reads one back from disk.
-- **Autosave.** Turn it on in the settings and Inskea writes changes back a moment after you stop editing: to the open file on the desktop, or to browser storage so a reload restores the drawing. With no file yet, it asks for one.
-- **No surprise losses.** Unsaved work prompts before you start a new drawing, open another one, or close the app, and failed saves, loads, and exports tell you what went wrong.
-- **Opens from your file manager.** On the desktop, `.skea` files are associated with Inskea: double-click one to open it, and launching a second copy hands the file to the running window.
-- **PNG and SVG export.** Save the current view, or drag a rectangle to pick exactly what to export. PNG for sharing, SVG for editing elsewhere.
+*(You can also run it instantly without installing: `npx inskea`)*
+
+### Native Installers
+
+Download pre-built installers for Windows (`.exe`), Debian/Ubuntu (`.deb`), or Arch Linux from [Releases](https://github.com/Quippy22/Inskea/releases).
 
 ## Keyboard shortcuts
 
-The shortcuts are chosen for one-handed use, so your other hand can stay on the mouse or pen while you draw. Press `?` in the app for the full list. The ones you will reach for most:
+Press `?` anywhere in the app to view the shortcut overlay.
 
-| Action | Keys |
-| --- | --- |
-| Select, hand, draw, erase modes | `s`, `a`, `d`, `e` |
-| Rectangle, ellipse, line, arrow, text | `1`, `2`, `3`, `4`, `5` |
-| Freehand | `f` |
-| Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` |
-| Copy / paste / duplicate | `Ctrl+C` / `Ctrl+V` / `Ctrl+D` |
-| Group / ungroup | `Ctrl+G` / `Ctrl+Shift+G` |
-| Add / edit a shape label | `Ctrl+T` |
-| Delete selection | `Delete` or `Backspace` |
-| New / open / save / save as | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` |
-| Cancel, deselect, or leave a group | `Esc` |
-| Shortcut help | `?` |
+<p align="center">
+  <img src="assets/shortcuts.png" alt="Keyboard Shortcuts" width="85%">
+</p>
+
