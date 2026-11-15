@@ -12,15 +12,6 @@ const CHART_KIND_OPTS: &[(ChartKind, &str)] = &[
     (ChartKind::Sparkline, "Sparkline"),
 ];
 
-const CHART_PALETTE_OPTS: &[(ChartPalette, &str)] = &[
-    (ChartPalette::Ocean, "Ocean"),
-    (ChartPalette::Sunset, "Sunset"),
-    (ChartPalette::Forest, "Forest"),
-    (ChartPalette::Pastel, "Pastel"),
-    (ChartPalette::Neon, "Neon"),
-    (ChartPalette::Monochrome, "Mono"),
-];
-
 fn chart_kind_icon(kind: ChartKind) -> View {
     let content = match kind {
         ChartKind::Bar => view! {
@@ -103,9 +94,10 @@ pub fn chart_section(
                     "Palette"
                 </div>
                 <div class="grid grid-cols-3 gap-1">
-                    {CHART_PALETTE_OPTS
+                    {ChartPalette::ALL
                         .iter()
-                        .map(|&(pal, label)| {
+                        .map(|&pal| {
+                            let label = pal.label();
                             let set_pal = set_chart_palette.clone();
                             let sample_col = crate::model::Color::new("#38bdf8");
                             let c0 = pal.color_at(0, &sample_col);

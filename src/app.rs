@@ -266,7 +266,6 @@ pub fn App() -> impl IntoView {
         selected_tool,
         default_style,
         default_chart_style,
-        chart_editing_id,
         push_snapshot: push_snapshot.clone(),
     };
 
@@ -863,7 +862,7 @@ pub fn App() -> impl IntoView {
                 on_cancel=snippet_cancel
             />
             <CatalogueContextMenu context=catalogue.clone() />
-            <SelectionContextMenu context=catalogue.clone() />
+            <SelectionContextMenu context=catalogue.clone() chart_editing_id=chart_editing_id />
             <ChartDataEditor
                 scene=scene
                 chart_editing_id=chart_editing_id

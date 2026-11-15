@@ -25,6 +25,7 @@ pub enum ChartKind {
 }
 
 impl ChartKind {
+    #[allow(dead_code)]
     pub const ALL: [ChartKind; 5] = [
         ChartKind::Bar,
         ChartKind::Line,
@@ -33,6 +34,7 @@ impl ChartKind {
         ChartKind::Sparkline,
     ];
 
+    #[allow(dead_code)]
     pub fn label(&self) -> &'static str {
         match self {
             ChartKind::Bar => "Bar",

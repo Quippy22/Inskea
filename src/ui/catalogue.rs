@@ -571,7 +571,10 @@ pub fn CatalogueContextMenu(context: CatalogueContext) -> impl IntoView {
 
 /// The menu opened by right-clicking a shape on the canvas.
 #[component]
-pub fn SelectionContextMenu(context: CatalogueContext) -> impl IntoView {
+pub fn SelectionContextMenu(
+    context: CatalogueContext,
+    #[prop(optional)] chart_editing_id: Option<RwSignal<Option<ElementId>>>,
+) -> impl IntoView {
     let menu = context.selection_menu;
     move || {
         let Some((x, y)) = menu.get() else {
@@ -579,13 +582,25 @@ pub fn SelectionContextMenu(context: CatalogueContext) -> impl IntoView {
         };
         let size = crate::util::window_size();
         let left = x.min(size.x - 184.0).max(8.0);
-        let top = y.min(size.y - 48.0).max(8.0);
+        let top = y.min(size.y - 84.0).max(8.0);
         let close = move || menu.set(None);
         let save = {
             let context = context.clone();
             move |_| {
                 close();
                 context.begin_save();
+            }
+        };
+        let selected_chart_id = {
+            let ids = context.selected_ids.get();
+            if ids.len() == 1 {
+                let id = ids[0];
+                context
+                    .scene
+                    .with(|s| matches!(s.element_by_id(id), Some(crate::model::Element::Chart(_))))
+                    .then_some(id)
+            } else {
+                None
             }
         };
 
@@ -600,10 +615,27 @@ pub fn SelectionContextMenu(context: CatalogueContext) -> impl IntoView {
                     }
                 ></div>
                 <div
-                    class="fixed z-[71] w-44 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1"
+                    class="fixed z-[71] w-48 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1"
                     style=format!("left:{left}px; top:{top}px")
                     role="menu"
                 >
+                    {match (selected_chart_id, chart_editing_id) {
+                        (Some(cid), Some(edit_sig)) => view! {
+                            <button
+                                class=styles::MENU_ITEM
+                                on:click=move |_| {
+                                    close();
+                                    edit_sig.set(Some(cid));
+                                }
+                                role="menuitem"
+                            >
+                                <span>"Edit chart data…"</span>
+                                <span class="text-subtle">{icon::chart()}</span>
+                            </button>
+                        }
+                        .into_view(),
+                        _ => view! {}.into_view(),
+                    }}
                     <button class=styles::MENU_ITEM on:click=save role="menuitem">
                         <span>"Save as snippet"</span>
                         <span class="text-subtle">{icon::save_snippet()}</span>

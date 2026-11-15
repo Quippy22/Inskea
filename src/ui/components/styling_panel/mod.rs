@@ -64,6 +64,9 @@ type UpdateStyle = Rc<dyn Fn(&dyn Fn(&mut ElementStyle))>;
 /// The same for freehand line styles.
 type UpdateLineStyle = Rc<dyn Fn(&dyn Fn(&mut LineStyle))>;
 
+/// The same for chart styles.
+type UpdateChartStyle = Rc<dyn Fn(&dyn Fn(&mut ChartStyle))>;
+
 #[derive(Clone)]
 pub struct StylingPanelContext {
     pub scene: RwSignal<Scene>,
@@ -528,7 +531,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         }
     });
 
-    let update_chart_style: Rc<dyn Fn(&dyn Fn(&mut ChartStyle))> = Rc::new({
+    let update_chart_style: UpdateChartStyle = Rc::new({
         let local_chart_style = local_chart_style;
         let default_chart_style = default_chart_style;
         let scene = scene;

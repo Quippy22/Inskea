@@ -1,7 +1,7 @@
 use crate::canvas::{CanvasMode, Viewport};
 use crate::document::DocContext;
 use crate::edit_ops;
-use crate::model::{Chart, ChartKind, ChartStyle, Element, ElementId, ElementStyle, Point};
+use crate::model::{Chart, ChartKind, ChartStyle, Element, ElementStyle, Point};
 use crate::tauri_bridge;
 use crate::ui::dock::Tool;
 use crate::ui::notify;
@@ -27,7 +27,6 @@ pub struct ChartImport {
     pub selected_tool: RwSignal<Tool>,
     pub default_style: RwSignal<ElementStyle>,
     pub default_chart_style: RwSignal<ChartStyle>,
-    pub chart_editing_id: RwSignal<Option<ElementId>>,
     pub push_snapshot: Rc<dyn Fn()>,
 }
 
