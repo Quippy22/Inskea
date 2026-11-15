@@ -61,6 +61,7 @@ lucide_icons! {
     arrow => "arrow-up-right.svg",
     text => "type.svg",
     freehand => "line-squiggle.svg",
+    chart => "chart-column.svg",
 
     // Toolbar and menu.
     home => "house.svg",

@@ -6,10 +6,12 @@ use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::edit_ops::Clipboard;
 use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
 use crate::model::{
-    ChangeSet, Color, ConnectorVariant, ElementId, ElementStyle, LineStyle, Point, Scene,
+    ChangeSet, ChartStyle, Color, ConnectorVariant, ElementId, ElementStyle, LineStyle, Point,
+    Scene,
 };
 use crate::skea;
 use crate::tauri_bridge;
+use crate::ui::chart_import::{is_tabular_file, is_tabular_path, ChartImport};
 use crate::ui::components::{StylingPanel, StylingPanelContext};
 use crate::ui::dock::{Dock, Tool};
 use crate::ui::image_import::ImageImport;
@@ -240,6 +242,16 @@ pub fn App() -> impl IntoView {
 
     let is_tauri = tauri_bridge::is_tauri();
 
+    // ── Default style for new shapes (draw-mode panel changes) ────────────
+    let default_style = create_rw_signal(ElementStyle {
+        stroke_color: selected_color.get_untracked(),
+        ..Default::default()
+    });
+    let default_line_style = create_rw_signal(LineStyle::default());
+    let default_connector_variant = create_rw_signal(ConnectorVariant::default());
+    let default_chart_style = create_rw_signal(ChartStyle::default());
+    let chart_editing_id = create_rw_signal::<Option<ElementId>>(None);
+
     let image_import = ImageImport {
         doc: doc.clone(),
         viewport,
@@ -247,10 +259,22 @@ pub fn App() -> impl IntoView {
         push_snapshot: push_snapshot.clone(),
     };
 
-    // Images arrive either from Tauri's OS drop event (physical pixels) or,
-    // in a browser, from a DOM drop on the canvas.
+    let chart_import = ChartImport {
+        doc: doc.clone(),
+        viewport,
+        canvas_mode,
+        selected_tool,
+        default_style,
+        default_chart_style,
+        chart_editing_id,
+        push_snapshot: push_snapshot.clone(),
+    };
+
+    // Images and CSV/TSV files arrive either from Tauri's OS drop event
+    // (physical pixels) or, in a browser, from a DOM drop on the canvas.
     if is_tauri {
         let image_import = image_import.clone();
+        let chart_import = chart_import.clone();
         tauri_bridge::on_file_drop(move |paths, position| {
             let at = position.map(|(x, y)| {
                 let ratio = web_sys::window()
@@ -263,10 +287,18 @@ pub fn App() -> impl IntoView {
                     .get_untracked()
                     .screen_to_world(screen, window_size())
             });
-            image_import.import_paths(paths, at);
+            let (csv_paths, img_paths): (Vec<String>, Vec<String>) =
+                paths.into_iter().partition(|p| is_tabular_path(p));
+            if !csv_paths.is_empty() {
+                chart_import.import_paths(csv_paths, at);
+            }
+            if !img_paths.is_empty() {
+                image_import.import_paths(img_paths, at);
+            }
         });
     } else {
         let image_import_drag = image_import.clone();
+        let chart_import_drag = chart_import.clone();
         let _ = window_event_listener(leptos::ev::dragover, move |event: leptos::ev::DragEvent| {
             if has_files(&event) {
                 event.prevent_default();
@@ -291,7 +323,43 @@ pub fn App() -> impl IntoView {
                 .viewport
                 .get_untracked()
                 .screen_to_world(screen, window_size());
-            image_import_drag.import_files(files, Some(at));
+            let (csv_files, img_files): (Vec<web_sys::File>, Vec<web_sys::File>) =
+                files.into_iter().partition(is_tabular_file);
+            if !csv_files.is_empty() {
+                chart_import_drag.import_files(csv_files, Some(at));
+            }
+            if !img_files.is_empty() {
+                image_import_drag.import_files(img_files, Some(at));
+            }
+        });
+    }
+
+    // Smart paste of CSV / TSV / Markdown tables into a chart on the canvas.
+    {
+        let chart_import_paste = chart_import.clone();
+        let _ = window_event_listener(leptos::ev::paste, move |event: web_sys::Event| {
+            // Do not intercept paste when typing inside an <input> or <textarea>.
+            if let Some(target) = event.target() {
+                if let Some(el) = target.dyn_ref::<web_sys::Element>() {
+                    let tag = el.tag_name().to_ascii_uppercase();
+                    if tag == "INPUT" || tag == "TEXTAREA" {
+                        return;
+                    }
+                }
+            }
+            let Ok(data_val) = js_sys::Reflect::get(&event, &"clipboardData".into()) else {
+                return;
+            };
+            let Some(data) = data_val.dyn_ref::<web_sys::DataTransfer>() else {
+                return;
+            };
+            if let Ok(text) = data.get_data("text/plain") {
+                if !text.trim().is_empty()
+                    && chart_import_paste.import_tabular_text(&text, None, None)
+                {
+                    event.prevent_default();
+                }
+            }
         });
     }
 
@@ -690,17 +758,19 @@ pub fn App() -> impl IntoView {
         );
     });
 
-    // ── Default style for new shapes (draw-mode panel changes) ────────────
-    let default_style = create_rw_signal(ElementStyle {
-        stroke_color: selected_color.get_untracked(),
-        ..Default::default()
-    });
-    let default_line_style = create_rw_signal(LineStyle::default());
-    let default_connector_variant = create_rw_signal(ConnectorVariant::default());
-
     create_effect(move |_| {
         let is_arrow = matches!(selected_tool.get(), Tool::Arrow);
         default_line_style.update(|ls| ls.has_end_arrowhead = is_arrow);
+    });
+
+    // Close the chart data editor if its target chart was deleted or deselected.
+    create_effect(move |_| {
+        if let Some(edit_id) = chart_editing_id.get() {
+            let exists = scene.with(|s| matches!(s.element_by_id(edit_id), Some(crate::model::Element::Chart(_))));
+            if !exists {
+                chart_editing_id.set(None);
+            }
+        }
     });
 
     // ── Panel visibility ───────────────────────────────────────────────────
@@ -737,6 +807,8 @@ pub fn App() -> impl IntoView {
                     default_style,
                     default_line_style,
                     default_connector_variant,
+                    default_chart_style,
+                    chart_editing_id,
                     theme_open,
                     modal_open,
                     on_context_menu: on_canvas_menu.clone(),
@@ -759,6 +831,7 @@ pub fn App() -> impl IntoView {
                 shortcuts_open=shortcuts_open
                 settings=settings
                 image_import=image_import
+                chart_import=chart_import.clone()
             />
             <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />
             <CanvasStatus scene=scene viewport=viewport />

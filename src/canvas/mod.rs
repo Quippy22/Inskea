@@ -184,6 +184,7 @@ pub fn Canvas(
 ) -> impl IntoView {
     let mut st = CanvasState::new();
     st.selected_ids = inputs.selected_ids;
+    st.chart_editing_id = inputs.chart_editing_id;
     let props = inputs;
 
     st.screen_size.set(window_size());
@@ -225,6 +226,7 @@ pub fn Canvas(
                 return;
             }
             if st.text_edit.editing_id.get_untracked().is_some()
+                || st.chart_editing_id.get_untracked().is_some()
                 || shortcuts_open.get_untracked()
                 || props.modal_open.get_untracked()
                 || props.theme_open.get_untracked()
@@ -274,8 +276,8 @@ pub fn Canvas(
 
     // Esc: cancel the most recent interaction, in priority order: open
     // shortcuts modal, crop export, text edit (the textarea commits it),
-    // in-progress draw, selection drag / marquee, group edit, selection.
-    // With nothing left to cancel it returns to the neutral Pan mode.
+    // chart data editor, in-progress draw, selection drag / marquee, group edit,
+    // selection. With nothing left to cancel it returns to the neutral Pan mode.
     {
         let mut _st = st;
         let mut _props = props.clone();
@@ -294,6 +296,11 @@ pub fn Canvas(
             // (a) If a text element is being edited, the textarea's own
             // keydown handler commits it and stops the event.
             if _st.text_edit.editing_id.get_untracked().is_some() {
+                return;
+            }
+            // (a2) If the chart mini-sheet editor is open, close it first.
+            if _st.chart_editing_id.get_untracked().is_some() {
+                _st.chart_editing_id.set(None);
                 return;
             }
             // (b) Cancel an active crop-export drag.

@@ -1,4 +1,5 @@
 mod catalogue;
+pub(crate) mod chart_import;
 pub mod components;
 pub(crate) mod cursor;
 pub mod dock;

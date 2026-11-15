@@ -1,7 +1,7 @@
 use crate::model::StylingKind;
 
 /// Available drawing tool types.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Tool {
     Rectangle,
     Ellipse,
@@ -9,6 +9,7 @@ pub enum Tool {
     Arrow,
     Text,
     Freehand,
+    Chart,
 }
 
 impl Tool {
@@ -21,6 +22,7 @@ impl Tool {
             Tool::Arrow => StylingKind::Arrow,
             Tool::Text => StylingKind::Text,
             Tool::Freehand => StylingKind::Freehand,
+            Tool::Chart => StylingKind::Chart,
         }
     }
 }

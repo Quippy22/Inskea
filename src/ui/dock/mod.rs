@@ -41,13 +41,14 @@ pub fn Dock(
         }
     };
 
-    const ALL_TOOLS: [Tool; 6] = [
+    const ALL_TOOLS: [Tool; 7] = [
         Tool::Rectangle,
         Tool::Ellipse,
         Tool::Line,
         Tool::Arrow,
         Tool::Text,
         Tool::Freehand,
+        Tool::Chart,
     ];
 
     fn tool_title(tool: Tool) -> &'static str {
@@ -58,6 +59,7 @@ pub fn Dock(
             Tool::Arrow => "Arrow",
             Tool::Text => "Text",
             Tool::Freehand => "Freehand",
+            Tool::Chart => "Chart",
         }
     }
 
@@ -69,6 +71,7 @@ pub fn Dock(
             Tool::Arrow => icon::arrow().into_view(),
             Tool::Text => icon::text().into_view(),
             Tool::Freehand => icon::freehand().into_view(),
+            Tool::Chart => icon::chart().into_view(),
         }
     }
 

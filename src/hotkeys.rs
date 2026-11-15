@@ -26,6 +26,7 @@ pub(crate) const TOOL_SHORTCUTS: &[(&str, &str)] = &[
     ("3", "Line"),
     ("4", "Arrow"),
     ("5", "Text"),
+    ("6", "Chart"),
     ("f", "Freehand"),
 ];
 
@@ -129,7 +130,7 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
             && !shift
             && matches!(
                 key,
-                "s" | "a" | "d" | "e" | "1" | "2" | "3" | "4" | "5" | "f"
+                "s" | "a" | "d" | "e" | "1" | "2" | "3" | "4" | "5" | "6" | "f"
             )
         {
             ctx.eraser_active.set(false);
@@ -245,6 +246,10 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
             }
             (false, "5") => {
                 ctx.selected_tool.set(Tool::Text);
+                ctx.canvas_mode.set(CanvasMode::Draw);
+            }
+            (false, "6") => {
+                ctx.selected_tool.set(Tool::Chart);
                 ctx.canvas_mode.set(CanvasMode::Draw);
             }
             (false, "f") => {

@@ -3,8 +3,8 @@ use super::MIN_DRAG_DIST;
 use crate::model::elements::connector::SNAP_SCREEN_PX;
 use crate::model::elements::text::WrappedText;
 use crate::model::{
-    Color, ConnectionEnd, Connector, ConnectorVariant, Element, ElementData, Ellipse, Freehand,
-    FromDrag, Line, Point, Rectangle, Text, TextAlign, UpdateDrag,
+    Chart, Color, ConnectionEnd, Connector, ConnectorVariant, Element, ElementData, Ellipse,
+    Freehand, FromDrag, Line, Point, Rectangle, Text, TextAlign, UpdateDrag,
 };
 use crate::ui::dock::Tool;
 use leptos::{
@@ -120,6 +120,7 @@ pub(crate) fn build_drag_element(
         }
         Tool::Text => Text::from_drag(anchor, current, color, shift).into(),
         Tool::Freehand => Freehand::from_drag(anchor, current, color, shift).into(),
+        Tool::Chart => Chart::from_drag(anchor, current, color, shift).into(),
     }
 }
 
@@ -143,6 +144,9 @@ pub(crate) fn apply_draw_style(el: &mut Element, props: &CanvasInputs) {
         Element::Line(line) => line.line_style = props.default_line_style.get(),
         Element::Connector(connector) => {
             connector.line_style = props.default_line_style.get();
+        }
+        Element::Chart(chart) => {
+            chart.apply_chart_style(&props.default_chart_style.get());
         }
         _ => {}
     }
