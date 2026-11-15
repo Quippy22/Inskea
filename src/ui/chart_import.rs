@@ -32,6 +32,7 @@ pub struct ChartImport {
 
 impl ChartImport {
     /// Insert a new chart of the requested `ChartKind` at the centre of the viewport.
+    #[allow(dead_code)]
     pub fn insert_chart(&self, kind: ChartKind) {
         self.default_chart_style.update(|cs| cs.kind = kind);
         let centre = self.view_centre();

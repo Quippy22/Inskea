@@ -49,9 +49,9 @@ where
     let file_sub_hover = create_rw_signal(false);
     let show_file = Signal::derive(move || file_hover.get() || file_sub_hover.get());
 
-    let charts_hover = create_rw_signal(false);
-    let charts_sub_hover = create_rw_signal(false);
-    let show_charts = Signal::derive(move || charts_hover.get() || charts_sub_hover.get());
+    let tools_hover = create_rw_signal(false);
+    let tools_sub_hover = create_rw_signal(false);
+    let show_tools = Signal::derive(move || tools_hover.get() || tools_sub_hover.get());
 
     let import_hover = create_rw_signal(false);
     let import_sub_hover = create_rw_signal(false);
@@ -67,8 +67,8 @@ where
         menu_open.set(false);
         file_hover.set(false);
         file_sub_hover.set(false);
-        charts_hover.set(false);
-        charts_sub_hover.set(false);
+        tools_hover.set(false);
+        tools_sub_hover.set(false);
         import_hover.set(false);
         import_sub_hover.set(false);
         export_hover.set(false);
@@ -309,68 +309,9 @@ where
         },
     ];
 
-    let charts_items: Vec<DropdownItem> = vec![
-        DropdownItem::Header {
-            label: "Insert Chart",
-        },
+    let tools_items: Vec<DropdownItem> = vec![
         DropdownItem::Action {
-            label: "Bar Chart",
-            on_click: Rc::new({
-                let ci = chart_import.clone();
-                let close = close_menu;
-                move || {
-                    close();
-                    ci.insert_chart(ChartKind::Bar);
-                }
-            }),
-        },
-        DropdownItem::Action {
-            label: "Line Chart",
-            on_click: Rc::new({
-                let ci = chart_import.clone();
-                let close = close_menu;
-                move || {
-                    close();
-                    ci.insert_chart(ChartKind::Line);
-                }
-            }),
-        },
-        DropdownItem::Action {
-            label: "Area Chart",
-            on_click: Rc::new({
-                let ci = chart_import.clone();
-                let close = close_menu;
-                move || {
-                    close();
-                    ci.insert_chart(ChartKind::Area);
-                }
-            }),
-        },
-        DropdownItem::Action {
-            label: "Donut Chart",
-            on_click: Rc::new({
-                let ci = chart_import.clone();
-                let close = close_menu;
-                move || {
-                    close();
-                    ci.insert_chart(ChartKind::Donut);
-                }
-            }),
-        },
-        DropdownItem::Action {
-            label: "Sparkline",
-            on_click: Rc::new({
-                let ci = chart_import.clone();
-                let close = close_menu;
-                move || {
-                    close();
-                    ci.insert_chart(ChartKind::Sparkline);
-                }
-            }),
-        },
-        DropdownItem::Separator,
-        DropdownItem::Action {
-            label: "Draw Chart on Canvas",
+            label: "Chart",
             on_click: Rc::new({
                 let ci = chart_import.clone();
                 let close = close_menu;
@@ -380,17 +321,7 @@ where
                 }
             }),
         },
-        DropdownItem::Action {
-            label: "Import CSV / TSV…",
-            on_click: Rc::new({
-                let ci = chart_import.clone();
-                let close = close_menu;
-                move || {
-                    close();
-                    ci.pick_csv();
-                }
-            }),
-        },
+        DropdownItem::Disabled { label: "Frame" },
     ];
 
     let import_items: Vec<DropdownItem> = vec![
@@ -560,27 +491,27 @@ where
                                             />
                                         </div>
 
-                                        // ── Charts ───────────────────────────
+                                        // ── Tools ────────────────────────────
                                         <div
                                             class="relative"
-                                            on:mouseenter=move |_| charts_hover.set(true)
-                                            on:mouseleave=move |_| charts_hover.set(false)
+                                            on:mouseenter=move |_| tools_hover.set(true)
+                                            on:mouseleave=move |_| tools_hover.set(false)
                                         >
                                             <button class=styles::MENU_ITEM>
-                                                <span>"Charts"</span>
+                                                <span>"Tools"</span>
                                                 {icon::chevron_right()}
                                             </button>
                                             <Dropdown
-                                                show=show_charts
+                                                show=show_tools
                                                 on_mouseenter=Rc::new({
-                                                    let s = charts_sub_hover;
+                                                    let s = tools_sub_hover;
                                                     move || s.set(true)
                                                 })
                                                 on_mouseleave=Rc::new({
-                                                    let s = charts_sub_hover;
+                                                    let s = tools_sub_hover;
                                                     move || s.set(false)
                                                 })
-                                                items=charts_items.clone()
+                                                items=tools_items.clone()
                                             />
                                         </div>
 

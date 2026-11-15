@@ -10,6 +10,8 @@ pub enum DropdownItem {
         label: &'static str,
         on_click: Rc<dyn Fn()>,
     },
+    /// Non-interactive / placeholder row (e.g. "Frame").
+    Disabled { label: &'static str },
     /// Non-clickable header label (e.g. "PNG", "SVG").
     Header { label: &'static str },
     /// Horizontal separator line.
@@ -58,6 +60,18 @@ pub fn Dropdown(
                                 view! {
                                     <button class=styles::MENU_ITEM on:click=move |_| (cb)()>
                                         {*label}
+                                    </button>
+                                }
+                                    .into_view()
+                            }
+                            DropdownItem::Disabled { label } => {
+                                view! {
+                                    <button
+                                        class="flex items-center justify-between w-full text-left px-4 py-1.5 text-sm text-subtle/50 cursor-not-allowed select-none"
+                                        disabled=true
+                                        title="Coming soon"
+                                    >
+                                        <span>{*label}</span>
                                     </button>
                                 }
                                     .into_view()

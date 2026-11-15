@@ -10,7 +10,7 @@ pub(crate) const TIPS: &[&str] = &[
     "Ctrl+G groups the current selection.",
     "Ctrl+Shift+G ungroups the selection.",
     "Ctrl+D duplicates the selection.",
-    "Press 1-6 to pick a shape or chart tool.",
+    "Press 1-5 to pick a shape tool.",
     "Double-click a chart to edit its data.",
     "Press F for the freehand tool.",
     "Shift-drag shows smart guides.",
