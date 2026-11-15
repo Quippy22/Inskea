@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 const GITHUB_LATEST_RELEASE_URL: &str =
     "https://api.github.com/repos/Quippy22/Inskea/releases/latest";
+const GITHUB_LATEST_RELEASE_PAGE: &str = "https://github.com/Quippy22/Inskea/releases/latest";
 const NPM_LATEST_VERSION_URL: &str = "https://registry.npmjs.org/inskea/latest";
 const NPM_PACKAGE_PAGE: &str = "https://www.npmjs.com/package/inskea";
 const ALLOWED_GITHUB_PREFIX: &str = "https://github.com/Quippy22/Inskea/";
@@ -171,6 +172,7 @@ fn can_overwrite_current_exe() -> bool {
 pub fn select_asset_for_platform<'a>(
     assets: &'a [GithubAsset],
     os: &str,
+    arch: &str,
     arch_linux: bool,
     debian_linux: bool,
 ) -> Option<&'a GithubAsset> {
@@ -217,6 +219,16 @@ pub fn select_asset_for_platform<'a>(
                 }
             }
             None
+        }
+        "macos" => {
+            let suffix = match arch {
+                "aarch64" => "_aarch64.dmg",
+                "x86_64" => "_x64.dmg",
+                _ => return None,
+            };
+            valid_assets
+                .into_iter()
+                .find(|asset| asset.name.to_ascii_lowercase().ends_with(suffix))
         }
         _ => None,
     }
@@ -425,6 +437,7 @@ pub fn check_for_update() -> Result<UpdateCheck, String> {
     let selected = select_asset_for_platform(
         &release.assets,
         env::consts::OS,
+        env::consts::ARCH,
         is_arch_linux(),
         is_debian_linux(),
     );
@@ -437,7 +450,7 @@ pub fn check_for_update() -> Result<UpdateCheck, String> {
         current_version,
         latest_version,
         update_available,
-        release_url: NPM_PACKAGE_PAGE.to_string(),
+        release_url: GITHUB_LATEST_RELEASE_PAGE.to_string(),
         asset_name: selected.map(|a| a.name.clone()),
         asset_url: selected.map(|a| a.browser_download_url.clone()),
         can_install,
@@ -614,9 +627,9 @@ fn try_install_package(asset_name: &str, asset_url: &str) -> Result<UpdateOutcom
     }
 }
 
-/// Open the npm package page in the system browser.
+/// Open the release or npm package page in the system browser.
 pub fn open_release_url(url: &str) -> Result<(), String> {
-    let target = if is_valid_npm_url(url) {
+    let target = if is_valid_npm_url(url) || is_valid_github_url(url) {
         url
     } else {
         NPM_PACKAGE_PAGE
@@ -648,8 +661,7 @@ pub fn open_release_url(url: &str) -> Result<(), String> {
         .map_err(|e| format!("failed to open release page: {e}"))
 }
 
-/// Install the update in place if supported, otherwise open the npm package
-/// page in the user's browser.
+/// Install the update in place if supported, otherwise open its release page.
 pub fn install_or_open(
     release_url: &str,
     asset_name: Option<&str>,
@@ -775,23 +787,41 @@ mod tests {
                 browser_download_url:
                     "https://github.com/Quippy22/Inskea/releases/download/v2.0.0/Inskea_2.0.0_x64-setup.exe".into(),
             },
+            GithubAsset {
+                name: "Inskea_2.0.0_aarch64.dmg".into(),
+                browser_download_url:
+                    "https://github.com/Quippy22/Inskea/releases/download/v2.0.0/Inskea_2.0.0_aarch64.dmg".into(),
+            },
+            GithubAsset {
+                name: "Inskea_2.0.0_x64.dmg".into(),
+                browser_download_url:
+                    "https://github.com/Quippy22/Inskea/releases/download/v2.0.0/Inskea_2.0.0_x64.dmg".into(),
+            },
         ];
 
         assert_eq!(
-            select_asset_for_platform(&assets, "linux", true, false).map(|a| a.name.as_str()),
+            select_asset_for_platform(&assets, "linux", "x86_64", true, false)
+                .map(|a| a.name.as_str()),
             Some("inskea-2.0.0-1-x86_64.pkg.tar.zst")
         );
         assert_eq!(
-            select_asset_for_platform(&assets, "linux", false, true).map(|a| a.name.as_str()),
+            select_asset_for_platform(&assets, "linux", "x86_64", false, true)
+                .map(|a| a.name.as_str()),
             Some("Inskea_2.0.0_amd64.deb")
         );
         assert_eq!(
-            select_asset_for_platform(&assets, "windows", false, false).map(|a| a.name.as_str()),
+            select_asset_for_platform(&assets, "windows", "x86_64", false, false)
+                .map(|a| a.name.as_str()),
             Some("Inskea_2.0.0_x64-setup.exe")
         );
         assert_eq!(
-            select_asset_for_platform(&assets, "macos", false, false),
-            None
+            select_asset_for_platform(&assets, "macos", "aarch64", false, false),
+            Some(&assets[4])
+        );
+        assert_eq!(
+            select_asset_for_platform(&assets, "macos", "x86_64", false, false)
+                .map(|a| a.name.as_str()),
+            Some("Inskea_2.0.0_x64.dmg")
         );
     }
 }
