@@ -1429,7 +1429,7 @@ impl Scene {
             return Some(snap);
         }
         let shape = self.connection_shape_at(point, exclude)?;
-        let points = connector::connection_points(&shape)?;
+        let points = connector::all_connection_points(&shape)?;
         let (index, target) = nearest_connection(&points, point)?;
         Some((target, ConnectionEnd::new(shape.id(), index)))
     }
@@ -1465,11 +1465,7 @@ impl Scene {
         &self,
         point: Point,
         threshold: f64,
-    ) -> Option<(
-        ElementId,
-        [Point; connector::CONNECTION_POINT_COUNT],
-        Option<usize>,
-    )> {
+    ) -> Option<(ElementId, Vec<Point>, Option<usize>)> {
         let view = Rect::new(
             point.x - threshold,
             point.y - threshold,
@@ -1481,7 +1477,7 @@ impl Scene {
             return Some(guide);
         }
         let shape = self.connection_shape_at(point, None)?;
-        let points = connector::connection_points(&shape)?;
+        let points = connector::all_connection_points(&shape)?;
         let (index, _) = nearest_connection(&points, point)?;
         Some((shape.id(), points, Some(index)))
     }
@@ -1526,10 +1522,7 @@ impl Scene {
 }
 
 /// Index and position of the connection point closest to `point`.
-fn nearest_connection(
-    points: &[Point; connector::CONNECTION_POINT_COUNT],
-    point: Point,
-) -> Option<(usize, Point)> {
+fn nearest_connection(points: &[Point], point: Point) -> Option<(usize, Point)> {
     points
         .iter()
         .enumerate()
@@ -2343,5 +2336,62 @@ mod tests {
         assert_eq!(connector.points[0].y + element.origin.y, anchor.y);
         assert_eq!(connector.points[1].x + element.origin.x, -1800.0);
         assert_eq!(connector.points[1].y + element.origin.y, -1998.0);
+    }
+
+    #[test]
+    fn connector_binds_to_chart_data_point_and_tracks_value_changes() {
+        use crate::model::elements::chart::{Chart, ChartKind};
+        use crate::model::Color;
+
+        let mut s = Scene::new();
+        let chart = Chart::new_at(
+            Point::new(200.0, 150.0),
+            ChartKind::Bar,
+            Color::new(Color::WHITE),
+        );
+        let handles = chart.value_handles();
+        assert_eq!(handles.len(), 4);
+        let bar_1_peak = handles[1].1;
+        s.add_element(Element::Chart(chart));
+
+        // Snap a connector directly onto the 2nd bar's peak (point index 9 + 1 = 10)
+        let (snapped, binding) = s
+            .bind_connection(
+                Point::new(bar_1_peak.x + 2.0, bar_1_peak.y - 1.0),
+                14.0,
+                None,
+            )
+            .expect("should snap to bar peak");
+        assert_eq!(binding, ConnectionEnd::new(1, 10));
+        assert_eq!(snapped, bar_1_peak);
+
+        s.add_element(Element::Connector(Connector {
+            data: ElementData::new(0),
+            points: vec![snapped, Point::new(500.0, 50.0)].into_boxed_slice(),
+            line_style: LineStyle::default(),
+            variant: ConnectorVariant::Curved,
+            start_binding: Some(binding),
+            end_binding: None,
+            curve_bend: None,
+            elbow_split: None,
+            elbow_bends: Vec::new(),
+        }));
+
+        // Change the 2nd bar's value and refresh connectors
+        let new_peak = {
+            let mut el = s.element_by_id_mut(1).unwrap();
+            let Element::Chart(c) = &mut *el else {
+                panic!("expected chart");
+            };
+            c.items[1].value = 30.0;
+            c.value_handles()[1].1
+        };
+        assert_ne!(new_peak.y, bar_1_peak.y);
+        s.refresh_connectors_for(1);
+
+        let Some(Element::Connector(conn)) = s.element_by_id(2) else {
+            panic!("expected connector");
+        };
+        assert_eq!(conn.points[0], new_peak);
     }
 }

@@ -46,6 +46,7 @@ pub fn cursor_style(
             | DragOperation::PathMidpoint(_)
             | DragOperation::CurveBend
             | DragOperation::ElbowSection(_) => "pointer".to_string(),
+            DragOperation::ChartValue(_) => "ns-resize".to_string(),
         };
     }
 
@@ -58,6 +59,7 @@ pub fn cursor_style(
             | DragOperation::PathMidpoint(_)
             | DragOperation::CurveBend
             | DragOperation::ElbowSection(_) => "pointer".to_string(),
+            DragOperation::ChartValue(_) => "ns-resize".to_string(),
         };
     }
 

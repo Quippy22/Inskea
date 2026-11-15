@@ -839,9 +839,33 @@ pub fn connection_points(element: &Element) -> Option<[Point; CONNECTION_POINT_C
     Some(points)
 }
 
+/// All attachable points on an element: the 3×3 grid (`0..9`), plus for a
+/// [`Chart`] each data item's interactive anchor at `9 + item_index`.
+pub fn all_connection_points(element: &Element) -> Option<Vec<Point>> {
+    let base = connection_points(element)?;
+    let mut points = base.to_vec();
+    if let Element::Chart(chart) = element {
+        for (_, pt) in chart.value_handles() {
+            points.push(pt);
+        }
+    }
+    Some(points)
+}
+
 /// Resolve one stored binding to a world-space point.
 pub fn binding_point(element: &Element, binding: ConnectionEnd) -> Option<Point> {
-    connection_points(element).and_then(|points| points.get(binding.index()).copied())
+    let idx = binding.index();
+    if idx < CONNECTION_POINT_COUNT {
+        connection_points(element).and_then(|points| points.get(idx).copied())
+    } else if let Element::Chart(chart) = element {
+        let handle_idx = idx - CONNECTION_POINT_COUNT;
+        chart
+            .value_handles()
+            .into_iter()
+            .find_map(|(i, pt)| (i == handle_idx).then_some(pt))
+    } else {
+        None
+    }
 }
 
 /// Nearest connection point within `threshold` world units.
@@ -857,7 +881,7 @@ pub fn nearest_connection_point(
         if exclude == Some(id) {
             continue;
         }
-        let Some(points) = connection_points(element) else {
+        let Some(points) = all_connection_points(element) else {
             continue;
         };
         for (index, candidate) in points.iter().enumerate() {
@@ -882,10 +906,10 @@ pub fn connection_guide(
     elements: &[Element],
     point: Point,
     threshold: f64,
-) -> Option<(ElementId, [Point; CONNECTION_POINT_COUNT], Option<usize>)> {
+) -> Option<(ElementId, Vec<Point>, Option<usize>)> {
     let mut best: Option<(f64, ElementId, usize)> = None;
     for element in elements {
-        let Some(points) = connection_points(element) else {
+        let Some(points) = all_connection_points(element) else {
             continue;
         };
         for (index, candidate) in points.iter().enumerate() {
@@ -903,7 +927,7 @@ pub fn connection_guide(
     }
     let (_, id, index) = best?;
     let element = elements.iter().find(|element| element.id() == id)?;
-    let points = connection_points(element)?;
+    let points = all_connection_points(element)?;
     let highlight = ((points[index].x - point.x).hypot(points[index].y - point.y) <= threshold)
         .then_some(index);
     Some((id, points, highlight))

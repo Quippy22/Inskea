@@ -25,7 +25,7 @@ pub enum CanvasMode {
 }
 
 /// Which canvas operation is currently being dragged.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum DragOperation {
     /// Resize corner or edge handle on the bounding box.
     Resize(ResizeHandle),
@@ -42,6 +42,8 @@ pub enum DragOperation {
     CurveBend,
     /// Dragging one of an elbow connector's section midpoints.
     ElbowSection(usize),
+    /// Dragging a chart data item's interactive value handle (bar top, line node, donut slice).
+    ChartValue(usize),
 }
 
 /// Drag-related state (resize, move, rotate, path-point drag).
@@ -155,6 +157,8 @@ pub struct CanvasState {
     pub cursor_style: RwSignal<String>,
     pub drag: DragState,
     pub text_edit: TextEditState,
+    /// Chart currently open in the floating mini-sheet data editor.
+    pub chart_editing_id: RwSignal<Option<ElementId>>,
     pub active_touches: RwSignal<Vec<(i32, Point)>>,
     pub touch_pinching: RwSignal<bool>,
     pub last_touch_pinch: RwSignal<Option<(f64, Point)>>,
@@ -177,6 +181,7 @@ impl CanvasState {
             cursor_style: create_rw_signal("default".to_string()),
             drag: DragState::new(),
             text_edit: TextEditState::new(),
+            chart_editing_id: create_rw_signal(None),
             active_touches: create_rw_signal(Vec::new()),
             touch_pinching: create_rw_signal(false),
             last_touch_pinch: create_rw_signal(None),

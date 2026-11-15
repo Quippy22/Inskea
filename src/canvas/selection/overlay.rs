@@ -487,12 +487,52 @@ fn selection_overlay_content(
     let individual_boxes = render_multi_select_boxes(ids, els, hex, wpx);
     let inner = render_bbox_overlay(b.x, b.y, b.w, b.h, hr, hex, wpx);
     let icons = render_move_rotate_icons(hex, cx, cy, rx, ry, wpx);
+    let chart_handles: Vec<View> = if ids.len() == 1 {
+        if let Some(Element::Chart(chart)) = els.first() {
+            let dot_r = 4.2 * wpx;
+            let inner_r = 1.8 * wpx;
+            chart
+                .unrotated_value_handles()
+                .into_iter()
+                .map(|(_, p)| {
+                    view! {
+                        <g pointer-events="none">
+                            <circle
+                                cx=p.x
+                                cy=p.y
+                                r=dot_r
+                                fill=fill
+                                stroke=hex
+                                stroke-width="1.75"
+                                vector-effect="non-scaling-stroke"
+                            />
+                            <circle
+                                cx=p.x
+                                cy=p.y
+                                r=inner_r
+                                fill=hex
+                            />
+                        </g>
+                    }
+                    .into_view()
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
 
     if rot != 0.0 {
         let deg = rot.to_degrees();
         view! {
             {individual_boxes}
-            <g transform=format!("rotate({} {} {})", deg, cx, cy)>{inner}{icons}</g>
+            <g transform=format!("rotate({} {} {})", deg, cx, cy)>
+                {inner}
+                {icons}
+                {chart_handles}
+            </g>
         }
         .into_view()
     } else {
@@ -500,6 +540,7 @@ fn selection_overlay_content(
             {individual_boxes}
             {inner}
             {icons}
+            {chart_handles}
         }
         .into_view()
     }

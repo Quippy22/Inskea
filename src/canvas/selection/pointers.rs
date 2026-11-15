@@ -59,6 +59,28 @@ fn handle_text_double_click(
                 .set(text_elem.wrapped.raw.to_string());
             true
         }
+        Element::Chart(_) => {
+            if let Some(label) = element.data().embedded_text.as_ref() {
+                if let Some(layout) =
+                    crate::model::elements::embedded_text::layout_for_element(element)
+                {
+                    let local =
+                        Point::unrotate(world, layout.center.x, layout.center.y, layout.rotation);
+                    if (local.x - layout.center.x).abs() <= layout.width / 2.0 + HIT_MARGIN
+                        && (local.y - layout.center.y).abs() <= layout.height / 2.0 + HIT_MARGIN
+                    {
+                        st.text_edit.editing_embedded.set(true);
+                        st.text_edit.editing_new.set(false);
+                        st.text_edit.edit_text.set(label.wrapped.raw.to_string());
+                        st.text_edit.editing_id.set(Some(id));
+                        return true;
+                    }
+                }
+            }
+            st.selected_ids.set(vec![id]);
+            st.chart_editing_id.set(Some(id));
+            true
+        }
         element if element.supports_embedded_text() => {
             let Some(label) = element.data().embedded_text.as_ref() else {
                 return false;
@@ -109,6 +131,35 @@ fn route_drag_operation(kind: RouteHandle) -> DragOperation {
         RouteHandle::Curve => DragOperation::CurveBend,
         RouteHandle::Elbow(section) => DragOperation::ElbowSection(section),
     }
+}
+
+/// Check if pointer is on a chart data value handle.
+#[inline]
+fn handle_chart_value_hit(
+    world: Point,
+    st: &mut CanvasState,
+    props: &CanvasInputs,
+    el: &Element,
+) -> bool {
+    let Element::Chart(chart) = el else {
+        return false;
+    };
+    let wpx = world_per_px(props);
+    let radius = (HANDLE_RESIZE_RADIUS_PX + 2.0) * wpx;
+    for (idx, p) in chart.value_handles() {
+        let d = ((world.x - p.x).powi(2) + (world.y - p.y).powi(2)).sqrt();
+        if d <= radius {
+            (props.push_snapshot)();
+            st.drag.drag_originals.set(vec![el.clone()]);
+            st.drag
+                .drag_action
+                .set(Some(DragOperation::ChartValue(idx)));
+            st.drag.moving_anchor.set(Some(world));
+            st.drag.last_world.set(Some(world));
+            return true;
+        }
+    }
+    false
 }
 
 /// Check if pointer is on a path-point dot or segment-midpoint ghost handle.
@@ -527,6 +578,16 @@ fn detect_hovered_handle(
             return s
                 .with_element(id, |el, origin| {
                     let local = Point::new(world.x - origin.x, world.y - origin.y);
+                    if let Element::Chart(chart) = el {
+                        let chart_r = (HANDLE_RESIZE_RADIUS_PX + 2.0) * wpx;
+                        for (idx, p) in chart.value_handles() {
+                            if ((local.x - p.x).powi(2) + (local.y - p.y).powi(2)).sqrt()
+                                <= chart_r
+                            {
+                                return Some(DragOperation::ChartValue(idx));
+                            }
+                        }
+                    }
                     if let Some(points) = el.path_points() {
                         for (i, p) in points.iter().enumerate() {
                             if ((local.x - p.x).powi(2) + (local.y - p.y).powi(2)).sqrt()
@@ -861,6 +922,43 @@ fn do_elbow_drag(world: Point, st: &mut CanvasState, props: &mut CanvasInputs, s
     st.drag.last_world.set(Some(world));
 }
 
+/// Drag a chart's data value handle (bar top, line node, or donut slice).
+/// Also refreshes any connectors bound to this chart's data points.
+#[inline]
+fn do_chart_value_drag(
+    world: Point,
+    anchor: Point,
+    st: &mut CanvasState,
+    props: &mut CanvasInputs,
+    idx: usize,
+) {
+    let Some(&id) = st.selected_ids.get().first() else {
+        return;
+    };
+    let Some((base_max, base_item_value)) =
+        st.drag.drag_originals.with(|originals| {
+            originals.iter().find_map(|el| match el {
+                Element::Chart(chart) if chart.data.id == id => {
+                    let val = chart.items.get(idx).map(|item| item.value).unwrap_or(0.0);
+                    Some((chart.scale_max(), val))
+                }
+                _ => None,
+            })
+        })
+    else {
+        return;
+    };
+    props.scene.update(|s| {
+        if let Some(mut el) = s.element_by_id_mut(id) {
+            if let Element::Chart(chart) = &mut *el {
+                chart.set_value_from_world(idx, world, base_max, base_item_value, anchor);
+            }
+        }
+        s.refresh_connectors_for(id);
+    });
+    st.drag.last_world.set(Some(world));
+}
+
 /// Re-pin connectors bound to any moved shape. Drag frames restore every
 /// selected element from its original before re-applying the transform, so a
 /// selected connector is written after (or before) the shape it follows and
@@ -1185,7 +1283,8 @@ pub fn select_pointer_down(
 
     if ids.len() == 1 {
         if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
-            if handle_path_point_hit(world, st, props, el)
+            if handle_chart_value_hit(world, st, props, el)
+                || handle_path_point_hit(world, st, props, el)
                 || handle_path_move_icon(world, st, props, &els, el)
             {
                 return;
@@ -1239,6 +1338,9 @@ pub fn select_pointer_move(
                 do_route_handle_drag(world, st, props, Connector::set_curve_bend)
             }
             Some(DragOperation::ElbowSection(section)) => do_elbow_drag(world, st, props, section),
+            Some(DragOperation::ChartValue(idx)) => {
+                do_chart_value_drag(world, anchor, st, props, idx)
+            }
             _ => do_move(world, anchor, st, props),
         }
     }
