@@ -37,7 +37,7 @@ It runs as a native desktop app and in the browser, with the same tools and the 
 - **`.skea` Format** – Fully editable, non-destructive file format.
 - **Autosave** – Background autosaving to local files or browser storage.
 - **Export** – High-resolution PNG and clean vector SVG exports with crop area selection.
-- **Cross-Platform** – Seamless native desktop app (Linux, Windows) and web browser support.
+- **Cross-Platform** – Native desktop app for macOS, Linux, and Windows, plus web browser support.
 
 ## Installation
 
@@ -54,7 +54,33 @@ npm update -g inskea
 
 ### Native Installers
 
-Download pre-built installers for Windows (`.exe`), Debian/Ubuntu (`.deb`), or Arch Linux from [Releases](https://github.com/Quippy22/Inskea/releases).
+Download the macOS disk image (`.dmg`, available for Apple Silicon and Intel), Windows installer (`.exe`), Debian/Ubuntu package (`.deb`), or Arch Linux package from [Releases](https://github.com/Quippy22/Inskea/releases).
+
+On macOS, open the downloaded disk image and drag Inskea into Applications. If macOS blocks the app because it was downloaded from the internet, Control-click Inskea in Applications, choose **Open**, then confirm.
+
+### Build and run on macOS
+
+Install Xcode Command Line Tools, Rust with the WebAssembly target, Node.js with npm, and Trunk:
+
+```bash
+xcode-select --install
+rustup target add wasm32-unknown-unknown
+cargo install trunk --locked
+```
+
+From the repository root, install the JavaScript dependencies once, then run either the browser version or the native macOS app:
+
+```bash
+npm install
+trunk serve                 # Browser version
+npm run tauri -- dev        # Native desktop app
+```
+
+To package the native app as a macOS disk image:
+
+```bash
+npm run tauri -- build --bundles dmg
+```
 
 ## Keyboard shortcuts
 
@@ -63,4 +89,3 @@ Press `?` anywhere in the app to view the shortcut overlay.
 <p align="center">
   <img src="assets/shortcuts.png" alt="Keyboard Shortcuts" width="85%">
 </p>
-
