@@ -366,6 +366,6 @@ mod tests {
     fn editable_number_formatting() {
         assert_eq!(format_editable_number(42.0), "42");
         assert_eq!(format_editable_number(12.5), "12.5");
-        assert_eq!(format_editable_number(3.14159), "3.14");
+        assert_eq!(format_editable_number(std::f64::consts::PI), "3.14");
     }
 }
