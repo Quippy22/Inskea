@@ -377,6 +377,110 @@ fn el_svg(el: &Element) -> String {
                 format!(r#"<g transform="rotate({deg} {cx} {cy})">{image}</g>"#)
             }
         }
+        Element::Chart(c) => {
+            let sg = c.scene_graph();
+            let opacity = c.data.style.opacity;
+            let mut inner = String::new();
+            if let Some(r) = sg.card {
+                let _ = write!(
+                    inner,
+                    r#"<rect x="{}" y="{}" width="{}" height="{}" rx="{}" ry="{}" fill="{}" fill-opacity="{}" stroke="{}" stroke-width="{}" stroke-dasharray="{}"/>"#,
+                    r.x,
+                    r.y,
+                    r.w,
+                    r.h,
+                    r.rx,
+                    r.rx,
+                    r.fill,
+                    r.fill_opacity,
+                    r.stroke,
+                    r.stroke_width,
+                    r.stroke_dasharray,
+                );
+            }
+            for l in sg.lines {
+                let _ = write!(
+                    inner,
+                    r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}" stroke-dasharray="{}" opacity="{}"/>"#,
+                    l.x1,
+                    l.y1,
+                    l.x2,
+                    l.y2,
+                    l.stroke,
+                    l.stroke_width,
+                    l.stroke_dasharray,
+                    l.opacity,
+                );
+            }
+            for r in sg.rects {
+                let _ = write!(
+                    inner,
+                    r#"<rect x="{}" y="{}" width="{}" height="{}" rx="{}" ry="{}" fill="{}" fill-opacity="{}" stroke="{}" stroke-width="{}" stroke-dasharray="{}"/>"#,
+                    r.x,
+                    r.y,
+                    r.w,
+                    r.h,
+                    r.rx,
+                    r.rx,
+                    r.fill,
+                    r.fill_opacity,
+                    r.stroke,
+                    r.stroke_width,
+                    r.stroke_dasharray,
+                );
+            }
+            for p in sg.paths {
+                let _ = write!(
+                    inner,
+                    r#"<path d="{}" fill="{}" fill-opacity="{}" stroke="{}" stroke-width="{}" stroke-dasharray="{}" stroke-linecap="{}" stroke-linejoin="{}"/>"#,
+                    p.d,
+                    p.fill,
+                    p.fill_opacity,
+                    p.stroke,
+                    p.stroke_width,
+                    p.stroke_dasharray,
+                    p.linecap,
+                    p.linejoin,
+                );
+            }
+            for ci in sg.circles {
+                let _ = write!(
+                    inner,
+                    r#"<circle cx="{}" cy="{}" r="{}" fill="{}" stroke="{}" stroke-width="{}"/>"#,
+                    ci.cx,
+                    ci.cy,
+                    ci.r,
+                    ci.fill,
+                    ci.stroke,
+                    ci.stroke_width,
+                );
+            }
+            for t in sg.texts {
+                let weight = if t.bold { "600" } else { "400" };
+                let _ = write!(
+                    inner,
+                    r#"<text x="{}" y="{}" text-anchor="{}" font-size="{}" font-family="{}" font-weight="{}" fill="{}" opacity="{}">{}</text>"#,
+                    t.x,
+                    t.y,
+                    t.anchor,
+                    t.font_size,
+                    crate::model::elements::text::FONT_STACK,
+                    weight,
+                    t.fill,
+                    t.opacity,
+                    escape_xml_text(&t.text),
+                );
+            }
+            let out = format!(r#"<g opacity="{opacity}">{inner}</g>"#);
+            if c.data.rotation == 0.0 {
+                out
+            } else {
+                let cx = c.data.world_point.x + c.data.width / 2.0;
+                let cy = c.data.world_point.y + c.data.height / 2.0;
+                let deg = c.data.rotation.to_degrees();
+                format!(r#"<g transform="rotate({deg} {cx} {cy})">{out}</g>"#)
+            }
+        }
     };
     let Some(label) = el.data().embedded_text.as_ref() else {
         return body;
@@ -785,5 +889,25 @@ mod tests {
         assert!(svg.contains("font-style: normal"));
         assert!(svg.contains("font-style: italic"));
         assert!(svg.contains(r#"<rect/></svg>"#));
+    }
+
+    #[test]
+    fn chart_export_includes_bars_and_labels() {
+        use crate::model::elements::chart::{Chart, ChartKind};
+        use crate::model::Color;
+
+        let mut scene = Scene::new();
+        let mut chart = Chart::new_at(
+            Point::new(150.0, 120.0),
+            ChartKind::Bar,
+            Color::new(Color::WHITE),
+        );
+        chart.title = "Quarterly Sales".to_string();
+        scene.add_element(Element::Chart(chart));
+
+        let svg = scene_to_svg_crop(&scene, Rect::new(0.0, 0.0, 400.0, 300.0), Theme::Storm);
+        assert!(svg.contains("Quarterly Sales"));
+        assert!(svg.contains("Q1"));
+        assert!(svg.contains("<rect"));
     }
 }

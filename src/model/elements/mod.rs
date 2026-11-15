@@ -1,3 +1,4 @@
+pub mod chart;
 pub mod connector;
 pub mod ellipse;
 pub(crate) mod embedded_text;
@@ -9,6 +10,8 @@ pub mod rect;
 pub(crate) mod text;
 pub(crate) mod utils;
 
+#[allow(unused_imports)]
+pub use chart::{Chart, ChartItem, ChartKind, ChartPalette, ChartStyle};
 pub use connector::{ConnectionEnd, Connector, ConnectorVariant};
 pub use ellipse::Ellipse;
 pub use freehand::Freehand;
@@ -106,6 +109,7 @@ pub enum StylingKind {
     Text,
     Freehand,
     Image,
+    Chart,
 }
 
 /// Unique identifier for an element in the scene.
@@ -165,6 +169,8 @@ pub enum Element {
     Freehand(Freehand),
     /// An [`Image`] imported from a file and embedded as a data URL.
     Image(Image),
+    /// A vector [`Chart`] visualization (bar, line, area, donut, sparkline).
+    Chart(Chart),
 }
 
 // ── Element dispatch methods ───────────────────────────────────────────
@@ -185,6 +191,7 @@ impl Element {
             Element::Text(e) => &e.data,
             Element::Freehand(e) => &e.data,
             Element::Image(e) => &e.data,
+            Element::Chart(e) => &e.data,
         }
     }
 
@@ -198,6 +205,7 @@ impl Element {
             Element::Text(e) => &mut e.data,
             Element::Freehand(e) => &mut e.data,
             Element::Image(e) => &mut e.data,
+            Element::Chart(e) => &mut e.data,
         }
     }
 
@@ -231,6 +239,7 @@ impl Element {
             Element::Text(_) => StylingKind::Text,
             Element::Freehand(_) => StylingKind::Freehand,
             Element::Image(_) => StylingKind::Image,
+            Element::Chart(_) => StylingKind::Chart,
         }
     }
 
@@ -238,7 +247,11 @@ impl Element {
     pub fn supports_embedded_text(&self) -> bool {
         matches!(
             self,
-            Element::Rectangle(_) | Element::Ellipse(_) | Element::Line(_) | Element::Connector(_)
+            Element::Rectangle(_)
+                | Element::Ellipse(_)
+                | Element::Line(_)
+                | Element::Connector(_)
+                | Element::Chart(_)
         )
     }
 }
@@ -262,6 +275,7 @@ impl_into_element!(Connector);
 impl_into_element!(Text);
 impl_into_element!(Freehand);
 impl_into_element!(Image);
+impl_into_element!(Chart);
 
 // ── Trait definitions ──────────────────────────────────────────────────
 
@@ -480,6 +494,7 @@ macro_rules! dispatch_element {
                     Element::Text(e) => e.$method($($arg),*),
                     Element::Freehand(e) => e.$method($($arg),*),
                     Element::Image(e) => e.$method($($arg),*),
+                    Element::Chart(e) => e.$method($($arg),*),
                 }
             }
         }
@@ -495,6 +510,7 @@ macro_rules! dispatch_element {
                     Element::Text(e) => e.$method($($arg),*),
                     Element::Freehand(e) => e.$method($($arg),*),
                     Element::Image(e) => e.$method($($arg),*),
+                    Element::Chart(e) => e.$method($($arg),*),
                 }
             }
         }
@@ -511,6 +527,7 @@ impl Render for Element {
             Element::Text(e) => e.render(zoom),
             Element::Freehand(e) => e.render(zoom),
             Element::Image(e) => e.render(zoom),
+            Element::Chart(e) => e.render(zoom),
         }
     }
 
@@ -520,6 +537,7 @@ impl Render for Element {
             Element::Ellipse(e) => e.render_label_mask(),
             Element::Line(e) => e.render_label_mask(),
             Element::Connector(e) => e.render_label_mask(),
+            Element::Chart(e) => e.render_label_mask(),
             other => other.render(1.0),
         }
     }
@@ -556,6 +574,7 @@ impl HitTest for Element {
             Element::Text(e) => e.hit_test(point, margin),
             Element::Freehand(e) => e.hit_test(point, margin),
             Element::Image(e) => e.hit_test(point, margin),
+            Element::Chart(e) => e.hit_test(point, margin),
         }
     }
 }
@@ -570,6 +589,7 @@ impl Bounds for Element {
             Element::Text(e) => e.bounds(),
             Element::Freehand(e) => e.bounds(),
             Element::Image(e) => e.bounds(),
+            Element::Chart(e) => e.bounds(),
         };
         // Only path hosts grow their bounds to fit the label; a box label is
         // laid out inside its host. Skip the wrap for boxes instead of

@@ -29,7 +29,9 @@ pub struct EmbeddedTextLayout {
 pub fn layout_for_element(element: &Element) -> Option<EmbeddedTextLayout> {
     let data = element.data();
     match element {
-        Element::Rectangle(_) => layout_box(data, SHAPE_WIDTH_RATIO, SHAPE_HEIGHT_RATIO),
+        Element::Rectangle(_) | Element::Chart(_) => {
+            layout_box(data, SHAPE_WIDTH_RATIO, SHAPE_HEIGHT_RATIO)
+        }
         Element::Ellipse(_) => layout_box(data, ELLIPSE_WIDTH_RATIO, ELLIPSE_HEIGHT_RATIO),
         Element::Line(line) => layout_line(data, &line.points, line.line_style.curve_mode),
         Element::Connector(connector) => layout_path(data, &connector.route_points()),
@@ -39,7 +41,7 @@ pub fn layout_for_element(element: &Element) -> Option<EmbeddedTextLayout> {
 
 pub fn reference_size_for_element(element: &Element) -> Option<(f64, f64)> {
     match element {
-        Element::Rectangle(_) | Element::Ellipse(_) => Some((
+        Element::Rectangle(_) | Element::Ellipse(_) | Element::Chart(_) => Some((
             element.data().width.abs().max(1.0),
             element.data().height.abs().max(1.0),
         )),
@@ -192,7 +194,7 @@ pub fn layout_with_text(element: &Element, text: &str) -> Option<EmbeddedTextLay
         }
     };
     match element {
-        Element::Rectangle(_) => Some(layout_box_raw(
+        Element::Rectangle(_) | Element::Chart(_) => Some(layout_box_raw(
             data,
             label,
             text,

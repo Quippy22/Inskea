@@ -222,6 +222,25 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_chart_data() {
+        use crate::model::elements::chart::{Chart, ChartKind, ChartPalette};
+
+        let mut scene = Scene::new();
+        let mut chart = Chart::new_at(
+            Point::new(200.0, 160.0),
+            ChartKind::Donut,
+            Color::new(Color::WHITE),
+        );
+        chart.title = "Revenue Share".to_string();
+        chart.palette = ChartPalette::Sunset;
+        scene.add_element(Element::Chart(chart));
+
+        let saved = save_to_string(&scene).unwrap();
+        let loaded = load_from_str(&saved).unwrap();
+        assert_eq!(scene, loaded);
+    }
+
+    #[test]
     fn round_trip_rotation_and_font_size() {
         let mut s = Scene::new();
         let mut rd = ElementData::new(0);
