@@ -1,5 +1,6 @@
 use crate::model::{
-    Color, ConnectorVariant, Element, ElementId, ElementStyle, LineStyle, Scene, TextAlign,
+    ChartStyle, Color, ConnectorVariant, Element, ElementId, ElementStyle, LineStyle, Scene,
+    TextAlign,
 };
 use crate::ui::dock::Tool;
 use crate::ui::styles;
@@ -36,6 +37,20 @@ pub fn selected_connector_variant(
     if let Some(id) = ids.first() {
         if let Some(Element::Connector(c)) = scene.element_by_id(*id) {
             return c.variant;
+        }
+    }
+    default
+}
+
+/// Chart style of the first selected chart, or the draw-mode default.
+pub fn selected_chart_style(
+    scene: &Scene,
+    ids: &[ElementId],
+    default: ChartStyle,
+) -> ChartStyle {
+    if let Some(id) = ids.first() {
+        if let Some(Element::Chart(chart)) = scene.element_by_id(*id) {
+            return chart.chart_style();
         }
     }
     default

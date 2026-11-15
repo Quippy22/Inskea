@@ -1,5 +1,6 @@
 mod alignment;
 mod arrow;
+mod chart;
 mod color;
 mod connector;
 mod edit;
@@ -13,6 +14,7 @@ mod utils;
 
 use self::alignment::alignment_section;
 use self::arrow::arrow_section;
+use self::chart::chart_section;
 use self::color::{color_section, embedded_text_color_section, ColorSlot};
 use self::connector::connector_section;
 use self::edit::edit_section;
@@ -23,16 +25,16 @@ use self::layers::layers_section;
 use self::sliders::sliders_section;
 use self::style::style_section;
 use self::utils::{
-    read_panel_state, selected_connector_variant, selected_text_align, single_selected_element,
-    uniform_icon_seg,
+    read_panel_state, selected_chart_style, selected_connector_variant, selected_text_align,
+    single_selected_element, uniform_icon_seg,
 };
 use crate::canvas::settings::CanvasSettings;
 use crate::canvas::CanvasMode;
 use crate::edit_ops;
 use crate::edit_ops::Clipboard;
 use crate::model::{
-    Color, Connector, ConnectorVariant, CurveMode, EdgeStyle, Element, ElementId, ElementStyle,
-    LineStyle, Point, Scene, StrokeStyle, StylingKind, TextAlign,
+    ChartKind, ChartPalette, ChartStyle, Color, Connector, ConnectorVariant, CurveMode, EdgeStyle,
+    Element, ElementId, ElementStyle, LineStyle, Point, Scene, StrokeStyle, StylingKind, TextAlign,
 };
 use crate::ui::dock::Tool;
 use crate::ui::{icon, styles};
@@ -70,6 +72,8 @@ pub struct StylingPanelContext {
     pub default_style: RwSignal<ElementStyle>,
     pub default_line_style: RwSignal<LineStyle>,
     pub default_connector_variant: RwSignal<ConnectorVariant>,
+    pub default_chart_style: RwSignal<ChartStyle>,
+    pub chart_editing_id: RwSignal<Option<ElementId>>,
     pub clipboard: RwSignal<Clipboard>,
     pub push_snapshot: Rc<dyn Fn()>,
     pub canvas_mode: RwSignal<CanvasMode>,
@@ -102,6 +106,8 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         default_style,
         default_line_style,
         default_connector_variant,
+        default_chart_style,
+        chart_editing_id,
         clipboard,
         push_snapshot,
         canvas_mode,
@@ -130,7 +136,13 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
             StylingKind::Arrow | StylingKind::Connector
         )
     });
-    let is_rect = Signal::derive(move || styling_kind.get() == StylingKind::Rectangle);
+    let is_chart = Signal::derive(move || styling_kind.get() == StylingKind::Chart);
+    let is_rect = Signal::derive(move || {
+        matches!(
+            styling_kind.get(),
+            StylingKind::Rectangle | StylingKind::Chart
+        )
+    });
     let is_freehand = Signal::derive(move || styling_kind.get() == StylingKind::Freehand);
     let is_image = Signal::derive(move || styling_kind.get() == StylingKind::Image);
     // Images keep only the opacity slider; stroke and fill do nothing to them.
@@ -141,6 +153,11 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
             && !is_connector.get()
             && !is_freehand.get()
             && !is_image.get()
+    });
+    let has_single_selected_chart = Signal::derive(move || {
+        let ids = selected_ids.get();
+        ids.len() == 1
+            && scene.with(|s| matches!(s.element_by_id(ids[0]), Some(Element::Chart(_))))
     });
 
     let (init_style, init_line_style) = scene.with_untracked(|scene| {
@@ -172,6 +189,13 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
             scene,
             &selected_ids.get_untracked(),
             default_connector_variant.get_untracked(),
+        )
+    }));
+    let local_chart_style = create_rw_signal(scene.with_untracked(|scene| {
+        selected_chart_style(
+            scene,
+            &selected_ids.get_untracked(),
+            default_chart_style.get_untracked(),
         )
     }));
 
@@ -211,31 +235,38 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         scene.with(|_| ());
         let _dls = default_line_style.get();
         let _dcv = default_connector_variant.get();
-        let (new_style, new_line_style, align, embedded_color, variant) = leptos::untrack(|| {
-            scene.with_untracked(|scene| {
-                let ids = selected_ids.get_untracked();
-                let (style, line_style) = read_panel_state(
-                    scene,
-                    &ids,
-                    &default_style.get_untracked(),
-                    &default_line_style.get_untracked(),
-                    selected_tool.get_untracked(),
-                );
-                let align = selected_text_align(scene, &ids);
-                let embedded_color = ids
-                    .first()
-                    .and_then(|id| scene.element_by_id(*id))
-                    .and_then(|element| {
-                        element.data().embedded_text.as_ref().map(|text| text.color)
-                    });
-                let variant = selected_connector_variant(
-                    scene,
-                    &ids,
-                    default_connector_variant.get_untracked(),
-                );
-                (style, line_style, align, embedded_color, variant)
-            })
-        });
+        let _dcs = default_chart_style.get();
+        let (new_style, new_line_style, align, embedded_color, variant, chart_style) =
+            leptos::untrack(|| {
+                scene.with_untracked(|scene| {
+                    let ids = selected_ids.get_untracked();
+                    let (style, line_style) = read_panel_state(
+                        scene,
+                        &ids,
+                        &default_style.get_untracked(),
+                        &default_line_style.get_untracked(),
+                        selected_tool.get_untracked(),
+                    );
+                    let align = selected_text_align(scene, &ids);
+                    let embedded_color = ids
+                        .first()
+                        .and_then(|id| scene.element_by_id(*id))
+                        .and_then(|element| {
+                            element.data().embedded_text.as_ref().map(|text| text.color)
+                        });
+                    let variant = selected_connector_variant(
+                        scene,
+                        &ids,
+                        default_connector_variant.get_untracked(),
+                    );
+                    let chart_style = selected_chart_style(
+                        scene,
+                        &ids,
+                        default_chart_style.get_untracked(),
+                    );
+                    (style, line_style, align, embedded_color, variant, chart_style)
+                })
+            });
         stroke_size.set(new_style.stroke_width);
         text_size.set(new_style.font_size);
         text_align.set(align);
@@ -245,6 +276,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         local_line_style.set(new_line_style);
         local_embedded_text_color.set(embedded_color.unwrap_or_default());
         local_connector_variant.set(variant);
+        local_chart_style.set(chart_style);
     });
 
     let update_style: UpdateStyle = Rc::new({
@@ -496,6 +528,80 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         }
     });
 
+    let update_chart_style: Rc<dyn Fn(&dyn Fn(&mut ChartStyle))> = Rc::new({
+        let local_chart_style = local_chart_style;
+        let default_chart_style = default_chart_style;
+        let scene = scene;
+        let selected_ids = selected_ids;
+        let push_snapshot = push_snapshot.clone();
+        move |f: &dyn Fn(&mut ChartStyle)| {
+            local_chart_style.update(|cs| f(cs));
+            let ids = selected_ids.get_untracked();
+            if !ids.is_empty() {
+                edit_ops::mutate_scene(scene, &push_snapshot, |scene| {
+                    for id in &ids {
+                        if let Some(mut element) = scene.element_by_id_mut(*id) {
+                            if let Element::Chart(chart) = &mut *element {
+                                let mut cs = chart.chart_style();
+                                f(&mut cs);
+                                chart.apply_chart_style(&cs);
+                            }
+                        }
+                        scene.refresh_connectors_for(*id);
+                    }
+                });
+            } else {
+                default_chart_style.update(|cs| f(cs));
+            }
+        }
+    });
+
+    let set_chart_kind: Rc<dyn Fn(ChartKind)> = Rc::new({
+        let update_chart_style = update_chart_style.clone();
+        move |kind| update_chart_style(&|cs| cs.kind = kind)
+    });
+
+    let set_chart_palette: Rc<dyn Fn(ChartPalette)> = Rc::new({
+        let update_chart_style = update_chart_style.clone();
+        move |pal| update_chart_style(&|cs| cs.palette = pal)
+    });
+
+    let toggle_chart_grid: Rc<dyn Fn()> = Rc::new({
+        let update_chart_style = update_chart_style.clone();
+        move || update_chart_style(&|cs| cs.show_grid = !cs.show_grid)
+    });
+
+    let toggle_chart_labels: Rc<dyn Fn()> = Rc::new({
+        let update_chart_style = update_chart_style.clone();
+        move || update_chart_style(&|cs| cs.show_labels = !cs.show_labels)
+    });
+
+    let toggle_chart_values: Rc<dyn Fn()> = Rc::new({
+        let update_chart_style = update_chart_style.clone();
+        move || update_chart_style(&|cs| cs.show_values = !cs.show_values)
+    });
+
+    let toggle_chart_legend: Rc<dyn Fn()> = Rc::new({
+        let update_chart_style = update_chart_style.clone();
+        move || update_chart_style(&|cs| cs.show_legend = !cs.show_legend)
+    });
+
+    let on_edit_chart_data: Rc<dyn Fn()> = Rc::new({
+        let selected_ids = selected_ids;
+        let chart_editing_id = chart_editing_id;
+        move || {
+            let ids = selected_ids.get_untracked();
+            if ids.len() == 1 {
+                let target = ids[0];
+                if chart_editing_id.get_untracked() == Some(target) {
+                    chart_editing_id.set(None);
+                } else {
+                    chart_editing_id.set(Some(target));
+                }
+            }
+        }
+    });
+
     let color_swatches: &[&str] = &[
         Color::WHITE,
         Color::YELLOW,
@@ -506,6 +612,18 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
 
     view! {
         <div class="flex flex-col gap-4 select-none">
+            {chart_section(
+                is_chart,
+                has_single_selected_chart,
+                local_chart_style,
+                set_chart_kind,
+                set_chart_palette,
+                toggle_chart_grid,
+                toggle_chart_labels,
+                toggle_chart_values,
+                toggle_chart_legend,
+                on_edit_chart_data,
+            )}
             {sliders_section(
                 stroke_size,
                 stroke_size_cb,

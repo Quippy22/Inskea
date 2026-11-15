@@ -19,7 +19,7 @@ use crate::ui::notify::{self, Toasts};
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{
-    file_ops, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab,
+    file_ops, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab, ChartDataEditor,
     SaveSnippetDialog, SelectionContextMenu, SettingsPanel, ThemePicker, ToolBar,
     UnsavedChangesDialog, WelcomeOverlay,
 };
@@ -765,9 +765,15 @@ pub fn App() -> impl IntoView {
 
     // Close the chart data editor if its target chart was deleted or deselected.
     create_effect(move |_| {
+        let sel = selected_ids.get();
         if let Some(edit_id) = chart_editing_id.get() {
-            let exists = scene.with(|s| matches!(s.element_by_id(edit_id), Some(crate::model::Element::Chart(_))));
-            if !exists {
+            let exists = scene.with(|s| {
+                matches!(
+                    s.element_by_id(edit_id),
+                    Some(crate::model::Element::Chart(_))
+                )
+            });
+            if !exists || !sel.contains(&edit_id) {
                 chart_editing_id.set(None);
             }
         }
@@ -858,6 +864,13 @@ pub fn App() -> impl IntoView {
             />
             <CatalogueContextMenu context=catalogue.clone() />
             <SelectionContextMenu context=catalogue.clone() />
+            <ChartDataEditor
+                scene=scene
+                chart_editing_id=chart_editing_id
+                viewport=viewport
+                chart_import=chart_import.clone()
+                push_snapshot=push_snapshot.clone()
+            />
             <Toasts notifications=notifications />
 
             <div
@@ -873,6 +886,8 @@ pub fn App() -> impl IntoView {
                             default_style,
                             default_line_style,
                             default_connector_variant,
+                            default_chart_style,
+                            chart_editing_id,
                             clipboard,
                             push_snapshot: push_snapshot.clone(),
                             canvas_mode,
