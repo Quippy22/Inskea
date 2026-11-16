@@ -317,6 +317,66 @@ where
         }
     };
 
+    let on_export_all_frames_pdf = {
+        let close_menu = close_menu;
+        let doc = doc.clone();
+        move || {
+            close_menu();
+            let bg = settings.get_untracked().theme;
+            let notifications = doc.notifications;
+            doc.scene.with_untracked(|s| {
+                export::export_all_frames_pdf(s, bg, notifications);
+            });
+        }
+    };
+
+    let on_export_frame_pdf = {
+        let close_menu = close_menu;
+        let doc = doc.clone();
+        move || {
+            close_menu();
+            let bg = settings.get_untracked().theme;
+            let notifications = doc.notifications;
+            let selected = doc.selected_ids.get_untracked();
+            doc.scene.with_untracked(|s| {
+                let target_id = selected
+                    .iter()
+                    .copied()
+                    .find(|&id| matches!(s.element_by_id(id), Some(crate::model::Element::Frame(_))))
+                    .or_else(|| s.frames_ordered().first().map(|f| f.data.id));
+                match target_id {
+                    Some(fid) => {
+                        export::export_frame_pdf(s, fid, bg, notifications);
+                    }
+                    None => {
+                        notify::error(notifications, "No frames in the drawing to export.");
+                    }
+                }
+            });
+        }
+    };
+
+    let on_export_canvas_pdf = {
+        let close_menu = close_menu;
+        let doc = doc.clone();
+        move |selection_only: bool| {
+            close_menu();
+            let vp = viewport.get();
+            let screen = window_size();
+            let selected = doc.selected_ids.get_untracked();
+            let selected_ref = if selection_only {
+                Some(selected.as_slice())
+            } else {
+                None
+            };
+            let bg = settings.get_untracked().theme;
+            let notifications = doc.notifications;
+            doc.scene.with_untracked(|s| {
+                export::export_canvas_pdf(s, &vp, screen, selected_ref, bg, notifications);
+            });
+        }
+    };
+
     // ── Dropdown item lists ────────────────────────────────────────────
 
     let file_items: Vec<DropdownItem> = vec![
@@ -435,6 +495,36 @@ where
             on_click: Rc::new({
                 let f = on_export_frame;
                 move || f(ExportFormat::Svg)
+            }),
+        },
+        DropdownItem::Separator,
+        DropdownItem::Header { label: "PDF" },
+        DropdownItem::Action {
+            label: "All Frames (Gallery)",
+            on_click: Rc::new({
+                let f = on_export_all_frames_pdf;
+                move || f()
+            }),
+        },
+        DropdownItem::Action {
+            label: "Frame",
+            on_click: Rc::new({
+                let f = on_export_frame_pdf;
+                move || f()
+            }),
+        },
+        DropdownItem::Action {
+            label: "Full canvas",
+            on_click: Rc::new({
+                let f = on_export_canvas_pdf;
+                move || f(false)
+            }),
+        },
+        DropdownItem::Action {
+            label: "Selection",
+            on_click: Rc::new({
+                let f = on_export_canvas_pdf;
+                move || f(true)
             }),
         },
     ];

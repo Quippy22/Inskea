@@ -49,6 +49,33 @@ pub fn download_string(content: &str, filename: &str) {
     );
 }
 
+pub fn download_bytes(bytes: &[u8], filename: &str, mime: &str) {
+    let parts = js_sys::Array::new();
+    let uint8 = js_sys::Uint8Array::from(bytes);
+    parts.push(&uint8);
+    let opts = web_sys::BlobPropertyBag::new();
+    opts.set_type(mime);
+    let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &opts)
+        .expect("failed to create Blob");
+    let url = web_sys::Url::create_object_url_with_blob(&blob).expect("failed to create URL");
+    let document = web_sys::window().unwrap().document().unwrap();
+    let anchor = document.create_element("a").unwrap();
+    anchor.set_attribute("href", &url).ok();
+    anchor.set_attribute("download", filename).ok();
+    anchor.set_attribute("style", "display:none").ok();
+    document.body().unwrap().append_child(&anchor).ok();
+    let _ = anchor
+        .dyn_ref::<web_sys::HtmlElement>()
+        .map(|el| el.click());
+    document.body().unwrap().remove_child(&anchor).ok();
+    set_timeout(
+        move || {
+            web_sys::Url::revoke_object_url(&url).ok();
+        },
+        Duration::from_secs(1),
+    );
+}
+
 /// SVG export: walks elements and builds a minimal SVG string.
 /// When `selected` is `Some` and non-empty, only matching elements are
 /// included and the viewBox is set to the tight bounds of the selection.
@@ -701,6 +728,66 @@ async fn svg_to_png_blob(svg: &str) -> Option<web_sys::Blob> {
     png
 }
 
+/// Shared SVG→canvas→JPEG bytes pipeline used for PDF page generation.
+pub async fn svg_to_jpeg_bytes(
+    svg: &str,
+    scale: f64,
+    _quality: f64,
+) -> Option<(u32, u32, Vec<u8>)> {
+    let svg = svg_with_fonts(svg.to_string()).await;
+    let document = web_sys::window()?.document()?;
+    let blob = svg_blob(&svg)?;
+    let url = web_sys::Url::create_object_url_with_blob(&blob).ok()?;
+    let img = document
+        .create_element("img")
+        .ok()?
+        .dyn_into::<web_sys::HtmlImageElement>()
+        .ok()?;
+    if wasm_bindgen_futures::JsFuture::from(image_load_promise(&img, &url))
+        .await
+        .is_err()
+    {
+        web_sys::Url::revoke_object_url(&url).ok();
+        return None;
+    }
+
+    let natural_w = img.natural_width();
+    let natural_h = img.natural_height();
+    let pixel_w = ((natural_w as f64) * scale).round().max(1.0) as u32;
+    let pixel_h = ((natural_h as f64) * scale).round().max(1.0) as u32;
+
+    let canvas = document
+        .create_element("canvas")
+        .ok()?
+        .dyn_into::<web_sys::HtmlCanvasElement>()
+        .ok()?;
+    canvas.set_width(pixel_w);
+    canvas.set_height(pixel_h);
+
+    let ctx = canvas
+        .get_context("2d")
+        .ok()
+        .flatten()?
+        .dyn_into::<web_sys::CanvasRenderingContext2d>()
+        .ok()?;
+
+    if (scale - 1.0).abs() > 1e-4 {
+        let _ = ctx.scale(scale, scale);
+    }
+    let _ = ctx.draw_image_with_html_image_element(&img, 0.0, 0.0);
+    web_sys::Url::revoke_object_url(&url).ok();
+
+    let data_url = canvas
+        .to_data_url_with_type("image/jpeg")
+        .ok()?;
+
+    let b64 = data_url.split(',').nth(1)?;
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
+
+    Some((pixel_w, pixel_h, bytes))
+}
+
 pub fn download_png_from_svg(svg: String, filename: String, notifications: Notifications) {
     spawn_local(async move {
         let Some(blob) = svg_to_png_blob(&svg).await else {
@@ -887,6 +974,188 @@ pub fn tauri_export_png_named(svg: String, default_name: String, notifications: 
             }
         } else {
             notify::error(notifications, "Could not render the PNG export.");
+        }
+    });
+}
+
+/// Tauri-native PDF export with a custom default filename.
+pub fn tauri_export_pdf_named(bytes: Vec<u8>, default_name: String, notifications: Notifications) {
+    spawn_local(async move {
+        let dir = crate::tauri_bridge::get_documents_dir().await.ok();
+        let Some(path) =
+            crate::tauri_bridge::pick_save_path_pdf(&default_name, dir.as_deref()).await
+        else {
+            return;
+        };
+        let path = with_extension(path, "pdf");
+        match crate::tauri_bridge::save_file_binary(&path, &bytes).await {
+            Ok(()) => notify::info(notifications, format!("Exported {}", file_name(&path))),
+            Err(e) => notify::error(notifications, format!("Could not export the PDF: {e}")),
+        }
+    });
+}
+
+/// Export all frames in document sequence as a multi-page PDF document.
+pub fn export_all_frames_pdf(scene: &Scene, bg: Theme, notifications: Notifications) {
+    use crate::model::elements::Bounds;
+
+    let frames = scene.frames_ordered();
+    if frames.is_empty() {
+        notify::error(notifications, "No frames in the document to export.");
+        return;
+    }
+
+    let mut svg_list = Vec::new();
+    for frame in &frames {
+        let bounds = frame.bounds();
+        let svg = scene_to_svg_crop(scene, bounds, bg);
+        let width_pt = crate::ui::pdf::px_to_pt(frame.data.width.abs());
+        let height_pt = crate::ui::pdf::px_to_pt(frame.data.height.abs());
+        svg_list.push((width_pt, height_pt, svg));
+    }
+
+    let tauri = crate::tauri_bridge::is_tauri();
+    let filename = "frames-gallery.pdf".to_string();
+
+    spawn_local(async move {
+        let mut pages = Vec::new();
+        for (w_pt, h_pt, svg) in svg_list {
+            if let Some((w_px, h_px, jpeg)) = svg_to_jpeg_bytes(&svg, 2.0, 0.92).await {
+                pages.push(crate::ui::pdf::PdfPage {
+                    width_pt: w_pt,
+                    height_pt: h_pt,
+                    image_width_px: w_px,
+                    image_height_px: h_px,
+                    jpeg_data: jpeg,
+                });
+            }
+        }
+
+        if pages.is_empty() {
+            notify::error(notifications, "Failed to render frames for PDF export.");
+            return;
+        }
+
+        let pdf_bytes = crate::ui::pdf::build_pdf(&pages, "Frames Gallery");
+        if tauri {
+            tauri_export_pdf_named(pdf_bytes, filename, notifications);
+        } else {
+            download_bytes(&pdf_bytes, &filename, "application/pdf");
+            notify::info(
+                notifications,
+                format!("Exported {} frames to {}", pages.len(), filename),
+            );
+        }
+    });
+}
+
+/// Export a single frame as a 1-page PDF document.
+pub fn export_frame_pdf(
+    scene: &Scene,
+    frame_id: ElementId,
+    bg: Theme,
+    notifications: Notifications,
+) {
+    use crate::model::elements::Bounds;
+
+    let Some(Element::Frame(frame)) = scene.element_by_id(frame_id) else {
+        notify::error(notifications, "Select a frame to export.");
+        return;
+    };
+
+    let bounds = frame.bounds();
+    let stem = frame_filename_stem(&frame.name, frame.frame_order);
+    let svg = scene_to_svg_crop(scene, bounds, bg);
+    let width_pt = crate::ui::pdf::px_to_pt(frame.data.width.abs());
+    let height_pt = crate::ui::pdf::px_to_pt(frame.data.height.abs());
+    let filename = format!("{stem}.pdf");
+    let tauri = crate::tauri_bridge::is_tauri();
+
+    spawn_local(async move {
+        let Some((w_px, h_px, jpeg)) = svg_to_jpeg_bytes(&svg, 2.0, 0.92).await else {
+            notify::error(notifications, "Could not render the frame for PDF export.");
+            return;
+        };
+
+        let page = crate::ui::pdf::PdfPage {
+            width_pt,
+            height_pt,
+            image_width_px: w_px,
+            image_height_px: h_px,
+            jpeg_data: jpeg,
+        };
+
+        let pdf_bytes = crate::ui::pdf::build_pdf(&[page], &stem);
+        if tauri {
+            tauri_export_pdf_named(pdf_bytes, filename, notifications);
+        } else {
+            download_bytes(&pdf_bytes, &filename, "application/pdf");
+            notify::info(notifications, format!("Exported {filename}"));
+        }
+    });
+}
+
+/// Export the canvas or selection as a PDF document.
+pub fn export_canvas_pdf(
+    scene: &Scene,
+    viewport: &Viewport,
+    screen: Point,
+    selected: Option<&[ElementId]>,
+    bg: Theme,
+    notifications: Notifications,
+) {
+    let svg = scene_to_svg(scene, viewport, screen, selected, bg);
+    if svg.is_empty() {
+        notify::error(notifications, "Nothing to export.");
+        return;
+    }
+
+    let (width_pt, height_pt) = match selected {
+        Some(ids) if !ids.is_empty() => {
+            let elements: Vec<_> = ids
+                .iter()
+                .filter_map(|id| scene.element_by_id(*id))
+                .collect();
+            if let Some(b) = combined_bounds(ids, &elements) {
+                let pad = 10.0;
+                (
+                    crate::ui::pdf::px_to_pt(b.w + pad * 2.0),
+                    crate::ui::pdf::px_to_pt(b.h + pad * 2.0),
+                )
+            } else {
+                (crate::ui::pdf::px_to_pt(screen.x), crate::ui::pdf::px_to_pt(screen.y))
+            }
+        }
+        _ => (crate::ui::pdf::px_to_pt(screen.x), crate::ui::pdf::px_to_pt(screen.y)),
+    };
+
+    let filename = if selected.is_some_and(|s| !s.is_empty()) {
+        "selection.pdf".to_string()
+    } else {
+        "canvas.pdf".to_string()
+    };
+    let tauri = crate::tauri_bridge::is_tauri();
+
+    spawn_local(async move {
+        let Some((w_px, h_px, jpeg)) = svg_to_jpeg_bytes(&svg, 2.0, 0.92).await else {
+            notify::error(notifications, "Could not render the canvas for PDF export.");
+            return;
+        };
+
+        let page = crate::ui::pdf::PdfPage {
+            width_pt,
+            height_pt,
+            image_width_px: w_px,
+            image_height_px: h_px,
+            jpeg_data: jpeg,
+        };
+
+        let pdf_bytes = crate::ui::pdf::build_pdf(&[page], "Inskea Drawing");
+        if tauri {
+            tauri_export_pdf_named(pdf_bytes, filename, notifications);
+        } else {
+            download_bytes(&pdf_bytes, &filename, "application/pdf");
+            notify::info(notifications, format!("Exported {filename}"));
         }
     });
 }

@@ -69,6 +69,22 @@ impl FramesContext {
             .with_untracked(|s| export::export_frame(s, frame_id, as_png, bg, notifications));
     }
 
+    /// Export `frame_id` as a 1-page PDF.
+    pub fn export_frame_pdf(&self, frame_id: ElementId) {
+        let bg = self.settings.get_untracked().theme;
+        let notifications = self.notifications;
+        self.scene
+            .with_untracked(|s| export::export_frame_pdf(s, frame_id, bg, notifications));
+    }
+
+    /// Export all frames in document sequence as a multi-page PDF document.
+    pub fn export_all_frames_pdf(&self) {
+        let bg = self.settings.get_untracked().theme;
+        let notifications = self.notifications;
+        self.scene
+            .with_untracked(|s| export::export_all_frames_pdf(s, bg, notifications));
+    }
+
     /// Delete `frame_id` from the scene.
     pub fn delete_frame(&self, frame_id: ElementId) {
         edit_ops::mutate_scene(self.scene, &self.push_snapshot, |s| {
@@ -228,6 +244,7 @@ pub fn FramesPanel(context: FramesContext) -> impl IntoView {
                 let count = frames.len();
                 let ctx_read = context.clone();
                 let ctx_draw = context.clone();
+                let ctx_pdf = context.clone();
                 let close_backdrop = close.clone();
                 let close_btn = close.clone();
 
@@ -287,6 +304,18 @@ pub fn FramesPanel(context: FramesContext) -> impl IntoView {
                                 >
                                     <span class="mr-1.5">{icon::frame()}</span>
                                     "New frame"
+                                </button>
+                                <button
+                                    class=format!(
+                                        "{} flex-1 disabled:opacity-40 disabled:pointer-events-none",
+                                        styles::BTN_TEXT
+                                    )
+                                    disabled=count == 0
+                                    on:click=move |_| ctx_pdf.export_all_frames_pdf()
+                                    title="Export the whole gallery of frames as a multi-page PDF"
+                                >
+                                    <span class="mr-1.5">{icon::book_open_small()}</span>
+                                    "Export PDF"
                                 </button>
                                 <button
                                     class=format!(
@@ -502,6 +531,7 @@ pub fn FramesContextMenu(context: FramesContext) -> impl IntoView {
 
         let ctx_png = context.clone();
         let ctx_svg = context.clone();
+        let ctx_pdf = context.clone();
         let ctx_focus = context.clone();
         let ctx_rename = context.clone();
         let ctx_read = context.clone();
@@ -543,6 +573,17 @@ pub fn FramesContextMenu(context: FramesContext) -> impl IntoView {
                     >
                         <span>"Export as SVG"</span>
                         <span class="text-subtle">{icon::frame()}</span>
+                    </button>
+                    <button
+                        class=styles::MENU_ITEM
+                        on:click=move |_| {
+                            close();
+                            ctx_pdf.export_frame_pdf(item.id);
+                        }
+                        role="menuitem"
+                    >
+                        <span>"Export as PDF"</span>
+                        <span class="text-subtle">{icon::book_open_small()}</span>
                     </button>
                     <div class="h-px bg-border my-1"></div>
                     <button

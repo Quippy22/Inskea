@@ -658,6 +658,7 @@ pub fn SelectionContextMenu(
                             let fctx_read = fctx.clone();
                             let fctx_png = fctx.clone();
                             let fctx_svg = fctx.clone();
+                            let fctx_pdf = fctx.clone();
                             view! {
                                 <>
                                     <button
@@ -703,6 +704,17 @@ pub fn SelectionContextMenu(
                                     >
                                         <span>"Export frame (SVG)"</span>
                                         <span class="text-subtle">{icon::frame()}</span>
+                                    </button>
+                                    <button
+                                        class=styles::MENU_ITEM
+                                        on:click=move |_| {
+                                            close();
+                                            fctx_pdf.export_frame_pdf(fid);
+                                        }
+                                        role="menuitem"
+                                    >
+                                        <span>"Export frame (PDF)"</span>
+                                        <span class="text-subtle">{icon::book_open_small()}</span>
                                     </button>
                                     <div class="h-px bg-border my-1"></div>
                                 </>

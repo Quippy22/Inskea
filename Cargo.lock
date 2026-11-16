@@ -692,6 +692,7 @@ dependencies = [
 name = "inskea"
 version = "2.2.0"
 dependencies = [
+ "base64",
  "console_error_panic_hook",
  "js-sys",
  "leptos",

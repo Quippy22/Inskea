@@ -10,6 +10,7 @@ pub(crate) mod frames;
 pub(crate) mod icon;
 pub(crate) mod image_import;
 pub(crate) mod notify;
+pub(crate) mod pdf;
 pub(crate) mod settings;
 mod status;
 /// UI overlay components: toolbar, dock, settings, icons, Tailwind class constants,

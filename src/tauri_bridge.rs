@@ -67,6 +67,11 @@ pub async fn pick_save_path_png(default_name: &str, default_dir: Option<&str>) -
     pick_save_path_with_filter(default_name, default_dir, "PNG Image", "png").await
 }
 
+/// Open a native save-file dialog for PDF export.
+pub async fn pick_save_path_pdf(default_name: &str, default_dir: Option<&str>) -> Option<String> {
+    pick_save_path_with_filter(default_name, default_dir, "PDF Document", "pdf").await
+}
+
 /// Open a native open-file dialog and return the chosen path, or `None` if cancelled.
 /// If `default_dir` is provided, the dialog starts in that directory.
 pub async fn pick_open_path(default_dir: Option<&str>) -> Option<String> {
