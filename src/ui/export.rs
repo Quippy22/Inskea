@@ -950,11 +950,11 @@ pub fn export_all_frames_pdf(scene: &Scene, bg: Theme, notifications: Notificati
     for frame in &frames {
         let bounds = frame.bounds();
         let elements = scene.elements_in_view(bounds);
-        let page = crate::ui::pdf::render_scene_to_pdf_page(&elements, bounds, bg);
+        let page = crate::pdf::render_scene_to_pdf_page(&elements, bounds, bg);
         pages.push(page);
     }
 
-    let pdf_bytes = crate::ui::pdf::build_pdf(&pages, "Frames Gallery");
+    let pdf_bytes = crate::pdf::build_pdf(&pages, "Frames Gallery");
     let filename = "frames-gallery.pdf".to_string();
 
     if crate::tauri_bridge::is_tauri() {
@@ -985,9 +985,9 @@ pub fn export_frame_pdf(
     let bounds = frame.bounds();
     let stem = frame_filename_stem(&frame.name, frame.frame_order);
     let elements = scene.elements_in_view(bounds);
-    let page = crate::ui::pdf::render_scene_to_pdf_page(&elements, bounds, bg);
+    let page = crate::pdf::render_scene_to_pdf_page(&elements, bounds, bg);
     let filename = format!("{stem}.pdf");
-    let pdf_bytes = crate::ui::pdf::build_pdf(&[page], &stem);
+    let pdf_bytes = crate::pdf::build_pdf(&[page], &stem);
 
     if crate::tauri_bridge::is_tauri() {
         tauri_export_pdf_named(pdf_bytes, filename, notifications);
@@ -1028,13 +1028,13 @@ pub fn export_canvas_pdf(
         }
     };
 
-    let page = crate::ui::pdf::render_scene_to_pdf_page(&elements, view, bg);
+    let page = crate::pdf::render_scene_to_pdf_page(&elements, view, bg);
     let title = if filename.starts_with("selection") {
         "Inskea Selection"
     } else {
         "Inskea Canvas"
     };
-    let pdf_bytes = crate::ui::pdf::build_pdf(&[page], title);
+    let pdf_bytes = crate::pdf::build_pdf(&[page], title);
 
     if crate::tauri_bridge::is_tauri() {
         tauri_export_pdf_named(pdf_bytes, filename, notifications);
