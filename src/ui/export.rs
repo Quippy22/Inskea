@@ -481,6 +481,44 @@ fn el_svg(el: &Element) -> String {
                 format!(r#"<g transform="rotate({deg} {cx} {cy})">{out}</g>"#)
             }
         }
+        Element::Frame(f) => {
+            let fill = f
+                .data
+                .style
+                .fill_color
+                .as_ref()
+                .map(|c| c.to_hex())
+                .unwrap_or_else(|| "none".to_string());
+            let (rx, ry) = match f.data.style.edge_style {
+                crate::model::elements::EdgeStyle::Rounded => {
+                    (f.data.style.roundness, f.data.style.roundness)
+                }
+                crate::model::elements::EdgeStyle::Sharp => (0.0, 0.0),
+            };
+            let rect = format!(
+                r#"<rect x="{}" y="{}" width="{}" height="{}" rx="{}" ry="{}" fill="{}" stroke="{}" stroke-width="{}" stroke-dasharray="{}" stroke-linejoin="{}" opacity="{}"/>"#,
+                f.data.world_point.x,
+                f.data.world_point.y,
+                f.data.width,
+                f.data.height,
+                rx,
+                ry,
+                fill,
+                f.data.style.stroke_color.to_hex(),
+                f.data.style.stroke_width,
+                f.data.style.stroke_style.stroke_dasharray(),
+                f.data.style.edge_style.stroke_linejoin(),
+                f.data.style.opacity,
+            );
+            if f.data.rotation == 0.0 {
+                rect
+            } else {
+                let cx = f.data.world_point.x + f.data.width / 2.0;
+                let cy = f.data.world_point.y + f.data.height / 2.0;
+                let deg = f.data.rotation.to_degrees();
+                format!(r#"<g transform="rotate({deg} {cx} {cy})">{rect}</g>"#)
+            }
+        }
     };
     let Some(label) = el.data().embedded_text.as_ref() else {
         return body;

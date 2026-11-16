@@ -2,6 +2,7 @@ pub mod chart;
 pub mod connector;
 pub mod ellipse;
 pub(crate) mod embedded_text;
+pub mod frame;
 pub mod freehand;
 pub mod image;
 pub(crate) mod line;
@@ -14,6 +15,8 @@ pub(crate) mod utils;
 pub use chart::{Chart, ChartItem, ChartKind, ChartPalette, ChartStyle};
 pub use connector::{ConnectionEnd, Connector, ConnectorVariant};
 pub use ellipse::Ellipse;
+#[allow(unused_imports)]
+pub use frame::{Frame, FrameOrientation, FramePreset, FrameStyle};
 pub use freehand::Freehand;
 pub use image::Image;
 #[allow(unused_imports)]
@@ -110,6 +113,7 @@ pub enum StylingKind {
     Freehand,
     Image,
     Chart,
+    Frame,
 }
 
 /// Unique identifier for an element in the scene.
@@ -171,6 +175,8 @@ pub enum Element {
     Image(Image),
     /// A vector [`Chart`] visualization (bar, line, area, donut, sparkline).
     Chart(Chart),
+    /// A named, ordered [`Frame`] / artboard with optional paper size presets.
+    Frame(Frame),
 }
 
 // ── Element dispatch methods ───────────────────────────────────────────
@@ -192,6 +198,7 @@ impl Element {
             Element::Freehand(e) => &e.data,
             Element::Image(e) => &e.data,
             Element::Chart(e) => &e.data,
+            Element::Frame(e) => &e.data,
         }
     }
 
@@ -206,6 +213,7 @@ impl Element {
             Element::Freehand(e) => &mut e.data,
             Element::Image(e) => &mut e.data,
             Element::Chart(e) => &mut e.data,
+            Element::Frame(e) => &mut e.data,
         }
     }
 
@@ -240,6 +248,7 @@ impl Element {
             Element::Freehand(_) => StylingKind::Freehand,
             Element::Image(_) => StylingKind::Image,
             Element::Chart(_) => StylingKind::Chart,
+            Element::Frame(_) => StylingKind::Frame,
         }
     }
 
@@ -252,6 +261,7 @@ impl Element {
                 | Element::Line(_)
                 | Element::Connector(_)
                 | Element::Chart(_)
+                | Element::Frame(_)
         )
     }
 }
@@ -276,6 +286,7 @@ impl_into_element!(Text);
 impl_into_element!(Freehand);
 impl_into_element!(Image);
 impl_into_element!(Chart);
+impl_into_element!(Frame);
 
 // ── Trait definitions ──────────────────────────────────────────────────
 
@@ -495,6 +506,7 @@ macro_rules! dispatch_element {
                     Element::Freehand(e) => e.$method($($arg),*),
                     Element::Image(e) => e.$method($($arg),*),
                     Element::Chart(e) => e.$method($($arg),*),
+                    Element::Frame(e) => e.$method($($arg),*),
                 }
             }
         }
@@ -511,6 +523,7 @@ macro_rules! dispatch_element {
                     Element::Freehand(e) => e.$method($($arg),*),
                     Element::Image(e) => e.$method($($arg),*),
                     Element::Chart(e) => e.$method($($arg),*),
+                    Element::Frame(e) => e.$method($($arg),*),
                 }
             }
         }
@@ -528,6 +541,7 @@ impl Render for Element {
             Element::Freehand(e) => e.render(zoom),
             Element::Image(e) => e.render(zoom),
             Element::Chart(e) => e.render(zoom),
+            Element::Frame(e) => e.render(zoom),
         }
     }
 
@@ -538,6 +552,7 @@ impl Render for Element {
             Element::Line(e) => e.render_label_mask(),
             Element::Connector(e) => e.render_label_mask(),
             Element::Chart(e) => e.render_label_mask(),
+            Element::Frame(e) => e.render_label_mask(),
             other => other.render(1.0),
         }
     }
@@ -575,6 +590,7 @@ impl HitTest for Element {
             Element::Freehand(e) => e.hit_test(point, margin),
             Element::Image(e) => e.hit_test(point, margin),
             Element::Chart(e) => e.hit_test(point, margin),
+            Element::Frame(e) => e.hit_test(point, margin),
         }
     }
 }
@@ -590,6 +606,7 @@ impl Bounds for Element {
             Element::Freehand(e) => e.bounds(),
             Element::Image(e) => e.bounds(),
             Element::Chart(e) => e.bounds(),
+            Element::Frame(e) => e.bounds(),
         };
         // Only path hosts grow their bounds to fit the label; a box label is
         // laid out inside its host. Skip the wrap for boxes instead of

@@ -1253,8 +1253,131 @@ impl Scene {
         self.record_next_id_before();
         element.data_mut().id = self.next_id;
         self.next_id += 1;
+        if let Element::Frame(_) = &element {
+            let next_order = self.next_frame_order();
+            let next_num = self.next_frame_number();
+            if let Element::Frame(frame) = &mut element {
+                if frame.frame_order == 0 {
+                    frame.frame_order = next_order;
+                }
+                if frame.name.trim().is_empty() {
+                    frame.name = format!("Frame {next_num}");
+                }
+            }
+        }
         let order = self.next_order;
         self.put_element(element, order);
+    }
+
+    /// Number of [`Frame`] elements currently in the scene.
+    pub fn frame_count(&self) -> usize {
+        self.chunks
+            .values()
+            .flat_map(|chunk| chunk.elements.iter())
+            .filter(|stored| matches!(stored.element, Element::Frame(_)))
+            .count()
+    }
+
+    /// Next 1-based `frame_order` index for a newly added frame.
+    pub fn next_frame_order(&self) -> u32 {
+        self.chunks
+            .values()
+            .flat_map(|chunk| chunk.elements.iter())
+            .filter_map(|stored| match &stored.element {
+                Element::Frame(f) => Some(f.frame_order),
+                _ => None,
+            })
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1)
+    }
+
+    /// Next unused default number `N` for `"Frame N"`.
+    pub fn next_frame_number(&self) -> u32 {
+        let mut n = (self.frame_count() as u32).saturating_add(1);
+        loop {
+            let candidate = format!("Frame {n}");
+            let taken = self
+                .chunks
+                .values()
+                .flat_map(|chunk| chunk.elements.iter())
+                .any(|stored| {
+                    matches!(
+                        &stored.element,
+                        Element::Frame(f) if f.name.eq_ignore_ascii_case(&candidate)
+                    )
+                });
+            if !taken {
+                return n;
+            }
+            n = n.saturating_add(1);
+        }
+    }
+
+    /// All [`Frame`] elements in the scene sorted by their page order (`frame_order`, then `id`),
+    /// with world-space coordinates materialized.
+    pub fn frames_ordered(&self) -> Vec<Frame> {
+        let mut frames: Vec<Frame> = self
+            .chunks
+            .iter()
+            .flat_map(|(key, chunk)| {
+                let origin = chunk_origin(*key);
+                chunk.elements.iter().filter_map(move |stored| {
+                    let Element::Frame(f) = &stored.element else {
+                        return None;
+                    };
+                    let mut frame = f.clone();
+                    frame.offset(origin.x, origin.y);
+                    Some(frame)
+                })
+            })
+            .collect();
+        frames.sort_by_key(|f| (f.frame_order, f.data.id));
+        frames
+    }
+
+    /// Rename a frame by ID. Ignores empty names.
+    pub fn rename_frame(&mut self, id: ElementId, new_name: impl Into<String>) {
+        let trimmed = new_name.into().trim().to_string();
+        if trimmed.is_empty() {
+            return;
+        }
+        if let Some(mut el) = self.element_by_id_mut(id) {
+            if let Element::Frame(frame) = &mut *el {
+                frame.name = trimmed;
+            }
+        }
+    }
+
+    /// Move `frame_id` to `new_index` (0-based) in the document's ordered frame list,
+    /// renumbering `frame_order` (`1..=N`) across all frames.
+    pub fn reorder_frame(&mut self, frame_id: ElementId, new_index: usize) {
+        let mut ordered_ids: Vec<ElementId> =
+            self.frames_ordered().into_iter().map(|f| f.data.id).collect();
+        let Some(cur_index) = ordered_ids.iter().position(|&id| id == frame_id) else {
+            return;
+        };
+        let target = new_index.min(ordered_ids.len().saturating_sub(1));
+        if cur_index == target {
+            return;
+        }
+        let id = ordered_ids.remove(cur_index);
+        ordered_ids.insert(target, id);
+        for (idx, fid) in ordered_ids.into_iter().enumerate() {
+            let desired_order = (idx as u32) + 1;
+            let needs_update = self
+                .with_element(fid, |el, _| {
+                    matches!(el, Element::Frame(f) if f.frame_order != desired_order)
+                })
+                .unwrap_or(false);
+            if needs_update {
+                if let Some(mut el) = self.element_by_id_mut(fid) {
+                    if let Element::Frame(f) = &mut *el {
+                        f.frame_order = desired_order;
+                    }
+                }
+            }
+        }
     }
 
     /// Move a selection as one z-order block while preserving internal order.
@@ -2393,5 +2516,44 @@ mod tests {
             panic!("expected connector");
         };
         assert_eq!(conn.points[0], new_peak);
+    }
+
+    #[test]
+    fn frame_ordering_rename_and_reorder() {
+        use crate::model::elements::frame::{Frame, FrameOrientation, FramePreset};
+
+        let mut s = Scene::new();
+        for i in 0..3 {
+            let mut f = Frame::from_drag(
+                Point::new(i as f64 * 900.0, 0.0),
+                Point::new(i as f64 * 900.0 + 400.0, 300.0),
+                Color::new(Color::WHITE),
+                false,
+            );
+            f.apply_preset(FramePreset::A4, FrameOrientation::Portrait);
+            s.add_element(Element::Frame(f));
+        }
+
+        let frames = s.frames_ordered();
+        assert_eq!(frames.len(), 3);
+        assert_eq!(frames[0].name, "Frame 1");
+        assert_eq!(frames[1].name, "Frame 2");
+        assert_eq!(frames[2].name, "Frame 3");
+        assert_eq!(frames[0].frame_order, 1);
+        assert_eq!(frames[1].frame_order, 2);
+        assert_eq!(frames[2].frame_order, 3);
+
+        // Rename Frame 2 -> "Cover Page"
+        s.rename_frame(frames[1].data.id, "Cover Page");
+        // Move "Cover Page" (id 2) to index 0
+        s.reorder_frame(frames[1].data.id, 0);
+
+        let reordered = s.frames_ordered();
+        assert_eq!(reordered[0].name, "Cover Page");
+        assert_eq!(reordered[0].frame_order, 1);
+        assert_eq!(reordered[1].name, "Frame 1");
+        assert_eq!(reordered[1].frame_order, 2);
+        assert_eq!(reordered[2].name, "Frame 3");
+        assert_eq!(reordered[2].frame_order, 3);
     }
 }
