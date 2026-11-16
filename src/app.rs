@@ -20,8 +20,8 @@ use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{
     file_ops, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab, ChartDataEditor,
-    SaveSnippetDialog, SelectionContextMenu, SettingsPanel, ThemePicker, ToolBar,
-    UnsavedChangesDialog, WelcomeOverlay,
+    FrameReaderOverlay, FramesContext, SaveSnippetDialog, SelectionContextMenu, SettingsPanel,
+    ThemePicker, ToolBar, UnsavedChangesDialog, WelcomeOverlay,
 };
 use crate::util::window_size;
 use leptos::*;
@@ -211,6 +211,20 @@ pub fn App() -> impl IntoView {
         selection_menu: create_rw_signal(None),
     };
     catalogue.refresh_globals();
+
+    let frames = FramesContext {
+        open: create_rw_signal(false),
+        scene,
+        selected_ids,
+        viewport,
+        canvas_mode,
+        selected_tool,
+        eraser_active,
+        push_snapshot: push_snapshot.clone(),
+        renaming_id: create_rw_signal(None),
+        rename_draft: create_rw_signal(String::new()),
+        read_mode_index: create_rw_signal(None),
+    };
 
     let on_save_snippet: Rc<dyn Fn()> = {
         let catalogue = catalogue.clone();
@@ -459,8 +473,12 @@ pub fn App() -> impl IntoView {
     // shortcuts stay quiet while either is open. The theme picker joins them
     // in `modal_open` below, but closes through the canvas Escape handler.
     let snippet_open = catalogue.pending;
+    let read_mode_index = frames.read_mode_index;
     let modal_open = Signal::derive(move || {
-        pending_action.get().is_some() || theme_open.get() || snippet_open.get().is_some()
+        pending_action.get().is_some()
+            || theme_open.get()
+            || snippet_open.get().is_some()
+            || read_mode_index.get().is_some()
     });
     {
         let catalogue_escape = catalogue.clone();
@@ -781,6 +799,9 @@ pub fn App() -> impl IntoView {
 
     // ── Panel visibility ───────────────────────────────────────────────────
     let show_panel = Signal::derive(move || {
+        if read_mode_index.get().is_some() {
+            return false;
+        }
         let mode = canvas_mode.get();
         if mode == CanvasMode::Select && !selected_ids.get().is_empty() {
             return true;
@@ -848,8 +869,10 @@ pub fn App() -> impl IntoView {
                 settings=settings
                 theme_open=theme_open
                 catalogue=catalogue.clone()
+                frames=frames.clone()
                 request_action=request_action.clone()
             />
+            <FrameReaderOverlay context=frames.clone() />
             <ThemePicker open=theme_open settings=settings />
             <ShortcutsModal shortcuts_open=shortcuts_open />
             <UnsavedChangesDialog
@@ -866,7 +889,11 @@ pub fn App() -> impl IntoView {
                 on_cancel=snippet_cancel
             />
             <CatalogueContextMenu context=catalogue.clone() />
-            <SelectionContextMenu context=catalogue.clone() chart_editing_id=chart_editing_id />
+            <SelectionContextMenu
+                context=catalogue.clone()
+                chart_editing_id=chart_editing_id
+                frames=frames.clone()
+            />
             <ChartDataEditor
                 scene=scene
                 chart_editing_id=chart_editing_id

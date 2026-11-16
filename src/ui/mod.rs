@@ -6,6 +6,7 @@ pub(crate) mod cursor;
 pub mod dock;
 pub(crate) mod export;
 pub(crate) mod file_ops;
+pub(crate) mod frames;
 pub(crate) mod icon;
 pub(crate) mod image_import;
 pub(crate) mod notify;
@@ -24,6 +25,7 @@ pub use catalogue::{
     CatalogueContext, CatalogueContextMenu, CatalogueTab, SaveSnippetDialog, SelectionContextMenu,
 };
 pub use chart_editor::ChartDataEditor;
+pub use frames::{FrameReaderOverlay, FramesContext};
 pub use settings::SettingsPanel;
 pub use status::CanvasStatus;
 pub use theme_picker::ThemePicker;

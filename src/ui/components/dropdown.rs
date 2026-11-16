@@ -10,7 +10,8 @@ pub enum DropdownItem {
         label: &'static str,
         on_click: Rc<dyn Fn()>,
     },
-    /// Non-interactive / placeholder row (e.g. "Frame").
+    /// Non-interactive / placeholder row.
+    #[allow(dead_code)]
     Disabled { label: &'static str },
     /// Non-clickable header label (e.g. "PNG", "SVG").
     Header { label: &'static str },

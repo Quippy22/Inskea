@@ -117,7 +117,6 @@ lucide_icons! {
     save_snippet => "bookmark-plus.svg",
     frames_grid => "layout-grid.svg",
     focus => "focus.svg",
-    book_open => "book-open.svg",
 }
 
 /// Small star shown beside a starred catalogue item.
