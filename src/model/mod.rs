@@ -1248,12 +1248,16 @@ impl Scene {
 
     /// Adds an element to the scene, assigning it a unique ID.
     ///
-    /// The element's previous ID is overwritten.
+    /// The element's previous ID is overwritten. Newly added [`Frame`] elements
+    /// start at the farthest back layer (`LayerOrder::Back`) so they sit behind
+    /// any existing canvas content.
     pub fn add_element(&mut self, mut element: Element) {
         self.record_next_id_before();
-        element.data_mut().id = self.next_id;
+        let assigned_id = self.next_id;
+        element.data_mut().id = assigned_id;
         self.next_id += 1;
-        if let Element::Frame(_) = &element {
+        let is_frame = matches!(element, Element::Frame(_));
+        if is_frame {
             let next_order = self.next_frame_order();
             let next_num = self.next_frame_number();
             if let Element::Frame(frame) = &mut element {
@@ -1267,6 +1271,9 @@ impl Scene {
         }
         let order = self.next_order;
         self.put_element(element, order);
+        if is_frame {
+            self.reorder_selection(&[assigned_id], LayerOrder::Back);
+        }
     }
 
     /// Number of [`Frame`] elements currently in the scene.
@@ -2555,5 +2562,40 @@ mod tests {
         assert_eq!(reordered[1].frame_order, 2);
         assert_eq!(reordered[2].name, "Frame 3");
         assert_eq!(reordered[2].frame_order, 3);
+    }
+
+    #[test]
+    fn new_frames_start_at_farthest_back_layer() {
+        use crate::model::elements::frame::Frame;
+
+        let mut s = Scene::new();
+        let r1 = Rectangle::from_drag(
+            Point::new(10.0, 10.0),
+            Point::new(100.0, 100.0),
+            Color::default(),
+            false,
+        );
+        let r2 = Rectangle::from_drag(
+            Point::new(20.0, 20.0),
+            Point::new(120.0, 120.0),
+            Color::default(),
+            false,
+        );
+        s.add_element(Element::Rectangle(r1));
+        s.add_element(Element::Rectangle(r2));
+
+        let frame = Frame::from_drag(
+            Point::new(0.0, 0.0),
+            Point::new(300.0, 300.0),
+            Color::default(),
+            false,
+        );
+        s.add_element(Element::Frame(frame));
+
+        let ordered = s.elements();
+        assert_eq!(ordered.len(), 3);
+        assert_eq!(ordered[0].id(), 3, "Frame should be at the farthest back layer");
+        assert_eq!(ordered[1].id(), 1);
+        assert_eq!(ordered[2].id(), 2);
     }
 }

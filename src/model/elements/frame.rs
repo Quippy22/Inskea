@@ -125,11 +125,25 @@ impl FrameOrientation {
     }
 }
 
+/// Default opacity for newly created frames (`0.6` = 60%).
+pub const DEFAULT_FRAME_OPACITY: f64 = 0.6;
+
 /// Default configuration for new frames created with the Frame tool.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FrameStyle {
     pub preset: FramePreset,
     pub orientation: FrameOrientation,
+    pub opacity: f64,
+}
+
+impl Default for FrameStyle {
+    fn default() -> Self {
+        Self {
+            preset: FramePreset::Freehand,
+            orientation: FrameOrientation::Portrait,
+            opacity: DEFAULT_FRAME_OPACITY,
+        }
+    }
 }
 
 /// A named, ordered canvas frame / artboard.
@@ -186,20 +200,43 @@ impl Frame {
         )
     }
 
-    /// Apply a preset and orientation to this frame, resizing it around its top-left corner
-    /// if the preset has fixed paper dimensions.
+    /// Apply a preset and orientation to this frame, resizing around its **center**
+    /// when the frame already exists on the canvas (`self.data.id != 0`), or setting
+    /// its initial dimensions before placement when `self.data.id == 0`.
     pub fn apply_preset(&mut self, preset: FramePreset, orientation: FrameOrientation) {
+        let prev_orientation = self.orientation;
         self.preset = preset;
         self.orientation = orientation;
+        let can_pivot_center =
+            self.data.id != 0 && self.data.width > 0.0 && self.data.height > 0.0;
         if let Some((w, h)) = preset.size_px(orientation) {
+            if can_pivot_center {
+                let cx = self.data.world_point.x + self.data.width / 2.0;
+                let cy = self.data.world_point.y + self.data.height / 2.0;
+                self.data.world_point.set(cx - w / 2.0, cy - h / 2.0);
+            }
             self.data.width = w;
             self.data.height = h;
+        } else if prev_orientation != orientation && can_pivot_center {
+            let cx = self.data.world_point.x + self.data.width / 2.0;
+            let cy = self.data.world_point.y + self.data.height / 2.0;
+            let (new_w, new_h) = (self.data.height, self.data.width);
+            self.data
+                .world_point
+                .set(cx - new_w / 2.0, cy - new_h / 2.0);
+            self.data.width = new_w;
+            self.data.height = new_h;
         }
     }
 
     /// Apply the styling panel's default frame style.
     pub fn apply_frame_style(&mut self, style: &FrameStyle) {
         self.apply_preset(style.preset, style.orientation);
+        self.data.style.opacity = style.opacity;
+        self.data.style.stroke_width = 1.5;
+        self.data.style.stroke_style = super::StrokeStyle::Solid;
+        self.data.style.edge_style = super::EdgeStyle::Sharp;
+        self.data.style.roundness = 0.0;
     }
 
     fn render_inner(&self, show_label: bool, zoom: f64) -> leptos::View {
@@ -207,15 +244,9 @@ impl Frame {
         let y = self.data.world_point.y;
         let w = self.data.width;
         let h = self.data.height;
-        let sw = self.data.style.stroke_width;
+        let sw = 1.5_f64;
         let fill = fill_paint(&self.data.style.fill_color);
         let stroke = self.data.style.stroke_color.to_hex();
-        let dash = self.data.style.stroke_style.stroke_dasharray();
-        let linejoin = self.data.style.edge_style.stroke_linejoin();
-        let (rx, ry) = match self.data.style.edge_style {
-            super::EdgeStyle::Rounded => (self.data.style.roundness, self.data.style.roundness),
-            super::EdgeStyle::Sharp => (0.0, 0.0),
-        };
         let opacity = self.data.style.opacity;
 
         // Keep the frame title readable across zoom levels without growing huge when zoomed in.
@@ -268,10 +299,7 @@ impl Frame {
                     fill=fill
                     stroke=stroke.clone()
                     stroke-width=sw
-                    stroke-dasharray=dash
-                    stroke-linejoin=linejoin
-                    rx=rx
-                    ry=ry
+                    stroke-linejoin="miter"
                 />
                 <path
                     d=ticks_d
@@ -337,6 +365,7 @@ impl FromDrag for Frame {
                     stroke_color: color,
                     stroke_width: 1.5,
                     roundness: 0.0,
+                    opacity: DEFAULT_FRAME_OPACITY,
                     ..Default::default()
                 },
                 ..ElementData::new(0)
@@ -497,5 +526,37 @@ mod tests {
         let inch_px = in_to_px(8.5);
         assert_eq!(inch_px, 816.0);
         assert!((px_to_in(inch_px) - 8.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn switching_orientation_pivots_around_frame_center() {
+        let mut frame = Frame::from_drag(
+            Point::new(100.0, 200.0),
+            Point::new(894.0, 1323.0),
+            Color::default(),
+            false,
+        );
+        frame.data.id = 1;
+        frame.apply_preset(FramePreset::A4, FrameOrientation::Portrait);
+        let center_before = frame.bounds().center();
+
+        frame.apply_preset(FramePreset::A4, FrameOrientation::Landscape);
+        let center_after = frame.bounds().center();
+
+        assert_eq!((frame.data.width, frame.data.height), (1123.0, 794.0));
+        assert!((center_before.x - center_after.x).abs() < 1e-6);
+        assert!((center_before.y - center_after.y).abs() < 1e-6);
+    }
+
+    #[test]
+    fn new_frames_default_to_sixty_percent_opacity() {
+        let frame = Frame::from_drag(
+            Point::new(0.0, 0.0),
+            Point::new(200.0, 100.0),
+            Color::default(),
+            false,
+        );
+        assert!((frame.data.style.opacity - 0.6).abs() < 1e-9);
+        assert!((FrameStyle::default().opacity - 0.6).abs() < 1e-9);
     }
 }

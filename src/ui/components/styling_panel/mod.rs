@@ -155,7 +155,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
     let is_rect = Signal::derive(move || {
         matches!(
             styling_kind.get(),
-            StylingKind::Rectangle | StylingKind::Chart | StylingKind::Frame
+            StylingKind::Rectangle | StylingKind::Chart
         )
     });
     let is_freehand = Signal::derive(move || styling_kind.get() == StylingKind::Freehand);
@@ -186,6 +186,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
             &selected_ids.get_untracked(),
             &default_style.get_untracked(),
             &default_line_style.get_untracked(),
+            &default_frame_style.get_untracked(),
             selected_tool.get_untracked(),
         )
     });
@@ -257,6 +258,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
 
     create_effect(move |_| {
         let _ids = selected_ids.get();
+        let _tool = selected_tool.get();
         // Track scene changes without cloning the document (this effect
         // re-runs on every drag step).
         scene.with(|_| ());
@@ -273,6 +275,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                         &ids,
                         &default_style.get_untracked(),
                         &default_line_style.get_untracked(),
+                        &default_frame_style.get_untracked(),
                         selected_tool.get_untracked(),
                     );
                     let align = selected_text_align(scene, &ids);
@@ -564,9 +567,18 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
 
     let opacity_cb: Rc<dyn Fn(f64)> = Rc::new({
         let update_style = update_style.clone();
+        let selected_ids = selected_ids;
+        let selected_tool = selected_tool;
+        let default_frame_style = default_frame_style;
         move |val| {
             let v = (val / 100.0).clamp(0.0, 1.0);
-            update_style(&|style| style.opacity = v);
+            if selected_ids.get_untracked().is_empty()
+                && selected_tool.get_untracked() == Tool::Frame
+            {
+                default_frame_style.update(|fs| fs.opacity = v);
+            } else {
+                update_style(&|style| style.opacity = v);
+            }
         }
     });
 
@@ -661,6 +673,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                                 let mut fs = FrameStyle {
                                     preset: frame.preset,
                                     orientation: frame.orientation,
+                                    opacity: frame.data.style.opacity,
                                 };
                                 f(&mut fs);
                                 frame.apply_frame_style(&fs);
@@ -787,6 +800,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 roundness,
                 roundness_cb,
                 hide_stroke,
+                is_frame,
                 is_line_or_arrow,
                 is_rect,
                 is_rounded,

@@ -489,25 +489,14 @@ fn el_svg(el: &Element) -> String {
                 .as_ref()
                 .map(|c| c.to_hex())
                 .unwrap_or_else(|| "none".to_string());
-            let (rx, ry) = match f.data.style.edge_style {
-                crate::model::elements::EdgeStyle::Rounded => {
-                    (f.data.style.roundness, f.data.style.roundness)
-                }
-                crate::model::elements::EdgeStyle::Sharp => (0.0, 0.0),
-            };
             let rect = format!(
-                r#"<rect x="{}" y="{}" width="{}" height="{}" rx="{}" ry="{}" fill="{}" stroke="{}" stroke-width="{}" stroke-dasharray="{}" stroke-linejoin="{}" opacity="{}"/>"#,
+                r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" stroke="{}" stroke-width="1.5" stroke-linejoin="miter" opacity="{}"/>"#,
                 f.data.world_point.x,
                 f.data.world_point.y,
                 f.data.width,
                 f.data.height,
-                rx,
-                ry,
                 fill,
                 f.data.style.stroke_color.to_hex(),
-                f.data.style.stroke_width,
-                f.data.style.stroke_style.stroke_dasharray(),
-                f.data.style.edge_style.stroke_linejoin(),
                 f.data.style.opacity,
             );
             if f.data.rotation == 0.0 {

@@ -45,36 +45,34 @@ pub fn frame_section(
                 </div>
             </div>
 
-            <Show when=move || local_frame_style.get().preset != FramePreset::Freehand>
-                <div>
-                    <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
-                        "Orientation"
-                    </div>
-                    <div class="grid grid-cols-2 gap-1">
-                        {[FrameOrientation::Portrait, FrameOrientation::Landscape]
-                            .into_iter()
-                            .map(|orient| {
-                                let label = orient.label();
-                                let set_orient = set_frame_orientation.clone();
-                                view! {
-                                    <button
-                                        class=move || {
-                                            if local_frame_style.get().orientation == orient {
-                                                styles::BTN_TEXT_ACTIVE
-                                            } else {
-                                                styles::BTN_TEXT
-                                            }
-                                        }
-                                        on:click=move |_| set_orient(orient)
-                                    >
-                                        {label}
-                                    </button>
-                                }
-                            })
-                            .collect_view()}
-                    </div>
+            <div>
+                <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
+                    "Orientation"
                 </div>
-            </Show>
+                <div class="grid grid-cols-2 gap-1">
+                    {[FrameOrientation::Portrait, FrameOrientation::Landscape]
+                        .into_iter()
+                        .map(|orient| {
+                            let label = orient.label();
+                            let set_orient = set_frame_orientation.clone();
+                            view! {
+                                <button
+                                    class=move || {
+                                        if local_frame_style.get().orientation == orient {
+                                            styles::BTN_TEXT_ACTIVE
+                                        } else {
+                                            styles::BTN_TEXT
+                                        }
+                                    }
+                                    on:click=move |_| set_orient(orient)
+                                >
+                                    {label}
+                                </button>
+                            }
+                        })
+                        .collect_view()}
+                </div>
+            </div>
 
             <Show when=move || !frame_dimensions_label.get().is_empty()>
                 <div class="text-[10px] leading-snug text-subtle px-0.5">

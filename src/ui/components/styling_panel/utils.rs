@@ -12,7 +12,8 @@ pub fn read_panel_state(
     ids: &[ElementId],
     default_style: &ElementStyle,
     default_line_style: &LineStyle,
-    _tool: Tool,
+    default_frame_style: &FrameStyle,
+    tool: Tool,
 ) -> (ElementStyle, LineStyle) {
     if let Some(id) = ids.first() {
         if let Some(el) = scene.element_by_id(*id) {
@@ -25,7 +26,11 @@ pub fn read_panel_state(
             return (d.style.clone(), ls);
         }
     }
-    (default_style.clone(), default_line_style.clone())
+    let mut style = default_style.clone();
+    if tool == Tool::Frame {
+        style.opacity = default_frame_style.opacity;
+    }
+    (style, default_line_style.clone())
 }
 
 /// Routing of the first selected connector, or the draw-mode default.
@@ -56,7 +61,7 @@ pub fn selected_chart_style(
     default
 }
 
-/// Frame style (preset & orientation) of the first selected frame, or the draw-mode default.
+/// Frame style (preset, orientation, opacity) of the first selected frame, or the draw-mode default.
 pub fn selected_frame_style(
     scene: &Scene,
     ids: &[ElementId],
@@ -67,6 +72,7 @@ pub fn selected_frame_style(
             return FrameStyle {
                 preset: frame.preset,
                 orientation: frame.orientation,
+                opacity: frame.data.style.opacity,
             };
         }
     }
