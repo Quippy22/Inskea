@@ -6,8 +6,8 @@ use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::edit_ops::Clipboard;
 use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
 use crate::model::{
-    ChangeSet, ChartStyle, Color, ConnectorVariant, ElementId, ElementStyle, LineStyle, Point,
-    Scene,
+    ChangeSet, ChartStyle, Color, ConnectorVariant, ElementId, ElementStyle, FrameStyle, LineStyle,
+    Point, Scene,
 };
 use crate::skea;
 use crate::tauri_bridge;
@@ -250,6 +250,7 @@ pub fn App() -> impl IntoView {
     let default_line_style = create_rw_signal(LineStyle::default());
     let default_connector_variant = create_rw_signal(ConnectorVariant::default());
     let default_chart_style = create_rw_signal(ChartStyle::default());
+    let default_frame_style = create_rw_signal(FrameStyle::default());
     let chart_editing_id = create_rw_signal::<Option<ElementId>>(None);
 
     let image_import = ImageImport {
@@ -813,6 +814,7 @@ pub fn App() -> impl IntoView {
                     default_line_style,
                     default_connector_variant,
                     default_chart_style,
+                    default_frame_style,
                     chart_editing_id,
                     theme_open,
                     modal_open,
@@ -827,6 +829,8 @@ pub fn App() -> impl IntoView {
                 request_action=request_action.clone()
                 viewport=viewport
                 canvas_mode=canvas_mode
+                selected_tool=selected_tool
+                eraser_active=eraser_active
                 on_undo=do_undo
                 on_redo=do_redo
                 can_undo=can_undo
@@ -886,7 +890,9 @@ pub fn App() -> impl IntoView {
                             default_line_style,
                             default_connector_variant,
                             default_chart_style,
+                            default_frame_style,
                             chart_editing_id,
+                            viewport,
                             clipboard,
                             push_snapshot: push_snapshot.clone(),
                             canvas_mode,

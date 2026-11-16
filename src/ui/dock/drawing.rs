@@ -10,6 +10,7 @@ pub enum Tool {
     Text,
     Freehand,
     Chart,
+    Frame,
 }
 
 impl Tool {
@@ -23,6 +24,7 @@ impl Tool {
             Tool::Text => StylingKind::Text,
             Tool::Freehand => StylingKind::Freehand,
             Tool::Chart => StylingKind::Chart,
+            Tool::Frame => StylingKind::Frame,
         }
     }
 }

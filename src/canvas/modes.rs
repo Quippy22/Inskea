@@ -3,8 +3,8 @@ use super::MIN_DRAG_DIST;
 use crate::model::elements::connector::SNAP_SCREEN_PX;
 use crate::model::elements::text::WrappedText;
 use crate::model::{
-    Chart, Color, ConnectionEnd, Connector, ConnectorVariant, Element, ElementData, Ellipse,
-    Freehand, FromDrag, Line, Point, Rectangle, Text, TextAlign, UpdateDrag,
+    Chart, Color, ConnectionEnd, Connector, ConnectorVariant, Element, ElementData, Ellipse, Frame,
+    FramePreset, Freehand, FromDrag, Line, Point, Rectangle, Text, TextAlign, UpdateDrag,
 };
 use crate::ui::dock::Tool;
 use leptos::{
@@ -121,6 +121,7 @@ pub(crate) fn build_drag_element(
         Tool::Text => Text::from_drag(anchor, current, color, shift).into(),
         Tool::Freehand => Freehand::from_drag(anchor, current, color, shift).into(),
         Tool::Chart => Chart::from_drag(anchor, current, color, shift).into(),
+        Tool::Frame => Frame::from_drag(anchor, current, color, shift).into(),
     }
 }
 
@@ -147,6 +148,10 @@ pub(crate) fn apply_draw_style(el: &mut Element, props: &CanvasInputs) {
         }
         Element::Chart(chart) => {
             chart.apply_chart_style(&props.default_chart_style.get());
+        }
+        Element::Frame(frame) => {
+            let fs = props.default_frame_style.get();
+            frame.apply_frame_style(&fs);
         }
         _ => {}
     }
@@ -265,7 +270,9 @@ pub fn draw_pointer_up(
         };
         let dx = end.x - anchor.x;
         let dy = end.y - anchor.y;
-        if dx.hypot(dy) < MIN_DRAG_DIST {
+        let is_preset_frame = state.tool == Tool::Frame
+            && props.default_frame_style.get_untracked().preset != FramePreset::Freehand;
+        if dx.hypot(dy) < MIN_DRAG_DIST && !is_preset_frame {
             st.drawing.set(None);
             return;
         }
@@ -280,6 +287,11 @@ pub fn draw_pointer_up(
             end_binding,
         );
         apply_draw_style(&mut el, props);
+        if let Element::Frame(frame) = &mut el {
+            if frame.preset != FramePreset::Freehand {
+                frame.update_drag(end, anchor, st.shift_pressed.get(), 1.0);
+            }
+        }
         (props.push_snapshot)();
         props.scene.update(|s| {
             s.add_element(el);

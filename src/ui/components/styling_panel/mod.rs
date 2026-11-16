@@ -6,6 +6,7 @@ mod connector;
 mod edit;
 mod fill;
 mod float_picker;
+mod frame;
 mod group;
 mod layers;
 mod sliders;
@@ -20,24 +21,27 @@ use self::connector::connector_section;
 use self::edit::edit_section;
 use self::fill::fill_section;
 use self::float_picker::float_picker;
+use self::frame::frame_section;
 use self::group::group_section;
 use self::layers::layers_section;
 use self::sliders::sliders_section;
 use self::style::style_section;
 use self::utils::{
-    read_panel_state, selected_chart_style, selected_connector_variant, selected_text_align,
-    single_selected_element, uniform_icon_seg,
+    read_panel_state, selected_chart_style, selected_connector_variant, selected_frame_style,
+    selected_text_align, single_selected_element, uniform_icon_seg,
 };
 use crate::canvas::settings::CanvasSettings;
-use crate::canvas::CanvasMode;
+use crate::canvas::{CanvasMode, Viewport};
 use crate::edit_ops;
 use crate::edit_ops::Clipboard;
 use crate::model::{
-    ChartKind, ChartPalette, ChartStyle, Color, Connector, ConnectorVariant, CurveMode, EdgeStyle,
-    Element, ElementId, ElementStyle, LineStyle, Point, Scene, StrokeStyle, StylingKind, TextAlign,
+    Bounds, ChartKind, ChartPalette, ChartStyle, Color, Connector, ConnectorVariant, CurveMode,
+    EdgeStyle, Element, ElementId, ElementStyle, FrameOrientation, FramePreset, FrameStyle,
+    LineStyle, Point, Scene, StrokeStyle, StylingKind, TextAlign,
 };
 use crate::ui::dock::Tool;
 use crate::ui::{icon, styles};
+use crate::util::window_size;
 use leptos::*;
 use leptos_color::Color as LpcColor;
 use std::rc::Rc;
@@ -67,6 +71,9 @@ type UpdateLineStyle = Rc<dyn Fn(&dyn Fn(&mut LineStyle))>;
 /// The same for chart styles.
 type UpdateChartStyle = Rc<dyn Fn(&dyn Fn(&mut ChartStyle))>;
 
+/// The same for frame styles.
+type UpdateFrameStyle = Rc<dyn Fn(&dyn Fn(&mut FrameStyle))>;
+
 #[derive(Clone)]
 pub struct StylingPanelContext {
     pub scene: RwSignal<Scene>,
@@ -76,7 +83,9 @@ pub struct StylingPanelContext {
     pub default_line_style: RwSignal<LineStyle>,
     pub default_connector_variant: RwSignal<ConnectorVariant>,
     pub default_chart_style: RwSignal<ChartStyle>,
+    pub default_frame_style: RwSignal<FrameStyle>,
     pub chart_editing_id: RwSignal<Option<ElementId>>,
+    pub viewport: RwSignal<Viewport>,
     pub clipboard: RwSignal<Clipboard>,
     pub push_snapshot: Rc<dyn Fn()>,
     pub canvas_mode: RwSignal<CanvasMode>,
@@ -110,7 +119,9 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         default_line_style,
         default_connector_variant,
         default_chart_style,
+        default_frame_style,
         chart_editing_id,
+        viewport,
         clipboard,
         push_snapshot,
         canvas_mode,
@@ -140,10 +151,11 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         )
     });
     let is_chart = Signal::derive(move || styling_kind.get() == StylingKind::Chart);
+    let is_frame = Signal::derive(move || styling_kind.get() == StylingKind::Frame);
     let is_rect = Signal::derive(move || {
         matches!(
             styling_kind.get(),
-            StylingKind::Rectangle | StylingKind::Chart
+            StylingKind::Rectangle | StylingKind::Chart | StylingKind::Frame
         )
     });
     let is_freehand = Signal::derive(move || styling_kind.get() == StylingKind::Freehand);
@@ -161,6 +173,11 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         let ids = selected_ids.get();
         ids.len() == 1
             && scene.with(|s| matches!(s.element_by_id(ids[0]), Some(Element::Chart(_))))
+    });
+    let has_single_selected_frame = Signal::derive(move || {
+        let ids = selected_ids.get();
+        ids.len() == 1
+            && scene.with(|s| matches!(s.element_by_id(ids[0]), Some(Element::Frame(_))))
     });
 
     let (init_style, init_line_style) = scene.with_untracked(|scene| {
@@ -201,6 +218,13 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
             default_chart_style.get_untracked(),
         )
     }));
+    let local_frame_style = create_rw_signal(scene.with_untracked(|scene| {
+        selected_frame_style(
+            scene,
+            &selected_ids.get_untracked(),
+            default_frame_style.get_untracked(),
+        )
+    }));
 
     let stroke_size = create_rw_signal(local_style.get_untracked().stroke_width);
     let text_size = create_rw_signal(local_style.get_untracked().font_size);
@@ -239,7 +263,8 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         let _dls = default_line_style.get();
         let _dcv = default_connector_variant.get();
         let _dcs = default_chart_style.get();
-        let (new_style, new_line_style, align, embedded_color, variant, chart_style) =
+        let _dfs = default_frame_style.get();
+        let (new_style, new_line_style, align, embedded_color, variant, chart_style, frame_style) =
             leptos::untrack(|| {
                 scene.with_untracked(|scene| {
                     let ids = selected_ids.get_untracked();
@@ -267,7 +292,20 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                         &ids,
                         default_chart_style.get_untracked(),
                     );
-                    (style, line_style, align, embedded_color, variant, chart_style)
+                    let frame_style = selected_frame_style(
+                        scene,
+                        &ids,
+                        default_frame_style.get_untracked(),
+                    );
+                    (
+                        style,
+                        line_style,
+                        align,
+                        embedded_color,
+                        variant,
+                        chart_style,
+                        frame_style,
+                    )
                 })
             });
         stroke_size.set(new_style.stroke_width);
@@ -280,6 +318,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         local_embedded_text_color.set(embedded_color.unwrap_or_default());
         local_connector_variant.set(variant);
         local_chart_style.set(chart_style);
+        local_frame_style.set(frame_style);
     });
 
     let update_style: UpdateStyle = Rc::new({
@@ -605,6 +644,90 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         }
     });
 
+    let update_frame_style: UpdateFrameStyle = Rc::new({
+        let local_frame_style = local_frame_style;
+        let default_frame_style = default_frame_style;
+        let scene = scene;
+        let selected_ids = selected_ids;
+        let push_snapshot = push_snapshot.clone();
+        move |f: &dyn Fn(&mut FrameStyle)| {
+            local_frame_style.update(|fs| f(fs));
+            let ids = selected_ids.get_untracked();
+            if !ids.is_empty() {
+                edit_ops::mutate_scene(scene, &push_snapshot, |scene| {
+                    for id in &ids {
+                        if let Some(mut element) = scene.element_by_id_mut(*id) {
+                            if let Element::Frame(frame) = &mut *element {
+                                let mut fs = FrameStyle {
+                                    preset: frame.preset,
+                                    orientation: frame.orientation,
+                                };
+                                f(&mut fs);
+                                frame.apply_frame_style(&fs);
+                            }
+                        }
+                        scene.refresh_connectors_for(*id);
+                    }
+                });
+            } else {
+                default_frame_style.update(|fs| f(fs));
+            }
+        }
+    });
+
+    let set_frame_preset: Rc<dyn Fn(FramePreset)> = Rc::new({
+        let update_frame_style = update_frame_style.clone();
+        move |preset| update_frame_style(&|fs| fs.preset = preset)
+    });
+
+    let set_frame_orientation: Rc<dyn Fn(FrameOrientation)> = Rc::new({
+        let update_frame_style = update_frame_style.clone();
+        move |orient| update_frame_style(&|fs| fs.orientation = orient)
+    });
+
+    let frame_dimensions_label = Signal::derive(move || {
+        let ids = selected_ids.get();
+        if ids.len() == 1 {
+            if let Some(summary) = scene.with(|s| match s.element_by_id(ids[0]) {
+                Some(Element::Frame(f)) => Some(f.dimensions_summary()),
+                _ => None,
+            }) {
+                return summary;
+            }
+        }
+        let fs = local_frame_style.get();
+        if let Some((w_px, h_px)) = fs.preset.size_px(fs.orientation) {
+            let w_cm = crate::model::elements::frame::px_to_cm(w_px);
+            let h_cm = crate::model::elements::frame::px_to_cm(h_px);
+            let w_in = crate::model::elements::frame::px_to_in(w_px);
+            let h_in = crate::model::elements::frame::px_to_in(h_px);
+            format!(
+                "{:.1} × {:.1} cm  ({:.1} × {:.1} in · {:.0} × {:.0} px)",
+                w_cm, h_cm, w_in, h_in, w_px, h_px
+            )
+        } else {
+            "Drag on canvas to create a custom-sized frame".to_string()
+        }
+    });
+
+    let on_focus_frame: Rc<dyn Fn()> = Rc::new({
+        let scene = scene;
+        let selected_ids = selected_ids;
+        let viewport = viewport;
+        move || {
+            let ids = selected_ids.get_untracked();
+            if let Some(&id) = ids.first() {
+                if let Some(bounds) = scene.with_untracked(|s| match s.element_by_id(id) {
+                    Some(Element::Frame(f)) => Some(f.bounds()),
+                    _ => None,
+                }) {
+                    let screen = window_size();
+                    viewport.update(|vp| vp.fit_rect(bounds, screen, 72.0, 0.1, 20.0));
+                }
+            }
+        }
+    });
+
     let color_swatches: &[&str] = &[
         Color::WHITE,
         Color::YELLOW,
@@ -615,6 +738,15 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
 
     view! {
         <div class="flex flex-col gap-4 select-none">
+            {frame_section(
+                is_frame,
+                has_single_selected_frame,
+                local_frame_style,
+                frame_dimensions_label,
+                set_frame_preset,
+                set_frame_orientation,
+                on_focus_frame,
+            )}
             {chart_section(
                 is_chart,
                 has_single_selected_chart,

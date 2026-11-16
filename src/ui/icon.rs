@@ -62,6 +62,7 @@ lucide_icons! {
     text => "type.svg",
     freehand => "line-squiggle.svg",
     chart => "chart-column.svg",
+    frame => "frame.svg",
 
     // Toolbar and menu.
     home => "house.svg",
@@ -71,6 +72,7 @@ lucide_icons! {
     menu => "menu.svg",
     close => "x.svg",
     check => "check.svg",
+    chevron_left => "chevron-left.svg",
     chevron_right => "chevron-right.svg",
 
     // Edit, clipboard, and layers.
@@ -110,9 +112,12 @@ lucide_icons! {
     connector_curved => "spline.svg",
     connector_straight => "corner-down-right.svg",
 
-    // Catalogue.
+    // Catalogue and Frames.
     catalogue => "library-big.svg",
     save_snippet => "bookmark-plus.svg",
+    frames_grid => "layout-grid.svg",
+    focus => "focus.svg",
+    book_open => "book-open.svg",
 }
 
 /// Small star shown beside a starred catalogue item.
@@ -137,6 +142,21 @@ pub fn chevron_up() -> impl IntoView {
 
 pub fn chevron_down() -> impl IntoView {
     svg(include_str!("icons/chevron-down.svg"), "w-3 h-3")
+}
+
+/// Small focus icon for frame rows and buttons.
+pub fn focus_small() -> impl IntoView {
+    svg(include_str!("icons/focus.svg"), "w-3.5 h-3.5")
+}
+
+/// Small pencil icon for renaming a frame.
+pub fn pencil_small() -> impl IntoView {
+    svg(include_str!("icons/pencil.svg"), "w-3.5 h-3.5")
+}
+
+/// Small book-open icon for entering Frame Read/View mode.
+pub fn book_open_small() -> impl IntoView {
+    svg(include_str!("icons/book-open.svg"), "w-4 h-4")
 }
 
 /// Palette mark used by the theme picker.

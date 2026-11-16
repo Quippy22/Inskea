@@ -59,6 +59,7 @@ pub fn Dock(
             Tool::Text => "Text",
             Tool::Freehand => "Freehand",
             Tool::Chart => "Chart",
+            Tool::Frame => "Frame",
         }
     }
 
@@ -71,6 +72,7 @@ pub fn Dock(
             Tool::Text => icon::text().into_view(),
             Tool::Freehand => icon::freehand().into_view(),
             Tool::Chart => icon::chart().into_view(),
+            Tool::Frame => icon::frame().into_view(),
         }
     }
 

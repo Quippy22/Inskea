@@ -26,6 +26,8 @@ pub fn ToolBar<F1, F2>(
     request_action: RequestAction,
     viewport: RwSignal<Viewport>,
     canvas_mode: RwSignal<CanvasMode>,
+    selected_tool: RwSignal< crate::ui::dock::Tool>,
+    eraser_active: RwSignal<bool>,
     on_undo: F1,
     on_redo: F2,
     can_undo: Signal<bool>,
@@ -321,7 +323,18 @@ where
                 }
             }),
         },
-        DropdownItem::Disabled { label: "Frame" },
+        DropdownItem::Action {
+            label: "Frame",
+            on_click: Rc::new({
+                let close = close_menu;
+                move || {
+                    close();
+                    selected_tool.set(crate::ui::dock::Tool::Frame);
+                    canvas_mode.set(CanvasMode::Draw);
+                    eraser_active.set(false);
+                }
+            }),
+        },
     ];
 
     let import_items: Vec<DropdownItem> = vec![
