@@ -75,6 +75,16 @@ pub fn unrotate_for_element(point: Point, el: &Element) -> Point {
     Point::unrotate(point, cx, cy, rot)
 }
 
+/// Bounding box of the on-canvas "Focus" button rendered above the top-right
+/// corner of a single selected `Frame`.
+pub fn frame_focus_badge_rect(padded_bounds: Rect, wpx: f64) -> Rect {
+    let w = 56.0 * wpx;
+    let h = 18.0 * wpx;
+    let x = padded_bounds.x + padded_bounds.w - w;
+    let y = padded_bounds.y - 26.0 * wpx;
+    Rect::new(x, y, w, h)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -20,11 +20,13 @@ pub fn mm_to_px(mm: f64) -> f64 {
 }
 
 /// Convert centimeters to rounded canvas pixels at 96 DPI.
+#[allow(dead_code)]
 pub fn cm_to_px(cm: f64) -> f64 {
     (cm * PX_PER_CM).round()
 }
 
 /// Convert inches to rounded canvas pixels at 96 DPI.
+#[allow(dead_code)]
 pub fn in_to_px(inches: f64) -> f64 {
     (inches * PX_PER_INCH).round()
 }

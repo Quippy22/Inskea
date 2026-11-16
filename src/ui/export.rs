@@ -948,4 +948,23 @@ mod tests {
         assert!(svg.contains("Q1"));
         assert!(svg.contains("<rect"));
     }
+
+    #[test]
+    fn frame_export_renders_rect_with_preset_size() {
+        use crate::model::elements::frame::{Frame, FrameOrientation, FramePreset};
+
+        let mut scene = Scene::new();
+        let mut frame = Frame {
+            data: ElementData::new(0),
+            name: "Frame 1".to_string(),
+            preset: FramePreset::A4,
+            orientation: FrameOrientation::Portrait,
+            frame_order: 1,
+        };
+        frame.apply_preset(FramePreset::A4, FrameOrientation::Portrait);
+        scene.add_element(Element::Frame(frame));
+
+        let svg = scene_to_svg_crop(&scene, Rect::new(0.0, 0.0, 1000.0, 1300.0), Theme::Paper);
+        assert!(svg.contains(r#"<rect x="0" y="0" width="794" height="1123""#));
+    }
 }

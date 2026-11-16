@@ -1,7 +1,7 @@
 use super::utils::{
-    handle_positions, selection_bounds, selection_padding, stroke_radius, unrotate_for_element,
-    HANDLE_MOVE_RADIUS_PX, HANDLE_RESIZE_RADIUS_PX, HANDLE_ROTATE_RADIUS_PX, PATH_MERGE_DIST,
-    ROTATE_HANDLE_OFFSET_PX, SELECT_PADDING_PX,
+    frame_focus_badge_rect, handle_positions, selection_bounds, selection_padding, stroke_radius,
+    unrotate_for_element, HANDLE_MOVE_RADIUS_PX, HANDLE_RESIZE_RADIUS_PX, HANDLE_ROTATE_RADIUS_PX,
+    PATH_MERGE_DIST, ROTATE_HANDLE_OFFSET_PX, SELECT_PADDING_PX,
 };
 use super::MIN_DRAG_DIST;
 use crate::canvas::smart_guides::{self, GuideBox, SmartGuideState};
@@ -79,6 +79,32 @@ fn handle_text_double_click(
             }
             st.selected_ids.set(vec![id]);
             st.chart_editing_id.set(Some(id));
+            true
+        }
+        Element::Frame(frame) => {
+            if let Some(label) = element.data().embedded_text.as_ref() {
+                if let Some(layout) =
+                    crate::model::elements::embedded_text::layout_for_element(element)
+                {
+                    let local =
+                        Point::unrotate(world, layout.center.x, layout.center.y, layout.rotation);
+                    if (local.x - layout.center.x).abs() <= layout.width / 2.0 + HIT_MARGIN
+                        && (local.y - layout.center.y).abs() <= layout.height / 2.0 + HIT_MARGIN
+                    {
+                        st.text_edit.editing_embedded.set(true);
+                        st.text_edit.editing_new.set(false);
+                        st.text_edit.edit_text.set(label.wrapped.raw.to_string());
+                        st.text_edit.editing_id.set(Some(id));
+                        return true;
+                    }
+                }
+            }
+            let rect = frame.bounds();
+            let screen = crate::util::window_size();
+            props
+                .viewport
+                .update(|vp| vp.fit_rect(rect, screen, 72.0, 0.1, 20.0));
+            st.selected_ids.set(vec![id]);
             true
         }
         element if element.supports_embedded_text() => {
@@ -397,6 +423,23 @@ fn handle_selection_handles(
     let Some(b) = selection_bounds(ids, els) else {
         return false;
     };
+
+    // On-canvas "Focus" pill above the top-right corner of a single selected Frame.
+    if ids.len() == 1 {
+        if let Some(Element::Frame(frame)) = els.iter().find(|e| e.id() == ids[0]) {
+            let wpx = world_per_px(props);
+            let padded = b.padded(selection_padding(ids, els, wpx));
+            let badge = frame_focus_badge_rect(padded, wpx);
+            if badge.contains_point(test) {
+                let rect = frame.bounds();
+                let screen = crate::util::window_size();
+                props
+                    .viewport
+                    .update(|vp| vp.fit_rect(rect, screen, 72.0, 0.1, 20.0));
+                return true;
+            }
+        }
+    }
 
     if hit_resize_handle(test, b, st, props, world, ids, els) {
         return true;
