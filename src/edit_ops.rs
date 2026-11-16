@@ -1,7 +1,7 @@
 use crate::model::elements::{Bounds, Offset};
 use crate::model::{
-    AlignTarget, Alignment, ConnectionEnd, Distribution, Element, ElementId, Group, LayerOrder,
-    Point, Rect, Scene,
+    Alignment, ConnectionEnd, Distribution, Element, ElementId, Group, LayerOrder, Point, Rect,
+    Scene,
 };
 use leptos::{RwSignal, SignalGet, SignalSet, SignalUpdate, SignalWith, SignalWithUntracked};
 use std::rc::Rc;
@@ -266,27 +266,6 @@ pub fn align_selection(
     }
     mutate_scene(scene, push_snapshot, |s| {
         crate::model::align_selection(s, &ids, alignment);
-    });
-}
-
-/// Align selected elements or complete groups with an explicit target (Frame, Selection, etc.).
-pub fn align_selection_to(
-    scene: RwSignal<Scene>,
-    selected_ids: RwSignal<Vec<ElementId>>,
-    alignment: Alignment,
-    target: AlignTarget,
-    push_snapshot: &Rc<dyn Fn()>,
-) {
-    let ids = selected_ids.get();
-    if ids.is_empty() {
-        return;
-    }
-    let can = scene.with_untracked(|s| crate::model::can_align_selection(s, &ids));
-    if !can {
-        return;
-    }
-    mutate_scene(scene, push_snapshot, |s| {
-        crate::model::align_selection_to(s, &ids, alignment, target);
     });
 }
 

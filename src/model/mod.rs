@@ -9,8 +9,8 @@ pub mod selection;
 
 #[allow(unused_imports)]
 pub use alignment::{
-    align_selection, align_selection_to, can_align_selection, distribute_selection,
-    find_enclosing_frame, selection_item_count, AlignTarget, Alignment, Distribution,
+    align_selection, can_align_selection, distribute_selection, find_enclosing_frame,
+    selection_item_count, Alignment, Distribution,
 };
 pub use color::Color;
 pub use elements::*;

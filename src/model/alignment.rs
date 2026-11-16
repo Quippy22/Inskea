@@ -12,14 +12,6 @@ pub enum Alignment {
     Bottom,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum AlignTarget {
-    #[default]
-    Auto,
-    Selection,
-    Frame,
-    FrameEach,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Distribution {
@@ -151,60 +143,57 @@ pub fn find_enclosing_frame(scene: &Scene, ids: &[ElementId]) -> Option<Frame> {
         })
 }
 
+/// Find all element IDs positioned inside the given frame (excluding frames themselves).
+pub fn elements_inside_frame(scene: &Scene, frame: &Frame) -> Vec<ElementId> {
+    let frame_bounds = frame.bounds();
+    let frame_id = frame.data.id;
+    scene
+        .elements()
+        .iter()
+        .filter(|el| {
+            if el.id() == frame_id || matches!(el, Element::Frame(_)) {
+                return false;
+            }
+            let b = layout_bounds(el);
+            frame_bounds.contains_point(b.center()) || frame_bounds.intersects(&b)
+        })
+        .map(|el| el.id())
+        .collect()
+}
+
 /// Returns whether the current selection can be aligned.
 ///
 /// Returns true if:
 /// - 2 or more items are selected, OR
-/// - 1 item is selected, and it is situated inside an enclosing frame (and is not a frame itself).
+/// - Exactly 1 item is selected, and it is a Frame that contains elements inside it.
 pub fn can_align_selection(scene: &Scene, ids: &[ElementId]) -> bool {
     let items = selection_items(scene, ids);
     if items.is_empty() {
         return false;
     }
-    if items.len() >= 2 {
-        return true;
-    }
-    if let Some(id) = ids.first() {
-        if let Some(Element::Frame(_)) = scene.element_by_id(*id) {
-            return false;
+    if ids.len() == 1 {
+        if let Some(Element::Frame(frame)) = scene.element_by_id(ids[0]) {
+            return !elements_inside_frame(scene, &frame).is_empty();
         }
+        return false;
     }
-    find_enclosing_frame(scene, ids).is_some()
+    items.len() >= 2
 }
 
 pub fn align_selection(scene: &mut Scene, ids: &[ElementId], alignment: Alignment) {
-    align_selection_to(scene, ids, alignment, AlignTarget::Auto);
-}
-
-pub fn align_selection_to(
-    scene: &mut Scene,
-    ids: &[ElementId],
-    alignment: Alignment,
-    target: AlignTarget,
-) {
     let items = selection_items(scene, ids);
     if items.is_empty() {
         return;
     }
 
-    let enclosing_frame = find_enclosing_frame(scene, ids);
-
-    let use_frame = match target {
-        AlignTarget::Frame | AlignTarget::FrameEach => enclosing_frame.is_some(),
-        AlignTarget::Selection => false,
-        AlignTarget::Auto => {
-            (items.len() == 1 && enclosing_frame.is_some())
-                || (items.len() > 1
-                    && ids
-                        .iter()
-                        .any(|id| matches!(scene.element_by_id(*id), Some(Element::Frame(_)))))
-        }
-    };
-
-    if use_frame {
-        if let Some(frame) = enclosing_frame {
-            let treat_as_block = matches!(target, AlignTarget::Frame | AlignTarget::Auto);
-            align_items_to_frame(scene, &items, &frame, alignment, treat_as_block);
+    // When a single frame is selected, align all elements inside the frame as a block/group!
+    if ids.len() == 1 {
+        if let Some(Element::Frame(frame)) = scene.element_by_id(ids[0]) {
+            let inside_ids = elements_inside_frame(scene, &frame);
+            if !inside_ids.is_empty() {
+                let inner_items = selection_items(scene, &inside_ids);
+                align_items_to_frame(scene, &inner_items, &frame, alignment);
+            }
             return;
         }
     }
@@ -212,6 +201,18 @@ pub fn align_selection_to(
     if items.len() < 2 {
         return;
     }
+
+    let has_frame_in_selection = ids
+        .iter()
+        .any(|id| matches!(scene.element_by_id(*id), Some(Element::Frame(_))));
+
+    if has_frame_in_selection {
+        if let Some(frame) = find_enclosing_frame(scene, ids) {
+            align_items_to_frame(scene, &items, &frame, alignment);
+            return;
+        }
+    }
+
     let Some(all_bounds) = union_bounds(&items) else {
         return;
     };
@@ -242,7 +243,6 @@ fn align_items_to_frame(
     items: &[SelectionItem],
     frame: &Frame,
     alignment: Alignment,
-    treat_as_block: bool,
 ) {
     let frame_bounds = frame.bounds();
     let frame_id = frame.data.id;
@@ -253,55 +253,25 @@ fn align_items_to_frame(
         .filter(|item| !item.ids.contains(&frame_id))
         .collect();
 
-    if non_frame_items.is_empty() {
+    let Some(all_bounds) = non_frame_items
+        .iter()
+        .map(|item| item.bounds)
+        .reduce(|left, right| left.union(&right))
+    else {
         return;
-    }
+    };
 
-    if non_frame_items.len() == 1 || !treat_as_block {
-        for item in non_frame_items {
-            let target_pos = match alignment {
-                Alignment::Left => frame_bounds.x,
-                Alignment::HorizontalCenter => frame_bounds.center().x - item.bounds.w / 2.0,
-                Alignment::Right => frame_bounds.right() - item.bounds.w,
-                Alignment::Top => frame_bounds.y,
-                Alignment::VerticalCenter => frame_bounds.center().y - item.bounds.h / 2.0,
-                Alignment::Bottom => frame_bounds.bottom() - item.bounds.h,
-            };
-            let (dx, dy) = match alignment {
-                Alignment::Left | Alignment::HorizontalCenter | Alignment::Right => {
-                    (target_pos - item.bounds.x, 0.0)
-                }
-                Alignment::Top | Alignment::VerticalCenter | Alignment::Bottom => {
-                    (0.0, target_pos - item.bounds.y)
-                }
-            };
-            offset_item(scene, item, dx, dy);
-        }
-    } else {
-        let Some(all_bounds) = non_frame_items
-            .iter()
-            .map(|item| item.bounds)
-            .reduce(|left, right| left.union(&right))
-        else {
-            return;
-        };
+    let (dx, dy) = match alignment {
+        Alignment::Left => (frame_bounds.x - all_bounds.x, 0.0),
+        Alignment::HorizontalCenter => (frame_bounds.center().x - all_bounds.center().x, 0.0),
+        Alignment::Right => (frame_bounds.right() - all_bounds.right(), 0.0),
+        Alignment::Top => (0.0, frame_bounds.y - all_bounds.y),
+        Alignment::VerticalCenter => (0.0, frame_bounds.center().y - all_bounds.center().y),
+        Alignment::Bottom => (0.0, frame_bounds.bottom() - all_bounds.bottom()),
+    };
 
-        let (dx, dy) = match alignment {
-            Alignment::Left => (frame_bounds.x - all_bounds.x, 0.0),
-            Alignment::HorizontalCenter => {
-                (frame_bounds.center().x - all_bounds.center().x, 0.0)
-            }
-            Alignment::Right => (frame_bounds.right() - all_bounds.right(), 0.0),
-            Alignment::Top => (0.0, frame_bounds.y - all_bounds.y),
-            Alignment::VerticalCenter => {
-                (0.0, frame_bounds.center().y - all_bounds.center().y)
-            }
-            Alignment::Bottom => (0.0, frame_bounds.bottom() - all_bounds.bottom()),
-        };
-
-        for item in non_frame_items {
-            offset_item(scene, item, dx, dy);
-        }
+    for item in non_frame_items {
+        offset_item(scene, item, dx, dy);
     }
 }
 
@@ -507,26 +477,36 @@ mod tests {
         let frame_id = 1;
         let rect_id = 2;
 
-        assert!(can_align_selection(&scene, &[rect_id]));
-        assert!(!can_align_selection(&scene, &[frame_id]));
+        // A single shape does not align to the frame on its own
+        assert!(!can_align_selection(&scene, &[rect_id]));
+        // A selected frame containing elements CAN align its contents
+        assert!(can_align_selection(&scene, &[frame_id]));
 
-        align_selection(&mut scene, &[rect_id], Alignment::HorizontalCenter);
+        align_selection(&mut scene, &[frame_id], Alignment::HorizontalCenter);
         assert_eq!(scene.element_by_id(rect_id).unwrap().bounds().x, 250.0);
 
-        align_selection(&mut scene, &[rect_id], Alignment::VerticalCenter);
+        align_selection(&mut scene, &[frame_id], Alignment::VerticalCenter);
         assert_eq!(scene.element_by_id(rect_id).unwrap().bounds().y, 225.0);
 
-        align_selection(&mut scene, &[rect_id], Alignment::Left);
+        align_selection(&mut scene, &[frame_id], Alignment::Left);
         assert_eq!(scene.element_by_id(rect_id).unwrap().bounds().x, 100.0);
 
-        align_selection(&mut scene, &[rect_id], Alignment::Right);
+        align_selection(&mut scene, &[frame_id], Alignment::Right);
         assert_eq!(scene.element_by_id(rect_id).unwrap().bounds().x, 400.0);
 
-        align_selection(&mut scene, &[rect_id], Alignment::Top);
+        align_selection(&mut scene, &[frame_id], Alignment::Top);
         assert_eq!(scene.element_by_id(rect_id).unwrap().bounds().y, 100.0);
 
-        align_selection(&mut scene, &[rect_id], Alignment::Bottom);
+        align_selection(&mut scene, &[frame_id], Alignment::Bottom);
         assert_eq!(scene.element_by_id(rect_id).unwrap().bounds().y, 350.0);
+    }
+
+    #[test]
+    fn empty_frame_cannot_align() {
+        let mut scene = Scene::new();
+        scene.add_element(test_frame(0, 100.0, 100.0, 400.0, 300.0, "Frame 1"));
+        let frame_id = 1;
+        assert!(!can_align_selection(&scene, &[frame_id]));
     }
 
     #[test]
@@ -550,15 +530,11 @@ mod tests {
         scene.add_element(rectangle(0, 50.0, 100.0, 100.0, 50.0));
         scene.add_element(rectangle(0, 200.0, 100.0, 100.0, 50.0));
 
+        let frame_id = 1;
         let rect_a = 2;
         let rect_b = 3;
 
-        align_selection_to(
-            &mut scene,
-            &[rect_a, rect_b],
-            Alignment::HorizontalCenter,
-            AlignTarget::Frame,
-        );
+        align_selection(&mut scene, &[frame_id], Alignment::HorizontalCenter);
 
         let bounds_a = scene.element_by_id(rect_a).unwrap().bounds();
         let bounds_b = scene.element_by_id(rect_b).unwrap().bounds();
@@ -568,27 +544,6 @@ mod tests {
         assert_eq!(bounds_b.x - bounds_a.right(), 50.0);
         let union_center = (bounds_a.x + bounds_b.right()) / 2.0;
         assert_eq!(union_center, 300.0);
-    }
-
-    #[test]
-    fn multiple_elements_in_frame_align_each_item() {
-        let mut scene = Scene::new();
-        scene.add_element(test_frame(0, 0.0, 0.0, 600.0, 400.0, "Frame 1"));
-        scene.add_element(rectangle(0, 50.0, 100.0, 100.0, 50.0));
-        scene.add_element(rectangle(0, 200.0, 200.0, 80.0, 50.0));
-
-        let rect_a = 2;
-        let rect_b = 3;
-
-        align_selection_to(
-            &mut scene,
-            &[rect_a, rect_b],
-            Alignment::Left,
-            AlignTarget::FrameEach,
-        );
-
-        assert_eq!(scene.element_by_id(rect_a).unwrap().bounds().x, 0.0);
-        assert_eq!(scene.element_by_id(rect_b).unwrap().bounds().x, 0.0);
     }
 
     #[test]

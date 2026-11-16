@@ -300,6 +300,7 @@ impl Frame {
                     stroke=stroke.clone()
                     stroke-width=sw
                     stroke-linejoin="miter"
+                    pointer-events="stroke"
                 />
                 <path
                     d=ticks_d
@@ -425,9 +426,9 @@ impl HitTest for Frame {
         let w = self.data.width;
         let h = self.data.height;
 
-        // Also allow clicking the top-left header label region just above the frame.
-        let header_h = 20.0;
-        let header_w = (w * 0.6).clamp(60.0, 220.0);
+        // Allow clicking the top-left header label badge region above the frame.
+        let header_h = 24.0;
+        let header_w = (w * 0.75).clamp(60.0, 300.0);
         if px >= x - margin
             && px <= x + header_w + margin
             && py >= y - header_h - margin
@@ -436,21 +437,22 @@ impl HitTest for Frame {
             return true;
         }
 
-        let has_fill = self.data.style.fill_color.is_some();
-        if has_fill {
-            px >= x - margin && px <= x + w + margin && py >= y - margin && py <= y + h + margin
-        } else {
-            let dl = (px - x).abs();
-            let dr = (px - (x + w)).abs();
-            let dt = (py - y).abs();
-            let db = (py - (y + h)).abs();
-            let near_edge = dl.min(dr).min(dt).min(db);
-            near_edge <= margin + self.data.style.stroke_width
-                && px >= x - margin
-                && px <= x + w + margin
-                && py >= y - margin
-                && py <= y + h + margin
-        }
+        // Frames are visual artboards with no clickable fill.
+        // Clicking inside the frame has normal canvas click behavior.
+        // Only clicking the frame's edges/borders selects the frame.
+        let dl = (px - x).abs();
+        let dr = (px - (x + w)).abs();
+        let dt = (py - y).abs();
+        let db = (py - (y + h)).abs();
+        let near_edge = dl.min(dr).min(dt).min(db);
+        let stroke_w = self.data.style.stroke_width.max(1.5);
+        let threshold = (margin + stroke_w).max(8.0);
+
+        near_edge <= threshold
+            && px >= x - threshold
+            && px <= x + w + threshold
+            && py >= y - threshold
+            && py <= y + h + threshold
     }
 }
 

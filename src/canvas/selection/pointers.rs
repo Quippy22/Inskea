@@ -81,32 +81,6 @@ fn handle_text_double_click(
             st.chart_editing_id.set(Some(id));
             true
         }
-        Element::Frame(frame) => {
-            if let Some(label) = element.data().embedded_text.as_ref() {
-                if let Some(layout) =
-                    crate::model::elements::embedded_text::layout_for_element(element)
-                {
-                    let local =
-                        Point::unrotate(world, layout.center.x, layout.center.y, layout.rotation);
-                    if (local.x - layout.center.x).abs() <= layout.width / 2.0 + HIT_MARGIN
-                        && (local.y - layout.center.y).abs() <= layout.height / 2.0 + HIT_MARGIN
-                    {
-                        st.text_edit.editing_embedded.set(true);
-                        st.text_edit.editing_new.set(false);
-                        st.text_edit.edit_text.set(label.wrapped.raw.to_string());
-                        st.text_edit.editing_id.set(Some(id));
-                        return true;
-                    }
-                }
-            }
-            let rect = frame.bounds();
-            let screen = crate::util::window_size();
-            props
-                .viewport
-                .update(|vp| vp.fit_rect(rect, screen, 72.0, 0.1, 20.0));
-            st.selected_ids.set(vec![id]);
-            true
-        }
         element if element.supports_embedded_text() => {
             let Some(label) = element.data().embedded_text.as_ref() else {
                 return false;

@@ -58,6 +58,13 @@ impl Rect {
             && other.bottom() <= self.bottom()
     }
 
+    pub fn intersects(&self, other: &Rect) -> bool {
+        self.x < other.right()
+            && self.right() > other.x
+            && self.y < other.bottom()
+            && self.bottom() > other.y
+    }
+
     pub fn union(self, other: &Rect) -> Rect {
         let x1 = self.x.min(other.x);
         let y1 = self.y.min(other.y);
