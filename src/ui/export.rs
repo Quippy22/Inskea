@@ -728,65 +728,6 @@ async fn svg_to_png_blob(svg: &str) -> Option<web_sys::Blob> {
     png
 }
 
-/// Shared SVG→canvas→JPEG bytes pipeline used for PDF page generation.
-pub async fn svg_to_jpeg_bytes(
-    svg: &str,
-    scale: f64,
-    _quality: f64,
-) -> Option<(u32, u32, Vec<u8>)> {
-    let svg = svg_with_fonts(svg.to_string()).await;
-    let document = web_sys::window()?.document()?;
-    let blob = svg_blob(&svg)?;
-    let url = web_sys::Url::create_object_url_with_blob(&blob).ok()?;
-    let img = document
-        .create_element("img")
-        .ok()?
-        .dyn_into::<web_sys::HtmlImageElement>()
-        .ok()?;
-    if wasm_bindgen_futures::JsFuture::from(image_load_promise(&img, &url))
-        .await
-        .is_err()
-    {
-        web_sys::Url::revoke_object_url(&url).ok();
-        return None;
-    }
-
-    let natural_w = img.natural_width();
-    let natural_h = img.natural_height();
-    let pixel_w = ((natural_w as f64) * scale).round().max(1.0) as u32;
-    let pixel_h = ((natural_h as f64) * scale).round().max(1.0) as u32;
-
-    let canvas = document
-        .create_element("canvas")
-        .ok()?
-        .dyn_into::<web_sys::HtmlCanvasElement>()
-        .ok()?;
-    canvas.set_width(pixel_w);
-    canvas.set_height(pixel_h);
-
-    let ctx = canvas
-        .get_context("2d")
-        .ok()
-        .flatten()?
-        .dyn_into::<web_sys::CanvasRenderingContext2d>()
-        .ok()?;
-
-    if (scale - 1.0).abs() > 1e-4 {
-        let _ = ctx.scale(scale, scale);
-    }
-    let _ = ctx.draw_image_with_html_image_element(&img, 0.0, 0.0);
-    web_sys::Url::revoke_object_url(&url).ok();
-
-    let data_url = canvas
-        .to_data_url_with_type("image/jpeg")
-        .ok()?;
-
-    let b64 = data_url.split(',').nth(1)?;
-    use base64::Engine;
-    let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
-
-    Some((pixel_w, pixel_h, bytes))
-}
 
 pub fn download_png_from_svg(svg: String, filename: String, notifications: Notifications) {
     spawn_local(async move {
@@ -1005,48 +946,26 @@ pub fn export_all_frames_pdf(scene: &Scene, bg: Theme, notifications: Notificati
         return;
     }
 
-    let mut svg_list = Vec::new();
+    let mut pages = Vec::with_capacity(frames.len());
     for frame in &frames {
         let bounds = frame.bounds();
-        let svg = scene_to_svg_crop(scene, bounds, bg);
-        let width_pt = crate::ui::pdf::px_to_pt(frame.data.width.abs());
-        let height_pt = crate::ui::pdf::px_to_pt(frame.data.height.abs());
-        svg_list.push((width_pt, height_pt, svg));
+        let elements = scene.elements_in_view(bounds);
+        let page = crate::ui::pdf::render_scene_to_pdf_page(&elements, bounds, bg);
+        pages.push(page);
     }
 
-    let tauri = crate::tauri_bridge::is_tauri();
+    let pdf_bytes = crate::ui::pdf::build_pdf(&pages, "Frames Gallery");
     let filename = "frames-gallery.pdf".to_string();
 
-    spawn_local(async move {
-        let mut pages = Vec::new();
-        for (w_pt, h_pt, svg) in svg_list {
-            if let Some((w_px, h_px, jpeg)) = svg_to_jpeg_bytes(&svg, 2.0, 0.92).await {
-                pages.push(crate::ui::pdf::PdfPage {
-                    width_pt: w_pt,
-                    height_pt: h_pt,
-                    image_width_px: w_px,
-                    image_height_px: h_px,
-                    jpeg_data: jpeg,
-                });
-            }
-        }
-
-        if pages.is_empty() {
-            notify::error(notifications, "Failed to render frames for PDF export.");
-            return;
-        }
-
-        let pdf_bytes = crate::ui::pdf::build_pdf(&pages, "Frames Gallery");
-        if tauri {
-            tauri_export_pdf_named(pdf_bytes, filename, notifications);
-        } else {
-            download_bytes(&pdf_bytes, &filename, "application/pdf");
-            notify::info(
-                notifications,
-                format!("Exported {} frames to {}", pages.len(), filename),
-            );
-        }
-    });
+    if crate::tauri_bridge::is_tauri() {
+        tauri_export_pdf_named(pdf_bytes, filename, notifications);
+    } else {
+        download_bytes(&pdf_bytes, &filename, "application/pdf");
+        notify::info(
+            notifications,
+            format!("Exported {} frames to {}", pages.len(), filename),
+        );
+    }
 }
 
 /// Export a single frame as a 1-page PDF document.
@@ -1065,34 +984,17 @@ pub fn export_frame_pdf(
 
     let bounds = frame.bounds();
     let stem = frame_filename_stem(&frame.name, frame.frame_order);
-    let svg = scene_to_svg_crop(scene, bounds, bg);
-    let width_pt = crate::ui::pdf::px_to_pt(frame.data.width.abs());
-    let height_pt = crate::ui::pdf::px_to_pt(frame.data.height.abs());
+    let elements = scene.elements_in_view(bounds);
+    let page = crate::ui::pdf::render_scene_to_pdf_page(&elements, bounds, bg);
     let filename = format!("{stem}.pdf");
-    let tauri = crate::tauri_bridge::is_tauri();
+    let pdf_bytes = crate::ui::pdf::build_pdf(&[page], &stem);
 
-    spawn_local(async move {
-        let Some((w_px, h_px, jpeg)) = svg_to_jpeg_bytes(&svg, 2.0, 0.92).await else {
-            notify::error(notifications, "Could not render the frame for PDF export.");
-            return;
-        };
-
-        let page = crate::ui::pdf::PdfPage {
-            width_pt,
-            height_pt,
-            image_width_px: w_px,
-            image_height_px: h_px,
-            jpeg_data: jpeg,
-        };
-
-        let pdf_bytes = crate::ui::pdf::build_pdf(&[page], &stem);
-        if tauri {
-            tauri_export_pdf_named(pdf_bytes, filename, notifications);
-        } else {
-            download_bytes(&pdf_bytes, &filename, "application/pdf");
-            notify::info(notifications, format!("Exported {filename}"));
-        }
-    });
+    if crate::tauri_bridge::is_tauri() {
+        tauri_export_pdf_named(pdf_bytes, filename, notifications);
+    } else {
+        download_bytes(&pdf_bytes, &filename, "application/pdf");
+        notify::info(notifications, format!("Exported {filename}"));
+    }
 }
 
 /// Export the canvas or selection as a PDF document.
@@ -1104,13 +1006,7 @@ pub fn export_canvas_pdf(
     bg: Theme,
     notifications: Notifications,
 ) {
-    let svg = scene_to_svg(scene, viewport, screen, selected, bg);
-    if svg.is_empty() {
-        notify::error(notifications, "Nothing to export.");
-        return;
-    }
-
-    let (width_pt, height_pt) = match selected {
+    let (view, elements, filename): (Rect, Vec<Element>, String) = match selected {
         Some(ids) if !ids.is_empty() => {
             let elements: Vec<_> = ids
                 .iter()
@@ -1118,46 +1014,34 @@ pub fn export_canvas_pdf(
                 .collect();
             if let Some(b) = combined_bounds(ids, &elements) {
                 let pad = 10.0;
-                (
-                    crate::ui::pdf::px_to_pt(b.w + pad * 2.0),
-                    crate::ui::pdf::px_to_pt(b.h + pad * 2.0),
-                )
+                let crop = Rect::new(b.x - pad, b.y - pad, b.w + pad * 2.0, b.h + pad * 2.0);
+                (crop, elements, "selection.pdf".to_string())
             } else {
-                (crate::ui::pdf::px_to_pt(screen.x), crate::ui::pdf::px_to_pt(screen.y))
+                notify::error(notifications, "Nothing to export.");
+                return;
             }
         }
-        _ => (crate::ui::pdf::px_to_pt(screen.x), crate::ui::pdf::px_to_pt(screen.y)),
-    };
-
-    let filename = if selected.is_some_and(|s| !s.is_empty()) {
-        "selection.pdf".to_string()
-    } else {
-        "canvas.pdf".to_string()
-    };
-    let tauri = crate::tauri_bridge::is_tauri();
-
-    spawn_local(async move {
-        let Some((w_px, h_px, jpeg)) = svg_to_jpeg_bytes(&svg, 2.0, 0.92).await else {
-            notify::error(notifications, "Could not render the canvas for PDF export.");
-            return;
-        };
-
-        let page = crate::ui::pdf::PdfPage {
-            width_pt,
-            height_pt,
-            image_width_px: w_px,
-            image_height_px: h_px,
-            jpeg_data: jpeg,
-        };
-
-        let pdf_bytes = crate::ui::pdf::build_pdf(&[page], "Inskea Drawing");
-        if tauri {
-            tauri_export_pdf_named(pdf_bytes, filename, notifications);
-        } else {
-            download_bytes(&pdf_bytes, &filename, "application/pdf");
-            notify::info(notifications, format!("Exported {filename}"));
+        _ => {
+            let view = viewport.visible_rect(screen);
+            let elements = scene.elements_in_view(view);
+            (view, elements, "canvas.pdf".to_string())
         }
-    });
+    };
+
+    let page = crate::ui::pdf::render_scene_to_pdf_page(&elements, view, bg);
+    let title = if filename.starts_with("selection") {
+        "Inskea Selection"
+    } else {
+        "Inskea Canvas"
+    };
+    let pdf_bytes = crate::ui::pdf::build_pdf(&[page], title);
+
+    if crate::tauri_bridge::is_tauri() {
+        tauri_export_pdf_named(pdf_bytes, filename, notifications);
+    } else {
+        download_bytes(&pdf_bytes, &filename, "application/pdf");
+        notify::info(notifications, format!("Exported {filename}"));
+    }
 }
 
 #[cfg(test)]
