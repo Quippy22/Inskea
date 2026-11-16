@@ -290,6 +290,33 @@ where
         }
     };
 
+    let on_export_frame = {
+        let close_menu = close_menu;
+        let doc = doc.clone();
+        move |fmt: ExportFormat| {
+            close_menu();
+            let bg = settings.get_untracked().theme;
+            let notifications = doc.notifications;
+            let selected = doc.selected_ids.get_untracked();
+            doc.scene.with_untracked(|s| {
+                let target_id = selected
+                    .iter()
+                    .copied()
+                    .find(|&id| matches!(s.element_by_id(id), Some(crate::model::Element::Frame(_))))
+                    .or_else(|| s.frames_ordered().first().map(|f| f.data.id));
+                match target_id {
+                    Some(fid) => {
+                        let as_png = matches!(fmt, ExportFormat::Png);
+                        export::export_frame(s, fid, as_png, bg, notifications);
+                    }
+                    None => {
+                        notify::error(notifications, "No frames in the drawing to export.");
+                    }
+                }
+            });
+        }
+    };
+
     // ── Dropdown item lists ────────────────────────────────────────────
 
     let file_items: Vec<DropdownItem> = vec![
@@ -380,6 +407,13 @@ where
                 move || f(ExportFormat::Png, true)
             }),
         },
+        DropdownItem::Action {
+            label: "Frame",
+            on_click: Rc::new({
+                let f = on_export_frame;
+                move || f(ExportFormat::Png)
+            }),
+        },
         DropdownItem::Separator,
         DropdownItem::Header { label: "SVG" },
         DropdownItem::Action {
@@ -394,6 +428,13 @@ where
             on_click: Rc::new({
                 let f = on_export;
                 move || f(ExportFormat::Svg, true)
+            }),
+        },
+        DropdownItem::Action {
+            label: "Frame",
+            on_click: Rc::new({
+                let f = on_export_frame;
+                move || f(ExportFormat::Svg)
             }),
         },
     ];

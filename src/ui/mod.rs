@@ -25,7 +25,7 @@ pub use catalogue::{
     CatalogueContext, CatalogueContextMenu, CatalogueTab, SaveSnippetDialog, SelectionContextMenu,
 };
 pub use chart_editor::ChartDataEditor;
-pub use frames::{FrameReaderOverlay, FramesContext};
+pub use frames::{FrameReaderOverlay, FramesContext, FramesContextMenu};
 pub use settings::SettingsPanel;
 pub use status::CanvasStatus;
 pub use theme_picker::ThemePicker;

@@ -1,12 +1,23 @@
+use crate::canvas::settings::CanvasSettings;
 use crate::canvas::{CanvasMode, Viewport};
 use crate::edit_ops;
 use crate::model::{Bounds, ElementId, Frame, FramePreset, Scene};
 use crate::ui::components::IconButton;
 use crate::ui::dock::Tool;
-use crate::ui::{icon, styles};
+use crate::ui::notify::Notifications;
+use crate::ui::{export, icon, styles};
 use crate::util::window_size;
 use leptos::*;
 use std::rc::Rc;
+
+/// Context menu state when right-clicking a frame row in the Frames gallery.
+#[derive(Clone, Copy, Debug)]
+pub struct FrameMenu {
+    pub id: ElementId,
+    pub index: usize,
+    pub x: f64,
+    pub y: f64,
+}
 
 /// Shared state for the top-right Frames panel and the Frame Read / View Mode overlay.
 #[derive(Clone)]
@@ -19,11 +30,15 @@ pub struct FramesContext {
     pub selected_tool: RwSignal<Tool>,
     pub eraser_active: RwSignal<bool>,
     pub push_snapshot: Rc<dyn Fn()>,
+    pub notifications: Notifications,
+    pub settings: RwSignal<CanvasSettings>,
     /// Currently inline-renaming frame ID and its draft text.
     pub renaming_id: RwSignal<Option<ElementId>>,
     pub rename_draft: RwSignal<String>,
     /// Active 0-based frame index when Read / View mode is open (`None` when normal editing).
     pub read_mode_index: RwSignal<Option<usize>>,
+    /// Right-click context menu on a frame row in the Frames gallery.
+    pub menu: RwSignal<Option<FrameMenu>>,
 }
 
 impl FramesContext {
@@ -44,6 +59,22 @@ impl FramesContext {
         self.focus_frame(frame_id);
         self.selected_ids.set(vec![frame_id]);
         self.canvas_mode.set(CanvasMode::Select);
+    }
+
+    /// Export `frame_id` as PNG (`as_png = true`) or SVG (`as_png = false`).
+    pub fn export_frame(&self, frame_id: ElementId, as_png: bool) {
+        let bg = self.settings.get_untracked().theme;
+        let notifications = self.notifications;
+        self.scene
+            .with_untracked(|s| export::export_frame(s, frame_id, as_png, bg, notifications));
+    }
+
+    /// Delete `frame_id` from the scene.
+    pub fn delete_frame(&self, frame_id: ElementId) {
+        edit_ops::mutate_scene(self.scene, &self.push_snapshot, |s| {
+            s.remove_by_id(frame_id);
+        });
+        self.selected_ids.update(|ids| ids.retain(|&id| id != frame_id));
     }
 
     /// Start inline renaming a frame.
@@ -99,6 +130,7 @@ impl FramesContext {
         }
         let idx = start_index.min(frames.len() - 1);
         self.open.set(false);
+        self.menu.set(None);
         self.renaming_id.set(None);
         self.selected_ids.set(Vec::new());
         self.read_mode_index.set(Some(idx));
@@ -146,6 +178,7 @@ impl FramesContext {
     /// Switch the canvas to Draw mode with `Tool::Frame`.
     pub fn activate_frame_tool(&self) {
         self.open.set(false);
+        self.menu.set(None);
         self.selected_tool.set(Tool::Frame);
         self.canvas_mode.set(CanvasMode::Draw);
         self.eraser_active.set(false);
@@ -160,6 +193,7 @@ pub fn FramesPanel(context: FramesContext) -> impl IntoView {
         let context = context.clone();
         move || {
             context.commit_rename();
+            context.menu.set(None);
             open.set(false);
         }
     };
@@ -169,6 +203,7 @@ pub fn FramesPanel(context: FramesContext) -> impl IntoView {
             let next = !open.get_untracked();
             if !next {
                 context.commit_rename();
+                context.menu.set(None);
             }
             open.set(next);
         }
@@ -312,9 +347,21 @@ fn frame_row(
     let ctx_key = context.clone();
     let ctx_up = context.clone();
     let ctx_down = context.clone();
+    let ctx_menu = context.clone();
     let frame_for_rename = frame.clone();
     let is_first = idx == 0;
     let is_last = idx + 1 >= total;
+
+    let open_context_menu = move |ev: web_sys::MouseEvent| {
+        ev.prevent_default();
+        ev.stop_propagation();
+        ctx_menu.menu.set(Some(FrameMenu {
+            id,
+            index: idx,
+            x: ev.client_x() as f64,
+            y: ev.client_y() as f64,
+        }));
+    };
 
     view! {
         <div
@@ -325,6 +372,7 @@ fn frame_row(
                     styles::CATALOGUE_ITEM
                 }
             }
+            on:contextmenu=open_context_menu
         >
             <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-surface/70 text-[11px] font-mono text-subtle tabular-nums">
                 {idx + 1}
@@ -370,7 +418,7 @@ fn frame_row(
                                     event.stop_propagation();
                                     ctx_dbl.begin_rename(&frame_dbl);
                                 }
-                                title="Click to select & focus · Double-click to rename"
+                                title="Click to select & focus · Double-click to rename · Right-click for options"
                             >
                                 <span class="block truncate text-xs font-medium text-fg">
                                     {name_text}
@@ -436,6 +484,123 @@ fn frame_row(
                 </div>
             </div>
         </div>
+    }
+}
+
+/// Context menu opened by right-clicking a frame row in the Frames gallery (`FramesPanel`).
+#[component]
+pub fn FramesContextMenu(context: FramesContext) -> impl IntoView {
+    let menu = context.menu;
+    move || {
+        let Some(item) = menu.get() else {
+            return view! {}.into_view();
+        };
+        let size = window_size();
+        let left = item.x.min(size.x - 196.0).max(8.0);
+        let top = item.y.min(size.y - 220.0).max(8.0);
+        let close = move || menu.set(None);
+
+        let ctx_png = context.clone();
+        let ctx_svg = context.clone();
+        let ctx_focus = context.clone();
+        let ctx_rename = context.clone();
+        let ctx_read = context.clone();
+        let ctx_delete = context.clone();
+
+        view! {
+            <>
+                <div
+                    class="fixed inset-0 z-[70]"
+                    on:click=move |_| close()
+                    on:contextmenu=move |ev| {
+                        ev.prevent_default();
+                        close();
+                    }
+                ></div>
+                <div
+                    class="fixed z-[71] w-48 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1"
+                    style=format!("left:{left}px; top:{top}px")
+                    role="menu"
+                >
+                    <button
+                        class=styles::MENU_ITEM
+                        on:click=move |_| {
+                            close();
+                            ctx_png.export_frame(item.id, true);
+                        }
+                        role="menuitem"
+                    >
+                        <span>"Export as PNG"</span>
+                        <span class="text-subtle">{icon::frame()}</span>
+                    </button>
+                    <button
+                        class=styles::MENU_ITEM
+                        on:click=move |_| {
+                            close();
+                            ctx_svg.export_frame(item.id, false);
+                        }
+                        role="menuitem"
+                    >
+                        <span>"Export as SVG"</span>
+                        <span class="text-subtle">{icon::frame()}</span>
+                    </button>
+                    <div class="h-px bg-border my-1"></div>
+                    <button
+                        class=styles::MENU_ITEM
+                        on:click=move |_| {
+                            close();
+                            ctx_focus.focus_frame(item.id);
+                        }
+                        role="menuitem"
+                    >
+                        <span>"Focus frame"</span>
+                        <span class="text-subtle">{icon::focus_small()}</span>
+                    </button>
+                    <button
+                        class=styles::MENU_ITEM
+                        on:click=move |_| {
+                            close();
+                            let frame_opt = ctx_rename.scene.with_untracked(|s| {
+                                s.frames_ordered()
+                                    .into_iter()
+                                    .find(|f| f.data.id == item.id)
+                            });
+                            if let Some(f) = frame_opt {
+                                ctx_rename.begin_rename(&f);
+                            }
+                        }
+                        role="menuitem"
+                    >
+                        <span>"Rename"</span>
+                        <span class="text-subtle">{icon::pencil_small()}</span>
+                    </button>
+                    <button
+                        class=styles::MENU_ITEM
+                        on:click=move |_| {
+                            close();
+                            ctx_read.start_read_mode(item.index);
+                        }
+                        role="menuitem"
+                    >
+                        <span>"Read mode from here"</span>
+                        <span class="text-subtle">{icon::book_open_small()}</span>
+                    </button>
+                    <div class="h-px bg-border my-1"></div>
+                    <button
+                        class=styles::MENU_ITEM
+                        on:click=move |_| {
+                            close();
+                            ctx_delete.delete_frame(item.id);
+                        }
+                        role="menuitem"
+                    >
+                        <span class="text-red">"Delete"</span>
+                        <span class="text-red">{icon::trash_small()}</span>
+                    </button>
+                </div>
+            </>
+        }
+        .into_view()
     }
 }
 

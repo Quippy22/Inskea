@@ -656,6 +656,8 @@ pub fn SelectionContextMenu(
                         (Some((fid, fidx)), Some(fctx)) => {
                             let fctx_focus = fctx.clone();
                             let fctx_read = fctx.clone();
+                            let fctx_png = fctx.clone();
+                            let fctx_svg = fctx.clone();
                             view! {
                                 <>
                                     <button
@@ -680,6 +682,29 @@ pub fn SelectionContextMenu(
                                         <span>"Read mode from here"</span>
                                         <span class="text-subtle">{icon::book_open_small()}</span>
                                     </button>
+                                    <button
+                                        class=styles::MENU_ITEM
+                                        on:click=move |_| {
+                                            close();
+                                            fctx_png.export_frame(fid, true);
+                                        }
+                                        role="menuitem"
+                                    >
+                                        <span>"Export frame (PNG)"</span>
+                                        <span class="text-subtle">{icon::frame()}</span>
+                                    </button>
+                                    <button
+                                        class=styles::MENU_ITEM
+                                        on:click=move |_| {
+                                            close();
+                                            fctx_svg.export_frame(fid, false);
+                                        }
+                                        role="menuitem"
+                                    >
+                                        <span>"Export frame (SVG)"</span>
+                                        <span class="text-subtle">{icon::frame()}</span>
+                                    </button>
+                                    <div class="h-px bg-border my-1"></div>
                                 </>
                             }
                             .into_view()

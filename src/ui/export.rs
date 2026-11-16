@@ -737,16 +737,82 @@ pub fn download_png_from_svg(svg: String, filename: String, notifications: Notif
     });
 }
 
+/// Sanitize a frame display name into a clean filename stem (e.g. `"Frame 1"` -> `"frame-1"`).
+pub fn frame_filename_stem(raw: &str, fallback_index: u32) -> String {
+    let mut out = String::new();
+    let mut last_dash = false;
+    for ch in raw.trim().chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            last_dash = false;
+        } else if (ch == ' ' || ch == '-' || ch == '_') && !out.is_empty() && !last_dash {
+            out.push('-');
+            last_dash = true;
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    if out.is_empty() {
+        format!("frame-{}", fallback_index.max(1))
+    } else {
+        out
+    }
+}
+
+/// Export a single [`Element::Frame`] (and all canvas elements intersecting its bounds)
+/// as either a PNG (`as_png = true`) or SVG (`as_png = false`).
+pub fn export_frame(
+    scene: &Scene,
+    frame_id: ElementId,
+    as_png: bool,
+    bg: Theme,
+    notifications: Notifications,
+) {
+    use crate::model::Bounds;
+
+    let Some(Element::Frame(frame)) = scene.element_by_id(frame_id) else {
+        notify::error(notifications, "Select a frame to export.");
+        return;
+    };
+    let bounds = frame.bounds();
+    let stem = frame_filename_stem(&frame.name, frame.frame_order);
+    let svg = scene_to_svg_crop(scene, bounds, bg);
+    let tauri = crate::tauri_bridge::is_tauri();
+    if as_png {
+        let filename = format!("{stem}.png");
+        if tauri {
+            tauri_export_png_named(svg, filename, notifications);
+        } else {
+            download_png_from_svg(svg, filename, notifications);
+        }
+    } else {
+        let filename = format!("{stem}.svg");
+        if tauri {
+            tauri_export_svg_named(svg, filename, notifications);
+        } else {
+            download_string(&svg, &filename);
+        }
+    }
+}
+
 /// Tauri-native SVG export: shows a save dialog, writes the SVG string to disk.
 pub fn tauri_export_svg(svg: String, selection: bool, notifications: Notifications) {
+    let name = if selection {
+        "selection.svg"
+    } else {
+        "canvas.svg"
+    };
+    tauri_export_svg_named(svg, name.to_string(), notifications);
+}
+
+/// Tauri-native SVG export with a custom default filename.
+pub fn tauri_export_svg_named(svg: String, default_name: String, notifications: Notifications) {
     spawn_local(async move {
         let dir = crate::tauri_bridge::get_documents_dir().await.ok();
-        let name = if selection {
-            "selection.svg"
-        } else {
-            "canvas.svg"
-        };
-        let Some(path) = crate::tauri_bridge::pick_save_path_svg(name, dir.as_deref()).await else {
+        let Some(path) =
+            crate::tauri_bridge::pick_save_path_svg(&default_name, dir.as_deref()).await
+        else {
             return;
         };
         let path = with_extension(path, "svg");
@@ -759,18 +825,25 @@ pub fn tauri_export_svg(svg: String, selection: bool, notifications: Notificatio
 
 /// Tauri-native PNG export: renders SVG to canvas, converts to blob, saves as PNG.
 pub fn tauri_export_png(svg: String, selection: bool, notifications: Notifications) {
+    let name = if selection {
+        "selection.png"
+    } else {
+        "canvas.png"
+    };
+    tauri_export_png_named(svg, name.to_string(), notifications);
+}
+
+/// Tauri-native PNG export with a custom default filename.
+pub fn tauri_export_png_named(svg: String, default_name: String, notifications: Notifications) {
     spawn_local(async move {
         let Some(blob) = svg_to_png_blob(&svg).await else {
             notify::error(notifications, "Could not render the PNG export.");
             return;
         };
-        let name = if selection {
-            "selection.png"
-        } else {
-            "canvas.png"
-        };
         let dir = crate::tauri_bridge::get_documents_dir().await.ok();
-        let Some(path) = crate::tauri_bridge::pick_save_path_png(name, dir.as_deref()).await else {
+        let Some(path) =
+            crate::tauri_bridge::pick_save_path_png(&default_name, dir.as_deref()).await
+        else {
             return;
         };
         let path = with_extension(path, "png");
@@ -956,4 +1029,12 @@ mod tests {
         let svg = scene_to_svg_crop(&scene, Rect::new(0.0, 0.0, 1000.0, 1300.0), Theme::Paper);
         assert!(svg.contains(r#"<rect x="0" y="0" width="794" height="1123""#));
     }
+
+    #[test]
+    fn frame_filename_stem_sanitizes_titles() {
+        assert_eq!(frame_filename_stem("Frame 1", 1), "frame-1");
+        assert_eq!(frame_filename_stem("  Cover Page / Intro! ", 2), "cover-page-intro");
+        assert_eq!(frame_filename_stem("", 3), "frame-3");
+    }
 }
+

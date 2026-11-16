@@ -20,8 +20,8 @@ use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{
     file_ops, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab, ChartDataEditor,
-    FrameReaderOverlay, FramesContext, SaveSnippetDialog, SelectionContextMenu, SettingsPanel,
-    ThemePicker, ToolBar, UnsavedChangesDialog, WelcomeOverlay,
+    FrameReaderOverlay, FramesContext, FramesContextMenu, SaveSnippetDialog, SelectionContextMenu,
+    SettingsPanel, ThemePicker, ToolBar, UnsavedChangesDialog, WelcomeOverlay,
 };
 use crate::util::window_size;
 use leptos::*;
@@ -221,9 +221,12 @@ pub fn App() -> impl IntoView {
         selected_tool,
         eraser_active,
         push_snapshot: push_snapshot.clone(),
+        notifications,
+        settings,
         renaming_id: create_rw_signal(None),
         rename_draft: create_rw_signal(String::new()),
         read_mode_index: create_rw_signal(None),
+        menu: create_rw_signal(None),
     };
 
     let on_save_snippet: Rc<dyn Fn()> = {
@@ -482,6 +485,7 @@ pub fn App() -> impl IntoView {
     });
     {
         let catalogue_escape = catalogue.clone();
+        let frames_escape = frames.clone();
         let _ = window_event_listener(leptos::ev::keydown, move |ev: leptos::ev::KeyboardEvent| {
             if ev.key() != "Escape" {
                 return;
@@ -495,6 +499,9 @@ pub fn App() -> impl IntoView {
             } else if catalogue_escape.menu.get_untracked().is_some() {
                 ev.prevent_default();
                 catalogue_escape.menu.set(None);
+            } else if frames_escape.menu.get_untracked().is_some() {
+                ev.prevent_default();
+                frames_escape.menu.set(None);
             } else if catalogue_escape.selection_menu.get_untracked().is_some() {
                 ev.prevent_default();
                 catalogue_escape.selection_menu.set(None);
@@ -889,6 +896,7 @@ pub fn App() -> impl IntoView {
                 on_cancel=snippet_cancel
             />
             <CatalogueContextMenu context=catalogue.clone() />
+            <FramesContextMenu context=frames.clone() />
             <SelectionContextMenu
                 context=catalogue.clone()
                 chart_editing_id=chart_editing_id
