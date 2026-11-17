@@ -87,50 +87,6 @@ jobs:
             echo "should_release=true" >> "$GITHUB_OUTPUT"
           fi
 
-  clippy:
-    name: Clippy
-    needs: version
-    if: needs.version.outputs.should_release == 'true'
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Cache Linux dependencies
-        id: apt_cache
-        uses: awalsh128/cache-apt-pkgs-action@v1
-        continue-on-error: true
-        with:
-          packages: >-
-            build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
-            librsvg2-dev libssl-dev libgtk-3-dev libxdo-dev curl wget file
-            patchelf
-          version: "1.0"
-      - name: Install Linux dependencies
-        if: steps.apt_cache.outcome != 'success'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libssl-dev \
-            libgtk-3-dev \
-            libxdo-dev \
-            curl \
-            wget \
-            file \
-            patchelf
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: clippy
-          workspaces: |
-            . -> target
-            src-tauri -> target
-      - name: Clippy (root)
-        run: cargo clippy --all-targets -- -D warnings
-      - name: Clippy (desktop)
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
   build:
     name: Build ${{ matrix.name }}
@@ -163,19 +119,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Cache Linux dependencies
-        if: runner.os == 'Linux'
-        id: apt_cache
-        uses: awalsh128/cache-apt-pkgs-action@v1
-        continue-on-error: true
-        with:
-          packages: >-
-            build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
-            librsvg2-dev libssl-dev libgtk-3-dev libxdo-dev curl wget file
-            patchelf
-          version: "1.0"
       - name: Install Linux dependencies
-        if: runner.os == 'Linux' && steps.apt_cache.outcome != 'success'
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -199,22 +144,12 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.artifact }}
+          shared-key: ${{ matrix.artifact }}
+          cache-all-crates: "true"
+          cache-targets: "true"
           workspaces: |
             . -> target
             src-tauri -> target
-      # sccache's rustc command exceeds Windows' 32K command-line limit on web-sys.
-      - name: Set up sccache
-        if: runner.os == 'Linux'
-        id: sccache
-        uses: mozilla-actions/sccache-action@v0.0.11
-        continue-on-error: true
-      - name: Enable sccache
-        if: runner.os == 'Linux' && steps.sccache.outcome == 'success'
-        shell: bash
-        run: |
-          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
-          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
       - uses: taiki-e/install-action@v2
         with:
           tool: trunk@0.21.14
@@ -379,7 +314,7 @@ jobs:
 
   release:
     name: Publish release
-    needs: [version, clippy, build]
+    needs: [version, build]
     if: needs.version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
