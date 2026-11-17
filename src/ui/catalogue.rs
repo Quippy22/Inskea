@@ -574,6 +574,7 @@ pub fn CatalogueContextMenu(context: CatalogueContext) -> impl IntoView {
 pub fn SelectionContextMenu(
     context: CatalogueContext,
     #[prop(optional)] chart_editing_id: Option<RwSignal<Option<ElementId>>>,
+    #[prop(optional)] frames: Option<crate::ui::frames::FramesContext>,
 ) -> impl IntoView {
     let menu = context.selection_menu;
     move || {
@@ -603,6 +604,21 @@ pub fn SelectionContextMenu(
                 None
             }
         };
+        let selected_frame_info = {
+            let ids = context.selected_ids.get();
+            if ids.len() == 1 {
+                let id = ids[0];
+                context.scene.with(|s| {
+                    s.frames_ordered()
+                        .iter()
+                        .position(|f| f.data.id == id)
+                        .map(|idx| (id, idx))
+                })
+            } else {
+                None
+            }
+        };
+        let frames_for_menu = frames.clone();
 
         view! {
             <>
@@ -634,6 +650,77 @@ pub fn SelectionContextMenu(
                             </button>
                         }
                         .into_view(),
+                        _ => view! {}.into_view(),
+                    }}
+                    {match (selected_frame_info, frames_for_menu) {
+                        (Some((fid, fidx)), Some(fctx)) => {
+                            let fctx_focus = fctx.clone();
+                            let fctx_read = fctx.clone();
+                            let fctx_png = fctx.clone();
+                            let fctx_svg = fctx.clone();
+                            let fctx_pdf = fctx.clone();
+                            view! {
+                                <>
+                                    <button
+                                        class=styles::MENU_ITEM
+                                        on:click=move |_| {
+                                            close();
+                                            fctx_focus.focus_frame(fid);
+                                        }
+                                        role="menuitem"
+                                    >
+                                        <span>"Focus frame"</span>
+                                        <span class="text-subtle">{icon::focus()}</span>
+                                    </button>
+                                    <button
+                                        class=styles::MENU_ITEM
+                                        on:click=move |_| {
+                                            close();
+                                            fctx_read.start_read_mode(fidx);
+                                        }
+                                        role="menuitem"
+                                    >
+                                        <span>"Read mode from here"</span>
+                                        <span class="text-subtle">{icon::book_open_small()}</span>
+                                    </button>
+                                    <button
+                                        class=styles::MENU_ITEM
+                                        on:click=move |_| {
+                                            close();
+                                            fctx_png.export_frame(fid, true);
+                                        }
+                                        role="menuitem"
+                                    >
+                                        <span>"Export frame (PNG)"</span>
+                                        <span class="text-subtle">{icon::frame()}</span>
+                                    </button>
+                                    <button
+                                        class=styles::MENU_ITEM
+                                        on:click=move |_| {
+                                            close();
+                                            fctx_svg.export_frame(fid, false);
+                                        }
+                                        role="menuitem"
+                                    >
+                                        <span>"Export frame (SVG)"</span>
+                                        <span class="text-subtle">{icon::frame()}</span>
+                                    </button>
+                                    <button
+                                        class=styles::MENU_ITEM
+                                        on:click=move |_| {
+                                            close();
+                                            fctx_pdf.export_frame_pdf(fid);
+                                        }
+                                        role="menuitem"
+                                    >
+                                        <span>"Export frame (PDF)"</span>
+                                        <span class="text-subtle">{icon::book_open_small()}</span>
+                                    </button>
+                                    <div class="h-px bg-border my-1"></div>
+                                </>
+                            }
+                            .into_view()
+                        }
                         _ => view! {}.into_view(),
                     }}
                     <button class=styles::MENU_ITEM on:click=save role="menuitem">

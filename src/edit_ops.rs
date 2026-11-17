@@ -126,6 +126,16 @@ pub(crate) fn insert_elements(
         let bindings = take_connector_bindings(&mut element);
         element.offset(dx, dy);
         element.data_mut().id = 0;
+        if let Element::Frame(frame) = &mut element {
+            frame.frame_order = 0;
+            if frame
+                .name
+                .strip_prefix("Frame ")
+                .is_some_and(|rest| rest.trim().parse::<u32>().is_ok())
+            {
+                frame.name.clear();
+            }
+        }
         scene.add_element(element);
         let new_id = scene.next_id - 1;
         new_ids.push(new_id);
@@ -239,7 +249,7 @@ pub fn reorder_selection(
     });
 }
 
-/// Align selected elements or complete groups against the outer selection bounds.
+/// Align selected elements or complete groups against the outer selection bounds or enclosing frame.
 pub fn align_selection(
     scene: RwSignal<Scene>,
     selected_ids: RwSignal<Vec<ElementId>>,
@@ -247,7 +257,11 @@ pub fn align_selection(
     push_snapshot: &Rc<dyn Fn()>,
 ) {
     let ids = selected_ids.get();
-    if ids.len() < 2 {
+    if ids.is_empty() {
+        return;
+    }
+    let can = scene.with_untracked(|s| crate::model::can_align_selection(s, &ids));
+    if !can {
         return;
     }
     mutate_scene(scene, push_snapshot, |s| {

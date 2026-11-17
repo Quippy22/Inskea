@@ -1,6 +1,6 @@
 use super::utils::{
-    selection_bounds, selection_padding, stroke_radius, HANDLE_RESIZE_RADIUS_PX,
-    ROTATE_HANDLE_OFFSET_PX, SELECT_PADDING_PX,
+    frame_focus_badge_rect, selection_bounds, selection_padding, stroke_radius,
+    HANDLE_RESIZE_RADIUS_PX, ROTATE_HANDLE_OFFSET_PX, SELECT_PADDING_PX,
 };
 use super::DASH_PREVIEW;
 use crate::canvas::settings::CanvasSettings;
@@ -524,6 +524,68 @@ fn selection_overlay_content(
         Vec::new()
     };
 
+    let frame_focus_badge: Option<View> = if ids.len() == 1 {
+        if let Some(Element::Frame(_)) = els.first() {
+            let badge = frame_focus_badge_rect(b, wpx);
+            let rx_pill = 4.0 * wpx;
+            let fs = 10.5 * wpx;
+            let icon_scale = 0.48 * wpx;
+            let icon_cx = badge.x + 11.0 * wpx;
+            let icon_cy = badge.y + badge.h / 2.0;
+            let text_x = badge.x + 21.0 * wpx;
+            let text_y = badge.y + badge.h * 0.70;
+            Some(
+                view! {
+                    <g pointer-events="none">
+                        <rect
+                            x=badge.x
+                            y=badge.y
+                            width=badge.w
+                            height=badge.h
+                            rx=rx_pill
+                            ry=rx_pill
+                            fill=fill
+                            stroke=hex
+                            stroke-width="1.25"
+                            vector-effect="non-scaling-stroke"
+                        />
+                        <g
+                            stroke=hex
+                            stroke-width="2"
+                            fill="none"
+                            transform=format!(
+                                "translate({} {}) scale({}) translate(-12 -12)",
+                                icon_cx, icon_cy, icon_scale
+                            )
+                        >
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                            <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                            <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                            <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                        </g>
+                        <text
+                            x=text_x
+                            y=text_y
+                            font-size=fs
+                            font-family=crate::model::elements::text::FONT_STACK
+                            font-weight="600"
+                            fill=hex
+                            style="user-select: none;"
+                        >
+                            "Focus"
+                        </text>
+                    </g>
+                }
+                .into_view(),
+            )
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     if rot != 0.0 {
         let deg = rot.to_degrees();
         view! {
@@ -532,6 +594,7 @@ fn selection_overlay_content(
                 {inner}
                 {icons}
                 {chart_handles}
+                {frame_focus_badge}
             </g>
         }
         .into_view()
@@ -541,6 +604,7 @@ fn selection_overlay_content(
             {inner}
             {icons}
             {chart_handles}
+            {frame_focus_badge}
         }
         .into_view()
     }

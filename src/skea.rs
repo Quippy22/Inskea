@@ -241,6 +241,43 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_frame_data() {
+        use crate::model::elements::frame::{Frame, FrameOrientation, FramePreset};
+
+        let mut scene = Scene::new();
+        let mut f1 = Frame {
+            data: ElementData::new(0),
+            name: "Cover Page".to_string(),
+            preset: FramePreset::A4,
+            orientation: FrameOrientation::Landscape,
+            frame_order: 1,
+        };
+        f1.apply_preset(FramePreset::A4, FrameOrientation::Landscape);
+        scene.add_element(Element::Frame(f1));
+
+        let mut f2 = Frame {
+            data: ElementData::new(0),
+            name: "Appendix".to_string(),
+            preset: FramePreset::B4,
+            orientation: FrameOrientation::Portrait,
+            frame_order: 2,
+        };
+        f2.apply_preset(FramePreset::B4, FrameOrientation::Portrait);
+        scene.add_element(Element::Frame(f2));
+
+        let saved = save_to_string(&scene).unwrap();
+        let loaded = load_from_str(&saved).unwrap();
+        assert_eq!(scene, loaded);
+        let ordered = loaded.frames_ordered();
+        assert_eq!(ordered.len(), 2);
+        assert_eq!(ordered[0].name, "Cover Page");
+        assert_eq!(ordered[0].preset, FramePreset::A4);
+        assert_eq!(ordered[0].orientation, FrameOrientation::Landscape);
+        assert_eq!(ordered[1].name, "Appendix");
+        assert_eq!(ordered[1].preset, FramePreset::B4);
+    }
+
+    #[test]
     fn round_trip_rotation_and_font_size() {
         let mut s = Scene::new();
         let mut rd = ElementData::new(0);

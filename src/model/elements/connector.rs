@@ -806,9 +806,11 @@ impl PathPoints for Connector {
 /// a connector never floats away from the curve. Text uses its glyph box.
 pub fn connection_points(element: &Element) -> Option<[Point; CONNECTION_POINT_COUNT]> {
     let bounds = match element {
-        Element::Rectangle(_) | Element::Ellipse(_) | Element::Image(_) | Element::Chart(_) => {
-            element.bounds()
-        }
+        Element::Rectangle(_)
+        | Element::Ellipse(_)
+        | Element::Image(_)
+        | Element::Chart(_)
+        | Element::Frame(_) => element.bounds(),
         Element::Text(text) => text.visual_bounds(),
         Element::Line(_) | Element::Freehand(_) | Element::Connector(_) => return None,
     };

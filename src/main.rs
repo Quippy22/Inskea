@@ -7,6 +7,7 @@ mod edit_ops;
 mod fonts;
 mod hotkeys;
 mod model;
+pub mod pdf;
 mod skea;
 mod storage;
 mod tauri_bridge;

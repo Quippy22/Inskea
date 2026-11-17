@@ -49,6 +49,33 @@ pub fn download_string(content: &str, filename: &str) {
     );
 }
 
+pub fn download_bytes(bytes: &[u8], filename: &str, mime: &str) {
+    let parts = js_sys::Array::new();
+    let uint8 = js_sys::Uint8Array::from(bytes);
+    parts.push(&uint8);
+    let opts = web_sys::BlobPropertyBag::new();
+    opts.set_type(mime);
+    let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &opts)
+        .expect("failed to create Blob");
+    let url = web_sys::Url::create_object_url_with_blob(&blob).expect("failed to create URL");
+    let document = web_sys::window().unwrap().document().unwrap();
+    let anchor = document.create_element("a").unwrap();
+    anchor.set_attribute("href", &url).ok();
+    anchor.set_attribute("download", filename).ok();
+    anchor.set_attribute("style", "display:none").ok();
+    document.body().unwrap().append_child(&anchor).ok();
+    let _ = anchor
+        .dyn_ref::<web_sys::HtmlElement>()
+        .map(|el| el.click());
+    document.body().unwrap().remove_child(&anchor).ok();
+    set_timeout(
+        move || {
+            web_sys::Url::revoke_object_url(&url).ok();
+        },
+        Duration::from_secs(1),
+    );
+}
+
 /// SVG export: walks elements and builds a minimal SVG string.
 /// When `selected` is `Some` and non-empty, only matching elements are
 /// included and the viewBox is set to the tight bounds of the selection.
@@ -481,6 +508,33 @@ fn el_svg(el: &Element) -> String {
                 format!(r#"<g transform="rotate({deg} {cx} {cy})">{out}</g>"#)
             }
         }
+        Element::Frame(f) => {
+            let fill = f
+                .data
+                .style
+                .fill_color
+                .as_ref()
+                .map(|c| c.to_hex())
+                .unwrap_or_else(|| "none".to_string());
+            let rect = format!(
+                r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" stroke="{}" stroke-width="1.5" stroke-linejoin="miter" opacity="{}"/>"#,
+                f.data.world_point.x,
+                f.data.world_point.y,
+                f.data.width,
+                f.data.height,
+                fill,
+                f.data.style.stroke_color.to_hex(),
+                f.data.style.opacity,
+            );
+            if f.data.rotation == 0.0 {
+                rect
+            } else {
+                let cx = f.data.world_point.x + f.data.width / 2.0;
+                let cy = f.data.world_point.y + f.data.height / 2.0;
+                let deg = f.data.rotation.to_degrees();
+                format!(r#"<g transform="rotate({deg} {cx} {cy})">{rect}</g>"#)
+            }
+        }
     };
     let Some(label) = el.data().embedded_text.as_ref() else {
         return body;
@@ -674,6 +728,7 @@ async fn svg_to_png_blob(svg: &str) -> Option<web_sys::Blob> {
     png
 }
 
+
 pub fn download_png_from_svg(svg: String, filename: String, notifications: Notifications) {
     spawn_local(async move {
         let Some(blob) = svg_to_png_blob(&svg).await else {
@@ -710,16 +765,82 @@ pub fn download_png_from_svg(svg: String, filename: String, notifications: Notif
     });
 }
 
+/// Sanitize a frame display name into a clean filename stem (e.g. `"Frame 1"` -> `"frame-1"`).
+pub fn frame_filename_stem(raw: &str, fallback_index: u32) -> String {
+    let mut out = String::new();
+    let mut last_dash = false;
+    for ch in raw.trim().chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            last_dash = false;
+        } else if (ch == ' ' || ch == '-' || ch == '_') && !out.is_empty() && !last_dash {
+            out.push('-');
+            last_dash = true;
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    if out.is_empty() {
+        format!("frame-{}", fallback_index.max(1))
+    } else {
+        out
+    }
+}
+
+/// Export a single [`Element::Frame`] (and all canvas elements intersecting its bounds)
+/// as either a PNG (`as_png = true`) or SVG (`as_png = false`).
+pub fn export_frame(
+    scene: &Scene,
+    frame_id: ElementId,
+    as_png: bool,
+    bg: Theme,
+    notifications: Notifications,
+) {
+    use crate::model::Bounds;
+
+    let Some(Element::Frame(frame)) = scene.element_by_id(frame_id) else {
+        notify::error(notifications, "Select a frame to export.");
+        return;
+    };
+    let bounds = frame.bounds();
+    let stem = frame_filename_stem(&frame.name, frame.frame_order);
+    let svg = scene_to_svg_crop(scene, bounds, bg);
+    let tauri = crate::tauri_bridge::is_tauri();
+    if as_png {
+        let filename = format!("{stem}.png");
+        if tauri {
+            tauri_export_png_named(svg, filename, notifications);
+        } else {
+            download_png_from_svg(svg, filename, notifications);
+        }
+    } else {
+        let filename = format!("{stem}.svg");
+        if tauri {
+            tauri_export_svg_named(svg, filename, notifications);
+        } else {
+            download_string(&svg, &filename);
+        }
+    }
+}
+
 /// Tauri-native SVG export: shows a save dialog, writes the SVG string to disk.
 pub fn tauri_export_svg(svg: String, selection: bool, notifications: Notifications) {
+    let name = if selection {
+        "selection.svg"
+    } else {
+        "canvas.svg"
+    };
+    tauri_export_svg_named(svg, name.to_string(), notifications);
+}
+
+/// Tauri-native SVG export with a custom default filename.
+pub fn tauri_export_svg_named(svg: String, default_name: String, notifications: Notifications) {
     spawn_local(async move {
         let dir = crate::tauri_bridge::get_documents_dir().await.ok();
-        let name = if selection {
-            "selection.svg"
-        } else {
-            "canvas.svg"
-        };
-        let Some(path) = crate::tauri_bridge::pick_save_path_svg(name, dir.as_deref()).await else {
+        let Some(path) =
+            crate::tauri_bridge::pick_save_path_svg(&default_name, dir.as_deref()).await
+        else {
             return;
         };
         let path = with_extension(path, "svg");
@@ -732,18 +853,25 @@ pub fn tauri_export_svg(svg: String, selection: bool, notifications: Notificatio
 
 /// Tauri-native PNG export: renders SVG to canvas, converts to blob, saves as PNG.
 pub fn tauri_export_png(svg: String, selection: bool, notifications: Notifications) {
+    let name = if selection {
+        "selection.png"
+    } else {
+        "canvas.png"
+    };
+    tauri_export_png_named(svg, name.to_string(), notifications);
+}
+
+/// Tauri-native PNG export with a custom default filename.
+pub fn tauri_export_png_named(svg: String, default_name: String, notifications: Notifications) {
     spawn_local(async move {
         let Some(blob) = svg_to_png_blob(&svg).await else {
             notify::error(notifications, "Could not render the PNG export.");
             return;
         };
-        let name = if selection {
-            "selection.png"
-        } else {
-            "canvas.png"
-        };
         let dir = crate::tauri_bridge::get_documents_dir().await.ok();
-        let Some(path) = crate::tauri_bridge::pick_save_path_png(name, dir.as_deref()).await else {
+        let Some(path) =
+            crate::tauri_bridge::pick_save_path_png(&default_name, dir.as_deref()).await
+        else {
             return;
         };
         let path = with_extension(path, "png");
@@ -789,6 +917,131 @@ pub fn tauri_export_png(svg: String, selection: bool, notifications: Notificatio
             notify::error(notifications, "Could not render the PNG export.");
         }
     });
+}
+
+/// Tauri-native PDF export with a custom default filename.
+pub fn tauri_export_pdf_named(bytes: Vec<u8>, default_name: String, notifications: Notifications) {
+    spawn_local(async move {
+        let dir = crate::tauri_bridge::get_documents_dir().await.ok();
+        let Some(path) =
+            crate::tauri_bridge::pick_save_path_pdf(&default_name, dir.as_deref()).await
+        else {
+            return;
+        };
+        let path = with_extension(path, "pdf");
+        match crate::tauri_bridge::save_file_binary(&path, &bytes).await {
+            Ok(()) => notify::info(notifications, format!("Exported {}", file_name(&path))),
+            Err(e) => notify::error(notifications, format!("Could not export the PDF: {e}")),
+        }
+    });
+}
+
+/// Export all frames in document sequence as a multi-page PDF document.
+pub fn export_all_frames_pdf(scene: &Scene, bg: Theme, notifications: Notifications) {
+    use crate::model::elements::Bounds;
+
+    let frames = scene.frames_ordered();
+    if frames.is_empty() {
+        notify::error(notifications, "No frames in the document to export.");
+        return;
+    }
+
+    let mut pages = Vec::with_capacity(frames.len());
+    for frame in &frames {
+        let bounds = frame.bounds();
+        let elements = scene.elements_in_view(bounds);
+        let page = crate::pdf::render_scene_to_pdf_page(&elements, bounds, bg);
+        pages.push(page);
+    }
+
+    let pdf_bytes = crate::pdf::build_pdf(&pages, "Frames Gallery");
+    let filename = "frames-gallery.pdf".to_string();
+
+    if crate::tauri_bridge::is_tauri() {
+        tauri_export_pdf_named(pdf_bytes, filename, notifications);
+    } else {
+        download_bytes(&pdf_bytes, &filename, "application/pdf");
+        notify::info(
+            notifications,
+            format!("Exported {} frames to {}", pages.len(), filename),
+        );
+    }
+}
+
+/// Export a single frame as a 1-page PDF document.
+pub fn export_frame_pdf(
+    scene: &Scene,
+    frame_id: ElementId,
+    bg: Theme,
+    notifications: Notifications,
+) {
+    use crate::model::elements::Bounds;
+
+    let Some(Element::Frame(frame)) = scene.element_by_id(frame_id) else {
+        notify::error(notifications, "Select a frame to export.");
+        return;
+    };
+
+    let bounds = frame.bounds();
+    let stem = frame_filename_stem(&frame.name, frame.frame_order);
+    let elements = scene.elements_in_view(bounds);
+    let page = crate::pdf::render_scene_to_pdf_page(&elements, bounds, bg);
+    let filename = format!("{stem}.pdf");
+    let pdf_bytes = crate::pdf::build_pdf(&[page], &stem);
+
+    if crate::tauri_bridge::is_tauri() {
+        tauri_export_pdf_named(pdf_bytes, filename, notifications);
+    } else {
+        download_bytes(&pdf_bytes, &filename, "application/pdf");
+        notify::info(notifications, format!("Exported {filename}"));
+    }
+}
+
+/// Export the canvas or selection as a PDF document.
+pub fn export_canvas_pdf(
+    scene: &Scene,
+    viewport: &Viewport,
+    screen: Point,
+    selected: Option<&[ElementId]>,
+    bg: Theme,
+    notifications: Notifications,
+) {
+    let (view, elements, filename): (Rect, Vec<Element>, String) = match selected {
+        Some(ids) if !ids.is_empty() => {
+            let elements: Vec<_> = ids
+                .iter()
+                .filter_map(|id| scene.element_by_id(*id))
+                .collect();
+            if let Some(b) = combined_bounds(ids, &elements) {
+                let pad = 10.0;
+                let crop = Rect::new(b.x - pad, b.y - pad, b.w + pad * 2.0, b.h + pad * 2.0);
+                (crop, elements, "selection.pdf".to_string())
+            } else {
+                notify::error(notifications, "Nothing to export.");
+                return;
+            }
+        }
+        _ => {
+            let view = viewport.visible_rect(screen);
+            let elements = scene.elements_in_view(view);
+            (view, elements, "canvas.pdf".to_string())
+        }
+    };
+
+    let page = crate::pdf::render_scene_to_pdf_page(&elements, view, bg);
+    let title = if filename.starts_with("selection") {
+        "Inskea Selection"
+    } else {
+        "Inskea Canvas"
+    };
+    let pdf_bytes = crate::pdf::build_pdf(&[page], title);
+
+    if crate::tauri_bridge::is_tauri() {
+        tauri_export_pdf_named(pdf_bytes, filename, notifications);
+    } else {
+        download_bytes(&pdf_bytes, &filename, "application/pdf");
+        notify::info(notifications, format!("Exported {filename}"));
+    }
 }
 
 #[cfg(test)]
@@ -910,4 +1163,31 @@ mod tests {
         assert!(svg.contains("Q1"));
         assert!(svg.contains("<rect"));
     }
+
+    #[test]
+    fn frame_export_renders_rect_with_preset_size() {
+        use crate::model::elements::frame::{Frame, FrameOrientation, FramePreset};
+
+        let mut scene = Scene::new();
+        let mut frame = Frame {
+            data: ElementData::new(0),
+            name: "Frame 1".to_string(),
+            preset: FramePreset::A4,
+            orientation: FrameOrientation::Portrait,
+            frame_order: 1,
+        };
+        frame.apply_preset(FramePreset::A4, FrameOrientation::Portrait);
+        scene.add_element(Element::Frame(frame));
+
+        let svg = scene_to_svg_crop(&scene, Rect::new(0.0, 0.0, 1000.0, 1300.0), Theme::Paper);
+        assert!(svg.contains(r#"<rect x="0" y="0" width="794" height="1123""#));
+    }
+
+    #[test]
+    fn frame_filename_stem_sanitizes_titles() {
+        assert_eq!(frame_filename_stem("Frame 1", 1), "frame-1");
+        assert_eq!(frame_filename_stem("  Cover Page / Intro! ", 2), "cover-page-intro");
+        assert_eq!(frame_filename_stem("", 3), "frame-3");
+    }
 }
+

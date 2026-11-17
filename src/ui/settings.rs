@@ -5,6 +5,7 @@ use crate::document::{PendingAction, RequestAction};
 use crate::tauri_bridge::{self, UpdateCheck, UpdateOutcome};
 use crate::ui::catalogue::{Catalogue, CatalogueContext};
 use crate::ui::components::{IconButton, NumberSlider, SegmentedControl};
+use crate::ui::frames::{FramesContext, FramesPanel};
 use crate::ui::icon;
 use crate::ui::notify;
 use crate::ui::styles;
@@ -91,6 +92,7 @@ pub fn SettingsPanel(
     settings: RwSignal<CanvasSettings>,
     theme_open: RwSignal<bool>,
     catalogue: CatalogueContext,
+    frames: FramesContext,
     request_action: RequestAction,
 ) -> impl IntoView {
     let is_tauri = tauri_bridge::is_tauri();
@@ -232,7 +234,36 @@ pub fn SettingsPanel(
     });
 
     let close = move || open.set(false);
-    let toggle = move || open.update(|v| *v = !*v);
+    let toggle = {
+        let cat_open = catalogue.open;
+        let frames_open = frames.open;
+        move || {
+            let next = !open.get_untracked();
+            if next {
+                cat_open.set(false);
+                frames_open.set(false);
+            }
+            open.set(next);
+        }
+    };
+
+    // Close sibling top-right popovers when one opens.
+    {
+        let cat_open = catalogue.open;
+        let frames_open = frames.open;
+        create_effect(move |_| {
+            if cat_open.get() {
+                frames_open.set(false);
+                open.set(false);
+            }
+        });
+        create_effect(move |_| {
+            if frames_open.get() {
+                cat_open.set(false);
+                open.set(false);
+            }
+        });
+    }
 
     // ── Options arrays ────────────────────────────────────
     let center_opts = &[
@@ -253,6 +284,7 @@ pub fn SettingsPanel(
         <div class="fixed top-4 right-4 z-50 pointer-events-none">
             <div class="relative pointer-events-auto">
                 <div class=format!("{} flex items-center", styles::PANEL)>
+                    <FramesPanel context=frames />
                     <Catalogue context=catalogue />
                     <div class="relative">
                         <IconButton on_click=toggle title="Settings" class=styles::BTN_COLLAPSE>

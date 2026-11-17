@@ -94,6 +94,28 @@ impl Viewport {
         self.offset_x = world.x - (new_center.x - screen_size.x / 2.0) / self.zoom;
         self.offset_y = world.y - (new_center.y - screen_size.y / 2.0) / self.zoom;
     }
+
+    /// Pan and zoom the viewport so `rect` is centered and fits inside `screen_size`
+    /// with at least `padding_px` of screen margin on each side.
+    pub fn fit_rect(
+        &mut self,
+        rect: Rect,
+        screen_size: Point,
+        padding_px: f64,
+        min_zoom: f64,
+        max_zoom: f64,
+    ) {
+        let center = rect.center();
+        self.offset_x = center.x;
+        self.offset_y = center.y;
+        let w = rect.w.abs().max(1.0);
+        let h = rect.h.abs().max(1.0);
+        let avail_w = (screen_size.x - padding_px * 2.0).max(64.0);
+        let avail_h = (screen_size.y - padding_px * 2.0).max(64.0);
+        let zoom_x = avail_w / w;
+        let zoom_y = avail_h / h;
+        self.zoom = zoom_x.min(zoom_y).clamp(min_zoom, max_zoom);
+    }
 }
 
 pub const EDGE_GRACE_PX: f64 = 40.0;
@@ -331,5 +353,17 @@ mod tests {
         let delta = edge_follow_delta(center, screen_size, shape_past_top, vp);
         assert!(delta.is_some());
         assert!(delta.unwrap().y < 0.0);
+    }
+
+    #[test]
+    fn fit_rect_centers_and_scales_to_available_screen_area() {
+        let mut vp = Viewport::default();
+        let rect = Rect::new(100.0, 200.0, 800.0, 400.0);
+        let screen = Point::new(1000.0, 800.0);
+        vp.fit_rect(rect, screen, 100.0, 0.1, 20.0);
+        assert!((vp.offset_x - 500.0).abs() < 1e-9);
+        assert!((vp.offset_y - 400.0).abs() < 1e-9);
+        // Available width = 800 -> zoom_x = 1.0, Available height = 600 -> zoom_y = 1.5 => min = 1.0
+        assert!((vp.zoom - 1.0).abs() < 1e-9);
     }
 }

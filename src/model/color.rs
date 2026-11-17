@@ -52,6 +52,15 @@ impl Color {
         format!("#{:02x}{:02x}{:02x}", self.0[0], self.0[1], self.0[2])
     }
 
+    /// Convert channels to PDF RGB floats (0.0 to 1.0).
+    pub fn to_pdf_rgb(self) -> (f64, f64, f64) {
+        (
+            self.0[0] as f64 / 255.0,
+            self.0[1] as f64 / 255.0,
+            self.0[2] as f64 / 255.0,
+        )
+    }
+
     pub const WHITE: &'static str = "#ffffff";
     pub const YELLOW: &'static str = "#eab308";
     pub const GREEN: &'static str = "#22c55e";

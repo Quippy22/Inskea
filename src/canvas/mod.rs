@@ -945,7 +945,9 @@ pub fn Canvas(
             } else {
                 (world, None)
             };
-            if (end.x - anchor.x).hypot(end.y - anchor.y) < MIN_DRAG_DIST {
+            let is_preset_frame = state.tool == Tool::Frame
+                && props.default_frame_style.get().preset != FramePreset::Freehand;
+            if (end.x - anchor.x).hypot(end.y - anchor.y) < MIN_DRAG_DIST && !is_preset_frame {
                 return None;
             }
             let mut el = modes::build_drag_element(
@@ -959,6 +961,11 @@ pub fn Canvas(
                 end_binding,
             );
             modes::apply_draw_style(&mut el, &props);
+            if let Element::Frame(frame) = &mut el {
+                if frame.preset != FramePreset::Freehand {
+                    frame.update_drag(end, anchor, shift, 1.0);
+                }
+            }
             Some(view! { <g stroke-dasharray=DASH_PREVIEW>{el.render(props.viewport.get().zoom)}</g> }.into_view())
         }
     };

@@ -14,7 +14,12 @@ pub fn sliders_section(
     kind: Signal<StylingKind>,
 ) -> impl IntoView {
     view! {
-        <div class:hidden=move || matches!(kind.get(), StylingKind::Text | StylingKind::Image)>
+        <div class:hidden=move || {
+            matches!(
+                kind.get(),
+                StylingKind::Text | StylingKind::Image | StylingKind::Frame
+            )
+        }>
             <NumberSlider
                 value=stroke_size
                 min=1.0
@@ -23,6 +28,8 @@ pub fn sliders_section(
                 label="Stroke size"
                 on_change=stroke_size_cb
             />
+        </div>
+        <div class:hidden=move || matches!(kind.get(), StylingKind::Text | StylingKind::Image)>
             <NumberSlider
                 value=opacity
                 min=5.0
@@ -44,3 +51,4 @@ pub fn sliders_section(
         </div>
     }
 }
+

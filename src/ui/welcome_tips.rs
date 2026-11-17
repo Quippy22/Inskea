@@ -12,6 +12,7 @@ pub(crate) const TIPS: &[&str] = &[
     "Ctrl+D duplicates the selection.",
     "Press 1-5 to pick a shape tool.",
     "Double-click a chart to edit its data.",
+    "Use Frames and Read Mode to step through pages.",
     "Press F for the freehand tool.",
     "Shift-drag shows smart guides.",
     "Alt-drag snaps to the grid.",
