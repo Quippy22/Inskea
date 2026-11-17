@@ -207,37 +207,22 @@ function copyFolder(src, dest) {
 copyFolder(path.join(npmDir, 'bin'), path.join(mainDir, 'bin'));
 copyFolder(path.join(npmDir, 'scripts'), path.join(mainDir, 'scripts'));
 copyFolder(path.join(npmDir, 'assets'), path.join(mainDir, 'assets'));
+// Copy root README.md and LICENSE
+const rootReadme = path.join(rootDir, 'README.md');
+if (fs.existsSync(rootReadme)) {
+  fs.copyFileSync(rootReadme, path.join(mainDir, 'README.md'));
+  fs.copyFileSync(rootReadme, path.join(linuxDir, 'README.md'));
+  fs.copyFileSync(rootReadme, path.join(winDir, 'README.md'));
+  fs.copyFileSync(rootReadme, path.join(darwinArm64Dir, 'README.md'));
+  fs.copyFileSync(rootReadme, path.join(darwinX64Dir, 'README.md'));
+} else {
+  console.warn(`[npm-publish] Warning: ${rootReadme} not found, skipping README copy.`);
+}
 
-const readmeContent = `# Inskea
-
-Infinite-canvas vector drawing application for sketching shapes, freehand strokes, and text.
-
-## Installation
-
-\`\`\`bash
-npm install -g inskea
-\`\`\`
-
-## Run
-
-\`\`\`bash
-inskea
-\`\`\`
-
-Or open a specific drawing:
-
-\`\`\`bash
-inskea my-sketch.skea
-\`\`\`
-
-## Instant Trial (No install)
-
-\`\`\`bash
-npx inskea
-\`\`\`
-`;
-
-fs.writeFileSync(path.join(mainDir, 'README.md'), readmeContent);
+const rootLicense = path.join(rootDir, 'LICENSE');
+if (fs.existsSync(rootLicense)) {
+  fs.copyFileSync(rootLicense, path.join(mainDir, 'LICENSE'));
+}
 
 fs.writeFileSync(
   path.join(mainDir, 'package.json'),
