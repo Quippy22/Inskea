@@ -37,11 +37,11 @@ It runs as a native desktop app and in the browser, with the same tools and the 
 - **`.skea` Format** – Fully editable, non-destructive file format.
 - **Autosave** – Background autosaving to local files or browser storage.
 - **Export** – High-resolution PNG and clean vector SVG exports with crop area selection.
-- **Cross-Platform** – Seamless native desktop app (Linux, Windows) and web browser support.
+- **Cross-Platform** – Native desktop app for macOS, Linux, and Windows, plus web browser support.
 
 ## Installation
 
-### Via npm (Linux & Windows)
+### Via npm (Linux, Windows & macOS)
 
 ```bash
 npm install -g inskea
@@ -54,7 +54,7 @@ npm update -g inskea
 
 ### Native Installers
 
-Download pre-built installers for Windows (`.exe`), Debian/Ubuntu (`.deb`), or Arch Linux from [Releases](https://github.com/Quippy22/Inskea/releases).
+Download pre-built installers for macOS (`.dmg`), Windows (`.exe`), Debian/Ubuntu (`.deb`), or Arch Linux from [Releases](https://github.com/Quippy22/Inskea/releases).
 
 ## Keyboard shortcuts
 
