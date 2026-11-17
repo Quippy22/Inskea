@@ -323,6 +323,42 @@ jobs:
           path: npm-windows-bin/inskea.exe
           if-no-files-found: error
           retention-days: 1
+      - name: Stage macOS Apple Silicon binary for npm
+        if: matrix.artifact == 'macos-arm64'
+        run: |
+          mkdir -p npm-macos-arm64-bin
+          if [ -f src-tauri/target/release/inskea ]; then
+            cp src-tauri/target/release/inskea npm-macos-arm64-bin/
+          elif [ -f target/release/inskea ]; then
+            cp target/release/inskea npm-macos-arm64-bin/
+          fi
+          strip npm-macos-arm64-bin/inskea || true
+          codesign -s - -f npm-macos-arm64-bin/inskea || true
+      - uses: actions/upload-artifact@v4
+        if: matrix.artifact == 'macos-arm64'
+        with:
+          name: npm-macos-arm64-bin
+          path: npm-macos-arm64-bin/inskea
+          if-no-files-found: error
+          retention-days: 1
+      - name: Stage macOS Intel binary for npm
+        if: matrix.artifact == 'macos-x64'
+        run: |
+          mkdir -p npm-macos-x64-bin
+          if [ -f src-tauri/target/release/inskea ]; then
+            cp src-tauri/target/release/inskea npm-macos-x64-bin/
+          elif [ -f target/release/inskea ]; then
+            cp target/release/inskea npm-macos-x64-bin/
+          fi
+          strip npm-macos-x64-bin/inskea || true
+          codesign -s - -f npm-macos-x64-bin/inskea || true
+      - uses: actions/upload-artifact@v4
+        if: matrix.artifact == 'macos-x64'
+        with:
+          name: npm-macos-x64-bin
+          path: npm-macos-x64-bin/inskea
+          if-no-files-found: error
+          retention-days: 1
       - name: Stage Linux binary for npm
         if: matrix.artifact == 'debian'
         run: |
@@ -443,6 +479,14 @@ jobs:
         with:
           name: npm-windows-bin
           path: packaging/npm/dist-bin/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-macos-arm64-bin
+          path: packaging/npm/dist-bin/darwin-arm64
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-macos-x64-bin
+          path: packaging/npm/dist-bin/darwin-x64
       - name: Publish packages to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

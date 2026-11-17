@@ -28,6 +28,8 @@ try {
 
 const LINUX_PKG = `${SCOPE}/inskea-linux-x64`;
 const WIN_PKG = `${SCOPE}/inskea-win32-x64`;
+const DARWIN_ARM64_PKG = `${SCOPE}/inskea-darwin-arm64`;
+const DARWIN_X64_PKG = `${SCOPE}/inskea-darwin-x64`;
 
 console.log(`[npm-publish] Preparing packages for Inskea v${version}...`);
 
@@ -107,7 +109,81 @@ fs.writeFileSync(
   )
 );
 
-// 3. Prepare Main wrapper package
+// 3. Prepare macOS Apple Silicon package
+const darwinArm64Dir = path.join(outDir, 'darwin-arm64');
+const darwinArm64BinDir = path.join(darwinArm64Dir, 'bin');
+fs.mkdirSync(darwinArm64BinDir, { recursive: true });
+
+const darwinArm64BinSource = path.join(npmDir, 'dist-bin', 'darwin-arm64', 'inskea');
+if (!fs.existsSync(darwinArm64BinSource)) {
+  console.error(`Missing macOS ARM64 binary at ${darwinArm64BinSource}`);
+  process.exit(1);
+}
+fs.copyFileSync(darwinArm64BinSource, path.join(darwinArm64BinDir, 'inskea'));
+fs.chmodSync(path.join(darwinArm64BinDir, 'inskea'), 0o755);
+
+fs.writeFileSync(
+  path.join(darwinArm64Dir, 'package.json'),
+  JSON.stringify(
+    {
+      name: DARWIN_ARM64_PKG,
+      version: version,
+      description: 'macOS Apple Silicon (arm64) native binary for Inskea',
+      os: ['darwin'],
+      cpu: ['arm64'],
+      bin: {
+        inskea: 'bin/inskea'
+      },
+      files: ['bin/inskea'],
+      license: 'MIT',
+      repository: {
+        type: 'git',
+        url: 'https://github.com/Quippy22/Inskea'
+      }
+    },
+    null,
+    2
+  )
+);
+
+// 4. Prepare macOS Intel package
+const darwinX64Dir = path.join(outDir, 'darwin-x64');
+const darwinX64BinDir = path.join(darwinX64Dir, 'bin');
+fs.mkdirSync(darwinX64BinDir, { recursive: true });
+
+const darwinX64BinSource = path.join(npmDir, 'dist-bin', 'darwin-x64', 'inskea');
+if (!fs.existsSync(darwinX64BinSource)) {
+  console.error(`Missing macOS Intel binary at ${darwinX64BinSource}`);
+  process.exit(1);
+}
+fs.copyFileSync(darwinX64BinSource, path.join(darwinX64BinDir, 'inskea'));
+fs.chmodSync(path.join(darwinX64BinDir, 'inskea'), 0o755);
+
+fs.writeFileSync(
+  path.join(darwinX64Dir, 'package.json'),
+  JSON.stringify(
+    {
+      name: DARWIN_X64_PKG,
+      version: version,
+      description: 'macOS Intel (x64) native binary for Inskea',
+      os: ['darwin'],
+      cpu: ['x64'],
+      bin: {
+        inskea: 'bin/inskea'
+      },
+      files: ['bin/inskea'],
+      license: 'MIT',
+      repository: {
+        type: 'git',
+        url: 'https://github.com/Quippy22/Inskea'
+      }
+    },
+    null,
+    2
+  )
+);
+
+// 5. Prepare Main wrapper package
 const mainDir = path.join(outDir, 'main');
 fs.mkdirSync(mainDir, { recursive: true });
 
@@ -179,7 +255,9 @@ fs.writeFileSync(
       },
       optionalDependencies: {
         [LINUX_PKG]: version,
-        [WIN_PKG]: version
+        [WIN_PKG]: version,
+        [DARWIN_ARM64_PKG]: version,
+        [DARWIN_X64_PKG]: version
       },
       keywords: [
         'inskea',
@@ -209,6 +287,8 @@ console.log('[npm-publish] Packages assembled successfully.');
 const packagesToPublish = [
   { name: LINUX_PKG, dir: linuxDir },
   { name: WIN_PKG, dir: winDir },
+  { name: DARWIN_ARM64_PKG, dir: darwinArm64Dir },
+  { name: DARWIN_X64_PKG, dir: darwinX64Dir },
   { name: 'inskea', dir: mainDir }
 ];
 

@@ -18,9 +18,9 @@ if (!pkgName) {
   pkgName = `@quippy/inskea-${key}`;
 }
 
-if (process.platform !== 'linux' && process.platform !== 'win32') {
+if (process.platform !== 'linux' && process.platform !== 'win32' && process.platform !== 'darwin') {
   console.error(`[inskea] Unsupported platform: ${process.platform}`);
-  console.error('Currently supported platforms: linux-x64, win32-x64');
+  console.error('Currently supported platforms: darwin-arm64, darwin-x64, linux-x64, win32-x64');
   process.exit(1);
 }
 

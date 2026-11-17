@@ -41,7 +41,7 @@ It runs as a native desktop app and in the browser, with the same tools and the 
 
 ## Installation
 
-### Via npm (Linux & Windows)
+### Via npm (Linux, Windows & macOS)
 
 ```bash
 npm install -g inskea
