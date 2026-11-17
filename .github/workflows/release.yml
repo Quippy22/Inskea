@@ -145,6 +145,16 @@ jobs:
             bundle: nsis
             artifact: windows
             path: src-tauri/target/release/bundle/nsis/*.exe
+          - name: macOS (Apple Silicon)
+            os: macos-latest
+            bundle: dmg
+            artifact: macos-arm64
+            path: src-tauri/target/release/bundle/dmg/*.dmg
+          - name: macOS (Intel)
+            os: macos-15-intel
+            bundle: dmg
+            artifact: macos-x64
+            path: src-tauri/target/release/bundle/dmg/*.dmg
           - name: Debian
             os: ubuntu-22.04
             bundle: deb
@@ -255,6 +265,7 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
         with:
           args: --bundles ${{ matrix.bundle }} ${{ env.TAURI_CONFIG_ARGS }}
       - uses: actions/upload-artifact@v4
