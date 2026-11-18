@@ -82,7 +82,7 @@ pub async fn pick_open_path(default_dir: Option<&str>) -> Option<String> {
 pub async fn pick_image_path(default_dir: Option<&str>) -> Option<String> {
     pick_open_path_with_filter(
         "Image",
-        &["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"],
+        &["png", "jpg", "jpeg", "jfif", "gif", "webp", "svg", "bmp", "avif"],
         default_dir,
     )
     .await

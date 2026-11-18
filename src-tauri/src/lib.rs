@@ -198,10 +198,12 @@ const IMAGE_MIME_TYPES: &[(&str, &str)] = &[
     ("png", "image/png"),
     ("jpg", "image/jpeg"),
     ("jpeg", "image/jpeg"),
+    ("jfif", "image/jpeg"),
     ("gif", "image/gif"),
     ("webp", "image/webp"),
     ("svg", "image/svg+xml"),
     ("bmp", "image/bmp"),
+    ("avif", "image/avif"),
 ];
 
 /// The MIME type for a supported image path, or `None` for other files.

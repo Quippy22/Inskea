@@ -15,7 +15,8 @@ use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_futures::JsFuture;
 
 /// Accepted by the browser's file input; native dialogs use their own filter.
-const BROWSER_ACCEPT: &str = "image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/bmp";
+const BROWSER_ACCEPT: &str =
+    "image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/bmp,image/avif";
 
 /// World-space gap between images imported in the same batch, so a multi-file
 /// drop does not stack them all on one spot.
@@ -116,7 +117,9 @@ impl ImageImport {
             let anchor = at.unwrap_or_else(|| this.view_centre());
             let mut images = Vec::new();
             for (index, data_url) in data_urls.into_iter().enumerate() {
-                let Some((width, height)) = measure(&data_url).await else {
+                let Some(((width, height), optimized_src)) =
+                    measure_and_optimize(&data_url).await
+                else {
                     notify::error(
                         this.doc.notifications,
                         "Could not read that image.".to_string(),
@@ -125,7 +128,7 @@ impl ImageImport {
                 };
                 let cascade = index as f64 * CASCADE_STEP;
                 let centre = Point::new(anchor.x + cascade, anchor.y + cascade);
-                images.push(Image::new(data_url.into(), width, height, centre));
+                images.push(Image::new(optimized_src.into(), width, height, centre));
             }
             if images.is_empty() {
                 return;
@@ -200,8 +203,13 @@ impl ImageImport {
     }
 }
 
-/// Natural size of an image after its data URL loads.
-async fn measure(data_url: &str) -> Option<(f64, f64)> {
+/// Largest pixel side a freshly imported raster bitmap is allowed before downscaling.
+/// Keeping raster dimensions under 2048px preserves crisp 2K quality while avoiding
+/// massive memory overhead, base64 string lag, and excessive texture allocations.
+const MAX_RASTER_PIXELS: f64 = 2048.0;
+
+/// Measure image dimensions and downscale oversized raster bitmaps to prevent lag.
+async fn measure_and_optimize(data_url: &str) -> Option<((f64, f64), String)> {
     let image = web_sys::window()?
         .document()?
         .create_element("img")
@@ -211,7 +219,56 @@ async fn measure(data_url: &str) -> Option<(f64, f64)> {
     JsFuture::from(export::image_load_promise(&image, data_url))
         .await
         .ok()?;
-    Some((image.natural_width() as f64, image.natural_height() as f64))
+    let nw = image.natural_width() as f64;
+    let nh = image.natural_height() as f64;
+    if !nw.is_finite() || !nh.is_finite() || nw <= 0.0 || nh <= 0.0 {
+        return None;
+    }
+    // Vector SVGs stay untouched as vectors
+    if data_url.starts_with("data:image/svg+xml") {
+        return Some(((nw, nh), data_url.to_string()));
+    }
+    // Downscale oversized raster images
+    if nw > MAX_RASTER_PIXELS || nh > MAX_RASTER_PIXELS {
+        if let Some(downscaled) = downscale_raster(&image, nw, nh, data_url) {
+            return Some(((nw, nh), downscaled));
+        }
+    }
+    Some(((nw, nh), data_url.to_string()))
+}
+
+fn downscale_raster(
+    image: &web_sys::HtmlImageElement,
+    nw: f64,
+    nh: f64,
+    data_url: &str,
+) -> Option<String> {
+    let scale = (MAX_RASTER_PIXELS / nw.max(nh)).min(1.0);
+    let dw = ((nw * scale).round() as u32).max(1);
+    let dh = ((nh * scale).round() as u32).max(1);
+    let document = web_sys::window()?.document()?;
+    let canvas = document
+        .create_element("canvas")
+        .ok()?
+        .dyn_into::<web_sys::HtmlCanvasElement>()
+        .ok()?;
+    canvas.set_width(dw);
+    canvas.set_height(dh);
+    let ctx = canvas
+        .get_context("2d")
+        .ok()??
+        .dyn_into::<web_sys::CanvasRenderingContext2d>()
+        .ok()?;
+    ctx.draw_image_with_html_image_element_and_dw_and_dh(image, 0.0, 0.0, dw as f64, dh as f64)
+        .ok()?;
+    let mime = if data_url.starts_with("data:image/jpeg") || data_url.starts_with("data:image/jpg") {
+        "image/jpeg"
+    } else if data_url.starts_with("data:image/webp") {
+        "image/webp"
+    } else {
+        "image/png"
+    };
+    canvas.to_data_url_with_type(mime).ok()
 }
 
 /// Read a browser file as a data URL. Resolves with `null` when reading fails.

@@ -49,16 +49,87 @@ fn fit_size(natural_width: f64, natural_height: f64) -> (f64, f64) {
     )
 }
 
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static BLOB_URL_CACHE: std::cell::RefCell<std::collections::HashMap<String, String>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Retrieve a short, browser-cached `blob:` URL for a `data:` URL on wasm32,
+/// avoiding huge string allocations and re-decoding overhead during canvas rendering.
+pub(crate) fn display_href(src: &str) -> String {
+    #[cfg(target_arch = "wasm32")]
+    {
+        if src.starts_with("data:") {
+            return BLOB_URL_CACHE.with(|cache| {
+                let mut map = cache.borrow_mut();
+                if let Some(cached) = map.get(src) {
+                    return cached.clone();
+                }
+                if let Some(url) = data_url_to_blob_url(src) {
+                    map.insert(src.to_string(), url.clone());
+                    url
+                } else {
+                    src.to_string()
+                }
+            });
+        }
+    }
+    src.to_string()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn data_url_to_blob_url(data_url: &str) -> Option<String> {
+    use base64::Engine;
+
+    let payload = data_url.strip_prefix("data:")?;
+    if let Some((header, b64_part)) = payload.split_once(";base64,") {
+        let mime = if header.is_empty() {
+            "application/octet-stream"
+        } else {
+            header
+        };
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64_part.trim())
+            .ok()?;
+        let uint8 = js_sys::Uint8Array::from(bytes.as_slice());
+        let parts = js_sys::Array::new();
+        parts.push(&uint8);
+        let opts = web_sys::BlobPropertyBag::new();
+        opts.set_type(mime);
+        let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &opts).ok()?;
+        web_sys::Url::create_object_url_with_blob(&blob).ok()
+    } else if let Some((mime, text_part)) = payload.split_once(',') {
+        let parts = js_sys::Array::new();
+        parts.push(&wasm_bindgen::JsValue::from_str(text_part));
+        let opts = web_sys::BlobPropertyBag::new();
+        opts.set_type(mime);
+        let blob = web_sys::Blob::new_with_str_sequence_and_options(&parts, &opts).ok()?;
+        web_sys::Url::create_object_url_with_blob(&blob).ok()
+    } else {
+        None
+    }
+}
+
 impl Render for Image {
     fn render(&self, _zoom: f64) -> leptos::View {
         let x = self.data.world_point.x;
         let y = self.data.world_point.y;
         let w = self.data.width;
         let h = self.data.height;
-        let href = Rc::clone(&self.src);
+        let href = display_href(&self.src);
         let opacity = self.data.style.opacity;
         let inner = leptos::view! {
-            <image x=x y=y width=w height=h href=href preserveAspectRatio="none" opacity=opacity />
+            <image
+                x=x
+                y=y
+                width=w
+                height=h
+                href=href
+                preserveAspectRatio="none"
+                opacity=opacity
+                style="image-rendering: auto;"
+            />
         }
         .into_view();
         if self.data.rotation == 0.0 {
