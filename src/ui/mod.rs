@@ -20,6 +20,7 @@ mod toolbar;
 pub(crate) mod unsaved_dialog;
 mod welcome;
 mod welcome_tips;
+mod whats_new;
 
 pub use catalogue::{
     CatalogueContext, CatalogueContextMenu, CatalogueTab, SaveSnippetDialog, SelectionContextMenu,
@@ -32,3 +33,5 @@ pub use theme_picker::ThemePicker;
 pub use toolbar::ToolBar;
 pub use unsaved_dialog::UnsavedChangesDialog;
 pub use welcome::WelcomeOverlay;
+pub use whats_new::WhatsNewModal;
+

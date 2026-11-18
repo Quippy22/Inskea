@@ -35,6 +35,7 @@ pub fn ToolBar<F1, F2>(
     export_crop_active: RwSignal<bool>,
     on_crop_export: RwSignal<Option<CropExportCallback>>,
     shortcuts_open: RwSignal<bool>,
+    whats_new_open: RwSignal<bool>,
     settings: RwSignal<CanvasSettings>,
     image_import: ImageImport,
     chart_import: ChartImport,
@@ -852,7 +853,16 @@ where
                                             />
                                         </div>
 
-                                        // ── Help ─────────────────────────────
+                                        // ── What's New & Help ───────────────
+                                        <button
+                                            class=styles::MENU_ITEM
+                                            on:click=move |_| {
+                                                close_menu();
+                                                whats_new_open.set(true);
+                                            }
+                                        >
+                                            <span>"What's New"</span>
+                                        </button>
                                         <button
                                             class=styles::MENU_ITEM
                                             on:click=move |_| {

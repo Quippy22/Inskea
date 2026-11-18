@@ -4,6 +4,7 @@
 const SETTINGS_KEY: &str = "inskea.settings";
 const AUTOSAVE_KEY: &str = "inskea.autosave";
 const CATALOGUE_KEY: &str = "inskea.catalogue";
+const LAST_SEEN_VERSION_KEY: &str = "inskea.last_seen_version";
 
 fn local_storage() -> Option<web_sys::Storage> {
     web_sys::window()?.local_storage().ok().flatten()
@@ -48,3 +49,16 @@ pub fn save_catalogue(content: &str) -> bool {
         .and_then(|storage| storage.set_item(CATALOGUE_KEY, content).ok())
         .is_some()
 }
+
+/// The version of the app the user last saw the What's New modal for.
+pub fn load_last_seen_version() -> Option<String> {
+    local_storage()?.get_item(LAST_SEEN_VERSION_KEY).ok().flatten()
+}
+
+/// Save the current app version as the last seen version.
+pub fn save_last_seen_version(version: &str) {
+    if let Some(storage) = local_storage() {
+        let _ = storage.set_item(LAST_SEEN_VERSION_KEY, version);
+    }
+}
+

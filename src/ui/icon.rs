@@ -112,11 +112,12 @@ lucide_icons! {
     connector_curved => "spline.svg",
     connector_straight => "corner-down-right.svg",
 
-    // Catalogue and Frames.
+    // Catalogue, Frames, and Docs.
     catalogue => "library-big.svg",
     save_snippet => "bookmark-plus.svg",
     frames_grid => "layout-grid.svg",
     focus => "focus.svg",
+    book_open => "book-open.svg",
 }
 
 /// Small star shown beside a starred catalogue item.

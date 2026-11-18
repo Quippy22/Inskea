@@ -21,7 +21,7 @@ use crate::ui::styles;
 use crate::ui::{
     file_ops, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab, ChartDataEditor,
     FrameReaderOverlay, FramesContext, FramesContextMenu, SaveSnippetDialog, SelectionContextMenu,
-    SettingsPanel, ThemePicker, ToolBar, UnsavedChangesDialog, WelcomeOverlay,
+    SettingsPanel, ThemePicker, ToolBar, UnsavedChangesDialog, WelcomeOverlay, WhatsNewModal,
 };
 use crate::util::window_size;
 use leptos::*;
@@ -67,6 +67,16 @@ pub fn App() -> impl IntoView {
     let eraser_active = create_rw_signal(false);
     let shortcuts_open = create_rw_signal(false);
     let theme_open = create_rw_signal(false);
+    let whats_new_open = create_rw_signal(false);
+
+    {
+        let current_version = env!("CARGO_PKG_VERSION");
+        let last_seen = crate::storage::load_last_seen_version();
+        if last_seen.as_deref() != Some(current_version) {
+            whats_new_open.set(true);
+            crate::storage::save_last_seen_version(current_version);
+        }
+    }
 
     let export_crop_active = create_rw_signal(false);
     let on_crop_export = create_rw_signal::<Option<CropExportCallback>>(None);
@@ -565,6 +575,7 @@ pub fn App() -> impl IntoView {
             || theme_open.get()
             || snippet_open.get().is_some()
             || read_mode_index.get().is_some()
+            || whats_new_open.get()
     });
     {
         let catalogue_escape = catalogue.clone();
@@ -573,7 +584,10 @@ pub fn App() -> impl IntoView {
             if ev.key() != "Escape" {
                 return;
             }
-            if pending_action.get_untracked().is_some() {
+            if whats_new_open.get_untracked() {
+                ev.prevent_default();
+                whats_new_open.set(false);
+            } else if pending_action.get_untracked().is_some() {
                 ev.prevent_default();
                 dialog_cancel.call(());
             } else if catalogue_escape.pending.get_untracked().is_some() {
@@ -950,6 +964,7 @@ pub fn App() -> impl IntoView {
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
                 shortcuts_open=shortcuts_open
+                whats_new_open=whats_new_open
                 settings=settings
                 image_import=image_import
                 chart_import=chart_import.clone()
@@ -962,10 +977,12 @@ pub fn App() -> impl IntoView {
                 catalogue=catalogue.clone()
                 frames=frames.clone()
                 request_action=request_action.clone()
+                whats_new_open=whats_new_open
             />
             <FrameReaderOverlay context=frames.clone() />
             <ThemePicker open=theme_open settings=settings />
             <ShortcutsModal shortcuts_open=shortcuts_open />
+            <WhatsNewModal open=whats_new_open />
             <UnsavedChangesDialog
                 pending=pending_action
                 on_save=dialog_save

@@ -373,6 +373,8 @@ jobs:
             if [ "$has_section" = false ]; then
               echo "Maintenance and internal updates."
             fi
+            echo
+            echo "See [updates.md](https://github.com/${{ github.repository }}/blob/main/updates.md) for full update details and visual highlights."
           } > release-notes.md
 
           cat release-notes.md
