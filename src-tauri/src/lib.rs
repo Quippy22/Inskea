@@ -444,7 +444,22 @@ pub fn run() {
     let context = tauri::generate_context!();
 
     #[cfg(windows)]
-    set_app_user_model_id(context.config().identifier.as_str());
+    {
+        set_app_user_model_id(context.config().identifier.as_str());
+        if std::env::var_os("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_none() {
+            std::env::set_var(
+                "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+                "--enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist",
+            );
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
+            std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "0");
+        }
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {

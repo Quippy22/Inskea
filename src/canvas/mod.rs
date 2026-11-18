@@ -1227,7 +1227,7 @@ pub fn Canvas(
             node_ref=svg_ref
             width="100%"
             height="100%"
-            style="display: block; user-select: none; -webkit-user-select: none; touch-action: none;"
+            style="display: block; user-select: none; -webkit-user-select: none; touch-action: none; transform: translateZ(0);"
             style:cursor=move || st.cursor_style.get()
             viewBox=view_box
             on:pointerdown=on_pointer_down
