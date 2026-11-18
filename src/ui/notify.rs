@@ -1,5 +1,6 @@
 use leptos::*;
 use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(target_arch = "wasm32")]
 use std::time::Duration;
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -32,6 +33,7 @@ pub fn notify(notifications: Notifications, kind: NoticeKind, message: impl Into
             list.remove(0);
         }
     });
+    #[cfg(target_arch = "wasm32")]
     set_timeout(
         move || notifications.update(|list| list.retain(|notice| notice.id != id)),
         Duration::from_secs(5),

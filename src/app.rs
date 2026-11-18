@@ -85,7 +85,7 @@ pub fn App() -> impl IntoView {
     let undo_stack = create_rw_signal(Vec::<ChangeSet>::new());
     let redo_stack = create_rw_signal(Vec::<ChangeSet>::new());
 
-    let push_snapshot = Rc::new(move || {
+    let push_snapshot: Rc<dyn Fn()> = Rc::new(move || {
         let mut sealed = None;
         if scene.with_untracked(|s| s.has_pending()) {
             scene.update(|s| sealed = s.seal_pending());
@@ -287,11 +287,13 @@ pub fn App() -> impl IntoView {
         push_snapshot: push_snapshot.clone(),
     };
 
-    // Images and CSV/TSV files arrive either from Tauri's OS drop event
+    // Drawings, images, and CSV/TSV files arrive either from Tauri's OS drop event
     // (physical pixels) or, in a browser, from a DOM drop on the canvas.
     if is_tauri {
         let image_import = image_import.clone();
         let chart_import = chart_import.clone();
+        let doc_drop = doc.clone();
+        let push_snapshot_drop = push_snapshot.clone();
         tauri_bridge::on_file_drop(move |paths, position| {
             let at = position.map(|(x, y)| {
                 let ratio = web_sys::window()
@@ -304,8 +306,30 @@ pub fn App() -> impl IntoView {
                     .get_untracked()
                     .screen_to_world(screen, window_size())
             });
-            let (csv_paths, img_paths): (Vec<String>, Vec<String>) =
-                paths.into_iter().partition(|p| is_tabular_path(p));
+            let mut skea_paths = Vec::new();
+            let mut csv_paths = Vec::new();
+            let mut img_paths = Vec::new();
+            for p in paths {
+                if p.to_ascii_lowercase().ends_with(".skea") {
+                    skea_paths.push(p);
+                } else if is_tabular_path(&p) {
+                    csv_paths.push(p);
+                } else {
+                    img_paths.push(p);
+                }
+            }
+            for p in skea_paths {
+                let doc = doc_drop.clone();
+                let vp = image_import.viewport;
+                let cm = image_import.canvas_mode;
+                let ps = push_snapshot_drop.clone();
+                let at = at;
+                spawn_local(async move {
+                    if let Ok(c) = tauri_bridge::load_skea(&p).await {
+                        crate::ui::file_ops::import_drawing_from_str(&doc, vp, cm, &ps, &c, at);
+                    }
+                });
+            }
             if !csv_paths.is_empty() {
                 chart_import.import_paths(csv_paths, at);
             }
@@ -316,6 +340,8 @@ pub fn App() -> impl IntoView {
     } else {
         let image_import_drag = image_import.clone();
         let chart_import_drag = chart_import.clone();
+        let doc_drag = doc.clone();
+        let push_snapshot_drag = push_snapshot.clone();
         let _ = window_event_listener(leptos::ev::dragover, move |event: leptos::ev::DragEvent| {
             if has_files(&event) {
                 event.prevent_default();
@@ -340,8 +366,46 @@ pub fn App() -> impl IntoView {
                 .viewport
                 .get_untracked()
                 .screen_to_world(screen, window_size());
-            let (csv_files, img_files): (Vec<web_sys::File>, Vec<web_sys::File>) =
-                files.into_iter().partition(is_tabular_file);
+            let mut skea_files = Vec::new();
+            let mut csv_files = Vec::new();
+            let mut img_files = Vec::new();
+            for f in files {
+                if f.name().to_ascii_lowercase().ends_with(".skea") {
+                    skea_files.push(f);
+                } else if is_tabular_file(&f) {
+                    csv_files.push(f);
+                } else {
+                    img_files.push(f);
+                }
+            }
+            for f in skea_files {
+                let doc = doc_drag.clone();
+                let vp = image_import_drag.viewport;
+                let cm = image_import_drag.canvas_mode;
+                let ps = push_snapshot_drag.clone();
+                let at = at;
+                let Ok(reader) = web_sys::FileReader::new() else {
+                    continue;
+                };
+                let reader_c = reader.clone();
+                let on_load = wasm_bindgen::closure::Closure::wrap(Box::new(move || {
+                    if let Ok(val) = reader_c.result() {
+                        if let Some(text) = val.as_string() {
+                            crate::ui::file_ops::import_drawing_from_str(
+                                &doc,
+                                vp,
+                                cm,
+                                &ps,
+                                &text,
+                                Some(at),
+                            );
+                        }
+                    }
+                }) as Box<dyn FnMut()>);
+                reader.set_onload(Some(on_load.as_ref().unchecked_ref()));
+                on_load.forget();
+                let _ = reader.read_as_text(&f);
+            }
             if !csv_files.is_empty() {
                 chart_import_drag.import_files(csv_files, Some(at));
             }
@@ -351,9 +415,10 @@ pub fn App() -> impl IntoView {
         });
     }
 
-    // Smart paste of CSV / TSV / Markdown tables into a chart on the canvas.
+    // Smart paste of images and CSV / TSV / Markdown tables onto the canvas.
     {
         let chart_import_paste = chart_import.clone();
+        let image_import_paste = image_import.clone();
         let _ = window_event_listener(leptos::ev::paste, move |event: web_sys::Event| {
             // Do not intercept paste when typing inside an <input> or <textarea>.
             if let Some(target) = event.target() {
@@ -370,6 +435,19 @@ pub fn App() -> impl IntoView {
             let Some(data) = data_val.dyn_ref::<web_sys::DataTransfer>() else {
                 return;
             };
+            // 1. Check for pasted image files (e.g. screenshots from clipboard)
+            if let Some(file_list) = data.files() {
+                let img_files: Vec<web_sys::File> = (0..file_list.length())
+                    .filter_map(|i| file_list.item(i))
+                    .filter(|f| f.type_().starts_with("image/"))
+                    .collect();
+                if !img_files.is_empty() {
+                    event.prevent_default();
+                    image_import_paste.import_files(img_files, None);
+                    return;
+                }
+            }
+            // 2. Check for tabular text for charts
             if let Ok(text) = data.get_data("text/plain") {
                 if !text.trim().is_empty()
                     && chart_import_paste.import_tabular_text(&text, None, None)
