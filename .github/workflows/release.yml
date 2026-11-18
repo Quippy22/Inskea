@@ -348,20 +348,30 @@ jobs:
           subjects=$(git log "$range" --no-merges --pretty=format:%s)
           features=$(printf '%s\n' "$subjects" | grep -E '^feat(\([^)]*\))?:' | sed -E 's/^feat(\([^)]*\))?: //' || true)
           fixes=$(printf '%s\n' "$subjects" | grep -E '^fix(\([^)]*\))?:' | sed -E 's/^fix(\([^)]*\))?: //' || true)
+          perf=$(printf '%s\n' "$subjects" | grep -E '^perf(\([^)]*\))?:' | sed -E 's/^perf(\([^)]*\))?: //' || true)
 
+          has_section=false
           {
-            echo "## Features"
             if [ -n "$features" ]; then
+              echo "## Features"
               printf '%s\n' "$features" | sed 's/^/- /'
-            else
-              echo "- No feature changes."
+              echo
+              has_section=true
             fi
-            echo
-            echo "## Fixes"
             if [ -n "$fixes" ]; then
+              echo "## Fixes"
               printf '%s\n' "$fixes" | sed 's/^/- /'
-            else
-              echo "- No fixes."
+              echo
+              has_section=true
+            fi
+            if [ -n "$perf" ]; then
+              echo "## Performance"
+              printf '%s\n' "$perf" | sed 's/^/- /'
+              echo
+              has_section=true
+            fi
+            if [ "$has_section" = false ]; then
+              echo "Maintenance and internal updates."
             fi
           } > release-notes.md
 
