@@ -141,12 +141,12 @@ pub fn apply(
     selected_ids: RwSignal<Vec<ElementId>>,
     push_snapshot: &Rc<dyn Fn()>,
     target: Point,
-) {
+) -> Vec<ElementId> {
     if snippet.is_empty() {
-        return;
+        return Vec::new();
     }
     let Some(bounds) = bounds(snippet) else {
-        return;
+        return Vec::new();
     };
     let center = bounds.center();
     let dx = target.x - center.x;
@@ -156,7 +156,8 @@ pub fn apply(
         new_ids =
             edit_ops::insert_elements(scene, snippet.elements.clone(), &snippet.groups, dx, dy);
     });
-    selected_ids.set(new_ids);
+    selected_ids.set(new_ids.clone());
+    new_ids
 }
 
 // ── Global catalogue storage ───────────────────────────────────────────────
@@ -307,5 +308,29 @@ mod tests {
         let bad = r#"{"format_version":2,"snippet":{"name":"x","elements":[]}}"#;
         assert!(from_json(bad).is_err());
         assert!(from_json(r#"{"snippet":{"name":"x","elements":[]}}"#).is_err());
+    }
+
+    #[test]
+    fn apply_places_elements_centered_at_target_and_returns_ids() {
+        let runtime = leptos::create_runtime();
+        let mut source_scene = Scene::new();
+        source_scene.add_element(rectangle(0));
+        let pending = capture_selection(&source_scene, &[1]).unwrap();
+        let snippet = pending.into_snippet("box".into(), "Box".into());
+
+        let target_scene = leptos::create_rw_signal(Scene::new());
+        let selected_ids = leptos::create_rw_signal(Vec::new());
+        let push_snapshot: Rc<dyn Fn()> = Rc::new(|| {});
+
+        let target = Point::new(150.0, 250.0);
+        let ids = apply(&snippet, target_scene, selected_ids, &push_snapshot, target);
+
+        assert_eq!(ids.len(), 1);
+        assert_eq!(selected_ids.get(), ids);
+        let bounds = target_scene.get().element_by_id(ids[0]).unwrap().bounds();
+        let center = bounds.center();
+        assert!((center.x - target.x).abs() < 1e-4);
+        assert!((center.y - target.y).abs() < 1e-4);
+        runtime.dispose();
     }
 }

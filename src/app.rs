@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::canvas::settings::{CanvasSettings, CenterStyle, GridSize, GridStyle, Theme};
-use crate::canvas::{Canvas, CanvasMode, CropExportCallback, Viewport};
+use crate::canvas::{Canvas, CanvasMode, CropExportCallback, PendingPlacement, Viewport};
 use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::edit_ops::Clipboard;
 use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
@@ -194,12 +194,17 @@ pub fn App() -> impl IntoView {
     let dirty = create_rw_signal(false);
     let notifications = create_rw_signal(Vec::new());
 
+    let pending_placement = create_rw_signal::<Option<PendingPlacement>>(None);
+
     let catalogue = CatalogueContext {
         open: create_rw_signal(false),
         tab: create_rw_signal(CatalogueTab::Local),
         scene,
         selected_ids,
         viewport,
+        canvas_mode,
+        cursor_world,
+        pending_placement,
         push_snapshot: push_snapshot.clone(),
         notifications,
         settings,
@@ -925,6 +930,7 @@ pub fn App() -> impl IntoView {
                     theme_open,
                     modal_open,
                     on_context_menu: on_canvas_menu.clone(),
+                    pending_placement,
                 }
                 on_text_commit=on_text_commit
                 shortcuts_open=shortcuts_open

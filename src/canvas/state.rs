@@ -46,6 +46,13 @@ pub enum DragOperation {
     ChartValue(usize),
 }
 
+/// A collection snippet requested for interactive placement.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PendingPlacement {
+    pub ids: Vec<ElementId>,
+    pub origin: Point,
+}
+
 /// Drag-related state (resize, move, rotate, path-point drag).
 #[derive(Clone, Copy)]
 pub struct DragState {
@@ -162,6 +169,8 @@ pub struct CanvasState {
     pub active_touches: RwSignal<Vec<(i32, Point)>>,
     pub touch_pinching: RwSignal<bool>,
     pub last_touch_pinch: RwSignal<Option<(f64, Point)>>,
+    /// True while an added collection snippet is floating on the cursor, waiting for click-to-place.
+    pub is_placing: RwSignal<bool>,
 }
 
 impl CanvasState {
@@ -185,6 +194,7 @@ impl CanvasState {
             active_touches: create_rw_signal(Vec::new()),
             touch_pinching: create_rw_signal(false),
             last_touch_pinch: create_rw_signal(None),
+            is_placing: create_rw_signal(false),
         }
     }
 }
@@ -223,6 +233,8 @@ pub struct CanvasInputs {
     /// Open the selection menu at these client coordinates after a shape was
     /// right-clicked and selected.
     pub on_context_menu: Rc<dyn Fn(f64, f64)>,
+    /// A collection snippet requested for interactive placement.
+    pub pending_placement: RwSignal<Option<PendingPlacement>>,
 }
 
 // ── Helper functions used by pointer event handlers ──────────────────────

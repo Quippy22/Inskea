@@ -14,13 +14,15 @@ use crate::model::elements::connector::SNAP_SCREEN_PX;
 pub use crate::model::interaction::combined_bounds;
 use modes::{cancel_drawing, draw_pointer_down, draw_pointer_up, finish_freehand};
 use selection::{
-    cancel_drag, select_pointer_down, select_pointer_move, select_pointer_up,
-    shift_interaction_origin, translate_moving_shape_and_camera,
+    begin_placement_move, cancel_drag, clear_drag_state, select_pointer_down,
+    select_pointer_move, select_pointer_up, shift_interaction_origin,
+    translate_moving_shape_and_camera,
 };
 pub use state::CanvasInputs;
 pub use state::CanvasMode;
 pub use state::CropExportCallback;
 pub use state::DragOperation;
+pub use state::PendingPlacement;
 use state::{hit_and_erase, CanvasState};
 
 use crate::model::*;
@@ -311,6 +313,19 @@ pub fn Canvas(
                 _st.drag.last_world.set(None);
                 return;
             }
+            // (b2) Cancel a collection snippet floating placement.
+            if _st.is_placing.get_untracked() {
+                _st.is_placing.set(false);
+                let ids = _st.selected_ids.get_untracked();
+                _props.scene.update(|s| {
+                    s.remove_elements(&ids);
+                    s.clear_pending();
+                });
+                _st.selected_ids.set(Vec::new());
+                let mut st = _st;
+                clear_drag_state(&mut st);
+                return;
+            }
             // (c) Cancel an in-progress draw. For Freehand the element was
             // added to the scene on pointer_down, so it is removed together
             // with its undo snapshot.
@@ -526,6 +541,57 @@ pub fn Canvas(
         });
     }
 
+    // ── Interactive Collection Snippet Placement ─────────────────────────
+    {
+        let st = st;
+        let props = props.clone();
+        create_effect(move |_| {
+            if let Some(placement) = props.pending_placement.get() {
+                props.pending_placement.set(None);
+                let ids = placement.ids;
+                let origin = placement.origin;
+                if ids.is_empty() {
+                    return;
+                }
+                props.canvas_mode.set(CanvasMode::Select);
+                st.selected_ids.set(ids.clone());
+
+                let view = props
+                    .viewport
+                    .get_untracked()
+                    .visible_rect(st.screen_size.get_untracked())
+                    .padded(100.0);
+                let els = props.scene.with_untracked(|s| s.elements_in_view(view));
+
+                let mut st = st;
+                begin_placement_move(origin, &mut st, &props, &els, &ids);
+                st.is_placing.set(true);
+            }
+        });
+    }
+
+    // ── Global Pointermove Listener for Window & Placement ───────────────
+    {
+        let st = st;
+        let props = props.clone();
+        let _ = window_event_listener(ev::pointermove, move |ev: ev::PointerEvent| {
+            let screen = Point::new(ev.client_x() as f64, ev.client_y() as f64);
+            props.cursor_screen.set((screen.x, screen.y));
+            if st.is_placing.get_untracked() {
+                let world = props
+                    .viewport
+                    .get_untracked()
+                    .screen_to_world(screen, st.screen_size.get_untracked());
+                props.cursor_world.set(world);
+                if st.drag.moving_anchor.get_untracked().is_some() {
+                    let mut st = st;
+                    let mut props = props.clone();
+                    selection::select_pointer_move(world, &ev, &mut st, &mut props);
+                }
+            }
+        });
+    }
+
     // ── Helper ───────────────────────────────────────────────────────────
     // Convert a DOM pointer event into world-space coordinates.
     // 1. Extracts `offset_x / offset_y` from the event (CSS pixels relative to the SVG).
@@ -569,6 +635,13 @@ pub fn Canvas(
         let update_world = update_world;
         let commit_edit = commit_edit.clone();
         move |ev: ev::PointerEvent| {
+            if ev.button() == 0 && st.is_placing.get_untracked() {
+                st.is_placing.set(false);
+                clear_drag_state(&mut st);
+                (props.push_snapshot)();
+                return;
+            }
+
             let editing = st.text_edit.editing_id.get().is_some();
             let mode = props.canvas_mode.get();
             let world = update_world(&ev);

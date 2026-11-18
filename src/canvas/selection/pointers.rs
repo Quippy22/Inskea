@@ -568,6 +568,32 @@ fn begin_move_drag(
     capture_smart_guide_targets(st, ids, els);
 }
 
+/// Start an interactive move for a newly inserted collection snippet.
+pub(crate) fn begin_placement_move(
+    world: Point,
+    st: &mut CanvasState,
+    _props: &CanvasInputs,
+    els: &[Element],
+    ids: &[ElementId],
+) {
+    let Some(bounds) = guide_union_bounds(ids, els) else {
+        return;
+    };
+    st.drag.drag_action.set(Some(DragOperation::Move));
+    st.drag.moving_anchor.set(Some(world));
+    st.drag.drag_bounds.set(Some(bounds));
+    st.drag.smart_guide_frame.set(guide_union_frame(ids, els));
+    st.drag.last_world.set(Some(world));
+    st.drag.move_applied.set(Point::default());
+    st.drag.drag_originals.set(
+        els.iter()
+            .filter(|el| ids.contains(&el.id()))
+            .cloned()
+            .collect(),
+    );
+    capture_smart_guide_targets(st, ids, els);
+}
+
 /// Figure out which handle (if any) the cursor is hovering over.
 /// Used to set the `hovered_handle` signal for cursor style feedback.
 #[inline]

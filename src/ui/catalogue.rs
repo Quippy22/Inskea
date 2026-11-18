@@ -1,8 +1,8 @@
 use crate::canvas::settings::CanvasSettings;
-use crate::canvas::Viewport;
+use crate::canvas::{CanvasMode, PendingPlacement, Viewport};
 use crate::catalogue as snippet_store;
 use crate::catalogue::{PendingSnippet, Snippet};
-use crate::model::{ElementId, Scene};
+use crate::model::{ElementId, Point, Scene};
 use crate::ui::components::IconButton;
 use crate::ui::notify::{self, Notifications};
 use crate::ui::{icon, styles};
@@ -35,6 +35,9 @@ pub struct CatalogueContext {
     pub scene: RwSignal<Scene>,
     pub selected_ids: RwSignal<Vec<ElementId>>,
     pub viewport: RwSignal<Viewport>,
+    pub canvas_mode: RwSignal<CanvasMode>,
+    pub cursor_world: RwSignal<Point>,
+    pub pending_placement: RwSignal<Option<PendingPlacement>>,
     pub push_snapshot: Rc<dyn Fn()>,
     pub notifications: Notifications,
     pub settings: RwSignal<CanvasSettings>,
@@ -158,21 +161,36 @@ impl CatalogueContext {
         });
     }
 
-    /// Place a snippet in the middle of the visible canvas. Rows are clicked
-    /// over the panel, so the last canvas cursor position would be stale.
-    pub fn apply(&self, snippet: &Snippet) {
-        let center = self
-            .viewport
-            .get_untracked()
-            .visible_rect(crate::util::window_size())
-            .center();
-        snippet_store::apply(
+    /// Place a snippet centered at the cursor, entering interactive move mode until click.
+    pub fn apply(&self, snippet: &Snippet, client: Option<Point>) {
+        let screen_size = crate::util::window_size();
+        let origin = if let Some(client_pt) = client {
+            self.viewport
+                .get_untracked()
+                .screen_to_world(client_pt, screen_size)
+        } else {
+            let cur = self.cursor_world.get_untracked();
+            if cur != Point::default() {
+                cur
+            } else {
+                self.viewport
+                    .get_untracked()
+                    .visible_rect(screen_size)
+                    .center()
+            }
+        };
+        let new_ids = snippet_store::apply(
             snippet,
             self.scene,
             self.selected_ids,
             &self.push_snapshot,
-            center,
+            origin,
         );
+        self.canvas_mode.set(CanvasMode::Select);
+        self.pending_placement.set(Some(PendingPlacement {
+            ids: new_ids,
+            origin,
+        }));
         self.open.set(false);
     }
 
@@ -414,7 +432,10 @@ fn snippet_row(snippet: Snippet, global: bool, context: CatalogueContext) -> imp
     let apply = {
         let context = context.clone();
         let snippet = snippet.clone();
-        move |_| context.apply(&snippet)
+        move |ev: web_sys::MouseEvent| {
+            let client = Point::new(ev.client_x() as f64, ev.client_y() as f64);
+            context.apply(&snippet, Some(client));
+        }
     };
     let open_menu = {
         let context = context.clone();
