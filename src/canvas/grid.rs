@@ -48,6 +48,7 @@ pub fn grid_overlay(
                         stroke=grid_color
                         stroke-opacity="0.25"
                         stroke-width="1"
+                        shape-rendering="crispEdges"
                     />
                 </pattern>
             }

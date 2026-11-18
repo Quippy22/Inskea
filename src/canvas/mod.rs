@@ -1279,8 +1279,11 @@ pub fn Canvas(
                                                 // keystroke.
                                                 let text = edit_text.get();
                                                 scene.with_element(id, |element, origin| {
-                                                    let transform =
-                                                        format!("translate({} {})", origin.x, origin.y);
+                                                    let transform = if origin.x == 0.0 && origin.y == 0.0 {
+                                                        None
+                                                    } else {
+                                                        Some(format!("translate({} {})", origin.x, origin.y))
+                                                    };
                                                     let content = if text.is_empty() {
                                                         element.render_label_mask()
                                                     } else {
@@ -1303,8 +1306,11 @@ pub fn Canvas(
                                                 })
                                             } else {
                                                 scene.with_element(id, |element, origin| {
-                                                    let transform =
-                                                        format!("translate({} {})", origin.x, origin.y);
+                                                    let transform = if origin.x == 0.0 && origin.y == 0.0 {
+                                                        None
+                                                    } else {
+                                                        Some(format!("translate({} {})", origin.x, origin.y))
+                                                    };
                                                     view! {
                                                         <g transform=transform pointer-events="none">
                                                             {element.render(1.0)}
