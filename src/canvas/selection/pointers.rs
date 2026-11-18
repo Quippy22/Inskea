@@ -602,17 +602,17 @@ fn detect_hovered_handle(
     st: &CanvasState,
     props: &CanvasInputs,
 ) -> Option<DragOperation> {
-    let ids = st.selected_ids.get();
+    let ids = st.selected_ids.get_untracked();
     if ids.is_empty() {
         return None;
     }
-    // `with` instead of `get`: hover runs on every pointer move and must
-    // not deep-clone the whole scene.
+    // `with_untracked` instead of `get`: hover runs on every pointer move and must
+    // not deep-clone the whole scene or track reactive dependencies.
     let wpx = world_per_px(props);
     let resize_radius = HANDLE_RESIZE_RADIUS_PX * wpx;
     let move_radius = HANDLE_MOVE_RADIUS_PX * wpx;
     let rotate_radius = HANDLE_ROTATE_RADIUS_PX * wpx;
-    props.scene.with(|s| {
+    props.scene.with_untracked(|s| {
         // A single selection is the common case, and hover runs on every
         // pointer move: read the element in place rather than deep-cloning a
         // large path (freehand/line) just to hit-test its handles. Chunk-stored
@@ -1026,14 +1026,14 @@ fn grid_step(props: &CanvasInputs) -> f64 {
 /// Offset all selected elements by the delta since the drag anchor.
 #[inline]
 fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut CanvasInputs) {
-    let ids = st.selected_ids.get();
-    let Some(bounds) = st.drag.drag_bounds.get() else {
+    let ids = st.selected_ids.get_untracked();
+    let Some(bounds) = st.drag.drag_bounds.get_untracked() else {
         return;
     };
     let raw_dx = world.x - anchor.x;
     let raw_dy = world.y - anchor.y;
     let smart_enabled =
-        st.shift_pressed.get() && matches!(st.drag.drag_action.get(), Some(DragOperation::Move));
+        st.shift_pressed.get_untracked() && matches!(st.drag.drag_action.get_untracked(), Some(DragOperation::Move));
     let (snap_dx, snap_dy, next_guides) = if smart_enabled {
         let viewport = props.viewport.get_untracked();
         let visible = viewport.visible_rect(st.screen_size.get_untracked());
@@ -1057,7 +1057,7 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
                 })
             })
         })
-    } else if st.alt_pressed.get() {
+    } else if st.alt_pressed.get_untracked() {
         // Alt grid-snaps live, like Shift snaps to the smart guides: the
         // selection's top-left tracks the nearest grid intersection while the
         // drag runs, and the raw delta resumes when Alt is released.
@@ -1362,17 +1362,17 @@ pub fn select_pointer_move(
     st: &mut CanvasState,
     props: &mut CanvasInputs,
 ) {
-    if st.drag.moving_anchor.get().is_none() {
+    if st.drag.moving_anchor.get_untracked().is_none() {
         let hovered = detect_hovered_handle(world, st, props);
         // Only notify when it actually changed: setting the signal on every
         // move re-runs the cursor effect and downstream work for nothing.
-        if st.drag.hovered_handle.with(|h| *h != hovered) {
+        if st.drag.hovered_handle.with_untracked(|h| *h != hovered) {
             st.drag.hovered_handle.set(hovered);
         }
     }
 
-    if let Some(anchor) = st.drag.moving_anchor.get() {
-        match st.drag.drag_action.get() {
+    if let Some(anchor) = st.drag.moving_anchor.get_untracked() {
+        match st.drag.drag_action.get_untracked() {
             Some(DragOperation::Resize(_)) => do_resize(world, st, props),
             Some(DragOperation::Rotate) => do_rotate(world, st, props),
             Some(DragOperation::PathPoint(idx)) => do_path_point_drag(world, st, props, idx),
