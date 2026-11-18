@@ -1196,11 +1196,12 @@ pub fn Canvas(
         create_memo(move |_| {
             let editing = editing_id.get();
             let embedded = editing_embedded.get();
-            let visible = props
+            let view_rect = props
                 .viewport
                 .get()
-                .visible_rect(screen_size.get())
-                .padded(2.0);
+                .visible_rect(screen_size.get());
+            let pad = (view_rect.w.min(view_rect.h) * 0.25).max(120.0);
+            let visible = view_rect.padded(pad);
             props.scene.with(|scene| {
                 scene
                     .visible_elements(visible)

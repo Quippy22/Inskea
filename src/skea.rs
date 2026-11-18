@@ -49,10 +49,19 @@ pub fn load_from_str(input: &str) -> Result<Scene, String> {
     let mut scene = file.scene;
     scene.normalize_groups();
     migrate(&mut scene, version);
-    // Loading is not an undoable user action; discard any journal entries
-    // produced by normalization and migration.
     scene.clear_pending();
+    #[cfg(target_arch = "wasm32")]
+    prewarm_images(&scene);
     Ok(scene)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn prewarm_images(scene: &Scene) {
+    scene.for_each_element(|el| {
+        if let crate::model::Element::Image(img) = el {
+            crate::model::elements::image::display_href(&img.src);
+        }
+    });
 }
 
 /// Bring a scene written by an older supported build up to the current layout.

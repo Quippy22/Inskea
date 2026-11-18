@@ -464,6 +464,19 @@ impl Scene {
         ordered.into_iter().map(|(_, element)| element).collect()
     }
 
+    /// Borrow each element in storage without cloning or sorting.
+    #[allow(dead_code)]
+    pub fn for_each_element<F>(&self, mut f: F)
+    where
+        F: FnMut(&Element),
+    {
+        for chunk in self.chunks.values() {
+            for stored in &chunk.elements {
+                f(&stored.element);
+            }
+        }
+    }
+
     /// Return a z-ordered subset without materializing unrelated chunks.
     pub fn elements_for_ids(&self, ids: &[ElementId]) -> Vec<Element> {
         let mut selected: Vec<_> = ids
