@@ -2,7 +2,7 @@ use crate::model::elements::path::{
     bounds_of_points, eval_cubic_bezier, hit_test_path, path_d, scale_points, segment_cubic_bezier,
     CurveMode,
 };
-use crate::model::elements::utils::{arrowhead_polyline, line_endpoints};
+use crate::model::elements::utils::{arrowhead_polyline, line_endpoints, write_coord};
 use crate::model::resize::ResizeContext;
 use crate::model::*;
 use leptos::IntoView;
@@ -565,10 +565,20 @@ impl Connector {
                 else {
                     return String::new();
                 };
-                format!(
-                    "M{} {} Q{} {} {} {}",
-                    a.x, a.y, control.x, control.y, b.x, b.y
-                )
+                let mut d = String::with_capacity(48);
+                d.push('M');
+                write_coord(&mut d, a.x);
+                d.push(' ');
+                write_coord(&mut d, a.y);
+                d.push_str(" Q");
+                write_coord(&mut d, control.x);
+                d.push(' ');
+                write_coord(&mut d, control.y);
+                d.push(' ');
+                write_coord(&mut d, b.x);
+                d.push(' ');
+                write_coord(&mut d, b.y);
+                d
             }
             ConnectorVariant::Curved => path_d(&self.points, CurveMode::Curved),
             ConnectorVariant::Straight => {
@@ -576,10 +586,16 @@ impl Connector {
                 if route.is_empty() {
                     return String::new();
                 }
-                let mut d = format!("M{} {}", route[0].x, route[0].y);
-                use std::fmt::Write;
+                let mut d = String::with_capacity(route.len() * 20);
+                d.push('M');
+                write_coord(&mut d, route[0].x);
+                d.push(' ');
+                write_coord(&mut d, route[0].y);
                 for p in &route[1..] {
-                    let _ = write!(d, " L{} {}", p.x, p.y);
+                    d.push_str(" L");
+                    write_coord(&mut d, p.x);
+                    d.push(' ');
+                    write_coord(&mut d, p.y);
                 }
                 d
             }
@@ -588,7 +604,15 @@ impl Connector {
 
     /// Arrowhead polylines for the start and end of the route.
     pub fn arrowheads(&self, sw: f64) -> (Option<String>, Option<String>) {
+        if !self.line_style.has_start_arrowhead && !self.line_style.has_end_arrowhead {
+            return (None, None);
+        }
         let route = self.route_points();
+        self.arrowheads_for_route(&route, sw)
+    }
+
+    /// Arrowhead polylines given an already evaluated route polyline.
+    pub fn arrowheads_for_route(&self, route: &[Point], sw: f64) -> (Option<String>, Option<String>) {
         let start = self
             .line_style
             .has_start_arrowhead
@@ -697,6 +721,7 @@ impl Connector {
                 stroke-linecap=linecap
                 stroke-dasharray=dash
                 opacity=opacity
+                shape-rendering="geometricPrecision"
             >
                 <path d=d />
                 {start_arrow.map(|p| leptos::view! { <polyline points=p /> })}

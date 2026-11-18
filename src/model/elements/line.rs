@@ -146,6 +146,7 @@ impl Line {
                     stroke-linecap=linecap
                     stroke-dasharray=dash
                     opacity=opacity
+                    shape-rendering="geometricPrecision"
                 >
                     <path d=d />
                     {start_arrow.map(|p| leptos::view! { <polyline points=p /> })}
@@ -164,6 +165,7 @@ impl Line {
                     stroke-linecap=linecap
                     stroke-dasharray=dash
                     opacity=opacity
+                    shape-rendering="geometricPrecision"
                 />
             }
             .into_view()
