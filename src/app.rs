@@ -964,7 +964,6 @@ pub fn App() -> impl IntoView {
                 export_crop_active=export_crop_active
                 on_crop_export=on_crop_export
                 shortcuts_open=shortcuts_open
-                whats_new_open=whats_new_open
                 settings=settings
                 image_import=image_import
                 chart_import=chart_import.clone()
