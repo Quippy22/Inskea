@@ -771,7 +771,11 @@ fn render_element(el: &Element, b: &mut PageBuilder) {
             let w_pt = px_to_pt(i.data.width);
             let h_pt = px_to_pt(i.data.height);
 
-            if let Some(base64_data) = i.src.strip_prefix("data:image/jpeg;base64,") {
+            let base64_data = i
+                .src
+                .strip_prefix("data:image/jpeg;base64,")
+                .or_else(|| i.src.strip_prefix("data:image/jpg;base64,"));
+            if let Some(base64_data) = base64_data {
                 if let Ok(bytes) = base64::Engine::decode(
                     &base64::engine::general_purpose::STANDARD,
                     base64_data,

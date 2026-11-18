@@ -124,39 +124,43 @@ where
     let on_import = {
         let close_menu = close_menu;
         let doc = doc.clone();
-        let request_action = request_action.clone();
+        let viewport = viewport;
+        let canvas_mode = canvas_mode;
+        let push_snapshot = image_import.push_snapshot.clone();
         move || {
             close_menu();
-            let doc = doc.clone();
-            let run = Rc::new(move || {
-                if tauri {
-                    let doc = doc.clone();
-                    spawn_local(async move {
-                        let path = tauri_bridge::pick_open_path(None).await;
-                        if let Some(path) = path {
-                            match tauri_bridge::load_skea(&path).await {
-                                Ok(c) => match skea::load_from_str(&c) {
-                                    Ok(loaded) => doc.adopt(loaded, Some(path)),
-                                    Err(e) => crate::ui::notify::error(
-                                        doc.notifications,
-                                        format!("That file is not a valid Inskea drawing: {e}"),
-                                    ),
-                                },
-                                Err(e) => crate::ui::notify::error(
-                                    doc.notifications,
-                                    format!("Could not open the file: {e}"),
-                                ),
-                            }
+            if tauri {
+                let doc = doc.clone();
+                let push_snapshot = push_snapshot.clone();
+                spawn_local(async move {
+                    let dir = tauri_bridge::get_documents_dir().await.ok();
+                    let path = tauri_bridge::pick_open_path(dir.as_deref()).await;
+                    if let Some(path) = path {
+                        match tauri_bridge::load_skea(&path).await {
+                            Ok(c) => file_ops::import_drawing_from_str(
+                                &doc,
+                                viewport,
+                                canvas_mode,
+                                &push_snapshot,
+                                &c,
+                                None,
+                            ),
+                            Err(e) => crate::ui::notify::error(
+                                doc.notifications,
+                                format!("Could not open the file: {e}"),
+                            ),
                         }
-                    });
-                } else {
-                    file_ops::browser_open(doc.clone());
-                }
-            });
-            request_action(PendingAction {
-                label: "import another drawing",
-                run,
-            });
+                    }
+                });
+            } else {
+                file_ops::browser_import_drawing(
+                    doc.clone(),
+                    viewport,
+                    canvas_mode,
+                    push_snapshot.clone(),
+                    None,
+                );
+            }
         }
     };
     let on_import_image = {
@@ -187,10 +191,13 @@ where
                     return;
                 }
             };
+            let stem =
+                export::document_stem(doc.saved_path.get_untracked().as_deref(), "untitled");
+            let default_name = format!("{stem}.skea");
             if tauri {
                 spawn_local(async move {
                     let dir = tauri_bridge::get_documents_dir().await.ok();
-                    let path = tauri_bridge::pick_save_path("untitled.skea", dir.as_deref()).await;
+                    let path = tauri_bridge::pick_save_path(&default_name, dir.as_deref()).await;
                     if let Some(path) = path {
                         match tauri_bridge::save_skea(&path, &content).await {
                             Ok(()) => crate::ui::notify::info(
@@ -208,7 +215,7 @@ where
                     }
                 });
             } else {
-                export::download_string(&content, "untitled.skea");
+                export::download_string(&content, &default_name);
             }
         }
     };
@@ -219,40 +226,49 @@ where
         Png,
     }
 
+    #[derive(Clone, Copy)]
+    enum ExportScope {
+        Canvas,
+        Selection,
+        Crop,
+    }
+
     let on_export = {
         let _close_menu = close_menu;
         let _export_crop_active = export_crop_active;
         let _on_crop_export = on_crop_export;
         let _doc = doc.clone();
-        move |fmt: ExportFormat, selection: bool| {
+        move |fmt: ExportFormat, scope: ExportScope| {
             _close_menu();
-            if selection {
+            let notifications = _doc.notifications;
+            let bg = settings.get_untracked().theme;
+            let stem =
+                export::document_stem(_doc.saved_path.get_untracked().as_deref(), "canvas");
+
+            if matches!(scope, ExportScope::Crop) {
                 let scene = _doc.scene;
-                let notifications = _doc.notifications;
                 let on_crop_export = _on_crop_export;
                 let export_crop_active = _export_crop_active;
                 let close_menu = _close_menu;
-                let bg = settings.get_untracked().theme;
+                let filename_stem = format!("{stem}-area");
                 on_crop_export.set(Some(Rc::new(move |rect: Rect| {
                     close_menu();
                     let svg = scene.with(|s| export::scene_to_svg_crop(s, rect, bg));
                     match fmt {
                         ExportFormat::Svg => {
+                            let filename = format!("{filename_stem}.svg");
                             if tauri {
-                                export::tauri_export_svg(svg, true, notifications);
+                                export::tauri_export_svg_named(svg, filename, notifications);
                             } else {
-                                export::download_string(&svg, "selection.svg");
+                                export::download_string(&svg, &filename);
                             }
                         }
                         ExportFormat::Png => {
+                            let filename = format!("{filename_stem}.png");
                             if tauri {
-                                export::tauri_export_png(svg, true, notifications);
+                                export::tauri_export_png_named(svg, filename, notifications);
                             } else {
-                                export::download_png_from_svg(
-                                    svg,
-                                    "selection.png".to_string(),
-                                    notifications,
-                                );
+                                export::download_png_from_svg(svg, filename, notifications);
                             }
                         }
                     }
@@ -264,26 +280,96 @@ where
                 );
                 return;
             }
+
+            if matches!(scope, ExportScope::Selection) {
+                let selected = _doc.selected_ids.get_untracked();
+                if selected.is_empty() {
+                    notify::info(
+                        notifications,
+                        "Drag on the canvas to choose the export area. Esc cancels.",
+                    );
+                    let scene = _doc.scene;
+                    let on_crop_export = _on_crop_export;
+                    let export_crop_active = _export_crop_active;
+                    let close_menu = _close_menu;
+                    let filename_stem = format!("{stem}-selection");
+                    on_crop_export.set(Some(Rc::new(move |rect: Rect| {
+                        close_menu();
+                        let svg = scene.with(|s| export::scene_to_svg_crop(s, rect, bg));
+                        match fmt {
+                            ExportFormat::Svg => {
+                                let filename = format!("{filename_stem}.svg");
+                                if tauri {
+                                    export::tauri_export_svg_named(svg, filename, notifications);
+                                } else {
+                                    export::download_string(&svg, &filename);
+                                }
+                            }
+                            ExportFormat::Png => {
+                                let filename = format!("{filename_stem}.png");
+                                if tauri {
+                                    export::tauri_export_png_named(svg, filename, notifications);
+                                } else {
+                                    export::download_png_from_svg(svg, filename, notifications);
+                                }
+                            }
+                        }
+                    })));
+                    export_crop_active.set(true);
+                    return;
+                }
+
+                let vp = viewport.get();
+                let size = window_size();
+                let svg = _doc
+                    .scene
+                    .with(|s| export::scene_to_svg(s, &vp, size, Some(&selected), bg));
+                if svg.is_empty() {
+                    notify::error(notifications, "Nothing to export.");
+                    return;
+                }
+                let filename_stem = format!("{stem}-selection");
+                match fmt {
+                    ExportFormat::Svg => {
+                        let filename = format!("{filename_stem}.svg");
+                        if tauri {
+                            export::tauri_export_svg_named(svg, filename, notifications);
+                        } else {
+                            export::download_string(&svg, &filename);
+                        }
+                    }
+                    ExportFormat::Png => {
+                        let filename = format!("{filename_stem}.png");
+                        if tauri {
+                            export::tauri_export_png_named(svg, filename, notifications);
+                        } else {
+                            export::download_png_from_svg(svg, filename, notifications);
+                        }
+                    }
+                }
+                return;
+            }
+
             let vp = viewport.get();
             let size = window_size();
-            let bg = settings.get_untracked().theme;
             let svg = _doc
                 .scene
                 .with(|s| export::scene_to_svg(s, &vp, size, None, bg));
-            let notifications = _doc.notifications;
             match fmt {
                 ExportFormat::Svg => {
+                    let filename = format!("{stem}.svg");
                     if tauri {
-                        export::tauri_export_svg(svg, false, notifications);
+                        export::tauri_export_svg_named(svg, filename, notifications);
                     } else {
-                        export::download_string(&svg, "canvas.svg");
+                        export::download_string(&svg, &filename);
                     }
                 }
                 ExportFormat::Png => {
+                    let filename = format!("{stem}.png");
                     if tauri {
-                        export::tauri_export_png(svg, false, notifications);
+                        export::tauri_export_png_named(svg, filename, notifications);
                     } else {
-                        export::download_png_from_svg(svg, "canvas.png".to_string(), notifications);
+                        export::download_png_from_svg(svg, filename, notifications);
                     }
                 }
             }
@@ -356,23 +442,61 @@ where
         }
     };
 
+    let on_export = Rc::new(on_export);
+
     let on_export_canvas_pdf = {
         let close_menu = close_menu;
         let doc = doc.clone();
-        move |selection_only: bool| {
+        let _export_crop_active = export_crop_active;
+        let _on_crop_export = on_crop_export;
+        move |scope: ExportScope| {
             close_menu();
+            let stem =
+                export::document_stem(doc.saved_path.get_untracked().as_deref(), "canvas");
+            let bg = settings.get_untracked().theme;
+            let notifications = doc.notifications;
+
+            if matches!(scope, ExportScope::Crop) {
+                let scene = doc.scene;
+                let on_crop_export = _on_crop_export;
+                let export_crop_active = _export_crop_active;
+                let default_name = format!("{stem}-area.pdf");
+                on_crop_export.set(Some(Rc::new(move |rect: Rect| {
+                    scene.with(|s| {
+                        export::export_crop_pdf(s, rect, bg, default_name.clone(), notifications);
+                    });
+                })));
+                export_crop_active.set(true);
+                notify::info(
+                    notifications,
+                    "Drag on the canvas to choose the export area. Esc cancels.",
+                );
+                return;
+            }
+
             let vp = viewport.get();
             let screen = window_size();
             let selected = doc.selected_ids.get_untracked();
-            let selected_ref = if selection_only {
-                Some(selected.as_slice())
-            } else {
-                None
+            let (selected_ref, filename) = match scope {
+                ExportScope::Selection => {
+                    if selected.is_empty() {
+                        notify::error(notifications, "Nothing selected to export.");
+                        return;
+                    }
+                    (Some(selected.as_slice()), format!("{stem}-selection.pdf"))
+                }
+                _ => (None, format!("{stem}.pdf")),
             };
-            let bg = settings.get_untracked().theme;
-            let notifications = doc.notifications;
             doc.scene.with_untracked(|s| {
-                export::export_canvas_pdf(s, &vp, screen, selected_ref, bg, notifications);
+                export::export_canvas_pdf_named(
+                    s,
+                    &vp,
+                    screen,
+                    selected_ref,
+                    bg,
+                    filename,
+                    notifications,
+                );
             });
         }
     };
@@ -456,15 +580,22 @@ where
         DropdownItem::Action {
             label: "Full canvas",
             on_click: Rc::new({
-                let f = on_export;
-                move || f(ExportFormat::Png, false)
+                let f = on_export.clone();
+                move || f(ExportFormat::Png, ExportScope::Canvas)
             }),
         },
         DropdownItem::Action {
             label: "Selection",
             on_click: Rc::new({
-                let f = on_export;
-                move || f(ExportFormat::Png, true)
+                let f = on_export.clone();
+                move || f(ExportFormat::Png, ExportScope::Selection)
+            }),
+        },
+        DropdownItem::Action {
+            label: "Selected area",
+            on_click: Rc::new({
+                let f = on_export.clone();
+                move || f(ExportFormat::Png, ExportScope::Crop)
             }),
         },
         DropdownItem::Action {
@@ -479,15 +610,22 @@ where
         DropdownItem::Action {
             label: "Full canvas",
             on_click: Rc::new({
-                let f = on_export;
-                move || f(ExportFormat::Svg, false)
+                let f = on_export.clone();
+                move || f(ExportFormat::Svg, ExportScope::Canvas)
             }),
         },
         DropdownItem::Action {
             label: "Selection",
             on_click: Rc::new({
-                let f = on_export;
-                move || f(ExportFormat::Svg, true)
+                let f = on_export.clone();
+                move || f(ExportFormat::Svg, ExportScope::Selection)
+            }),
+        },
+        DropdownItem::Action {
+            label: "Selected area",
+            on_click: Rc::new({
+                let f = on_export.clone();
+                move || f(ExportFormat::Svg, ExportScope::Crop)
             }),
         },
         DropdownItem::Action {
@@ -517,14 +655,21 @@ where
             label: "Full canvas",
             on_click: Rc::new({
                 let f = on_export_canvas_pdf;
-                move || f(false)
+                move || f(ExportScope::Canvas)
             }),
         },
         DropdownItem::Action {
             label: "Selection",
             on_click: Rc::new({
                 let f = on_export_canvas_pdf;
-                move || f(true)
+                move || f(ExportScope::Selection)
+            }),
+        },
+        DropdownItem::Action {
+            label: "Selected area",
+            on_click: Rc::new({
+                let f = on_export_canvas_pdf;
+                move || f(ExportScope::Crop)
             }),
         },
     ];

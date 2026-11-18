@@ -23,6 +23,27 @@ fn file_name(path: &str) -> &str {
     path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
+/// Extract a clean document stem from a saved file path, or use `fallback`.
+/// E.g. `"/home/user/diagram.skea"` -> `"diagram"`.
+pub fn document_stem(saved_path: Option<&str>, fallback: &str) -> String {
+    let Some(path) = saved_path else {
+        return fallback.to_string();
+    };
+    let name = file_name(path);
+    let stem = if let Some(stripped) = name.strip_suffix(".skea") {
+        stripped
+    } else if let Some(stripped) = name.strip_suffix(".SKEA") {
+        stripped
+    } else {
+        name
+    };
+    if stem.is_empty() {
+        fallback.to_string()
+    } else {
+        stem.to_string()
+    }
+}
+
 // ── Browser download helpers ──────────────────────────────────────────
 
 pub fn download_string(content: &str, filename: &str) {
@@ -132,7 +153,7 @@ fn bg_color(bg: Theme) -> &'static str {
 fn svg_document(view: Rect, width: f64, height: f64, bg: Theme, body: &str) -> String {
     let (x, y, w, h) = (view.x, view.y, view.w, view.h);
     format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="{x} {y} {w} {h}"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{}"/>{body}</svg>"#,
+        r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{width}" height="{height}" viewBox="{x} {y} {w} {h}"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{}"/>{body}</svg>"#,
         bg_color(bg)
     )
 }
@@ -387,11 +408,12 @@ fn el_svg(el: &Element) -> String {
             // The data URL is embedded in the document, so exports stay
             // self-contained and work when loaded as an <img> for PNG.
             let image = format!(
-                r#"<image x="{}" y="{}" width="{}" height="{}" href="{}" preserveAspectRatio="none" opacity="{}"/>"#,
+                r#"<image x="{}" y="{}" width="{}" height="{}" href="{}" xlink:href="{}" preserveAspectRatio="none" opacity="{}"/>"#,
                 i.data.world_point.x,
                 i.data.world_point.y,
                 i.data.width,
                 i.data.height,
+                i.src,
                 i.src,
                 i.data.style.opacity,
             );
@@ -825,6 +847,7 @@ pub fn export_frame(
 }
 
 /// Tauri-native SVG export: shows a save dialog, writes the SVG string to disk.
+#[allow(dead_code)]
 pub fn tauri_export_svg(svg: String, selection: bool, notifications: Notifications) {
     let name = if selection {
         "selection.svg"
@@ -852,6 +875,7 @@ pub fn tauri_export_svg_named(svg: String, default_name: String, notifications: 
 }
 
 /// Tauri-native PNG export: renders SVG to canvas, converts to blob, saves as PNG.
+#[allow(dead_code)]
 pub fn tauri_export_png(svg: String, selection: bool, notifications: Notifications) {
     let name = if selection {
         "selection.png"
@@ -997,13 +1021,14 @@ pub fn export_frame_pdf(
     }
 }
 
-/// Export the canvas or selection as a PDF document.
-pub fn export_canvas_pdf(
+/// Export the canvas or selection as a PDF document with a custom filename.
+pub fn export_canvas_pdf_named(
     scene: &Scene,
     viewport: &Viewport,
     screen: Point,
     selected: Option<&[ElementId]>,
     bg: Theme,
+    default_name: String,
     notifications: Notifications,
 ) {
     let (view, elements, filename): (Rect, Vec<Element>, String) = match selected {
@@ -1015,7 +1040,7 @@ pub fn export_canvas_pdf(
             if let Some(b) = combined_bounds(ids, &elements) {
                 let pad = 10.0;
                 let crop = Rect::new(b.x - pad, b.y - pad, b.w + pad * 2.0, b.h + pad * 2.0);
-                (crop, elements, "selection.pdf".to_string())
+                (crop, elements, default_name)
             } else {
                 notify::error(notifications, "Nothing to export.");
                 return;
@@ -1024,17 +1049,18 @@ pub fn export_canvas_pdf(
         _ => {
             let view = viewport.visible_rect(screen);
             let elements = scene.elements_in_view(view);
-            (view, elements, "canvas.pdf".to_string())
+            (view, elements, default_name)
         }
     };
 
     let page = crate::pdf::render_scene_to_pdf_page(&elements, view, bg);
-    let title = if filename.starts_with("selection") {
+    let title = if filename.contains("selection") {
         "Inskea Selection"
     } else {
         "Inskea Canvas"
     };
     let pdf_bytes = crate::pdf::build_pdf(&[page], title);
+    let filename = with_extension(filename, "pdf");
 
     if crate::tauri_bridge::is_tauri() {
         tauri_export_pdf_named(pdf_bytes, filename, notifications);
@@ -1042,6 +1068,53 @@ pub fn export_canvas_pdf(
         download_bytes(&pdf_bytes, &filename, "application/pdf");
         notify::info(notifications, format!("Exported {filename}"));
     }
+}
+
+/// Export a cropped area of the canvas as a PDF document.
+pub fn export_crop_pdf(
+    scene: &Scene,
+    crop: Rect,
+    bg: Theme,
+    default_name: String,
+    notifications: Notifications,
+) {
+    let elements = scene.elements_in_view(crop);
+    let page = crate::pdf::render_scene_to_pdf_page(&elements, crop, bg);
+    let pdf_bytes = crate::pdf::build_pdf(&[page], &default_name);
+    let filename = with_extension(default_name, "pdf");
+
+    if crate::tauri_bridge::is_tauri() {
+        tauri_export_pdf_named(pdf_bytes, filename, notifications);
+    } else {
+        download_bytes(&pdf_bytes, &filename, "application/pdf");
+        notify::info(notifications, format!("Exported {filename}"));
+    }
+}
+
+/// Export the canvas or selection as a PDF document.
+#[allow(dead_code)]
+pub fn export_canvas_pdf(
+    scene: &Scene,
+    viewport: &Viewport,
+    screen: Point,
+    selected: Option<&[ElementId]>,
+    bg: Theme,
+    notifications: Notifications,
+) {
+    let default_name = if selected.is_some_and(|ids| !ids.is_empty()) {
+        "selection.pdf".to_string()
+    } else {
+        "canvas.pdf".to_string()
+    };
+    export_canvas_pdf_named(
+        scene,
+        viewport,
+        screen,
+        selected,
+        bg,
+        default_name,
+        notifications,
+    );
 }
 
 #[cfg(test)]
@@ -1188,6 +1261,20 @@ mod tests {
         assert_eq!(frame_filename_stem("Frame 1", 1), "frame-1");
         assert_eq!(frame_filename_stem("  Cover Page / Intro! ", 2), "cover-page-intro");
         assert_eq!(frame_filename_stem("", 3), "frame-3");
+    }
+
+    #[test]
+    fn document_stem_extracts_clean_filename_stem() {
+        assert_eq!(
+            document_stem(Some("/home/user/drawings/architecture.skea"), "canvas"),
+            "architecture"
+        );
+        assert_eq!(
+            document_stem(Some("C:\\drawings\\flowchart.SKEA"), "canvas"),
+            "flowchart"
+        );
+        assert_eq!(document_stem(None, "canvas"), "canvas");
+        assert_eq!(document_stem(Some(".skea"), "canvas"), "canvas");
     }
 }
 
