@@ -82,6 +82,28 @@ pub(crate) fn scale_points(points: &mut [Point], ctx: &ResizeContext) {
     super::path::scale_points(points, ctx, &orig_slice);
 }
 
+/// Write a coordinate to a string buffer with clean, efficient formatting.
+/// Integers or near-integers are written without decimals; fractional numbers
+/// are rounded to 2 decimal places with trailing zeroes stripped, avoiding
+/// IEEE-754 mantissa bloat and reducing SVG parsing overhead in the GPU rasterizer.
+#[inline]
+pub(crate) fn write_coord(d: &mut String, v: f64) {
+    use std::fmt::Write;
+    if v.fract() == 0.0 && v.abs() < 1e12 {
+        let _ = write!(d, "{}", v as i64);
+    } else {
+        let rounded = (v * 100.0).round() / 100.0;
+        let diff = (rounded - (rounded as i64 as f64)).abs();
+        if diff < 1e-6 && rounded.abs() < 1e12 {
+            let _ = write!(d, "{}", rounded as i64);
+        } else {
+            let s = format!("{:.2}", rounded);
+            let trimmed = s.trim_end_matches('0').trim_end_matches('.');
+            d.push_str(trimmed);
+        }
+    }
+}
+
 pub(crate) fn arrowhead_polyline(tail: &Point, tip: &Point, sw: f64) -> String {
     let dx = tip.x - tail.x;
     let dy = tip.y - tail.y;
@@ -98,7 +120,19 @@ pub(crate) fn arrowhead_polyline(tail: &Point, tip: &Point, sw: f64) -> String {
     let ly = tip_y - uy * head_size + ux * head_size * 0.4;
     let rx = tip_x - ux * head_size + uy * head_size * 0.4;
     let ry = tip_y - uy * head_size - ux * head_size * 0.4;
-    format!("{},{} {},{} {},{}", lx, ly, tip_x, tip_y, rx, ry)
+    let mut out = String::with_capacity(48);
+    write_coord(&mut out, lx);
+    out.push(',');
+    write_coord(&mut out, ly);
+    out.push(' ');
+    write_coord(&mut out, tip_x);
+    out.push(',');
+    write_coord(&mut out, tip_y);
+    out.push(' ');
+    write_coord(&mut out, rx);
+    out.push(',');
+    write_coord(&mut out, ry);
+    out
 }
 
 pub(crate) fn rect_from_drag(anchor: Point, current: Point, shift: bool) -> (Point, f64, f64) {
@@ -190,5 +224,28 @@ mod tests {
         assert_eq!(pt, Point::new(0.0, 0.0));
         assert_eq!(w, 10.0);
         assert_eq!(h, 20.0);
+    }
+
+    #[test]
+    fn write_coord_formats_integers_and_floats() {
+        let mut s = String::new();
+        write_coord(&mut s, 42.0);
+        assert_eq!(s, "42");
+
+        let mut s = String::new();
+        write_coord(&mut s, 0.0);
+        assert_eq!(s, "0");
+
+        let mut s = String::new();
+        write_coord(&mut s, 10.5);
+        assert_eq!(s, "10.5");
+
+        let mut s = String::new();
+        write_coord(&mut s, 10.25);
+        assert_eq!(s, "10.25");
+
+        let mut s = String::new();
+        write_coord(&mut s, 10.250000000001);
+        assert_eq!(s, "10.25");
     }
 }

@@ -1,8 +1,7 @@
-use crate::model::elements::utils::scale_points;
+use crate::model::elements::utils::{scale_points, write_coord};
 use crate::model::resize::ResizeContext;
 use crate::model::*;
 use leptos::IntoView;
-use std::fmt::Write;
 
 /// Minimum distance (screen pixels) between consecutive sampled points.
 /// Points closer than this are discarded to keep the point array lean; the
@@ -151,6 +150,7 @@ impl Render for Freehand {
                 stroke-linejoin=linejoin
                 stroke-dasharray=dash
                 opacity=opacity
+                shape-rendering="geometricPrecision"
             />
         }
         .into_view()
@@ -169,20 +169,35 @@ pub(crate) fn build_smooth_path(points: &[Point]) -> String {
         return String::new();
     }
     if n == 1 {
-        return format!("M{} {}", points[0].x, points[0].y);
+        let mut d = String::with_capacity(20);
+        d.push('M');
+        write_coord(&mut d, points[0].x);
+        d.push(' ');
+        write_coord(&mut d, points[0].y);
+        return d;
     }
 
-    let mut d = format!("M{} {}", points[0].x, points[0].y);
+    let mut d = String::with_capacity(n * 24);
+    d.push('M');
+    write_coord(&mut d, points[0].x);
+    d.push(' ');
+    write_coord(&mut d, points[0].y);
 
     if n == 2 {
-        let _ = write!(d, " L{} {}", points[1].x, points[1].y);
+        d.push_str(" L");
+        write_coord(&mut d, points[1].x);
+        d.push(' ');
+        write_coord(&mut d, points[1].y);
         return d;
     }
 
     // Lead-in: straight line from the first point to the first midpoint
     let mx = (points[0].x + points[1].x) / 2.0;
     let my = (points[0].y + points[1].y) / 2.0;
-    let _ = write!(d, " L{} {}", mx, my);
+    d.push_str(" L");
+    write_coord(&mut d, mx);
+    d.push(' ');
+    write_coord(&mut d, my);
 
     // Quadratic bezier through each intermediate point, landing at the
     // midpoint between it and the next point.
@@ -190,11 +205,21 @@ pub(crate) fn build_smooth_path(points: &[Point]) -> String {
         let cp = &points[i];
         let mid_x = (cp.x + points[i + 1].x) / 2.0;
         let mid_y = (cp.y + points[i + 1].y) / 2.0;
-        let _ = write!(d, " Q{} {} {} {}", cp.x, cp.y, mid_x, mid_y);
+        d.push_str(" Q");
+        write_coord(&mut d, cp.x);
+        d.push(' ');
+        write_coord(&mut d, cp.y);
+        d.push(' ');
+        write_coord(&mut d, mid_x);
+        d.push(' ');
+        write_coord(&mut d, mid_y);
     }
 
     // Lead-out: straight line from the last midpoint to the final point
-    let _ = write!(d, " L{} {}", points[n - 1].x, points[n - 1].y);
+    d.push_str(" L");
+    write_coord(&mut d, points[n - 1].x);
+    d.push(' ');
+    write_coord(&mut d, points[n - 1].y);
 
     d
 }
@@ -290,5 +315,21 @@ mod tests {
         fh.finish(1.0);
         assert_eq!(fh.points.len(), 2);
         assert_eq!(fh.points.capacity(), 2);
+    }
+
+    #[test]
+    fn build_smooth_path_formats_compactly_and_correctly() {
+        assert_eq!(build_smooth_path(&[]), "");
+        assert_eq!(build_smooth_path(&[Point::new(10.0, 20.0)]), "M10 20");
+        assert_eq!(
+            build_smooth_path(&[Point::new(0.0, 0.0), Point::new(10.0, 10.0)]),
+            "M0 0 L10 10"
+        );
+        let path = build_smooth_path(&[
+            Point::new(0.0, 0.0),
+            Point::new(10.0, 20.0),
+            Point::new(20.0, 0.0),
+        ]);
+        assert_eq!(path, "M0 0 L5 10 Q10 20 15 10 L20 0");
     }
 }

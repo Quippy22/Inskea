@@ -1,3 +1,4 @@
+use crate::model::elements::utils::write_coord;
 use crate::model::resize::{resize_bbox, ResizeContext};
 use crate::model::{Point, Rect};
 
@@ -32,26 +33,51 @@ pub fn path_d(points: &[Point], mode: CurveMode) -> String {
         return String::new();
     }
     if n == 1 {
-        return format!("M{} {}", points[0].x, points[0].y);
+        let mut d = String::with_capacity(20);
+        d.push('M');
+        write_coord(&mut d, points[0].x);
+        d.push(' ');
+        write_coord(&mut d, points[0].y);
+        return d;
     }
 
     // For 2 points, both modes reduce to a single straight segment.
     if n == 2 || mode == CurveMode::Straight {
-        let mut d = format!("M{} {}", points[0].x, points[0].y);
+        let mut d = String::with_capacity(n * 20);
+        d.push('M');
+        write_coord(&mut d, points[0].x);
+        d.push(' ');
+        write_coord(&mut d, points[0].y);
         for p in &points[1..] {
-            use std::fmt::Write;
-            let _ = write!(d, " L{} {}", p.x, p.y);
+            d.push_str(" L");
+            write_coord(&mut d, p.x);
+            d.push(' ');
+            write_coord(&mut d, p.y);
         }
         return d;
     }
 
-    let mut d = format!("M{} {}", points[0].x, points[0].y);
-    use std::fmt::Write;
+    let mut d = String::with_capacity(n * 32);
+    d.push('M');
+    write_coord(&mut d, points[0].x);
+    d.push(' ');
+    write_coord(&mut d, points[0].y);
     for i in 0..n - 1 {
         let Some((_, b1, b2, p1)) = segment_cubic_bezier(points, i) else {
             continue;
         };
-        let _ = write!(d, " C{} {} {} {} {} {}", b1.x, b1.y, b2.x, b2.y, p1.x, p1.y);
+        d.push_str(" C");
+        write_coord(&mut d, b1.x);
+        d.push(' ');
+        write_coord(&mut d, b1.y);
+        d.push(' ');
+        write_coord(&mut d, b2.x);
+        d.push(' ');
+        write_coord(&mut d, b2.y);
+        d.push(' ');
+        write_coord(&mut d, p1.x);
+        d.push(' ');
+        write_coord(&mut d, p1.y);
     }
     d
 }
