@@ -148,17 +148,19 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
             ),
             (true, "g") | (true, "G") => {
                 if shift {
-                    edit_ops::ungroup_selection(
+                    if edit_ops::ungroup_selection(
                         ctx.doc.scene,
                         ctx.doc.selected_ids,
                         &ctx.push_snapshot,
-                    );
-                } else {
-                    edit_ops::group_selection(
-                        ctx.doc.scene,
-                        ctx.doc.selected_ids,
-                        &ctx.push_snapshot,
-                    );
+                    ) {
+                        notify::info(ctx.doc.notifications, "Ungrouped elements");
+                    }
+                } else if edit_ops::group_selection(
+                    ctx.doc.scene,
+                    ctx.doc.selected_ids,
+                    &ctx.push_snapshot,
+                ) {
+                    notify::info(ctx.doc.notifications, "Grouped elements");
                 }
             }
             (true, "ArrowLeft") if alt && shift => edit_ops::distribute_selection(

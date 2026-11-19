@@ -171,32 +171,36 @@ pub fn duplicate_selection(
     selected_ids.set(new_ids);
 }
 
-/// Group the selected elements into one persistent group.
+/// Group the selected elements into one persistent group. Returns true if a group was created.
 pub fn group_selection(
     scene: RwSignal<Scene>,
     selected_ids: RwSignal<Vec<ElementId>>,
     push_snapshot: &Rc<dyn Fn()>,
-) {
+) -> bool {
     let ids = selected_ids.get();
     if scene.with_untracked(|s| crate::model::selection_item_count(s, &ids)) < 2 {
-        return;
+        return false;
     }
     mutate_scene(scene, push_snapshot, |s| s.create_group(&ids));
+    true
 }
 
 /// Dissolve every group touching the selection; the members stay in the scene.
+/// Returns true if any groups were removed.
 pub fn ungroup_selection(
     scene: RwSignal<Scene>,
     selected_ids: RwSignal<Vec<ElementId>>,
     push_snapshot: &Rc<dyn Fn()>,
-) {
+) -> bool {
     let ids = selected_ids.get();
     if ids.is_empty() {
-        return;
+        return false;
     }
+    let mut removed = false;
     mutate_scene(scene, push_snapshot, |s| {
-        s.remove_groups_containing(&ids);
+        removed = !s.remove_groups_containing(&ids).is_empty();
     });
+    removed
 }
 
 /// Insert all clipboard elements centred on the cursor and select the new

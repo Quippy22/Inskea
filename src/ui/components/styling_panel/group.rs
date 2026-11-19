@@ -10,6 +10,7 @@ pub fn group_section(
     selected_ids: RwSignal<Vec<ElementId>>,
     canvas_mode: RwSignal<CanvasMode>,
     push_snapshot: Rc<dyn Fn()>,
+    notifications: crate::ui::notify::Notifications,
 ) -> impl IntoView {
     let in_select = move || canvas_mode.get() == CanvasMode::Select;
     let is_group = Signal::derive(move || {
@@ -43,7 +44,9 @@ pub fn group_section(
                     class:opacity-40=move || !can_group.get()
                     class:cursor-not-allowed=move || !can_group.get()
                     on:click=move |_| {
-                        edit_ops::group_selection(scene, selected_ids, &push_group);
+                        if edit_ops::group_selection(scene, selected_ids, &push_group) {
+                            crate::ui::notify::info(notifications, "Grouped elements");
+                        }
                     }
                     title="Group selection (Ctrl+G)"
                     aria-label="Group selection"
@@ -55,7 +58,9 @@ pub fn group_section(
                     class:opacity-40=move || !is_group.get()
                     class:cursor-not-allowed=move || !is_group.get()
                     on:click=move |_| {
-                        edit_ops::ungroup_selection(scene, selected_ids, &push_ungroup);
+                        if edit_ops::ungroup_selection(scene, selected_ids, &push_ungroup) {
+                            crate::ui::notify::info(notifications, "Ungrouped elements");
+                        }
                     }
                     title="Ungroup selection (Ctrl+Shift+G)"
                     aria-label="Ungroup selection"

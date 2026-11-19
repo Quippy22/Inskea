@@ -1033,6 +1033,7 @@ pub fn App() -> impl IntoView {
                             cursor_world,
                             settings,
                             on_save_snippet: on_save_snippet.clone(),
+                            notifications: doc.notifications,
                         } />
                     </div>
                 </div>

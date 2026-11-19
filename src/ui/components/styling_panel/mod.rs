@@ -92,6 +92,7 @@ pub struct StylingPanelContext {
     pub cursor_world: RwSignal<Point>,
     pub settings: RwSignal<CanvasSettings>,
     pub on_save_snippet: Rc<dyn Fn()>,
+    pub notifications: crate::ui::notify::Notifications,
 }
 
 fn mutate_selected_elements(
@@ -128,6 +129,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         cursor_world,
         settings,
         on_save_snippet,
+        notifications,
     } = context;
     let styling_kind = Signal::derive(move || {
         let ids = selected_ids.get();
@@ -821,7 +823,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 push_snapshot.clone(),
                 canvas_mode,
                 cursor_world,
-            )} {group_section(scene, selected_ids, canvas_mode, push_snapshot.clone())}
+            )} {group_section(scene, selected_ids, canvas_mode, push_snapshot.clone(), notifications)}
             {alignment_section(scene, selected_ids, canvas_mode, push_snapshot.clone())}
             {layers_section(scene, selected_ids, push_snapshot.clone())}
             <Show when=move || !selected_ids.get().is_empty()>
