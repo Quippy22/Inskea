@@ -20,8 +20,9 @@ use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{
     file_ops, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab, ChartDataEditor,
-    FrameReaderOverlay, FramesContext, FramesContextMenu, SaveSnippetDialog, SelectionContextMenu,
-    SettingsPanel, ThemePicker, ToolBar, UnsavedChangesDialog, WelcomeOverlay, WhatsNewModal,
+    DraggedPanel, FrameReaderOverlay, FramesContext, FramesContextMenu, PanelSnapHighlight,
+    PanelZone, SaveSnippetDialog, SelectionContextMenu, SettingsPanel, ThemePicker, ToolBar,
+    UnsavedChangesDialog, WelcomeOverlay, WhatsNewModal,
 };
 use crate::util::window_size;
 use leptos::*;
@@ -91,6 +92,26 @@ pub fn App() -> impl IntoView {
     });
 
     let clipboard = create_rw_signal(Clipboard::default());
+
+    let tools_zone = create_rw_signal(PanelZone::Left);
+    let shapes_zone = create_rw_signal(PanelZone::Left);
+    let active_drag = create_rw_signal::<Option<(DraggedPanel, Option<PanelZone>)>>(None);
+
+    if let Some((tz, sz)) = crate::storage::load_panel_zones() {
+        tools_zone.set(tz);
+        shapes_zone.set(sz);
+    }
+
+    let on_panel_zone_changed: Rc<dyn Fn()> = Rc::new({
+        let tools_zone = tools_zone;
+        let shapes_zone = shapes_zone;
+        move || {
+            crate::storage::save_panel_zones(
+                tools_zone.get_untracked(),
+                shapes_zone.get_untracked(),
+            );
+        }
+    });
 
     let undo_stack = create_rw_signal(Vec::<ChangeSet>::new());
     let redo_stack = create_rw_signal(Vec::<ChangeSet>::new());
@@ -972,7 +993,20 @@ pub fn App() -> impl IntoView {
                 image_import=image_import
                 chart_import=chart_import.clone()
             />
-            <Dock selected_tool=selected_tool canvas_mode=canvas_mode eraser_active=eraser_active />
+            <PanelSnapHighlight
+                active_drag=active_drag.into()
+                tools_zone=tools_zone.into()
+                shapes_zone=shapes_zone.into()
+            />
+            <Dock
+                selected_tool=selected_tool
+                canvas_mode=canvas_mode
+                eraser_active=eraser_active
+                zone=tools_zone
+                shapes_zone=shapes_zone.into()
+                active_drag=active_drag
+                on_drop_snap=on_panel_zone_changed.clone()
+            />
             <CanvasStatus scene=scene viewport=viewport />
             <SettingsPanel
                 settings=settings
