@@ -837,6 +837,7 @@ pub fn App() -> impl IntoView {
                 if !is_tauri {
                     if crate::storage::save_autosave(&content) {
                         doc.mark_saved(None, saved);
+                        notify::info(doc.notifications, "Autosaved");
                     } else {
                         notify::error(doc.notifications, "Could not autosave to browser storage.");
                     }
@@ -867,7 +868,10 @@ pub fn App() -> impl IntoView {
                 let path_before = doc.path_now();
                 spawn_local(async move {
                     match tauri_bridge::save_skea(&path, &content).await {
-                        Ok(()) => doc.mark_saved_for(generation, path_before, Some(path), saved),
+                        Ok(()) => {
+                            doc.mark_saved_for(generation, path_before, Some(path), saved);
+                            notify::info(notifications, "Autosaved");
+                        }
                         Err(e) => {
                             if doc.generation_now() == generation && doc.path_now() == path_before {
                                 notify::error(notifications, format!("Could not autosave: {e}"));
