@@ -12,6 +12,10 @@ use crate::ui::file_ops;
 use crate::ui::icon;
 use crate::ui::image_import::ImageImport;
 use crate::ui::notify;
+use crate::ui::panel_zone::{
+    animate_snap_transition, detect_snap_zone, grip_line_horizontal, grip_line_vertical,
+    toolbar_container_class, DraggedPanel, PanelZone,
+};
 use crate::ui::styles;
 use crate::util::window_size;
 use leptos::*;
@@ -38,6 +42,11 @@ pub fn ToolBar<F1, F2>(
     settings: RwSignal<CanvasSettings>,
     image_import: ImageImport,
     chart_import: ChartImport,
+    #[prop(default = create_rw_signal(PanelZone::Top))] zone: RwSignal<PanelZone>,
+    #[prop(default = create_rw_signal(None))] active_drag: RwSignal<
+        Option<(DraggedPanel, Option<PanelZone>)>,
+    >,
+    #[prop(optional)] on_drop_snap: Option<Rc<dyn Fn()>>,
 ) -> impl IntoView
 where
     F1: Fn() + 'static,
@@ -674,6 +683,86 @@ where
         },
     ];
 
+    let is_dragging = create_rw_signal(false);
+    let start_pos = create_rw_signal((0.0f64, 0.0f64));
+    let toolbar_ref = create_node_ref::<html::Div>();
+
+    let on_grip_pointerdown = move |ev: web_sys::PointerEvent| {
+        if ev.button() != 0 {
+            return;
+        }
+        ev.prevent_default();
+        ev.stop_propagation();
+        is_dragging.set(true);
+        start_pos.set((ev.client_x() as f64, ev.client_y() as f64));
+        active_drag.set(Some((DraggedPanel::Toolbar, None)));
+    };
+
+    let _ = window_event_listener(leptos::ev::pointermove, move |ev: web_sys::PointerEvent| {
+        if !is_dragging.get_untracked() {
+            return;
+        }
+        let (sx, sy) = start_pos.get_untracked();
+        let cx = ev.client_x() as f64;
+        let cy = ev.client_y() as f64;
+        let dx = cx - sx;
+        let dy = cy - sy;
+
+        if let Some(div) = toolbar_ref.get() {
+            let raw: &web_sys::HtmlElement = &div;
+            let style = raw.style();
+            let _ = style.set_property("transform", &format!("translate3d({dx}px, {dy}px, 0)"));
+            let _ = style.set_property("transition", "none");
+            let _ = style.set_property("z-index", "60");
+        }
+
+        let win_size = window_size();
+        let snap = detect_snap_zone(cx, cy, win_size.x, win_size.y);
+        active_drag.set(Some((DraggedPanel::Toolbar, snap)));
+    });
+
+    {
+        let on_drop_snap = on_drop_snap.clone();
+        let _ = window_event_listener(leptos::ev::pointerup, move |_ev: web_sys::PointerEvent| {
+            if !is_dragging.get_untracked() {
+                return;
+            }
+            is_dragging.set(false);
+
+            let target_zone = match active_drag.get_untracked() {
+                Some((DraggedPanel::Toolbar, Some(target))) => Some(target),
+                _ => None,
+            };
+            active_drag.set(None);
+
+            if let Some(div) = toolbar_ref.get() {
+                let raw: &web_sys::HtmlElement = &div;
+                let from_rect = raw.get_bounding_client_rect();
+                let _ = raw.style().remove_property("z-index");
+
+                if let Some(new_zone) = target_zone {
+                    if new_zone != zone.get_untracked() {
+                        zone.set(new_zone);
+                        if let Some(ref cb) = on_drop_snap {
+                            cb();
+                        }
+                    }
+                }
+
+                animate_snap_transition(raw, &from_rect);
+            }
+        });
+    }
+
+    let menu_dropdown_class = move || {
+        match zone.get() {
+            PanelZone::Top => styles::MENU_DROPDOWN,
+            PanelZone::Bottom => "absolute bottom-full right-0 mb-1 z-50 min-w-40 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1 pointer-events-auto",
+            PanelZone::Left => "absolute top-0 left-full ml-1 z-50 min-w-40 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1 pointer-events-auto",
+            PanelZone::Right => "absolute top-0 right-full mr-1 z-50 min-w-40 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1 pointer-events-auto",
+        }
+    };
+
     // ── Mode button helper ─────────────────────────────────────────────
 
     let btn = move |mode: CanvasMode| -> &'static str {
@@ -685,8 +774,31 @@ where
     };
 
     view! {
-        <div class=styles::CONTAINER_STATUSBAR>
-            <div class=styles::TBAR_INNER>
+        <div
+            node_ref=toolbar_ref
+            class=move || toolbar_container_class(zone.get())
+        >
+            <div class=move || {
+                let dir = if zone.get().is_horizontal() {
+                    "flex-row"
+                } else {
+                    "flex-col"
+                };
+                format!("flex items-center gap-0.5 rounded-lg bg-panel/80 backdrop-blur-sm border border-border panel-glow pointer-events-auto p-0.5 {dir}")
+            }>
+                <div
+                    class="cursor-grab active:cursor-grabbing p-1.5 text-subtle/60 hover:text-fg select-none rounded flex items-center justify-center transition-colors group"
+                    on:pointerdown=on_grip_pointerdown
+                    title="Drag to move toolbar"
+                >
+                    {move || {
+                        if zone.get().is_horizontal() {
+                            grip_line_vertical().into_view()
+                        } else {
+                            grip_line_horizontal().into_view()
+                        }
+                    }}
+                </div>
                 <button
                     class=move || btn(CanvasMode::Pan)
                     on:click=move |_| canvas_mode.set(CanvasMode::Pan)
@@ -755,7 +867,7 @@ where
                                         class="fixed inset-0 z-40"
                                         on:click=move |_| close_menu()
                                     ></div>
-                                    <div class=styles::MENU_DROPDOWN>
+                                    <div class=menu_dropdown_class>
                                         // ── File ─────────────────────────────
                                         <div
                                             class="relative"

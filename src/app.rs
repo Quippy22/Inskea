@@ -1098,6 +1098,9 @@ pub fn App() -> impl IntoView {
                 settings=settings
                 image_import=image_import
                 chart_import=chart_import.clone()
+                zone=toolbar_zone
+                active_drag=active_drag
+                on_drop_snap=on_panel_zone_changed.clone()
             />
             <PanelSnapHighlight
                 active_drag=active_drag.into()
@@ -1110,6 +1113,7 @@ pub fn App() -> impl IntoView {
                 eraser_active=eraser_active
                 zone=tools_zone
                 shapes_zone=shapes_zone.into()
+                toolbar_zone=toolbar_zone.into()
                 active_drag=active_drag
                 on_drop_snap=on_panel_zone_changed.clone()
             />
@@ -1156,7 +1160,7 @@ pub fn App() -> impl IntoView {
 
             <div
                 node_ref=shapes_panel_ref
-                class=move || shapes_container_class(shapes_zone.get(), tools_zone.get())
+                class=move || shapes_container_class(shapes_zone.get(), tools_zone.get(), toolbar_zone.get())
                 class:hidden=move || !show_panel.get()
             >
                 <div class=styles::PANEL>

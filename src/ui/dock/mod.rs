@@ -24,6 +24,7 @@ pub fn Dock(
     eraser_active: RwSignal<bool>,
     #[prop(default = create_rw_signal(PanelZone::Left))] zone: RwSignal<PanelZone>,
     #[prop(default = Signal::derive(|| PanelZone::Left))] shapes_zone: Signal<PanelZone>,
+    #[prop(default = Signal::derive(|| PanelZone::Top))] toolbar_zone: Signal<PanelZone>,
     #[prop(default = create_rw_signal(None))] active_drag: RwSignal<
         Option<(DraggedPanel, Option<PanelZone>)>,
     >,
@@ -161,7 +162,7 @@ pub fn Dock(
     view! {
         <div
             node_ref=dock_ref
-            class=move || tools_container_class(zone.get(), shapes_zone.get())
+            class=move || tools_container_class(zone.get(), shapes_zone.get(), toolbar_zone.get())
         >
             <div class=move || {
                 let layout = if zone.get().is_horizontal() {
