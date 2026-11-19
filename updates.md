@@ -1,24 +1,26 @@
 # What's New in Inskea
 
-## v3.1.3
-### Canvas Action Notifications
-- Action feedback: Instant toast notifications for grouping, ungrouping, saving, autosaving, duplicating, pasting, deleting, aligning, distributing, and layer reordering.
-- Streamlined settings: Cleaned up settings panel version display.
+## v3.2.0
+### Modular Workspace & Snappable Panels
+- Freeform dock snapping: Drag and snap the Tools dock, Shapes styling panel, and Main Toolbar to any of the 4 screen zones (Top, Bottom, Left, Right).
+- Dynamic orientation morphing: Panels seamlessly pivot between vertical and horizontal configurations when moved to top or bottom edges.
+- Horizontal styling ribbon: The styling panel transforms into an ultra-wide, low-profile horizontal ribbon when docked at the top or bottom.
+- Cursor anchor precision: The grab point on the drag handle stays mathematically locked to the cursor even as panels rotate.
+- Live snap previews: Clean continuous outline highlights project destination zones before releasing.
+- Fluid FLIP transitions: Smooth physics-driven slide animations transition panels directly into their resting snap spots.
+- Persistent workspace: Customized panel arrangements are automatically saved and restored in settings across sessions.
 
-## v3.1.2
-### 120 FPS Rendering & GPU Acceleration
-- High-refresh rate canvas: Optimized rendering pipeline for 120Hz, 144Hz, and ProMotion displays with zero-copy pointer caching.
-- Hardware-accelerated graphics: Dedicated GPU composited canvas layers, asynchronous off-thread image decoding, and desktop GPU rasterization.
-- Viewport overscan margin: Virtualized panning buffer prevents DOM churn when panning around complex scenes.
+### Brand Opening Experience & Vector Animations
+- Animated logo intro: High-fidelity vector splash screen based on the technical drafting compass, rotating circle, and pen drawing the wave underline.
+- Reusable logo components: Lightweight, configurable vector logo animations for loading states, dialogs, and loaders.
+- Seamless canvas dissolve: The splash screen smoothly dissolves away once settings, fonts, and storage have loaded.
 
-### Smooth Collection Snippet Placement
-- Centered cursor placement: Adding snippets from the local or global catalogue centers them directly under the cursor until clicked onto the canvas.
-- Continuous edge follow: Canvas edge panning seamlessly scrolls the viewport while moving snippets into position.
+### Smart Clipboard Paste
+- Text paste: Pasting clipboard text automatically spawns formatted text elements right at the mouse cursor.
+- Image paste: Pasting clipboard images immediately places new visual assets directly on the canvas without file dialogs.
+- Native & web paste: Consistent clipboard handling across Tauri desktop and browser environments.
 
-### Non-Destructive Imports & Smart Paste
-- Seamless `.skea` drops: Drag and drop `.skea` files directly onto any existing canvas without wiping your active drawing.
-- Smart clipboard paste: Paste screenshots and images directly from your clipboard onto the canvas.
-
-### Refined Export Scopes
-- Fine-grained exports: Export Full Canvas, Current Viewport, Selected Elements, or a Custom Crop Region.
-- Improved document naming: Automatic filename inference based on opened drawings.
+### Polished UI & Micro-Interactions
+- Directional panel entrances: Styling panels expand and slide smoothly from center or edge origins depending on dock placement.
+- Fluid menus: Dropdowns for settings, gallery, and catalogue feature soft scale-in and backdrop fades.
+- Minimal defaults: Fresh installations start on a pristine canvas with clean, distraction-free defaults.
