@@ -80,7 +80,7 @@ fn browser_save(doc: DocContext, on_done: Option<SaveCallback>) {
     };
     export::download_string(&content, &name);
     doc.mark_saved(Some(name.clone()), saved);
-    notify::info(doc.notifications, format!("Downloaded {name}"));
+    notify::info(doc.notifications, format!("Saved {name}"));
     report_saved(&on_done, true);
 }
 
@@ -123,7 +123,9 @@ fn save_to_path(doc: DocContext, path: String, on_done: Option<SaveCallback>) {
         };
         match tauri_bridge::save_skea(&path, &content).await {
             Ok(()) => {
-                doc.mark_saved_for(generation, path_before, Some(path), saved);
+                doc.mark_saved_for(generation, path_before, Some(path.clone()), saved);
+                let (_, filename) = split_path(&path);
+                notify::info(notifications, format!("Saved {filename}"));
                 report_saved(&on_done, true);
             }
             Err(e) => {
