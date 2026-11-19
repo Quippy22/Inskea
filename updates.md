@@ -1,5 +1,10 @@
 # What's New in Inskea
 
+## v3.1.3
+### Canvas Action Notifications
+- Action feedback: Instant toast notifications for grouping, ungrouping, saving, autosaving, duplicating, pasting, deleting, aligning, distributing, and layer reordering.
+- Streamlined settings: Cleaned up settings panel version display.
+
 ## v3.1.2
 ### 120 FPS Rendering & GPU Acceleration
 - High-refresh rate canvas: Optimized rendering pipeline for 120Hz, 144Hz, and ProMotion displays with zero-copy pointer caching.
