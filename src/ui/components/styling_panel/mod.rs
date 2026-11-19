@@ -756,11 +756,12 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
 
     view! {
         <div class=move || {
-            if is_horizontal.get() {
+            let base = if is_horizontal.get() {
                 "flex flex-row items-center gap-3 select-none flex-nowrap"
             } else {
                 "flex flex-col gap-4 select-none"
-            }
+            };
+            format!("{base} animate-section-in")
         }>
             {frame_section(
                 is_frame,

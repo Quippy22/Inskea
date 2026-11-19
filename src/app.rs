@@ -1276,7 +1276,16 @@ pub fn App() -> impl IntoView {
                     } else {
                         "flex flex-col p-2"
                     };
-                    format!("{} {} transition-all duration-200", styles::PANEL, layout)
+                    let anim = if is_shapes_dragging.get() {
+                        ""
+                    } else {
+                        match shapes_effective_zone.get() {
+                            PanelZone::Top | PanelZone::Bottom => "animate-panel-expand-y",
+                            PanelZone::Left => "animate-panel-slide-left",
+                            PanelZone::Right => "animate-panel-slide-right",
+                        }
+                    };
+                    format!("{} {} {} transition-all duration-200", styles::PANEL, layout, anim)
                 }>
                     <div
                         class=move || {

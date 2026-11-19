@@ -75,14 +75,17 @@ pub const MENU_DROPDOWN: &str = "absolute top-full right-0 mt-1 z-50 min-w-40 ro
 /// Menu dropdown item.
 pub const MENU_ITEM: &str = "flex items-center justify-between w-full text-left px-4 py-1.5 text-sm text-fg hover:bg-accent/10 transition-colors";
 
+/// Frosted backdrop behind dropdown windows.
+pub const BACKDROP: &str = "fixed inset-0 z-40 bg-black/15 backdrop-blur-[1px] animate-backdrop-in";
+
 /// Settings panel window (dropdown anchored below gear button).
-pub const SETTINGS_WINDOW: &str = "absolute top-full right-0 mt-2 z-50 w-64 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-3 px-4 pointer-events-auto select-none";
+pub const SETTINGS_WINDOW: &str = "absolute top-full right-0 mt-2 z-50 w-64 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-3 px-4 pointer-events-auto select-none animate-dropdown-in";
 
 /// Settings section label.
 pub const SETTINGS_LABEL: &str = "text-xs text-subtle shrink-0";
 
 /// Catalogue dropdown anchored below the top-right tools island.
-pub const CATALOGUE_WINDOW: &str = "absolute top-full right-0 mt-2 z-50 w-80 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl p-3 pointer-events-auto select-none";
+pub const CATALOGUE_WINDOW: &str = "absolute top-full right-0 mt-2 z-50 w-80 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl p-3 pointer-events-auto select-none animate-dropdown-in";
 
 /// Catalogue scope tab — active.
 pub const CATALOGUE_TAB_ACTIVE: &str =
@@ -93,7 +96,7 @@ pub const CATALOGUE_TAB_INACTIVE: &str =
     "flex-1 h-7 rounded-md text-xs transition-colors text-subtle hover:text-fg hover:bg-surface/50";
 
 /// One catalogue snippet row.
-pub const CATALOGUE_ITEM: &str = "flex items-center gap-2 w-full rounded-md border border-border bg-surface/30 p-1.5 text-left hover:border-subtle hover:bg-surface/60 transition-colors";
+pub const CATALOGUE_ITEM: &str = "flex items-center gap-2 w-full rounded-md border border-border bg-surface/30 p-1.5 text-left hover:border-subtle hover:bg-surface/60 transition-all duration-150 hover:translate-x-0.5 active:scale-[0.99]";
 
 /// Theme picker trigger in the settings window.
 pub const SETTINGS_THEME_BTN: &str = "flex items-center gap-1.5 h-8 px-2 text-xs rounded-md border border-border text-fg hover:bg-surface/50 transition-colors";

@@ -382,7 +382,7 @@ pub fn SettingsPanel(
 
                         view! {
                             <>
-                                <div class="fixed inset-0 z-40" on:click=move |_| close()></div>
+                                <div class=styles::BACKDROP on:click=move |_| close()></div>
 
                                 <div class=styles::SETTINGS_WINDOW>
                                     <div class="flex items-center justify-between mb-3">

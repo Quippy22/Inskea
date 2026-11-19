@@ -285,7 +285,7 @@ pub fn Catalogue(context: CatalogueContext) -> impl IntoView {
                 let context = context.clone();
                 view! {
                     <>
-                        <div class="fixed inset-0 z-40" on:click=move |_| close()></div>
+                        <div class=styles::BACKDROP on:click=move |_| close()></div>
                         <div class=styles::CATALOGUE_WINDOW>
                             <div class="flex items-center justify-between">
                                 <span class="text-sm font-medium text-fg">"Catalogue"</span>

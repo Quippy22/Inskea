@@ -251,7 +251,7 @@ pub fn FramesPanel(context: FramesContext) -> impl IntoView {
                 view! {
                     <>
                         <div
-                            class="fixed inset-0 z-40"
+                            class=styles::BACKDROP
                             on:click=move |_| close_backdrop()
                         ></div>
                         <div class=styles::CATALOGUE_WINDOW>
