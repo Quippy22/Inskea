@@ -94,7 +94,6 @@ pub fn SettingsPanel(
     catalogue: CatalogueContext,
     frames: FramesContext,
     request_action: RequestAction,
-    whats_new_open: RwSignal<bool>,
 ) -> impl IntoView {
     let is_tauri = tauri_bridge::is_tauri();
     let open = create_rw_signal(false);
@@ -372,13 +371,6 @@ pub fn SettingsPanel(
                                     <div class="flex items-center justify-between gap-2">
                                         <span class=styles::SETTINGS_LABEL>"Version"</span>
                                         <div class="flex items-center gap-2">
-                                            <button
-                                                class=styles::SETTINGS_UPDATE_BTN
-                                                title="View What's New"
-                                                on:click=move |_| whats_new_open.set(true)
-                                            >
-                                                "What's new"
-                                            </button>
                                             <span class="text-xs text-subtle font-mono">
                                                 {concat!("v", env!("CARGO_PKG_VERSION"))}
                                             </span>

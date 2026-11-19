@@ -976,7 +976,6 @@ pub fn App() -> impl IntoView {
                 catalogue=catalogue.clone()
                 frames=frames.clone()
                 request_action=request_action.clone()
-                whats_new_open=whats_new_open
             />
             <FrameReaderOverlay context=frames.clone() />
             <ThemePicker open=theme_open settings=settings />
