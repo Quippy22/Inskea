@@ -141,11 +141,15 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
             }
             (false, "s") => ctx.canvas_mode.set(CanvasMode::Select),
             (false, "a") => ctx.canvas_mode.set(CanvasMode::Pan),
-            (true, "d") | (true, "D") => edit_ops::duplicate_selection(
-                ctx.doc.scene,
-                ctx.doc.selected_ids,
-                &ctx.push_snapshot,
-            ),
+            (true, "d") | (true, "D") => {
+                if edit_ops::duplicate_selection(
+                    ctx.doc.scene,
+                    ctx.doc.selected_ids,
+                    &ctx.push_snapshot,
+                ) {
+                    notify::info(ctx.doc.notifications, "Duplicated elements");
+                }
+            }
             (true, "g") | (true, "G") => {
                 if shift {
                     if edit_ops::ungroup_selection(
@@ -257,19 +261,26 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
                 edit_ops::copy_selection(ctx.doc.scene, ctx.doc.selected_ids, ctx.clipboard);
                 notify::info(ctx.doc.notifications, "Copied");
             }
-            (true, "v") | (true, "V") => edit_ops::paste_clipboard(
-                ctx.doc.scene,
-                ctx.clipboard,
-                ctx.doc.selected_ids,
-                &ctx.push_snapshot,
-                ctx.cursor_world,
-            ),
+            (true, "v") | (true, "V") => {
+                let count_before = ctx.doc.scene.with_untracked(|s| s.element_count());
+                edit_ops::paste_clipboard(
+                    ctx.doc.scene,
+                    ctx.clipboard,
+                    ctx.doc.selected_ids,
+                    &ctx.push_snapshot,
+                    ctx.cursor_world,
+                );
+                if ctx.doc.scene.with_untracked(|s| s.element_count()) > count_before {
+                    notify::info(ctx.doc.notifications, "Pasted");
+                }
+            }
             (false, "Delete") | (false, "Backspace") => {
                 let ids = ctx.doc.selected_ids.get();
                 if !ids.is_empty() {
                     (ctx.push_snapshot)();
                     ctx.doc.scene.update(|s| s.remove_elements(&ids));
                     ctx.doc.selected_ids.set(Vec::new());
+                    notify::info(ctx.doc.notifications, "Deleted elements");
                 }
             }
             _ => {}

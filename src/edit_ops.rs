@@ -157,10 +157,10 @@ pub fn duplicate_selection(
     scene: RwSignal<Scene>,
     selected_ids: RwSignal<Vec<ElementId>>,
     push_snapshot: &Rc<dyn Fn()>,
-) {
+) -> bool {
     let ids = selected_ids.get();
     if ids.is_empty() {
-        return;
+        return false;
     }
     let mut new_ids = Vec::new();
     mutate_scene(scene, push_snapshot, |s| {
@@ -169,6 +169,7 @@ pub fn duplicate_selection(
         new_ids = insert_elements(s, elements, &groups, 20.0, 20.0);
     });
     selected_ids.set(new_ids);
+    true
 }
 
 /// Group the selected elements into one persistent group. Returns true if a group was created.

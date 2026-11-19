@@ -823,6 +823,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 push_snapshot.clone(),
                 canvas_mode,
                 cursor_world,
+                notifications,
             )} {group_section(scene, selected_ids, canvas_mode, push_snapshot.clone(), notifications)}
             {alignment_section(scene, selected_ids, canvas_mode, push_snapshot.clone())}
             {layers_section(scene, selected_ids, push_snapshot.clone())}
