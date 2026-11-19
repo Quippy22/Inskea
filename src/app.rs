@@ -163,7 +163,12 @@ pub fn App() -> impl IntoView {
         if let Some(div) = shapes_panel_ref.get() {
             let raw: &web_sys::HtmlElement = &div;
             let style = raw.style();
-            let _ = style.set_property("transform", &format!("translate3d({dx}px, {dy}px, 0)"));
+            let transform_val = if shapes_zone.get_untracked().is_horizontal() {
+                format!("translate3d(calc(-50% + {dx}px), {dy}px, 0)")
+            } else {
+                format!("translate3d({dx}px, calc(-50% + {dy}px), 0)")
+            };
+            let _ = style.set_property("transform", &transform_val);
             let _ = style.set_property("transition", "none");
             let _ = style.set_property("z-index", "60");
         }
@@ -185,11 +190,11 @@ pub fn App() -> impl IntoView {
                 Some((DraggedPanel::Shapes, Some(target))) => Some(target),
                 _ => None,
             };
-            active_drag.set(None);
 
             if let Some(div) = shapes_panel_ref.get() {
                 let raw: &web_sys::HtmlElement = &div;
                 let from_rect = raw.get_bounding_client_rect();
+                let _ = raw.style().remove_property("transform");
                 let _ = raw.style().remove_property("z-index");
 
                 if let Some(new_zone) = target_zone {
@@ -198,8 +203,11 @@ pub fn App() -> impl IntoView {
                         on_panel_zone_changed();
                     }
                 }
+                active_drag.set(None);
 
                 animate_snap_transition(raw, &from_rect);
+            } else {
+                active_drag.set(None);
             }
         });
     }

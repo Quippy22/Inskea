@@ -687,6 +687,14 @@ where
     let start_pos = create_rw_signal((0.0f64, 0.0f64));
     let toolbar_ref = create_node_ref::<html::Div>();
 
+    let effective_zone = Signal::derive(move || {
+        if let Some((DraggedPanel::Toolbar, Some(target))) = active_drag.get() {
+            target
+        } else {
+            zone.get()
+        }
+    });
+
     let on_grip_pointerdown = move |ev: web_sys::PointerEvent| {
         if ev.button() != 0 {
             return;
@@ -711,7 +719,12 @@ where
         if let Some(div) = toolbar_ref.get() {
             let raw: &web_sys::HtmlElement = &div;
             let style = raw.style();
-            let _ = style.set_property("transform", &format!("translate3d({dx}px, {dy}px, 0)"));
+            let transform_val = if zone.get_untracked().is_horizontal() {
+                format!("translate3d(calc(-50% + {dx}px), {dy}px, 0)")
+            } else {
+                format!("translate3d({dx}px, calc(-50% + {dy}px), 0)")
+            };
+            let _ = style.set_property("transform", &transform_val);
             let _ = style.set_property("transition", "none");
             let _ = style.set_property("z-index", "60");
         }
@@ -733,11 +746,11 @@ where
                 Some((DraggedPanel::Toolbar, Some(target))) => Some(target),
                 _ => None,
             };
-            active_drag.set(None);
 
             if let Some(div) = toolbar_ref.get() {
                 let raw: &web_sys::HtmlElement = &div;
                 let from_rect = raw.get_bounding_client_rect();
+                let _ = raw.style().remove_property("transform");
                 let _ = raw.style().remove_property("z-index");
 
                 if let Some(new_zone) = target_zone {
@@ -748,14 +761,17 @@ where
                         }
                     }
                 }
+                active_drag.set(None);
 
                 animate_snap_transition(raw, &from_rect);
+            } else {
+                active_drag.set(None);
             }
         });
     }
 
     let menu_dropdown_class = move || {
-        match zone.get() {
+        match effective_zone.get() {
             PanelZone::Top => styles::MENU_DROPDOWN,
             PanelZone::Bottom => "absolute bottom-full right-0 mb-1 z-50 min-w-40 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1 pointer-events-auto",
             PanelZone::Left => "absolute top-0 left-full ml-1 z-50 min-w-40 rounded-lg bg-panel/95 backdrop-blur-sm border border-border shadow-xl py-1 pointer-events-auto",
@@ -779,12 +795,12 @@ where
             class=move || toolbar_container_class(zone.get())
         >
             <div class=move || {
-                let dir = if zone.get().is_horizontal() {
+                let dir = if effective_zone.get().is_horizontal() {
                     "flex-row"
                 } else {
                     "flex-col"
                 };
-                format!("flex items-center gap-0.5 rounded-lg bg-panel/80 backdrop-blur-sm border border-border panel-glow pointer-events-auto p-0.5 {dir}")
+                format!("flex items-center gap-0.5 rounded-lg bg-panel/80 backdrop-blur-sm border border-border panel-glow pointer-events-auto p-0.5 transition-all duration-200 {dir}")
             }>
                 <div
                     class="cursor-grab active:cursor-grabbing p-1.5 text-subtle/60 hover:text-fg select-none rounded flex items-center justify-center transition-colors group"
@@ -792,7 +808,7 @@ where
                     title="Drag to move toolbar"
                 >
                     {move || {
-                        if zone.get().is_horizontal() {
+                        if effective_zone.get().is_horizontal() {
                             grip_line_vertical().into_view()
                         } else {
                             grip_line_horizontal().into_view()

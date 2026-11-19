@@ -92,6 +92,14 @@ pub fn Dock(
     let start_pos = create_rw_signal((0.0f64, 0.0f64));
     let dock_ref = create_node_ref::<html::Div>();
 
+    let effective_zone = Signal::derive(move || {
+        if let Some((DraggedPanel::Tools, Some(target))) = active_drag.get() {
+            target
+        } else {
+            zone.get()
+        }
+    });
+
     let on_grip_pointerdown = move |ev: web_sys::PointerEvent| {
         if ev.button() != 0 {
             return;
@@ -116,7 +124,12 @@ pub fn Dock(
         if let Some(div) = dock_ref.get() {
             let raw: &web_sys::HtmlElement = &div;
             let style = raw.style();
-            let _ = style.set_property("transform", &format!("translate3d({dx}px, {dy}px, 0)"));
+            let transform_val = if zone.get_untracked().is_horizontal() {
+                format!("translate3d(calc(-50% + {dx}px), {dy}px, 0)")
+            } else {
+                format!("translate3d({dx}px, calc(-50% + {dy}px), 0)")
+            };
+            let _ = style.set_property("transform", &transform_val);
             let _ = style.set_property("transition", "none");
             let _ = style.set_property("z-index", "60");
         }
@@ -138,11 +151,11 @@ pub fn Dock(
                 Some((DraggedPanel::Tools, Some(target))) => Some(target),
                 _ => None,
             };
-            active_drag.set(None);
 
             if let Some(div) = dock_ref.get() {
                 let raw: &web_sys::HtmlElement = &div;
                 let from_rect = raw.get_bounding_client_rect();
+                let _ = raw.style().remove_property("transform");
                 let _ = raw.style().remove_property("z-index");
 
                 if let Some(new_zone) = target_zone {
@@ -153,8 +166,11 @@ pub fn Dock(
                         }
                     }
                 }
+                active_drag.set(None);
 
                 animate_snap_transition(raw, &from_rect);
+            } else {
+                active_drag.set(None);
             }
         });
     }
@@ -165,12 +181,12 @@ pub fn Dock(
             class=move || tools_container_class(zone.get(), shapes_zone.get(), toolbar_zone.get())
         >
             <div class=move || {
-                let layout = if zone.get().is_horizontal() {
+                let layout = if effective_zone.get().is_horizontal() {
                     "flex flex-row items-center gap-0.5"
                 } else {
                     "flex flex-col items-center gap-0.5"
                 };
-                format!("{} p-0.5 {}", styles::PANEL, layout)
+                format!("{} p-0.5 {} transition-all duration-200", styles::PANEL, layout)
             }>
                 <div
                     class="cursor-grab active:cursor-grabbing p-1.5 text-subtle/60 hover:text-fg select-none rounded flex items-center justify-center transition-colors group"
@@ -178,7 +194,7 @@ pub fn Dock(
                     title="Drag to move panel"
                 >
                     {move || {
-                        if zone.get().is_horizontal() {
+                        if effective_zone.get().is_horizontal() {
                             grip_line_vertical().into_view()
                         } else {
                             grip_line_horizontal().into_view()
