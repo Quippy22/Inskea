@@ -231,6 +231,7 @@ pub struct CanvasSettings {
     pub theme: Theme,
     pub tools_zone: PanelZone,
     pub shapes_zone: PanelZone,
+    pub toolbar_zone: PanelZone,
 }
 
 impl Default for CanvasSettings {
@@ -243,6 +244,7 @@ impl Default for CanvasSettings {
             theme: Theme::Storm,
             tools_zone: PanelZone::Left,
             shapes_zone: PanelZone::Left,
+            toolbar_zone: PanelZone::Top,
         }
     }
 }

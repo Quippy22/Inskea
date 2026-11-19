@@ -90,29 +90,35 @@ pub fn App() -> impl IntoView {
 
     let tools_zone = create_rw_signal(settings.get_untracked().tools_zone);
     let shapes_zone = create_rw_signal(settings.get_untracked().shapes_zone);
+    let toolbar_zone = create_rw_signal(settings.get_untracked().toolbar_zone);
     let active_drag = create_rw_signal::<Option<(DraggedPanel, Option<PanelZone>)>>(None);
 
-    if let Some((tz, sz)) = crate::storage::load_panel_zones() {
+    if let Some((tz, sz, tb)) = crate::storage::load_panel_zones() {
         tools_zone.set(tz);
         shapes_zone.set(sz);
+        toolbar_zone.set(tb);
         settings.update(|s| {
             s.tools_zone = tz;
             s.shapes_zone = sz;
+            s.toolbar_zone = tb;
         });
     }
 
     let on_panel_zone_changed: Rc<dyn Fn()> = Rc::new({
         let tools_zone = tools_zone;
         let shapes_zone = shapes_zone;
+        let toolbar_zone = toolbar_zone;
         let settings = settings;
         move || {
             let tz = tools_zone.get_untracked();
             let sz = shapes_zone.get_untracked();
+            let tb = toolbar_zone.get_untracked();
             settings.update(|s| {
                 s.tools_zone = tz;
                 s.shapes_zone = sz;
+                s.toolbar_zone = tb;
             });
-            crate::storage::save_panel_zones(tz, sz);
+            crate::storage::save_panel_zones(tz, sz, tb);
         }
     });
 
@@ -123,6 +129,9 @@ pub fn App() -> impl IntoView {
         }
         if shapes_zone.get_untracked() != s.shapes_zone {
             shapes_zone.set(s.shapes_zone);
+        }
+        if toolbar_zone.get_untracked() != s.toolbar_zone {
+            toolbar_zone.set(s.toolbar_zone);
         }
     });
 
@@ -794,7 +803,7 @@ pub fn App() -> impl IntoView {
         crate::fonts::ensure_fonts_installed();
         spawn_local(async move {
             if let Ok(content) = tauri_bridge::load_settings().await {
-                if let Some((cs, gs, gz, auto, theme, tz, sz)) = from_toml(&content) {
+                if let Some((cs, gs, gz, auto, theme, tz, sz, tb)) = from_toml(&content) {
                     settings.set(CanvasSettings {
                         center_style: cs,
                         grid_style: gs,
@@ -803,16 +812,18 @@ pub fn App() -> impl IntoView {
                         theme,
                         tools_zone: tz,
                         shapes_zone: sz,
+                        toolbar_zone: tb,
                     });
                     tools_zone.set(tz);
                     shapes_zone.set(sz);
+                    toolbar_zone.set(tb);
                 }
             }
             initialized.set(true);
         });
     } else {
         if let Some(content) = crate::storage::load_settings() {
-            if let Some((cs, gs, gz, auto, theme, tz, sz)) = from_toml(&content) {
+            if let Some((cs, gs, gz, auto, theme, tz, sz, tb)) = from_toml(&content) {
                 settings.set(CanvasSettings {
                     center_style: cs,
                     grid_style: gs,
@@ -821,9 +832,11 @@ pub fn App() -> impl IntoView {
                     theme,
                     tools_zone: tz,
                     shapes_zone: sz,
+                    toolbar_zone: tb,
                 });
                 tools_zone.set(tz);
                 shapes_zone.set(sz);
+                toolbar_zone.set(tb);
             }
         }
         initialized.set(true);
@@ -852,6 +865,7 @@ pub fn App() -> impl IntoView {
                 s.theme,
                 s.tools_zone,
                 s.shapes_zone,
+                s.toolbar_zone,
             );
             if is_tauri {
                 spawn_local(async move {
