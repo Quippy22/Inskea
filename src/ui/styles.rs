@@ -15,6 +15,7 @@ pub const PANEL: &str =
 pub const TBAR_INNER: &str = "flex items-center gap-0.5 rounded-lg bg-panel/80 backdrop-blur-sm border border-border panel-glow pointer-events-auto p-0.5";
 
 /// Dock wrapper: fixed left-centre column.
+#[allow(dead_code)]
 pub const CONTAINER_DOCK: &str =
     "fixed left-4 max-sm:left-2 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-0.5";
 

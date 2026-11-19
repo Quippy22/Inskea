@@ -19,10 +19,11 @@ use crate::ui::notify::{self, Toasts};
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{
-    file_ops, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab, ChartDataEditor,
-    DraggedPanel, FrameReaderOverlay, FramesContext, FramesContextMenu, PanelSnapHighlight,
-    PanelZone, SaveSnippetDialog, SelectionContextMenu, SettingsPanel, ThemePicker, ToolBar,
-    UnsavedChangesDialog, WelcomeOverlay, WhatsNewModal,
+    animate_snap_transition, detect_snap_zone, file_ops, grip_horizontal,
+    shapes_container_class, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab,
+    ChartDataEditor, DraggedPanel, FrameReaderOverlay, FramesContext, FramesContextMenu,
+    PanelSnapHighlight, PanelZone, SaveSnippetDialog, SelectionContextMenu, SettingsPanel,
+    ThemePicker, ToolBar, UnsavedChangesDialog, WelcomeOverlay, WhatsNewModal,
 };
 use crate::util::window_size;
 use leptos::*;
@@ -112,6 +113,75 @@ pub fn App() -> impl IntoView {
             );
         }
     });
+
+    let is_shapes_dragging = create_rw_signal(false);
+    let shapes_start_pos = create_rw_signal((0.0f64, 0.0f64));
+    let shapes_panel_ref = create_node_ref::<html::Div>();
+
+    let on_shapes_grip_pointerdown = move |ev: web_sys::PointerEvent| {
+        if ev.button() != 0 {
+            return;
+        }
+        ev.prevent_default();
+        ev.stop_propagation();
+        is_shapes_dragging.set(true);
+        shapes_start_pos.set((ev.client_x() as f64, ev.client_y() as f64));
+        active_drag.set(Some((DraggedPanel::Shapes, None)));
+    };
+
+    let _ = window_event_listener(leptos::ev::pointermove, move |ev: web_sys::PointerEvent| {
+        if !is_shapes_dragging.get_untracked() {
+            return;
+        }
+        let (sx, sy) = shapes_start_pos.get_untracked();
+        let cx = ev.client_x() as f64;
+        let cy = ev.client_y() as f64;
+        let dx = cx - sx;
+        let dy = cy - sy;
+
+        if let Some(div) = shapes_panel_ref.get() {
+            let raw: &web_sys::HtmlElement = &div;
+            let style = raw.style();
+            let _ = style.set_property("transform", &format!("translate3d({dx}px, {dy}px, 0)"));
+            let _ = style.set_property("transition", "none");
+            let _ = style.set_property("z-index", "60");
+        }
+
+        let win_size = window_size();
+        let snap = detect_snap_zone(cx, cy, win_size.x, win_size.y);
+        active_drag.set(Some((DraggedPanel::Shapes, snap)));
+    });
+
+    {
+        let on_panel_zone_changed = on_panel_zone_changed.clone();
+        let _ = window_event_listener(leptos::ev::pointerup, move |_ev: web_sys::PointerEvent| {
+            if !is_shapes_dragging.get_untracked() {
+                return;
+            }
+            is_shapes_dragging.set(false);
+
+            let target_zone = match active_drag.get_untracked() {
+                Some((DraggedPanel::Shapes, Some(target))) => Some(target),
+                _ => None,
+            };
+            active_drag.set(None);
+
+            if let Some(div) = shapes_panel_ref.get() {
+                let raw: &web_sys::HtmlElement = &div;
+                let from_rect = raw.get_bounding_client_rect();
+                let _ = raw.style().remove_property("z-index");
+
+                if let Some(new_zone) = target_zone {
+                    if new_zone != shapes_zone.get_untracked() {
+                        shapes_zone.set(new_zone);
+                        on_panel_zone_changed();
+                    }
+                }
+
+                animate_snap_transition(raw, &from_rect);
+            }
+        });
+    }
 
     let undo_stack = create_rw_signal(Vec::<ChangeSet>::new());
     let redo_stack = create_rw_signal(Vec::<ChangeSet>::new());
@@ -1049,11 +1119,19 @@ pub fn App() -> impl IntoView {
             <Toasts notifications=notifications />
 
             <div
-                class="fixed left-[4.5rem] top-1/2 -translate-y-1/2 z-50"
+                node_ref=shapes_panel_ref
+                class=move || shapes_container_class(shapes_zone.get(), tools_zone.get())
                 class:hidden=move || !show_panel.get()
             >
                 <div class=styles::PANEL>
-                    <div class="py-2 px-3">
+                    <div
+                        class="cursor-grab active:cursor-grabbing px-3 pt-1.5 pb-0.5 text-subtle/60 hover:text-fg select-none rounded-t-lg flex items-center justify-center transition-colors"
+                        on:pointerdown=on_shapes_grip_pointerdown
+                        title="Drag to move panel"
+                    >
+                        {grip_horizontal()}
+                    </div>
+                    <div class="pb-2 px-3">
                         <StylingPanel context=StylingPanelContext {
                             scene,
                             selected_ids,

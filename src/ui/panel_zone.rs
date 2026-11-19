@@ -11,6 +11,7 @@ pub enum PanelZone {
 }
 
 impl PanelZone {
+    #[allow(dead_code)]
     pub const ALL: [PanelZone; 4] = [
         PanelZone::Left,
         PanelZone::Right,
@@ -18,6 +19,7 @@ impl PanelZone {
         PanelZone::Bottom,
     ];
 
+    #[allow(dead_code)]
     pub fn is_vertical(self) -> bool {
         matches!(self, PanelZone::Left | PanelZone::Right)
     }
@@ -100,30 +102,30 @@ pub fn shapes_container_class(zone: PanelZone, tools_zone: PanelZone) -> &'stati
     match zone {
         PanelZone::Left => {
             if tools_zone == PanelZone::Left {
-                "fixed left-[4.5rem] top-1/2 -translate-y-1/2 z-40"
+                "fixed left-[4.5rem] top-1/2 -translate-y-1/2 z-40 max-h-[85vh] overflow-y-auto"
             } else {
-                "fixed left-4 top-1/2 -translate-y-1/2 z-40"
+                "fixed left-4 top-1/2 -translate-y-1/2 z-40 max-h-[85vh] overflow-y-auto"
             }
         }
         PanelZone::Right => {
             if tools_zone == PanelZone::Right {
-                "fixed right-[4.5rem] top-1/2 -translate-y-1/2 z-40"
+                "fixed right-[4.5rem] top-1/2 -translate-y-1/2 z-40 max-h-[85vh] overflow-y-auto"
             } else {
-                "fixed right-4 top-1/2 -translate-y-1/2 z-40"
+                "fixed right-4 top-1/2 -translate-y-1/2 z-40 max-h-[85vh] overflow-y-auto"
             }
         }
         PanelZone::Top => {
             if tools_zone == PanelZone::Top {
-                "fixed top-16 left-[calc(50%+8.5rem)] -translate-x-1/2 z-40"
+                "fixed top-16 left-[calc(50%+8.5rem)] -translate-x-1/2 z-40 max-h-[80vh] overflow-y-auto"
             } else {
-                "fixed top-16 left-1/2 -translate-x-1/2 z-40"
+                "fixed top-16 left-1/2 -translate-x-1/2 z-40 max-h-[80vh] overflow-y-auto"
             }
         }
         PanelZone::Bottom => {
             if tools_zone == PanelZone::Bottom {
-                "fixed bottom-4 left-[calc(50%+8.5rem)] -translate-x-1/2 z-40"
+                "fixed bottom-4 left-[calc(50%+8.5rem)] -translate-x-1/2 z-40 max-h-[80vh] overflow-y-auto"
             } else {
-                "fixed bottom-4 left-1/2 -translate-x-1/2 z-40"
+                "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 max-h-[80vh] overflow-y-auto"
             }
         }
     }

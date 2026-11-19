@@ -172,13 +172,7 @@ pub fn Dock(
                 format!("{} p-0.5 {}", styles::PANEL, layout)
             }>
                 <div
-                    class=move || {
-                        if zone.get().is_horizontal() {
-                            "cursor-grab active:cursor-grabbing p-1 text-subtle/60 hover:text-fg select-none rounded flex items-center justify-center transition-colors"
-                        } else {
-                            "cursor-grab active:cursor-grabbing p-1 text-subtle/60 hover:text-fg select-none rounded flex items-center justify-center transition-colors"
-                        }
-                    }
+                    class="cursor-grab active:cursor-grabbing p-1 text-subtle/60 hover:text-fg select-none rounded flex items-center justify-center transition-colors"
                     on:pointerdown=on_grip_pointerdown
                     title="Drag to move panel"
                 >
