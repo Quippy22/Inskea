@@ -10,6 +10,7 @@ pub(crate) mod frames;
 pub(crate) mod icon;
 pub(crate) mod image_import;
 pub(crate) mod notify;
+pub mod panel_zone;
 pub(crate) mod settings;
 mod status;
 /// UI overlay components: toolbar, dock, settings, icons, Tailwind class constants,
@@ -27,6 +28,7 @@ pub use catalogue::{
 };
 pub use chart_editor::ChartDataEditor;
 pub use frames::{FrameReaderOverlay, FramesContext, FramesContextMenu};
+pub use panel_zone::{DraggedPanel, PanelSnapHighlight, PanelZone};
 pub use settings::SettingsPanel;
 pub use status::CanvasStatus;
 pub use theme_picker::ThemePicker;

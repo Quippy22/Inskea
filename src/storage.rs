@@ -62,3 +62,20 @@ pub fn save_last_seen_version(version: &str) {
     }
 }
 
+const PANEL_ZONES_KEY: &str = "inskea.panel_zones";
+
+/// Loads the persisted panel zones (tools_zone, shapes_zone) from browser storage.
+pub fn load_panel_zones() -> Option<(crate::ui::panel_zone::PanelZone, crate::ui::panel_zone::PanelZone)> {
+    let raw = local_storage()?.get_item(PANEL_ZONES_KEY).ok().flatten()?;
+    serde_json::from_str(&raw).ok()
+}
+
+/// Persists the panel zones to browser storage.
+pub fn save_panel_zones(tools: crate::ui::panel_zone::PanelZone, shapes: crate::ui::panel_zone::PanelZone) {
+    if let Some(storage) = local_storage() {
+        if let Ok(serialized) = serde_json::to_string(&(tools, shapes)) {
+            let _ = storage.set_item(PANEL_ZONES_KEY, &serialized);
+        }
+    }
+}
+
