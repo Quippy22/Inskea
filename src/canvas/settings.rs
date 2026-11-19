@@ -1,20 +1,21 @@
+use crate::ui::panel_zone::PanelZone;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum CenterStyle {
     Crosshair,
     Dot,
     Off,
 }
 
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum GridStyle {
     Dot,
     Line,
     Off,
 }
 
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GridSize(f64);
 
 impl GridSize {
@@ -221,13 +222,15 @@ impl Theme {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CanvasSettings {
     pub center_style: CenterStyle,
     pub grid_style: GridStyle,
     pub grid_size: GridSize,
     pub autosave: bool,
     pub theme: Theme,
+    pub tools_zone: PanelZone,
+    pub shapes_zone: PanelZone,
 }
 
 impl Default for CanvasSettings {
@@ -238,6 +241,8 @@ impl Default for CanvasSettings {
             grid_size: GridSize::new(30.0),
             autosave: false,
             theme: Theme::Storm,
+            tools_zone: PanelZone::Left,
+            shapes_zone: PanelZone::Left,
         }
     }
 }

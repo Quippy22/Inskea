@@ -84,33 +84,45 @@ pub fn App() -> impl IntoView {
     let on_crop_export = create_rw_signal::<Option<CropExportCallback>>(None);
     let on_text_commit = create_rw_signal::<Option<Rc<dyn Fn()>>>(None);
 
-    let settings = create_rw_signal(CanvasSettings {
-        center_style: CenterStyle::Off,
-        grid_style: GridStyle::Off,
-        grid_size: GridSize::new(30.0),
-        autosave: false,
-        theme: Theme::Storm,
-    });
+    let settings = create_rw_signal(CanvasSettings::default());
 
     let clipboard = create_rw_signal(Clipboard::default());
 
-    let tools_zone = create_rw_signal(PanelZone::Left);
-    let shapes_zone = create_rw_signal(PanelZone::Left);
+    let tools_zone = create_rw_signal(settings.get_untracked().tools_zone);
+    let shapes_zone = create_rw_signal(settings.get_untracked().shapes_zone);
     let active_drag = create_rw_signal::<Option<(DraggedPanel, Option<PanelZone>)>>(None);
 
     if let Some((tz, sz)) = crate::storage::load_panel_zones() {
         tools_zone.set(tz);
         shapes_zone.set(sz);
+        settings.update(|s| {
+            s.tools_zone = tz;
+            s.shapes_zone = sz;
+        });
     }
 
     let on_panel_zone_changed: Rc<dyn Fn()> = Rc::new({
         let tools_zone = tools_zone;
         let shapes_zone = shapes_zone;
+        let settings = settings;
         move || {
-            crate::storage::save_panel_zones(
-                tools_zone.get_untracked(),
-                shapes_zone.get_untracked(),
-            );
+            let tz = tools_zone.get_untracked();
+            let sz = shapes_zone.get_untracked();
+            settings.update(|s| {
+                s.tools_zone = tz;
+                s.shapes_zone = sz;
+            });
+            crate::storage::save_panel_zones(tz, sz);
+        }
+    });
+
+    create_effect(move |_| {
+        let s = settings.get();
+        if tools_zone.get_untracked() != s.tools_zone {
+            tools_zone.set(s.tools_zone);
+        }
+        if shapes_zone.get_untracked() != s.shapes_zone {
+            shapes_zone.set(s.shapes_zone);
         }
     });
 
@@ -782,28 +794,36 @@ pub fn App() -> impl IntoView {
         crate::fonts::ensure_fonts_installed();
         spawn_local(async move {
             if let Ok(content) = tauri_bridge::load_settings().await {
-                if let Some((cs, gs, gz, auto, theme)) = from_toml(&content) {
+                if let Some((cs, gs, gz, auto, theme, tz, sz)) = from_toml(&content) {
                     settings.set(CanvasSettings {
                         center_style: cs,
                         grid_style: gs,
                         grid_size: gz,
                         autosave: auto,
                         theme,
+                        tools_zone: tz,
+                        shapes_zone: sz,
                     });
+                    tools_zone.set(tz);
+                    shapes_zone.set(sz);
                 }
             }
             initialized.set(true);
         });
     } else {
         if let Some(content) = crate::storage::load_settings() {
-            if let Some((cs, gs, gz, auto, theme)) = from_toml(&content) {
+            if let Some((cs, gs, gz, auto, theme, tz, sz)) = from_toml(&content) {
                 settings.set(CanvasSettings {
                     center_style: cs,
                     grid_style: gs,
                     grid_size: gz,
                     autosave: auto,
                     theme,
+                    tools_zone: tz,
+                    shapes_zone: sz,
                 });
+                tools_zone.set(tz);
+                shapes_zone.set(sz);
             }
         }
         initialized.set(true);
@@ -830,6 +850,8 @@ pub fn App() -> impl IntoView {
                 s.grid_size,
                 s.autosave,
                 s.theme,
+                s.tools_zone,
+                s.shapes_zone,
             );
             if is_tauri {
                 spawn_local(async move {

@@ -8,6 +8,7 @@ use crate::ui::components::{IconButton, NumberSlider, SegmentedControl};
 use crate::ui::frames::{FramesContext, FramesPanel};
 use crate::ui::icon;
 use crate::ui::notify;
+use crate::ui::panel_zone::PanelZone;
 use crate::ui::styles;
 use leptos::*;
 use serde::{Deserialize, Serialize};
@@ -35,6 +36,10 @@ struct PersistentSettings {
     autosave: bool,
     #[serde(default)]
     theme: Option<Theme>,
+    #[serde(default)]
+    tools_zone: Option<PanelZone>,
+    #[serde(default)]
+    shapes_zone: Option<PanelZone>,
     /// Pre-theme settings stored a two-value canvas background. Read it only
     /// so old files keep their look after the upgrade.
     #[serde(default, skip_serializing)]
@@ -54,6 +59,8 @@ pub fn to_toml(
     grid_size: GridSize,
     autosave: bool,
     theme: Theme,
+    tools_zone: PanelZone,
+    shapes_zone: PanelZone,
 ) -> String {
     let s = PersistentSettings {
         center_style,
@@ -61,6 +68,8 @@ pub fn to_toml(
         grid_size,
         autosave,
         theme: Some(theme),
+        tools_zone: Some(tools_zone),
+        shapes_zone: Some(shapes_zone),
         canvas_bg: None,
     };
     toml::to_string(&s).unwrap_or_default()
@@ -68,7 +77,17 @@ pub fn to_toml(
 
 /// Deserialize a TOML string back into settings.
 /// Returns `None` if the content is empty or malformed.
-pub fn from_toml(content: &str) -> Option<(CenterStyle, GridStyle, GridSize, bool, Theme)> {
+pub fn from_toml(
+    content: &str,
+) -> Option<(
+    CenterStyle,
+    GridStyle,
+    GridSize,
+    bool,
+    Theme,
+    PanelZone,
+    PanelZone,
+)> {
     if content.is_empty() {
         return None;
     }
@@ -82,7 +101,17 @@ pub fn from_toml(content: &str) -> Option<(CenterStyle, GridStyle, GridSize, boo
             })
         })
         .unwrap_or(Theme::Storm);
-    Some((s.center_style, s.grid_style, s.grid_size, s.autosave, theme))
+    let tools_zone = s.tools_zone.unwrap_or(PanelZone::Left);
+    let shapes_zone = s.shapes_zone.unwrap_or(PanelZone::Left);
+    Some((
+        s.center_style,
+        s.grid_style,
+        s.grid_size,
+        s.autosave,
+        theme,
+        tools_zone,
+        shapes_zone,
+    ))
 }
 
 // ── Settings panel ──────────────────────────────────────────────────────────
@@ -203,6 +232,8 @@ pub fn SettingsPanel(
     let grid_style = create_rw_signal(settings.get().grid_style);
     let grid_size = create_rw_signal(settings.get().grid_size.px());
     let autosave = create_rw_signal(settings.get().autosave);
+    let tools_zone = create_rw_signal(settings.get().tools_zone);
+    let shapes_zone = create_rw_signal(settings.get().shapes_zone);
 
     create_effect(move |_| {
         let s = settings.get();
@@ -218,6 +249,12 @@ pub fn SettingsPanel(
         if autosave.get_untracked() != s.autosave {
             autosave.set(s.autosave);
         }
+        if tools_zone.get_untracked() != s.tools_zone {
+            tools_zone.set(s.tools_zone);
+        }
+        if shapes_zone.get_untracked() != s.shapes_zone {
+            shapes_zone.set(s.shapes_zone);
+        }
     });
 
     create_effect(move |_| {
@@ -231,6 +268,12 @@ pub fn SettingsPanel(
     });
     create_effect(move |_| {
         settings.update(|s| s.autosave = autosave.get());
+    });
+    create_effect(move |_| {
+        settings.update(|s| s.tools_zone = tools_zone.get());
+    });
+    create_effect(move |_| {
+        settings.update(|s| s.shapes_zone = shapes_zone.get());
     });
 
     let close = move || open.set(false);
@@ -279,6 +322,13 @@ pub fn SettingsPanel(
     ];
 
     let toggle_opts = &[(true, "On"), (false, "Off")];
+
+    let zone_opts = &[
+        (PanelZone::Left, "Left"),
+        (PanelZone::Right, "Right"),
+        (PanelZone::Top, "Top"),
+        (PanelZone::Bottom, "Bottom"),
+    ];
 
     view! {
         <div class="fixed top-4 right-4 z-50 pointer-events-none">
@@ -364,6 +414,18 @@ pub fn SettingsPanel(
                                     <div class="flex items-center justify-between">
                                         <span class=styles::SETTINGS_LABEL>"Autosave"</span>
                                         <SegmentedControl options=toggle_opts active=autosave />
+                                    </div>
+
+                                    <div class="h-px bg-border/70 my-3"></div>
+
+                                    <div class="flex items-center justify-between mb-3">
+                                        <span class=styles::SETTINGS_LABEL>"Tools"</span>
+                                        <SegmentedControl options=zone_opts active=tools_zone />
+                                    </div>
+
+                                    <div class="flex items-center justify-between">
+                                        <span class=styles::SETTINGS_LABEL>"Shapes"</span>
+                                        <SegmentedControl options=zone_opts active=shapes_zone />
                                     </div>
 
                                     <div class="h-px bg-border/70 my-3"></div>
@@ -513,16 +575,20 @@ mod tests {
             GridSize::new(37.5),
             true,
             Theme::Paper,
+            PanelZone::Right,
+            PanelZone::Bottom,
         );
-        assert!(
-            from_toml(&content)
-                == Some((
-                    CenterStyle::Dot,
-                    GridStyle::Line,
-                    GridSize::new(37.5),
-                    true,
-                    Theme::Paper,
-                ))
+        assert_eq!(
+            from_toml(&content),
+            Some((
+                CenterStyle::Dot,
+                GridStyle::Line,
+                GridSize::new(37.5),
+                true,
+                Theme::Paper,
+                PanelZone::Right,
+                PanelZone::Bottom,
+            ))
         );
     }
 
@@ -541,7 +607,10 @@ autosave = false
 canvas_bg = "Dark"
 "#;
         let light = dark.replace("Dark", "Light");
-        assert_eq!(from_toml(dark).unwrap().4, Theme::Storm);
+        let parsed = from_toml(dark).unwrap();
+        assert_eq!(parsed.4, Theme::Storm);
+        assert_eq!(parsed.5, PanelZone::Left);
+        assert_eq!(parsed.6, PanelZone::Left);
         assert_eq!(from_toml(&light).unwrap().4, Theme::Paper);
     }
 }
