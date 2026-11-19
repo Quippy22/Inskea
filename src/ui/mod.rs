@@ -32,9 +32,9 @@ pub use components::{LogoAnimation, OpeningScreen};
 pub use frames::{FrameReaderOverlay, FramesContext, FramesContextMenu};
 #[allow(unused_imports)]
 pub use panel_zone::{
-    animate_snap_transition, detect_snap_zone, grip_line_horizontal, grip_line_vertical,
-    shapes_container_class, toolbar_container_class, tools_container_class, DraggedPanel,
-    PanelSnapHighlight, PanelZone,
+    align_dragged_panel, animate_snap_transition, clean_dragged_panel, detect_snap_zone,
+    grip_line_horizontal, grip_line_vertical, shapes_container_class, toolbar_container_class,
+    tools_container_class, DraggedPanel, PanelSnapHighlight, PanelZone,
 };
 pub use settings::SettingsPanel;
 pub use status::CanvasStatus;

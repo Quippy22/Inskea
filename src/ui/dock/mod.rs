@@ -6,8 +6,8 @@ pub use drawing::Tool;
 use crate::canvas::CanvasMode;
 use crate::ui::icon;
 use crate::ui::panel_zone::{
-    animate_snap_transition, detect_snap_zone, grip_line_horizontal, grip_line_vertical,
-    tools_container_class, DraggedPanel, PanelZone,
+    align_dragged_panel, animate_snap_transition, clean_dragged_panel, detect_snap_zone,
+    grip_line_horizontal, grip_line_vertical, tools_container_class, DraggedPanel, PanelZone,
 };
 use crate::ui::styles;
 use leptos::*;
@@ -89,8 +89,9 @@ pub fn Dock(
     }
 
     let is_dragging = create_rw_signal(false);
-    let start_pos = create_rw_signal((0.0f64, 0.0f64));
+    let grab_ratio = create_rw_signal((0.5f64, 0.5f64));
     let dock_ref = create_node_ref::<html::Div>();
+    let grip_ref = create_node_ref::<html::Div>();
 
     let effective_zone = Signal::derive(move || {
         if let Some((DraggedPanel::Tools, Some(target))) = active_drag.get() {
@@ -106,8 +107,29 @@ pub fn Dock(
         }
         ev.prevent_default();
         ev.stop_propagation();
+
+        let cx = ev.client_x() as f64;
+        let cy = ev.client_y() as f64;
+
+        if let (Some(panel_div), Some(grip_div)) = (dock_ref.get(), grip_ref.get()) {
+            let grip_raw: &web_sys::HtmlElement = &grip_div;
+            let panel_raw: &web_sys::HtmlElement = &panel_div;
+            let grip_rect = grip_raw.get_bounding_client_rect();
+            let rx = if grip_rect.width() > 0.0 {
+                ((cx - grip_rect.left()) / grip_rect.width()).clamp(0.0, 1.0)
+            } else {
+                0.5
+            };
+            let ry = if grip_rect.height() > 0.0 {
+                ((cy - grip_rect.top()) / grip_rect.height()).clamp(0.0, 1.0)
+            } else {
+                0.5
+            };
+            grab_ratio.set((rx, ry));
+            align_dragged_panel(panel_raw, grip_raw, cx, cy, rx, ry);
+        }
+
         is_dragging.set(true);
-        start_pos.set((ev.client_x() as f64, ev.client_y() as f64));
         active_drag.set(Some((DraggedPanel::Tools, None)));
     };
 
@@ -115,28 +137,34 @@ pub fn Dock(
         if !is_dragging.get_untracked() {
             return;
         }
-        let (sx, sy) = start_pos.get_untracked();
         let cx = ev.client_x() as f64;
         let cy = ev.client_y() as f64;
-        let dx = cx - sx;
-        let dy = cy - sy;
-
-        if let Some(div) = dock_ref.get() {
-            let raw: &web_sys::HtmlElement = &div;
-            let style = raw.style();
-            let transform_val = if zone.get_untracked().is_horizontal() {
-                format!("translate3d(calc(-50% + {dx}px), {dy}px, 0)")
-            } else {
-                format!("translate3d({dx}px, calc(-50% + {dy}px), 0)")
-            };
-            let _ = style.set_property("transform", &transform_val);
-            let _ = style.set_property("transition", "none");
-            let _ = style.set_property("z-index", "60");
-        }
+        let (rx, ry) = grab_ratio.get_untracked();
 
         let win_size = crate::util::window_size();
         let snap = detect_snap_zone(cx, cy, win_size.x, win_size.y);
-        active_drag.set(Some((DraggedPanel::Tools, snap)));
+        let prev_snap = match active_drag.get_untracked() {
+            Some((DraggedPanel::Tools, s)) => s,
+            _ => None,
+        };
+        let snap_changed = snap != prev_snap;
+
+        if let (Some(panel_div), Some(grip_div)) = (dock_ref.get(), grip_ref.get()) {
+            let panel_raw: &web_sys::HtmlElement = &panel_div;
+            let grip_raw: &web_sys::HtmlElement = &grip_div;
+            align_dragged_panel(panel_raw, grip_raw, cx, cy, rx, ry);
+
+            if snap_changed {
+                active_drag.set(Some((DraggedPanel::Tools, snap)));
+                let panel_clone = panel_raw.clone();
+                let grip_clone = grip_raw.clone();
+                leptos::leptos_dom::helpers::request_animation_frame(move || {
+                    align_dragged_panel(&panel_clone, &grip_clone, cx, cy, rx, ry);
+                });
+            }
+        } else if snap_changed {
+            active_drag.set(Some((DraggedPanel::Tools, snap)));
+        }
     });
 
     {
@@ -154,9 +182,7 @@ pub fn Dock(
 
             if let Some(div) = dock_ref.get() {
                 let raw: &web_sys::HtmlElement = &div;
-                let from_rect = raw.get_bounding_client_rect();
-                let _ = raw.style().remove_property("transform");
-                let _ = raw.style().remove_property("z-index");
+                let from_rect = clean_dragged_panel(raw);
 
                 if let Some(new_zone) = target_zone {
                     if new_zone != zone.get_untracked() {
@@ -186,9 +212,11 @@ pub fn Dock(
                 } else {
                     "flex flex-col items-center gap-0.5"
                 };
-                format!("{} p-0.5 {} transition-all duration-200", styles::PANEL, layout)
+                let anim = if is_dragging.get() { "" } else { "transition-all duration-200" };
+                format!("{} p-0.5 {} {}", styles::PANEL, layout, anim)
             }>
                 <div
+                    node_ref=grip_ref
                     class="cursor-grab active:cursor-grabbing p-1.5 text-subtle/60 hover:text-fg select-none rounded flex items-center justify-center transition-colors group"
                     on:pointerdown=on_grip_pointerdown
                     title="Drag to move panel"

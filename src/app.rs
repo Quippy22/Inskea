@@ -19,11 +19,12 @@ use crate::ui::notify::{self, Toasts};
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{
-    animate_snap_transition, detect_snap_zone, file_ops, grip_line_horizontal, grip_line_vertical,
-    shapes_container_class, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab,
-    ChartDataEditor, DraggedPanel, FrameReaderOverlay, FramesContext, FramesContextMenu,
-    OpeningScreen, PanelSnapHighlight, PanelZone, SaveSnippetDialog, SelectionContextMenu,
-    SettingsPanel, ThemePicker, ToolBar, UnsavedChangesDialog, WelcomeOverlay, WhatsNewModal,
+    align_dragged_panel, animate_snap_transition, clean_dragged_panel, detect_snap_zone, file_ops,
+    grip_line_horizontal, grip_line_vertical, shapes_container_class, CanvasStatus,
+    CatalogueContext, CatalogueContextMenu, CatalogueTab, ChartDataEditor, DraggedPanel,
+    FrameReaderOverlay, FramesContext, FramesContextMenu, OpeningScreen, PanelSnapHighlight,
+    PanelZone, SaveSnippetDialog, SelectionContextMenu, SettingsPanel, ThemePicker, ToolBar,
+    UnsavedChangesDialog, WelcomeOverlay, WhatsNewModal,
 };
 use crate::util::window_size;
 use leptos::*;
@@ -136,8 +137,9 @@ pub fn App() -> impl IntoView {
     });
 
     let is_shapes_dragging = create_rw_signal(false);
-    let shapes_start_pos = create_rw_signal((0.0f64, 0.0f64));
+    let shapes_grab_ratio = create_rw_signal((0.5f64, 0.5f64));
     let shapes_panel_ref = create_node_ref::<html::Div>();
+    let shapes_grip_ref = create_node_ref::<html::Div>();
 
     let shapes_effective_zone = Signal::derive(move || {
         if let Some((DraggedPanel::Shapes, Some(target))) = active_drag.get() {
@@ -153,8 +155,29 @@ pub fn App() -> impl IntoView {
         }
         ev.prevent_default();
         ev.stop_propagation();
+
+        let cx = ev.client_x() as f64;
+        let cy = ev.client_y() as f64;
+
+        if let (Some(panel_div), Some(grip_div)) = (shapes_panel_ref.get(), shapes_grip_ref.get()) {
+            let grip_raw: &web_sys::HtmlElement = &grip_div;
+            let panel_raw: &web_sys::HtmlElement = &panel_div;
+            let grip_rect = grip_raw.get_bounding_client_rect();
+            let rx = if grip_rect.width() > 0.0 {
+                ((cx - grip_rect.left()) / grip_rect.width()).clamp(0.0, 1.0)
+            } else {
+                0.5
+            };
+            let ry = if grip_rect.height() > 0.0 {
+                ((cy - grip_rect.top()) / grip_rect.height()).clamp(0.0, 1.0)
+            } else {
+                0.5
+            };
+            shapes_grab_ratio.set((rx, ry));
+            align_dragged_panel(panel_raw, grip_raw, cx, cy, rx, ry);
+        }
+
         is_shapes_dragging.set(true);
-        shapes_start_pos.set((ev.client_x() as f64, ev.client_y() as f64));
         active_drag.set(Some((DraggedPanel::Shapes, None)));
     };
 
@@ -162,28 +185,34 @@ pub fn App() -> impl IntoView {
         if !is_shapes_dragging.get_untracked() {
             return;
         }
-        let (sx, sy) = shapes_start_pos.get_untracked();
         let cx = ev.client_x() as f64;
         let cy = ev.client_y() as f64;
-        let dx = cx - sx;
-        let dy = cy - sy;
-
-        if let Some(div) = shapes_panel_ref.get() {
-            let raw: &web_sys::HtmlElement = &div;
-            let style = raw.style();
-            let transform_val = if shapes_zone.get_untracked().is_horizontal() {
-                format!("translate3d(calc(-50% + {dx}px), {dy}px, 0)")
-            } else {
-                format!("translate3d({dx}px, calc(-50% + {dy}px), 0)")
-            };
-            let _ = style.set_property("transform", &transform_val);
-            let _ = style.set_property("transition", "none");
-            let _ = style.set_property("z-index", "60");
-        }
+        let (rx, ry) = shapes_grab_ratio.get_untracked();
 
         let win_size = window_size();
         let snap = detect_snap_zone(cx, cy, win_size.x, win_size.y);
-        active_drag.set(Some((DraggedPanel::Shapes, snap)));
+        let prev_snap = match active_drag.get_untracked() {
+            Some((DraggedPanel::Shapes, s)) => s,
+            _ => None,
+        };
+        let snap_changed = snap != prev_snap;
+
+        if let (Some(panel_div), Some(grip_div)) = (shapes_panel_ref.get(), shapes_grip_ref.get()) {
+            let panel_raw: &web_sys::HtmlElement = &panel_div;
+            let grip_raw: &web_sys::HtmlElement = &grip_div;
+            align_dragged_panel(panel_raw, grip_raw, cx, cy, rx, ry);
+
+            if snap_changed {
+                active_drag.set(Some((DraggedPanel::Shapes, snap)));
+                let panel_clone = panel_raw.clone();
+                let grip_clone = grip_raw.clone();
+                leptos::leptos_dom::helpers::request_animation_frame(move || {
+                    align_dragged_panel(&panel_clone, &grip_clone, cx, cy, rx, ry);
+                });
+            }
+        } else if snap_changed {
+            active_drag.set(Some((DraggedPanel::Shapes, snap)));
+        }
     });
 
     {
@@ -201,9 +230,7 @@ pub fn App() -> impl IntoView {
 
             if let Some(div) = shapes_panel_ref.get() {
                 let raw: &web_sys::HtmlElement = &div;
-                let from_rect = raw.get_bounding_client_rect();
-                let _ = raw.style().remove_property("transform");
-                let _ = raw.style().remove_property("z-index");
+                let from_rect = clean_dragged_panel(raw);
 
                 if let Some(new_zone) = target_zone {
                     if new_zone != shapes_zone.get_untracked() {
@@ -1286,9 +1313,11 @@ pub fn App() -> impl IntoView {
                             PanelZone::Right => "animate-panel-slide-right",
                         }
                     };
-                    format!("{} {} {} transition-all duration-200", styles::PANEL, layout, anim)
+                    let transition = if is_shapes_dragging.get() { "" } else { "transition-all duration-200" };
+                    format!("{} {} {} {}", styles::PANEL, layout, anim, transition)
                 }>
                     <div
+                        node_ref=shapes_grip_ref
                         class=move || {
                             if shapes_effective_zone.get().is_horizontal() {
                                 "cursor-grab active:cursor-grabbing p-1.5 text-subtle/60 hover:text-fg select-none rounded flex items-center justify-center transition-colors group shrink-0"

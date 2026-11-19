@@ -308,6 +308,84 @@ pub fn PanelSnapHighlight(
     }
 }
 
+/// Calculates the top-left viewport coordinate for a panel so that the point inside
+/// its grip handle where the user grabbed remains fixed at (cursor_x, cursor_y).
+#[allow(clippy::too_many_arguments)]
+pub fn calculate_drag_target(
+    cursor_x: f64,
+    cursor_y: f64,
+    grip_x: f64,
+    grip_y: f64,
+    grip_w: f64,
+    grip_h: f64,
+    panel_x: f64,
+    panel_y: f64,
+    grab_ratio_x: f64,
+    grab_ratio_y: f64,
+) -> (f64, f64) {
+    let grip_rel_panel_x = grip_x - panel_x;
+    let grip_rel_panel_y = grip_y - panel_y;
+
+    let grab_in_grip_x = grab_ratio_x * grip_w;
+    let grab_in_grip_y = grab_ratio_y * grip_h;
+
+    let grab_in_panel_x = grip_rel_panel_x + grab_in_grip_x;
+    let grab_in_panel_y = grip_rel_panel_y + grab_in_grip_y;
+
+    (cursor_x - grab_in_panel_x, cursor_y - grab_in_panel_y)
+}
+
+/// Positions a dragged floating panel so that the point on the grip handle where the user
+/// clicked remains locked directly underneath the mouse cursor, even when the panel rotates
+/// between horizontal and vertical orientations.
+pub fn align_dragged_panel(
+    panel_el: &web_sys::HtmlElement,
+    grip_el: &web_sys::HtmlElement,
+    cursor_x: f64,
+    cursor_y: f64,
+    grab_ratio_x: f64,
+    grab_ratio_y: f64,
+) {
+    let grip_rect = grip_el.get_bounding_client_rect();
+    let panel_rect = panel_el.get_bounding_client_rect();
+
+    let (target_left, target_top) = calculate_drag_target(
+        cursor_x,
+        cursor_y,
+        grip_rect.left(),
+        grip_rect.top(),
+        grip_rect.width(),
+        grip_rect.height(),
+        panel_rect.left(),
+        panel_rect.top(),
+        grab_ratio_x,
+        grab_ratio_y,
+    );
+
+    let style = panel_el.style();
+    let _ = style.set_property("left", "0px");
+    let _ = style.set_property("top", "0px");
+    let _ = style.set_property("right", "auto");
+    let _ = style.set_property("bottom", "auto");
+    let _ = style.set_property("transform", &format!("translate3d({target_left}px, {target_top}px, 0)"));
+    let _ = style.set_property("transition", "none");
+    let _ = style.set_property("z-index", "60");
+}
+
+/// Cleans up inline drag styles from a panel and returns its current bounding client rect for FLIP animation.
+pub fn clean_dragged_panel(panel_el: &web_sys::HtmlElement) -> web_sys::DomRect {
+    let from_rect = panel_el.get_bounding_client_rect();
+    let style = panel_el.style();
+    let _ = style.remove_property("left");
+    let _ = style.remove_property("top");
+    let _ = style.remove_property("right");
+    let _ = style.remove_property("bottom");
+    let _ = style.remove_property("transform");
+    let _ = style.remove_property("transition");
+    let _ = style.remove_property("z-index");
+    from_rect
+}
+
 /// Animates a panel smoothly from its current visual bounding box `from_rect`
 /// to its new layout position using GPU-accelerated CSS transform transition (FLIP).
 pub fn animate_snap_transition(
@@ -329,9 +407,28 @@ pub fn animate_snap_transition(
             return;
         }
 
-        let _ = el
-            .style()
-            .set_property("transform", &format!("translate({dx}px, {dy}px)"));
+        let class_name = el.class_name();
+        let is_h = class_name.contains("-translate-x-1/2");
+        let is_v = class_name.contains("-translate-y-1/2");
+
+        let (start_transform, target_transform) = if is_h {
+            (
+                format!("translate3d(calc(-50% + {dx}px), {dy}px, 0)"),
+                "translate3d(-50%, 0px, 0)".to_string(),
+            )
+        } else if is_v {
+            (
+                format!("translate3d({dx}px, calc(-50% + {dy}px), 0)"),
+                "translate3d(0px, -50%, 0)".to_string(),
+            )
+        } else {
+            (
+                format!("translate3d({dx}px, {dy}px, 0)"),
+                "translate3d(0px, 0px, 0)".to_string(),
+            )
+        };
+
+        let _ = el.style().set_property("transform", &start_transform);
         let _ = el.style().set_property("transition", "none");
 
         // Force reflow
@@ -342,8 +439,9 @@ pub fn animate_snap_transition(
             let _ = el_clone
                 .style()
                 .set_property("transition", "transform 320ms cubic-bezier(0.16, 1, 0.3, 1)");
-            let _ = el_clone.style().set_property("transform", "translate(0px, 0px)");
+            let _ = el_clone.style().set_property("transform", &target_transform);
 
+            #[cfg(target_arch = "wasm32")]
             leptos::set_timeout(
                 move || {
                     let _ = el_clone.style().remove_property("transform");
@@ -445,5 +543,36 @@ mod tests {
         );
         assert!(ghost_shapes_top.contains("w-[560px]"));
         assert!(ghost_shapes_top.contains("top-16"));
+    }
+
+    #[test]
+    fn test_calculate_drag_target_preserves_cursor_point() {
+        // Test vertical panel: user grabbed center of grip handle at (100, 200)
+        let (left, top) = calculate_drag_target(
+            100.0, 200.0, // cursor
+            90.0, 185.0,  // grip pos
+            20.0, 30.0,   // grip size
+            80.0, 180.0,  // panel pos
+            0.5, 0.5,     // grabbed center of grip
+        );
+        assert_eq!(left, 80.0);
+        assert_eq!(top, 180.0);
+
+        // When panel rotates to horizontal: grip dimensions & offset in panel change
+        // Suppose new horizontal panel has grip at relative (10.0, 12.0) with size (30.0, 20.0)
+        let (rot_left, rot_top) = calculate_drag_target(
+            100.0, 200.0, // same cursor position
+            10.0, 12.0,   // grip at panel-relative (10, 12)
+            30.0, 20.0,   // horizontal grip size
+            0.0, 0.0,     // panel origin
+            0.5, 0.5,     // grabbed center of grip
+        );
+        // Grabbed point inside horizontal panel = 10 + 0.5*30 = 25, 12 + 0.5*20 = 22
+        // Panel top-left should be cursor (100, 200) - (25, 22) = (75, 178)
+        assert_eq!(rot_left, 75.0);
+        assert_eq!(rot_top, 178.0);
+        // Verifying: panel top-left + grabbed point in panel = cursor!
+        assert_eq!(rot_left + 25.0, 100.0);
+        assert_eq!(rot_top + 22.0, 200.0);
     }
 }
