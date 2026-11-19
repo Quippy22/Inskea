@@ -55,6 +55,7 @@ enum LegacyCanvasBg {
 }
 
 /// Serialize settings to a TOML string.
+#[allow(clippy::too_many_arguments)]
 pub fn to_toml(
     center_style: CenterStyle,
     grid_style: GridStyle,
@@ -81,6 +82,7 @@ pub fn to_toml(
 
 /// Deserialize a TOML string back into settings.
 /// Returns `None` if the content is empty or malformed.
+#[allow(clippy::type_complexity)]
 pub fn from_toml(
     content: &str,
 ) -> Option<(

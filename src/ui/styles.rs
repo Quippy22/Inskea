@@ -12,6 +12,7 @@ pub const PANEL: &str =
     "rounded-lg bg-panel/80 backdrop-blur-sm border border-border shadow-lg pointer-events-auto";
 
 /// Toolbar inner container (horizontal button row with glow).
+#[allow(dead_code)]
 pub const TBAR_INNER: &str = "flex items-center gap-0.5 rounded-lg bg-panel/80 backdrop-blur-sm border border-border panel-glow pointer-events-auto p-0.5";
 
 /// Dock wrapper: fixed left-centre column.
@@ -20,6 +21,7 @@ pub const CONTAINER_DOCK: &str =
     "fixed left-4 max-sm:left-2 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-0.5";
 
 /// Status bar wrapper: fixed top-centre row.
+#[allow(dead_code)]
 pub const CONTAINER_STATUSBAR: &str =
     "fixed max-sm:top-2 top-4 inset-x-0 flex justify-center pointer-events-none z-50";
 
