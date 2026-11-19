@@ -17,7 +17,7 @@ pub fn edit_section(
     let push_dup = push_snapshot.clone();
     let push_paste = push_snapshot.clone();
     view! {
-        <div class:hidden=move || canvas_mode.get() != CanvasMode::Select>
+        <div class="shrink-0" class:hidden=move || canvas_mode.get() != CanvasMode::Select>
             <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                 "Edit"
             </div>

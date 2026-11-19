@@ -12,10 +12,14 @@ pub fn frame_section(
     set_frame_preset: Rc<dyn Fn(FramePreset)>,
     set_frame_orientation: Rc<dyn Fn(FrameOrientation)>,
     on_focus_frame: Rc<dyn Fn()>,
+    is_horizontal: Signal<bool>,
 ) -> impl IntoView {
     view! {
-        <div class="flex flex-col gap-3" class:hidden=move || !is_frame.get()>
-            <div>
+        <div
+            class=move || if is_horizontal.get() { "flex flex-row items-center gap-3 shrink-0" } else { "flex flex-col gap-3" }
+            class:hidden=move || !is_frame.get()
+        >
+            <div class="shrink-0">
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     "Frame size"
                 </div>
@@ -29,9 +33,9 @@ pub fn frame_section(
                                 <button
                                     class=move || {
                                         if local_frame_style.get().preset == preset {
-                                            "px-1.5 py-1 rounded border border-accent bg-accent/10 text-[11px] font-medium text-accent transition-colors text-center"
+                                             "px-1.5 py-1 rounded border border-accent bg-accent/10 text-[11px] font-medium text-accent transition-colors text-center"
                                         } else {
-                                            "px-1.5 py-1 rounded border border-border text-[11px] text-subtle hover:text-fg hover:bg-surface/50 transition-colors text-center"
+                                             "px-1.5 py-1 rounded border border-border text-[11px] text-subtle hover:text-fg hover:bg-surface/50 transition-colors text-center"
                                         }
                                     }
                                     title=format!("{label} frame size")
@@ -45,7 +49,7 @@ pub fn frame_section(
                 </div>
             </div>
 
-            <div>
+            <div class="shrink-0">
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     "Orientation"
                 </div>
@@ -75,14 +79,20 @@ pub fn frame_section(
             </div>
 
             <Show when=move || !frame_dimensions_label.get().is_empty()>
-                <div class="text-[10px] leading-snug text-subtle px-0.5">
+                <div class="text-[10px] leading-snug text-subtle px-0.5 shrink-0">
                     {move || frame_dimensions_label.get()}
                 </div>
             </Show>
 
             <Show when=move || has_single_selected_frame.get()>
                 <button
-                    class=format!("{} w-full", styles::BTN_TEXT)
+                    class=move || {
+                        if is_horizontal.get() {
+                            format!("{} shrink-0 whitespace-nowrap px-2", styles::BTN_TEXT)
+                        } else {
+                            format!("{} w-full", styles::BTN_TEXT)
+                        }
+                    }
                     on:click={
                         let f = on_focus_frame.clone();
                         move |_| f()

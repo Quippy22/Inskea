@@ -93,6 +93,7 @@ pub struct StylingPanelContext {
     pub settings: RwSignal<CanvasSettings>,
     pub on_save_snippet: Rc<dyn Fn()>,
     pub notifications: crate::ui::notify::Notifications,
+    pub zone: Signal<crate::ui::panel_zone::PanelZone>,
 }
 
 fn mutate_selected_elements(
@@ -130,7 +131,9 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
         settings,
         on_save_snippet,
         notifications,
+        zone,
     } = context;
+    let is_horizontal = Signal::derive(move || zone.get().is_horizontal());
     let styling_kind = Signal::derive(move || {
         let ids = selected_ids.get();
         let el =
@@ -752,7 +755,13 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
     ];
 
     view! {
-        <div class="flex flex-col gap-4 select-none">
+        <div class=move || {
+            if is_horizontal.get() {
+                "flex flex-row items-center gap-3 select-none flex-nowrap"
+            } else {
+                "flex flex-col gap-4 select-none"
+            }
+        }>
             {frame_section(
                 is_frame,
                 has_single_selected_frame,
@@ -761,6 +770,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 set_frame_preset,
                 set_frame_orientation,
                 on_focus_frame,
+                is_horizontal,
             )}
             {chart_section(
                 is_chart,
@@ -773,6 +783,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 toggle_chart_values,
                 toggle_chart_legend,
                 on_edit_chart_data,
+                is_horizontal,
             )}
             {sliders_section(
                 stroke_size,
@@ -782,7 +793,11 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 text_size,
                 text_size_cb,
                 styling_kind,
-            )} <div class="flex flex-col gap-1.5 mt-1" class:hidden=move || !is_text.get()>
+                is_horizontal,
+            )} <div
+                class=move || if is_horizontal.get() { "flex flex-col gap-1 shrink-0" } else { "flex flex-col gap-1.5 mt-1" }
+                class:hidden=move || !is_text.get()
+            >
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     Alignment
                 </div>
@@ -806,6 +821,7 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 is_line_or_arrow,
                 is_rect,
                 is_rounded,
+                is_horizontal,
             )} {connector_section(is_connector, local_connector_variant, set_connector_variant)}
             {color_section(local_style, set_color, active_slot, color_swatches, hide_stroke)}
             {embedded_text_color_section(
@@ -825,11 +841,17 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 cursor_world,
                 notifications,
             )} {group_section(scene, selected_ids, canvas_mode, push_snapshot.clone(), notifications)}
-            {alignment_section(scene, selected_ids, canvas_mode, push_snapshot.clone(), notifications)}
+            {alignment_section(scene, selected_ids, canvas_mode, push_snapshot.clone(), notifications, is_horizontal)}
             {layers_section(scene, selected_ids, push_snapshot.clone(), notifications)}
             <Show when=move || !selected_ids.get().is_empty()>
                 <button
-                    class=format!("{} w-full", styles::BTN_TEXT)
+                    class=move || {
+                        if is_horizontal.get() {
+                            format!("{} shrink-0 whitespace-nowrap px-2.5", styles::BTN_TEXT)
+                        } else {
+                            format!("{} w-full", styles::BTN_TEXT)
+                        }
+                    }
                     on:click={
                         let on_save_snippet = on_save_snippet.clone();
                         move |_| on_save_snippet()
@@ -841,6 +863,6 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 </button>
             </Show>
         </div>
-        {float_picker(active_slot, picker_color, picker_on_change, picker_ref, settings)}
+        {float_picker(active_slot, picker_color, picker_on_change, picker_ref, settings, zone)}
     }
 }

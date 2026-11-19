@@ -74,10 +74,14 @@ pub fn chart_section(
     toggle_values: Rc<dyn Fn()>,
     toggle_legend: Rc<dyn Fn()>,
     on_edit_data: Rc<dyn Fn()>,
+    is_horizontal: Signal<bool>,
 ) -> impl IntoView {
     view! {
-        <div class="flex flex-col gap-3" class:hidden=move || !is_chart.get()>
-            <div>
+        <div
+            class=move || if is_horizontal.get() { "flex flex-row items-center gap-3 shrink-0" } else { "flex flex-col gap-3" }
+            class:hidden=move || !is_chart.get()
+        >
+            <div class="shrink-0">
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     "Chart type"
                 </div>
@@ -89,7 +93,7 @@ pub fn chart_section(
                 )}
             </div>
 
-            <div>
+            <div class="shrink-0">
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     "Palette"
                 </div>
@@ -129,7 +133,7 @@ pub fn chart_section(
                 </div>
             </div>
 
-            <div>
+            <div class="shrink-0">
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     "Display"
                 </div>
@@ -199,7 +203,13 @@ pub fn chart_section(
 
             <Show when=move || has_single_selected_chart.get()>
                 <button
-                    class=format!("{} w-full font-medium", styles::BTN_TEXT_ACTIVE)
+                    class=move || {
+                        if is_horizontal.get() {
+                            format!("{} shrink-0 whitespace-nowrap px-2 font-medium", styles::BTN_TEXT_ACTIVE)
+                        } else {
+                            format!("{} w-full font-medium", styles::BTN_TEXT_ACTIVE)
+                        }
+                    }
                     on:click={
                         let f = on_edit_data.clone();
                         move |_| f()

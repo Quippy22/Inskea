@@ -16,7 +16,7 @@ pub fn layers_section(
     let push_forward = push_snapshot.clone();
     let push_front = push_snapshot;
     view! {
-        <div>
+        <div class="shrink-0">
             <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                 "Layers"
             </div>

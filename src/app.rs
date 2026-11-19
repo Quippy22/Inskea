@@ -19,7 +19,7 @@ use crate::ui::notify::{self, Toasts};
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{
-    animate_snap_transition, detect_snap_zone, file_ops, grip_line_horizontal,
+    animate_snap_transition, detect_snap_zone, file_ops, grip_line_horizontal, grip_line_vertical,
     shapes_container_class, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab,
     ChartDataEditor, DraggedPanel, FrameReaderOverlay, FramesContext, FramesContextMenu,
     PanelSnapHighlight, PanelZone, SaveSnippetDialog, SelectionContextMenu, SettingsPanel,
@@ -138,6 +138,14 @@ pub fn App() -> impl IntoView {
     let is_shapes_dragging = create_rw_signal(false);
     let shapes_start_pos = create_rw_signal((0.0f64, 0.0f64));
     let shapes_panel_ref = create_node_ref::<html::Div>();
+
+    let shapes_effective_zone = Signal::derive(move || {
+        if let Some((DraggedPanel::Shapes, Some(target))) = active_drag.get() {
+            target
+        } else {
+            shapes_zone.get()
+        }
+    });
 
     let on_shapes_grip_pointerdown = move |ev: web_sys::PointerEvent| {
         if ev.button() != 0 {
@@ -1203,6 +1211,7 @@ pub fn App() -> impl IntoView {
                 active_drag=active_drag.into()
                 tools_zone=tools_zone.into()
                 shapes_zone=shapes_zone.into()
+                toolbar_zone=toolbar_zone.into()
             />
             <Dock
                 selected_tool=selected_tool
@@ -1260,15 +1269,35 @@ pub fn App() -> impl IntoView {
                 class=move || shapes_container_class(shapes_zone.get(), tools_zone.get(), toolbar_zone.get())
                 class:hidden=move || !show_panel.get()
             >
-                <div class=styles::PANEL>
+                <div class=move || {
+                    let is_h = shapes_effective_zone.get().is_horizontal();
+                    let layout = if is_h {
+                        "flex flex-row items-center gap-2 p-1.5"
+                    } else {
+                        "flex flex-col p-2"
+                    };
+                    format!("{} {} transition-all duration-200", styles::PANEL, layout)
+                }>
                     <div
-                        class="cursor-grab active:cursor-grabbing px-3 pt-2 pb-1 text-subtle/60 hover:text-fg select-none rounded-t-lg flex items-center justify-center transition-colors group"
+                        class=move || {
+                            if shapes_effective_zone.get().is_horizontal() {
+                                "cursor-grab active:cursor-grabbing p-1.5 text-subtle/60 hover:text-fg select-none rounded flex items-center justify-center transition-colors group shrink-0"
+                            } else {
+                                "cursor-grab active:cursor-grabbing px-3 pt-2 pb-1 text-subtle/60 hover:text-fg select-none rounded-t-lg flex items-center justify-center transition-colors group shrink-0"
+                            }
+                        }
                         on:pointerdown=on_shapes_grip_pointerdown
                         title="Drag to move panel"
                     >
-                        {grip_line_horizontal()}
+                        {move || {
+                            if shapes_effective_zone.get().is_horizontal() {
+                                grip_line_vertical().into_view()
+                            } else {
+                                grip_line_horizontal().into_view()
+                            }
+                        }}
                     </div>
-                    <div class="pb-2 px-3">
+                    <div class=move || if shapes_effective_zone.get().is_horizontal() { "px-1 flex items-center min-w-0" } else { "pb-2 px-3" }>
                         <StylingPanel context=StylingPanelContext {
                             scene,
                             selected_ids,
@@ -1287,6 +1316,7 @@ pub fn App() -> impl IntoView {
                             settings,
                             on_save_snippet: on_save_snippet.clone(),
                             notifications: doc.notifications,
+                            zone: shapes_effective_zone,
                         } />
                     </div>
                 </div>

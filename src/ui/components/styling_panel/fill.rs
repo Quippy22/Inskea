@@ -14,7 +14,7 @@ pub fn fill_section(
     color_swatches: &'static [&'static str],
 ) -> impl IntoView {
     view! {
-        <div class:hidden=move || !base_kind.get()>
+        <div class="shrink-0" class:hidden=move || !base_kind.get()>
             <div>
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     "Background"

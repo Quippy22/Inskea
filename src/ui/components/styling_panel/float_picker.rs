@@ -1,5 +1,6 @@
 use crate::canvas::settings::CanvasSettings;
 use crate::ui::components::styling_panel::color::ColorSlot;
+use crate::ui::panel_zone::PanelZone;
 use leptos::*;
 use leptos_color::components::color_picker::ColorPicker as LpcCp;
 use leptos_color::theme::Theme;
@@ -11,10 +12,21 @@ pub fn float_picker(
     picker_on_change: Callback<LpcColor>,
     picker_ref: NodeRef<html::Div>,
     settings: RwSignal<CanvasSettings>,
+    zone: Signal<PanelZone>,
 ) -> impl IntoView {
     view! {
         <Show when=move || active_slot.get().is_some()>
-            <div class="absolute left-full top-1/2 -translate-y-1/2 ml-4" style="z-index: 9999;">
+            <div
+                class=move || {
+                    match zone.get() {
+                        PanelZone::Top => "absolute top-full left-1/2 -translate-x-1/2 mt-3",
+                        PanelZone::Bottom => "absolute bottom-full left-1/2 -translate-x-1/2 mb-3",
+                        PanelZone::Left => "absolute left-full top-1/2 -translate-y-1/2 ml-4",
+                        PanelZone::Right => "absolute right-full top-1/2 -translate-y-1/2 mr-4",
+                    }
+                }
+                style="z-index: 9999;"
+            >
                 <div node_ref=picker_ref>
                     {move || {
                         let p = settings.get().theme.palette();

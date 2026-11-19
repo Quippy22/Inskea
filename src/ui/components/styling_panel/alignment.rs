@@ -13,6 +13,7 @@ pub fn alignment_section(
     canvas_mode: RwSignal<CanvasMode>,
     push_snapshot: Rc<dyn Fn()>,
     notifications: crate::ui::notify::Notifications,
+    is_horizontal: Signal<bool>,
 ) -> impl IntoView {
     let in_select = move || canvas_mode.get() == CanvasMode::Select;
     let can_align = Signal::derive(move || {
@@ -109,93 +110,98 @@ pub fn alignment_section(
     };
 
     view! {
-        <div class:hidden=move || !in_select()>
+        <div class="shrink-0" class:hidden=move || !in_select()>
             <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
-                {move || if is_single_frame.get() { "Align frame contents" } else { "Element alignment" }}
+                {move || if is_single_frame.get() { "Align frame" } else { "Alignment" }}
             </div>
-            <div class="grid grid-cols-3 gap-1">
-                <button
-                    class=styles::BTN_TEXT
-                    class:opacity-40=move || !can_align.get()
-                    class:cursor-not-allowed=move || !can_align.get()
-                    on:click=move |_| align_left()
-                    title=move || if is_single_frame.get() { "Align contents left in frame" } else { "Align left edges" }
-                    aria-label=move || if is_single_frame.get() { "Align contents left in frame" } else { "Align left edges" }
+            <div class=move || if is_horizontal.get() { "flex items-center gap-1" } else { "flex flex-col gap-1" }>
+                <div class=move || if is_horizontal.get() { "flex items-center gap-0.5" } else { "grid grid-cols-3 gap-1" }>
+                    <button
+                        class=styles::BTN_TEXT
+                        class:opacity-40=move || !can_align.get()
+                        class:cursor-not-allowed=move || !can_align.get()
+                        on:click=move |_| align_left()
+                        title=move || if is_single_frame.get() { "Align contents left in frame" } else { "Align left edges" }
+                        aria-label=move || if is_single_frame.get() { "Align contents left in frame" } else { "Align left edges" }
+                    >
+                        {icon::align_left()}
+                    </button>
+                    <button
+                        class=styles::BTN_TEXT
+                        class:opacity-40=move || !can_align.get()
+                        class:cursor-not-allowed=move || !can_align.get()
+                        on:click=move |_| align_center()
+                        title=move || if is_single_frame.get() { "Center contents horizontally in frame" } else { "Align horizontal centers" }
+                        aria-label=move || if is_single_frame.get() { "Center contents horizontally in frame" } else { "Align horizontal centers" }
+                    >
+                        {icon::align_center_h()}
+                    </button>
+                    <button
+                        class=styles::BTN_TEXT
+                        class:opacity-40=move || !can_align.get()
+                        class:cursor-not-allowed=move || !can_align.get()
+                        on:click=move |_| align_right()
+                        title=move || if is_single_frame.get() { "Align contents right in frame" } else { "Align right edges" }
+                        aria-label=move || if is_single_frame.get() { "Align contents right in frame" } else { "Align right edges" }
+                    >
+                        {icon::align_right()}
+                    </button>
+                    <button
+                        class=styles::BTN_TEXT
+                        class:opacity-40=move || !can_align.get()
+                        class:cursor-not-allowed=move || !can_align.get()
+                        on:click=move |_| align_top()
+                        title=move || if is_single_frame.get() { "Align contents top in frame" } else { "Align top edges" }
+                        aria-label=move || if is_single_frame.get() { "Align contents top in frame" } else { "Align top edges" }
+                    >
+                        {icon::align_top()}
+                    </button>
+                    <button
+                        class=styles::BTN_TEXT
+                        class:opacity-40=move || !can_align.get()
+                        class:cursor-not-allowed=move || !can_align.get()
+                        on:click=move |_| align_middle()
+                        title=move || if is_single_frame.get() { "Center contents vertically in frame" } else { "Align vertical centers" }
+                        aria-label=move || if is_single_frame.get() { "Center contents vertically in frame" } else { "Align vertical centers" }
+                    >
+                        {icon::align_center_v()}
+                    </button>
+                    <button
+                        class=styles::BTN_TEXT
+                        class:opacity-40=move || !can_align.get()
+                        class:cursor-not-allowed=move || !can_align.get()
+                        on:click=move |_| align_bottom()
+                        title=move || if is_single_frame.get() { "Align contents bottom in frame" } else { "Align bottom edges" }
+                        aria-label=move || if is_single_frame.get() { "Align contents bottom in frame" } else { "Align bottom edges" }
+                    >
+                        {icon::align_bottom()}
+                    </button>
+                </div>
+                <div
+                    class=move || if is_horizontal.get() { "flex items-center gap-0.5 border-l border-border pl-1 ml-0.5" } else { "grid grid-cols-2 gap-1 mt-1" }
+                    class:hidden=move || is_single_frame.get()
                 >
-                    {icon::align_left()}
-                </button>
-                <button
-                    class=styles::BTN_TEXT
-                    class:opacity-40=move || !can_align.get()
-                    class:cursor-not-allowed=move || !can_align.get()
-                    on:click=move |_| align_center()
-                    title=move || if is_single_frame.get() { "Center contents horizontally in frame" } else { "Align horizontal centers" }
-                    aria-label=move || if is_single_frame.get() { "Center contents horizontally in frame" } else { "Align horizontal centers" }
-                >
-                    {icon::align_center_h()}
-                </button>
-                <button
-                    class=styles::BTN_TEXT
-                    class:opacity-40=move || !can_align.get()
-                    class:cursor-not-allowed=move || !can_align.get()
-                    on:click=move |_| align_right()
-                    title=move || if is_single_frame.get() { "Align contents right in frame" } else { "Align right edges" }
-                    aria-label=move || if is_single_frame.get() { "Align contents right in frame" } else { "Align right edges" }
-                >
-                    {icon::align_right()}
-                </button>
-                <button
-                    class=styles::BTN_TEXT
-                    class:opacity-40=move || !can_align.get()
-                    class:cursor-not-allowed=move || !can_align.get()
-                    on:click=move |_| align_top()
-                    title=move || if is_single_frame.get() { "Align contents top in frame" } else { "Align top edges" }
-                    aria-label=move || if is_single_frame.get() { "Align contents top in frame" } else { "Align top edges" }
-                >
-                    {icon::align_top()}
-                </button>
-                <button
-                    class=styles::BTN_TEXT
-                    class:opacity-40=move || !can_align.get()
-                    class:cursor-not-allowed=move || !can_align.get()
-                    on:click=move |_| align_middle()
-                    title=move || if is_single_frame.get() { "Center contents vertically in frame" } else { "Align vertical centers" }
-                    aria-label=move || if is_single_frame.get() { "Center contents vertically in frame" } else { "Align vertical centers" }
-                >
-                    {icon::align_center_v()}
-                </button>
-                <button
-                    class=styles::BTN_TEXT
-                    class:opacity-40=move || !can_align.get()
-                    class:cursor-not-allowed=move || !can_align.get()
-                    on:click=move |_| align_bottom()
-                    title=move || if is_single_frame.get() { "Align contents bottom in frame" } else { "Align bottom edges" }
-                    aria-label=move || if is_single_frame.get() { "Align contents bottom in frame" } else { "Align bottom edges" }
-                >
-                    {icon::align_bottom()}
-                </button>
-            </div>
-            <div class="grid grid-cols-2 gap-1 mt-1" class:hidden=move || is_single_frame.get()>
-                <button
-                    class=styles::BTN_TEXT
-                    class:opacity-40=move || !can_distribute.get()
-                    class:cursor-not-allowed=move || !can_distribute.get()
-                    on:click=move |_| distribute_horizontal()
-                    title="Distribute horizontally"
-                    aria-label="Distribute horizontally"
-                >
-                    {icon::distribute_horizontal()}
-                </button>
-                <button
-                    class=styles::BTN_TEXT
-                    class:opacity-40=move || !can_distribute.get()
-                    class:cursor-not-allowed=move || !can_distribute.get()
-                    on:click=move |_| distribute_vertical()
-                    title="Distribute vertically"
-                    aria-label="Distribute vertically"
-                >
-                    {icon::distribute_vertical()}
-                </button>
+                    <button
+                        class=styles::BTN_TEXT
+                        class:opacity-40=move || !can_distribute.get()
+                        class:cursor-not-allowed=move || !can_distribute.get()
+                        on:click=move |_| distribute_horizontal()
+                        title="Distribute horizontally"
+                        aria-label="Distribute horizontally"
+                    >
+                        {icon::distribute_horizontal()}
+                    </button>
+                    <button
+                        class=styles::BTN_TEXT
+                        class:opacity-40=move || !can_distribute.get()
+                        class:cursor-not-allowed=move || !can_distribute.get()
+                        on:click=move |_| distribute_vertical()
+                        title="Distribute vertically"
+                        aria-label="Distribute vertically"
+                    >
+                        {icon::distribute_vertical()}
+                    </button>
+                </div>
             </div>
         </div>
     }

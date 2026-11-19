@@ -85,7 +85,7 @@ pub fn toolbar_container_class(zone: PanelZone) -> &'static str {
 /// Computes the fixed positioning CSS classes for the Tools dock.
 pub fn tools_container_class(
     zone: PanelZone,
-    shapes_zone: PanelZone,
+    _shapes_zone: PanelZone,
     toolbar_zone: PanelZone,
 ) -> &'static str {
     match zone {
@@ -105,26 +105,14 @@ pub fn tools_container_class(
         }
         PanelZone::Top => {
             if toolbar_zone == PanelZone::Top {
-                if shapes_zone == PanelZone::Top {
-                    "fixed top-16 left-[calc(50%-8.5rem)] -translate-x-1/2 z-40 flex flex-row items-center gap-0.5"
-                } else {
-                    "fixed top-16 left-1/2 -translate-x-1/2 z-40 flex flex-row items-center gap-0.5"
-                }
-            } else if shapes_zone == PanelZone::Top {
-                "fixed top-4 left-[calc(50%-8.5rem)] -translate-x-1/2 z-40 flex flex-row items-center gap-0.5"
+                "fixed top-16 left-1/2 -translate-x-1/2 z-40 flex flex-row items-center gap-0.5"
             } else {
                 "fixed top-4 left-1/2 -translate-x-1/2 z-40 flex flex-row items-center gap-0.5"
             }
         }
         PanelZone::Bottom => {
             if toolbar_zone == PanelZone::Bottom {
-                if shapes_zone == PanelZone::Bottom {
-                    "fixed bottom-16 left-[calc(50%-8.5rem)] -translate-x-1/2 z-40 flex flex-row items-center gap-0.5"
-                } else {
-                    "fixed bottom-16 left-1/2 -translate-x-1/2 z-40 flex flex-row items-center gap-0.5"
-                }
-            } else if shapes_zone == PanelZone::Bottom {
-                "fixed bottom-4 left-[calc(50%-8.5rem)] -translate-x-1/2 z-40 flex flex-row items-center gap-0.5"
+                "fixed bottom-16 left-1/2 -translate-x-1/2 z-40 flex flex-row items-center gap-0.5"
             } else {
                 "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-row items-center gap-0.5"
             }
@@ -162,16 +150,13 @@ pub fn shapes_container_class(
             let is_tools_top = tools_zone == PanelZone::Top;
             match (is_tb_top, is_tools_top) {
                 (true, true) => {
-                    "fixed top-16 left-[calc(50%+8.5rem)] -translate-x-1/2 z-40 max-h-[80vh] overflow-y-auto"
+                    "fixed top-28 left-1/2 -translate-x-1/2 z-40 max-w-[95vw] overflow-x-auto"
                 }
-                (true, false) => {
-                    "fixed top-16 left-1/2 -translate-x-1/2 z-40 max-h-[80vh] overflow-y-auto"
-                }
-                (false, true) => {
-                    "fixed top-4 left-[calc(50%+8.5rem)] -translate-x-1/2 z-40 max-h-[80vh] overflow-y-auto"
+                (true, false) | (false, true) => {
+                    "fixed top-16 left-1/2 -translate-x-1/2 z-40 max-w-[95vw] overflow-x-auto"
                 }
                 (false, false) => {
-                    "fixed top-4 left-1/2 -translate-x-1/2 z-40 max-h-[80vh] overflow-y-auto"
+                    "fixed top-4 left-1/2 -translate-x-1/2 z-40 max-w-[95vw] overflow-x-auto"
                 }
             }
         }
@@ -180,16 +165,13 @@ pub fn shapes_container_class(
             let is_tools_bot = tools_zone == PanelZone::Bottom;
             match (is_tb_bot, is_tools_bot) {
                 (true, true) => {
-                    "fixed bottom-16 left-[calc(50%+8.5rem)] -translate-x-1/2 z-40 max-h-[80vh] overflow-y-auto"
+                    "fixed bottom-28 left-1/2 -translate-x-1/2 z-40 max-w-[95vw] overflow-x-auto"
                 }
-                (true, false) => {
-                    "fixed bottom-16 left-1/2 -translate-x-1/2 z-40 max-h-[80vh] overflow-y-auto"
-                }
-                (false, true) => {
-                    "fixed bottom-4 left-[calc(50%+8.5rem)] -translate-x-1/2 z-40 max-h-[80vh] overflow-y-auto"
+                (true, false) | (false, true) => {
+                    "fixed bottom-16 left-1/2 -translate-x-1/2 z-40 max-w-[95vw] overflow-x-auto"
                 }
                 (false, false) => {
-                    "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 max-h-[80vh] overflow-y-auto"
+                    "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 max-w-[95vw] overflow-x-auto"
                 }
             }
         }
@@ -200,7 +182,9 @@ pub fn shapes_container_class(
 pub fn ghost_highlight_class(
     panel: DraggedPanel,
     target_zone: PanelZone,
-    other_zone: PanelZone,
+    tools_zone: PanelZone,
+    _shapes_zone: PanelZone,
+    toolbar_zone: PanelZone,
 ) -> &'static str {
     match panel {
         DraggedPanel::Toolbar => match target_zone {
@@ -219,21 +203,29 @@ pub fn ghost_highlight_class(
         },
         DraggedPanel::Tools => match target_zone {
             PanelZone::Left => {
-                "fixed left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-[272px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                if toolbar_zone == PanelZone::Left {
+                    "fixed left-[4.25rem] top-1/2 -translate-y-1/2 z-30 w-11 h-[272px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                } else {
+                    "fixed left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-[272px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                }
             }
             PanelZone::Right => {
-                "fixed right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-[272px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                if toolbar_zone == PanelZone::Right {
+                    "fixed right-[4.25rem] top-1/2 -translate-y-1/2 z-30 w-11 h-[272px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                } else {
+                    "fixed right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-[272px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                }
             }
             PanelZone::Top => {
-                if other_zone == PanelZone::Top {
-                    "fixed top-16 left-[calc(50%-8.5rem)] -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
-                } else {
+                if toolbar_zone == PanelZone::Top {
                     "fixed top-16 left-1/2 -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                } else {
+                    "fixed top-4 left-1/2 -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 }
             }
             PanelZone::Bottom => {
-                if other_zone == PanelZone::Bottom {
-                    "fixed bottom-4 left-[calc(50%-8.5rem)] -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                if toolbar_zone == PanelZone::Bottom {
+                    "fixed bottom-16 left-1/2 -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 } else {
                     "fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 }
@@ -241,31 +233,55 @@ pub fn ghost_highlight_class(
         },
         DraggedPanel::Shapes => match target_zone {
             PanelZone::Left => {
-                if other_zone == PanelZone::Left {
+                let is_tb = toolbar_zone == PanelZone::Left;
+                let is_tools = tools_zone == PanelZone::Left;
+                if is_tb && is_tools {
+                    "fixed left-[7.5rem] top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                } else if is_tb || is_tools {
                     "fixed left-[4.5rem] top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 } else {
                     "fixed left-4 top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 }
             }
             PanelZone::Right => {
-                if other_zone == PanelZone::Right {
+                let is_tb = toolbar_zone == PanelZone::Right;
+                let is_tools = tools_zone == PanelZone::Right;
+                if is_tb && is_tools {
+                    "fixed right-[7.5rem] top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                } else if is_tb || is_tools {
                     "fixed right-[4.5rem] top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 } else {
                     "fixed right-4 top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 }
             }
             PanelZone::Top => {
-                if other_zone == PanelZone::Top {
-                    "fixed top-16 left-[calc(50%+8.5rem)] -translate-x-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
-                } else {
-                    "fixed top-16 left-1/2 -translate-x-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                let is_tb_top = toolbar_zone == PanelZone::Top;
+                let is_tools_top = tools_zone == PanelZone::Top;
+                match (is_tb_top, is_tools_top) {
+                    (true, true) => {
+                        "fixed top-28 left-1/2 -translate-x-1/2 z-30 w-[560px] max-w-[90vw] h-12 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                    }
+                    (true, false) | (false, true) => {
+                        "fixed top-16 left-1/2 -translate-x-1/2 z-30 w-[560px] max-w-[90vw] h-12 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                    }
+                    (false, false) => {
+                        "fixed top-4 left-1/2 -translate-x-1/2 z-30 w-[560px] max-w-[90vw] h-12 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                    }
                 }
             }
             PanelZone::Bottom => {
-                if other_zone == PanelZone::Bottom {
-                    "fixed bottom-4 left-[calc(50%+8.5rem)] -translate-x-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
-                } else {
-                    "fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                let is_tb_bot = toolbar_zone == PanelZone::Bottom;
+                let is_tools_bot = tools_zone == PanelZone::Bottom;
+                match (is_tb_bot, is_tools_bot) {
+                    (true, true) => {
+                        "fixed bottom-28 left-1/2 -translate-x-1/2 z-30 w-[560px] max-w-[90vw] h-12 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                    }
+                    (true, false) | (false, true) => {
+                        "fixed bottom-16 left-1/2 -translate-x-1/2 z-30 w-[560px] max-w-[90vw] h-12 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                    }
+                    (false, false) => {
+                        "fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[560px] max-w-[90vw] h-12 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
+                    }
                 }
             }
         },
@@ -278,17 +294,13 @@ pub fn PanelSnapHighlight(
     active_drag: Signal<Option<(DraggedPanel, Option<PanelZone>)>>,
     tools_zone: Signal<PanelZone>,
     shapes_zone: Signal<PanelZone>,
+    #[prop(default = Signal::derive(|| PanelZone::Top))] toolbar_zone: Signal<PanelZone>,
 ) -> impl IntoView {
     view! {
         {move || {
             let (panel, target_zone) = active_drag.get()?;
             let target = target_zone?;
-            let other_zone = match panel {
-                DraggedPanel::Tools => shapes_zone.get(),
-                DraggedPanel::Shapes => tools_zone.get(),
-                DraggedPanel::Toolbar => tools_zone.get(),
-            };
-            let class = ghost_highlight_class(panel, target, other_zone);
+            let class = ghost_highlight_class(panel, target, tools_zone.get(), shapes_zone.get(), toolbar_zone.get());
             Some(view! {
                 <div class=class></div>
             })
@@ -413,5 +425,25 @@ mod tests {
         assert!(toolbar_container_class(PanelZone::Bottom).contains("bottom-4"));
         assert!(toolbar_container_class(PanelZone::Left).contains("left-4"));
         assert!(toolbar_container_class(PanelZone::Right).contains("right-4"));
+    }
+
+    #[test]
+    fn test_horizontal_shapes_container_and_ghost() {
+        let shapes_top = shapes_container_class(PanelZone::Top, PanelZone::Left, PanelZone::Top);
+        assert!(shapes_top.contains("top-16"));
+        assert!(shapes_top.contains("max-w-[95vw]"));
+
+        let shapes_top_all = shapes_container_class(PanelZone::Top, PanelZone::Top, PanelZone::Top);
+        assert!(shapes_top_all.contains("top-28"));
+
+        let ghost_shapes_top = ghost_highlight_class(
+            DraggedPanel::Shapes,
+            PanelZone::Top,
+            PanelZone::Left,
+            PanelZone::Left,
+            PanelZone::Top,
+        );
+        assert!(ghost_shapes_top.contains("w-[560px]"));
+        assert!(ghost_shapes_top.contains("top-16"));
     }
 }

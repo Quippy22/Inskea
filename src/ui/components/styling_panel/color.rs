@@ -20,7 +20,7 @@ pub fn embedded_text_color_section(
     has_text: Signal<bool>,
 ) -> impl IntoView {
     view! {
-        <div class:hidden=move || !has_text.get()>
+        <div class="shrink-0" class:hidden=move || !has_text.get()>
             <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                 "Text color"
             </div>
@@ -46,7 +46,7 @@ pub fn color_section(
     hide_stroke: Signal<bool>,
 ) -> impl IntoView {
     view! {
-        <div class:hidden=move || hide_stroke.get()>
+        <div class="shrink-0" class:hidden=move || hide_stroke.get()>
             <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                 "Color"
             </div>

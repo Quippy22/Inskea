@@ -32,7 +32,7 @@ pub fn group_section(
     let push_group = push_snapshot.clone();
     let push_ungroup = push_snapshot.clone();
     view! {
-        <div class:hidden=move || !in_select()>
+        <div class="shrink-0" class:hidden=move || !in_select()>
             <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                 "Group"
             </div>

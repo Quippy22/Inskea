@@ -24,7 +24,7 @@ pub fn connector_section(
     ];
 
     view! {
-        <div class:hidden=move || !is_connector.get()>
+        <div class="shrink-0" class:hidden=move || !is_connector.get()>
             <div>
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     "Connector routing"

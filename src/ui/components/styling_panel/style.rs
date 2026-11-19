@@ -72,6 +72,7 @@ pub fn style_section(
     is_line_or_arrow: Signal<bool>,
     is_rect: Signal<bool>,
     is_rounded: Signal<bool>,
+    is_horizontal: Signal<bool>,
 ) -> impl IntoView {
     let stroke_opts: &[(StrokeStyle, &str)] = &[
         (StrokeStyle::Solid, "Solid"),
@@ -88,7 +89,7 @@ pub fn style_section(
         &[(EdgeStyle::Sharp, "Sharp"), (EdgeStyle::Rounded, "Rounded")];
 
     view! {
-        <div class:hidden=move || hide_stroke.get() || is_frame.get()>
+        <div class="shrink-0" class:hidden=move || hide_stroke.get() || is_frame.get()>
             <div>
                 <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                     "Stroke style"
@@ -101,7 +102,10 @@ pub fn style_section(
                 )}
             </div>
         </div>
-        <div class:hidden=move || hide_stroke.get()>
+        <div
+            class=move || if is_horizontal.get() { "flex flex-row items-center gap-2 shrink-0" } else { "shrink-0" }
+            class:hidden=move || hide_stroke.get()
+        >
             <div class:hidden=move || !is_line_or_arrow.get()>
                 <div>
                     <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
@@ -115,7 +119,10 @@ pub fn style_section(
                     )}
                 </div>
             </div>
-            <div class:hidden=move || !is_rect.get()>
+            <div
+                class=move || if is_horizontal.get() { "flex flex-row items-center gap-2 shrink-0" } else { "" }
+                class:hidden=move || !is_rect.get()
+            >
                 <div>
                     <div class=styles::SETTINGS_LABEL class:mb-1=move || true>
                         "Edge style"
@@ -127,7 +134,10 @@ pub fn style_section(
                         edge_style_icon,
                     )}
                 </div>
-                <div class:hidden=move || !(is_rounded.get() && is_rect.get())>
+                <div
+                    class=move || if is_horizontal.get() { "w-28 shrink-0" } else { "w-full" }
+                    class:hidden=move || !(is_rounded.get() && is_rect.get())
+                >
                     <NumberSlider
                         value=roundness
                         min=2.0
