@@ -229,3 +229,15 @@ pub struct CanvasSettings {
     pub autosave: bool,
     pub theme: Theme,
 }
+
+impl Default for CanvasSettings {
+    fn default() -> Self {
+        Self {
+            center_style: CenterStyle::Off,
+            grid_style: GridStyle::Off,
+            grid_size: GridSize::new(30.0),
+            autosave: false,
+            theme: Theme::Storm,
+        }
+    }
+}

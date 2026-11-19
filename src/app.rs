@@ -85,8 +85,8 @@ pub fn App() -> impl IntoView {
     let on_text_commit = create_rw_signal::<Option<Rc<dyn Fn()>>>(None);
 
     let settings = create_rw_signal(CanvasSettings {
-        center_style: CenterStyle::Crosshair,
-        grid_style: GridStyle::Dot,
+        center_style: CenterStyle::Off,
+        grid_style: GridStyle::Off,
         grid_size: GridSize::new(30.0),
         autosave: false,
         theme: Theme::Storm,
