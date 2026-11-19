@@ -825,8 +825,8 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                 cursor_world,
                 notifications,
             )} {group_section(scene, selected_ids, canvas_mode, push_snapshot.clone(), notifications)}
-            {alignment_section(scene, selected_ids, canvas_mode, push_snapshot.clone())}
-            {layers_section(scene, selected_ids, push_snapshot.clone())}
+            {alignment_section(scene, selected_ids, canvas_mode, push_snapshot.clone(), notifications)}
+            {layers_section(scene, selected_ids, push_snapshot.clone(), notifications)}
             <Show when=move || !selected_ids.get().is_empty()>
                 <button
                     class=format!("{} w-full", styles::BTN_TEXT)

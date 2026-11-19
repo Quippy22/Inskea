@@ -260,18 +260,19 @@ pub fn align_selection(
     selected_ids: RwSignal<Vec<ElementId>>,
     alignment: Alignment,
     push_snapshot: &Rc<dyn Fn()>,
-) {
+) -> bool {
     let ids = selected_ids.get();
     if ids.is_empty() {
-        return;
+        return false;
     }
     let can = scene.with_untracked(|s| crate::model::can_align_selection(s, &ids));
     if !can {
-        return;
+        return false;
     }
     mutate_scene(scene, push_snapshot, |s| {
         crate::model::align_selection(s, &ids, alignment);
     });
+    true
 }
 
 /// Distribute selected elements or complete groups with equal gaps.
@@ -280,14 +281,15 @@ pub fn distribute_selection(
     selected_ids: RwSignal<Vec<ElementId>>,
     distribution: Distribution,
     push_snapshot: &Rc<dyn Fn()>,
-) {
+) -> bool {
     let ids = selected_ids.get();
     if scene.with_untracked(|s| crate::model::selection_item_count(s, &ids)) < 3 {
-        return;
+        return false;
     }
     mutate_scene(scene, push_snapshot, |s| {
         crate::model::distribute_selection(s, &ids, distribution);
     });
+    true
 }
 
 #[cfg(test)]

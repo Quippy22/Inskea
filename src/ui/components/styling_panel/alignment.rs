@@ -12,6 +12,7 @@ pub fn alignment_section(
     selected_ids: RwSignal<Vec<ElementId>>,
     canvas_mode: RwSignal<CanvasMode>,
     push_snapshot: Rc<dyn Fn()>,
+    notifications: crate::ui::notify::Notifications,
 ) -> impl IntoView {
     let in_select = move || canvas_mode.get() == CanvasMode::Select;
     let can_align = Signal::derive(move || {
@@ -32,55 +33,79 @@ pub fn alignment_section(
 
     let align_left = {
         let push_snapshot = push_snapshot.clone();
-        move || edit_ops::align_selection(scene, selected_ids, Alignment::Left, &push_snapshot)
+        move || {
+            if edit_ops::align_selection(scene, selected_ids, Alignment::Left, &push_snapshot) {
+                crate::ui::notify::info(notifications, "Aligned left");
+            }
+        }
     };
     let align_center = {
         let push_snapshot = push_snapshot.clone();
         move || {
-            edit_ops::align_selection(
+            if edit_ops::align_selection(
                 scene,
                 selected_ids,
                 Alignment::HorizontalCenter,
                 &push_snapshot,
-            )
+            ) {
+                crate::ui::notify::info(notifications, "Aligned center");
+            }
         }
     };
     let align_right = {
         let push_snapshot = push_snapshot.clone();
-        move || edit_ops::align_selection(scene, selected_ids, Alignment::Right, &push_snapshot)
+        move || {
+            if edit_ops::align_selection(scene, selected_ids, Alignment::Right, &push_snapshot) {
+                crate::ui::notify::info(notifications, "Aligned right");
+            }
+        }
     };
     let align_top = {
         let push_snapshot = push_snapshot.clone();
-        move || edit_ops::align_selection(scene, selected_ids, Alignment::Top, &push_snapshot)
+        move || {
+            if edit_ops::align_selection(scene, selected_ids, Alignment::Top, &push_snapshot) {
+                crate::ui::notify::info(notifications, "Aligned top");
+            }
+        }
     };
     let align_middle = {
         let push_snapshot = push_snapshot.clone();
         move || {
-            edit_ops::align_selection(
+            if edit_ops::align_selection(
                 scene,
                 selected_ids,
                 Alignment::VerticalCenter,
                 &push_snapshot,
-            )
+            ) {
+                crate::ui::notify::info(notifications, "Aligned middle");
+            }
         }
     };
     let align_bottom = {
         let push_snapshot = push_snapshot.clone();
-        move || edit_ops::align_selection(scene, selected_ids, Alignment::Bottom, &push_snapshot)
+        move || {
+            if edit_ops::align_selection(scene, selected_ids, Alignment::Bottom, &push_snapshot) {
+                crate::ui::notify::info(notifications, "Aligned bottom");
+            }
+        }
     };
     let distribute_horizontal = {
         let push_snapshot = push_snapshot.clone();
         move || {
-            edit_ops::distribute_selection(
+            if edit_ops::distribute_selection(
                 scene,
                 selected_ids,
                 Distribution::Horizontal,
                 &push_snapshot,
-            )
+            ) {
+                crate::ui::notify::info(notifications, "Distributed horizontally");
+            }
         }
     };
     let distribute_vertical = move || {
-        edit_ops::distribute_selection(scene, selected_ids, Distribution::Vertical, &push_snapshot)
+        if edit_ops::distribute_selection(scene, selected_ids, Distribution::Vertical, &push_snapshot) {
+            crate::ui::notify::info(notifications, "Distributed vertically");
+        }
     };
 
     view! {

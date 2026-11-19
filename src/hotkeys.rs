@@ -167,42 +167,66 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
                     notify::info(ctx.doc.notifications, "Grouped elements");
                 }
             }
-            (true, "ArrowLeft") if alt && shift => edit_ops::distribute_selection(
-                ctx.doc.scene,
-                ctx.doc.selected_ids,
-                Distribution::Horizontal,
-                &ctx.push_snapshot,
-            ),
-            (true, "ArrowUp") if alt && shift => edit_ops::distribute_selection(
-                ctx.doc.scene,
-                ctx.doc.selected_ids,
-                Distribution::Vertical,
-                &ctx.push_snapshot,
-            ),
-            (true, "ArrowLeft") if alt => edit_ops::align_selection(
-                ctx.doc.scene,
-                ctx.doc.selected_ids,
-                Alignment::Left,
-                &ctx.push_snapshot,
-            ),
-            (true, "ArrowRight") if alt => edit_ops::align_selection(
-                ctx.doc.scene,
-                ctx.doc.selected_ids,
-                Alignment::Right,
-                &ctx.push_snapshot,
-            ),
-            (true, "ArrowUp") if alt => edit_ops::align_selection(
-                ctx.doc.scene,
-                ctx.doc.selected_ids,
-                Alignment::Top,
-                &ctx.push_snapshot,
-            ),
-            (true, "ArrowDown") if alt => edit_ops::align_selection(
-                ctx.doc.scene,
-                ctx.doc.selected_ids,
-                Alignment::Bottom,
-                &ctx.push_snapshot,
-            ),
+            (true, "ArrowLeft") if alt && shift => {
+                if edit_ops::distribute_selection(
+                    ctx.doc.scene,
+                    ctx.doc.selected_ids,
+                    Distribution::Horizontal,
+                    &ctx.push_snapshot,
+                ) {
+                    notify::info(ctx.doc.notifications, "Distributed horizontally");
+                }
+            }
+            (true, "ArrowUp") if alt && shift => {
+                if edit_ops::distribute_selection(
+                    ctx.doc.scene,
+                    ctx.doc.selected_ids,
+                    Distribution::Vertical,
+                    &ctx.push_snapshot,
+                ) {
+                    notify::info(ctx.doc.notifications, "Distributed vertically");
+                }
+            }
+            (true, "ArrowLeft") if alt => {
+                if edit_ops::align_selection(
+                    ctx.doc.scene,
+                    ctx.doc.selected_ids,
+                    Alignment::Left,
+                    &ctx.push_snapshot,
+                ) {
+                    notify::info(ctx.doc.notifications, "Aligned left");
+                }
+            }
+            (true, "ArrowRight") if alt => {
+                if edit_ops::align_selection(
+                    ctx.doc.scene,
+                    ctx.doc.selected_ids,
+                    Alignment::Right,
+                    &ctx.push_snapshot,
+                ) {
+                    notify::info(ctx.doc.notifications, "Aligned right");
+                }
+            }
+            (true, "ArrowUp") if alt => {
+                if edit_ops::align_selection(
+                    ctx.doc.scene,
+                    ctx.doc.selected_ids,
+                    Alignment::Top,
+                    &ctx.push_snapshot,
+                ) {
+                    notify::info(ctx.doc.notifications, "Aligned top");
+                }
+            }
+            (true, "ArrowDown") if alt => {
+                if edit_ops::align_selection(
+                    ctx.doc.scene,
+                    ctx.doc.selected_ids,
+                    Alignment::Bottom,
+                    &ctx.push_snapshot,
+                ) {
+                    notify::info(ctx.doc.notifications, "Aligned bottom");
+                }
+            }
             (true, "n") | (true, "N") => {
                 let doc = ctx.doc.clone();
                 (ctx.request_action)(PendingAction {
