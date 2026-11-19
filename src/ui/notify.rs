@@ -22,12 +22,14 @@ pub type Notifications = RwSignal<Vec<Notice>>;
 
 /// Show a transient message in the bottom-centre notice stack.
 pub fn notify(notifications: Notifications, kind: NoticeKind, message: impl Into<String>) {
+    let message = message.into();
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
     notifications.update(|list| {
+        list.retain(|notice| notice.message != message);
         list.push(Notice {
             id,
             kind,
-            message: message.into(),
+            message,
         });
         if list.len() > 4 {
             list.remove(0);
@@ -36,7 +38,7 @@ pub fn notify(notifications: Notifications, kind: NoticeKind, message: impl Into
     #[cfg(target_arch = "wasm32")]
     set_timeout(
         move || notifications.update(|list| list.retain(|notice| notice.id != id)),
-        Duration::from_secs(5),
+        Duration::from_secs(4),
     );
 }
 
