@@ -97,8 +97,6 @@ fn is_browser_shortcut(key: &str, ctrl: bool, alt: bool) -> bool {
                 | "O"
                 | "c"
                 | "C"
-                | "v"
-                | "V"
                 | "t"
                 | "T"
         ) || (alt && matches!(key, "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown"));
@@ -339,10 +337,13 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
         {
             return;
         }
+        let is_paste = ctrl && matches!(key.as_str(), "v" | "V");
         if is_browser_shortcut(&key, ctrl, alt) {
             ev.prevent_default();
         }
-        handle_shortcut(&key, ctrl, shift, alt);
+        if !is_paste {
+            handle_shortcut(&key, ctrl, shift, alt);
+        }
     });
 }
 
@@ -359,6 +360,7 @@ mod tests {
         assert!(is_browser_shortcut("Backspace", false, false));
         assert!(!is_browser_shortcut("s", false, false));
         assert!(!is_browser_shortcut("c", false, false));
+        assert!(!is_browser_shortcut("v", true, false));
         assert!(!is_browser_shortcut("a", true, false));
     }
 

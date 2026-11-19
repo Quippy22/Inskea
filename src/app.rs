@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::canvas::settings::CanvasSettings;
 use crate::canvas::{Canvas, CanvasMode, CropExportCallback, PendingPlacement, Viewport};
 use crate::document::{DocContext, PendingAction, RequestAction};
-use crate::edit_ops::Clipboard;
+use crate::edit_ops::{self, Clipboard};
 use crate::hotkeys::{register_hotkeys, HotkeysContext, ShortcutsModal};
 use crate::model::{
     ChangeSet, ChartStyle, Color, ConnectorVariant, ElementId, ElementStyle, FrameStyle, LineStyle,
@@ -550,10 +550,17 @@ pub fn App() -> impl IntoView {
         });
     }
 
-    // Smart paste of images and CSV / TSV / Markdown tables onto the canvas.
+    // Smart paste of images, text, elements, and tabular data onto the canvas.
     {
         let chart_import_paste = chart_import.clone();
         let image_import_paste = image_import.clone();
+        let doc_paste = doc.clone();
+        let push_snapshot_paste = push_snapshot.clone();
+        let viewport_paste = viewport;
+        let cursor_world_paste = cursor_world;
+        let canvas_mode_paste = canvas_mode;
+        let default_style_paste = default_style;
+        let clipboard_paste = clipboard;
         let _ = window_event_listener(leptos::ev::paste, move |event: web_sys::Event| {
             // Do not intercept paste when typing inside an <input> or <textarea>.
             if let Some(target) = event.target() {
@@ -570,25 +577,107 @@ pub fn App() -> impl IntoView {
             let Some(data) = data_val.dyn_ref::<web_sys::DataTransfer>() else {
                 return;
             };
+
+            let target_point = {
+                let vp = viewport_paste.get_untracked();
+                let visible = vp.visible_rect(window_size());
+                let cur = cursor_world_paste.get_untracked();
+                if visible.contains_point(cur) && cur != Point::default() {
+                    cur
+                } else {
+                    visible.center()
+                }
+            };
+
             // 1. Check for pasted image files (e.g. screenshots from clipboard)
+            let mut img_files = Vec::new();
             if let Some(file_list) = data.files() {
-                let img_files: Vec<web_sys::File> = (0..file_list.length())
-                    .filter_map(|i| file_list.item(i))
-                    .filter(|f| f.type_().starts_with("image/"))
-                    .collect();
-                if !img_files.is_empty() {
+                for i in 0..file_list.length() {
+                    if let Some(f) = file_list.item(i) {
+                        if f.type_().starts_with("image/") {
+                            img_files.push(f);
+                        }
+                    }
+                }
+            }
+            if img_files.is_empty() {
+                let items = data.items();
+                for i in 0..items.length() {
+                    if let Some(item) = items.get(i) {
+                        if item.kind() == "file" && item.type_().starts_with("image/") {
+                            if let Ok(Some(file)) = item.get_as_file() {
+                                img_files.push(file);
+                            }
+                        }
+                    }
+                }
+            }
+            if !img_files.is_empty() {
+                event.prevent_default();
+                image_import_paste.import_files(img_files, Some(target_point));
+                return;
+            }
+
+            // 2. Check for text data (Inskea elements payload, tabular charts, or text element)
+            if let Ok(text) = data.get_data("text/plain") {
+                let trimmed = text.trim();
+                if !trimmed.is_empty() {
+                    // 2a. Check if it's serialized Inskea elements
+                    if let Ok(payload) = serde_json::from_str::<edit_ops::ClipboardPayload>(trimmed) {
+                        if payload.inskea_clipboard && !payload.elements.is_empty() {
+                            event.prevent_default();
+                            edit_ops::paste_elements(
+                                doc_paste.scene,
+                                payload.elements,
+                                &payload.groups,
+                                doc_paste.selected_ids,
+                                &push_snapshot_paste,
+                                target_point,
+                            );
+                            canvas_mode_paste.set(CanvasMode::Select);
+                            doc_paste.show_welcome.set(false);
+                            notify::info(doc_paste.notifications, "Pasted elements");
+                            return;
+                        }
+                    }
+
+                    // 2b. Check for tabular text for charts
+                    if chart_import_paste.import_tabular_text(&text, None, Some(target_point)) {
+                        event.prevent_default();
+                        return;
+                    }
+
+                    // 2c. Paste as a text element!
                     event.prevent_default();
-                    image_import_paste.import_files(img_files, None);
+                    let new_id = edit_ops::mutate_scene(
+                        doc_paste.scene,
+                        &push_snapshot_paste,
+                        |s| edit_ops::paste_text_to_scene(s, &text, target_point, default_style_paste.get_untracked()),
+                    );
+                    if let Some(id) = new_id {
+                        doc_paste.selected_ids.set(vec![id]);
+                        canvas_mode_paste.set(CanvasMode::Select);
+                        doc_paste.show_welcome.set(false);
+                        notify::info(doc_paste.notifications, "Pasted text");
+                    }
                     return;
                 }
             }
-            // 2. Check for tabular text for charts
-            if let Ok(text) = data.get_data("text/plain") {
-                if !text.trim().is_empty()
-                    && chart_import_paste.import_tabular_text(&text, None, None)
-                {
-                    event.prevent_default();
-                }
+
+            // 3. Fallback: if clipboardData was empty, check internal clipboard
+            let internal_count_before = doc_paste.scene.with_untracked(|s| s.element_count());
+            edit_ops::paste_clipboard(
+                doc_paste.scene,
+                clipboard_paste,
+                doc_paste.selected_ids,
+                &push_snapshot_paste,
+                cursor_world_paste,
+            );
+            if doc_paste.scene.with_untracked(|s| s.element_count()) > internal_count_before {
+                event.prevent_default();
+                canvas_mode_paste.set(CanvasMode::Select);
+                doc_paste.show_welcome.set(false);
+                notify::info(doc_paste.notifications, "Pasted");
             }
         });
     }

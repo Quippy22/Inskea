@@ -7,21 +7,34 @@ use leptos::{RwSignal, SignalGet, SignalSet, SignalUpdate, SignalWith, SignalWit
 use std::rc::Rc;
 
 /// Copied elements plus the group structure they carried.
-#[derive(Clone, Debug, Default)]
+/// Copied elements plus the group structure they carried.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Clipboard {
     pub elements: Vec<Element>,
     /// Groups referencing the original element ids of `elements`.
     pub groups: Vec<Group>,
 }
 
+/// Serialized payload for copying/pasting Inskea elements across windows/sessions.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ClipboardPayload {
+    pub inskea_clipboard: bool,
+    pub elements: Vec<Element>,
+    pub groups: Vec<Group>,
+}
+
 /// Apply one scene mutation at the standard undo boundary.
-pub fn mutate_scene(
+pub fn mutate_scene<R>(
     scene: RwSignal<Scene>,
     push_snapshot: &Rc<dyn Fn()>,
-    mutation: impl FnOnce(&mut Scene),
-) {
+    mutation: impl FnOnce(&mut Scene) -> R,
+) -> R {
     (push_snapshot)();
-    scene.update(mutation);
+    let mut result = None;
+    scene.update(|s| {
+        result = Some(mutation(s));
+    });
+    result.expect("mutation ran")
 }
 
 /// Store copies of the currently selected elements in the clipboard,
@@ -34,7 +47,7 @@ pub fn copy_selection(
     let ids = selected_ids.get();
     let (els, groups) = scene.with(|s| {
         let els = s.elements_for_ids(&ids);
-        let groups = s
+        let groups: Vec<Group> = s
             .groups
             .iter()
             .filter_map(|g| {
@@ -50,9 +63,38 @@ pub fn copy_selection(
         (els, groups)
     });
     clipboard.set(Clipboard {
-        elements: els,
-        groups,
+        elements: els.clone(),
+        groups: groups.clone(),
     });
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        if !els.is_empty() {
+            let text_to_write = if els.len() == 1 {
+                if let Some(Element::Text(t)) = els.first() {
+                    Some(t.wrapped.raw.to_string())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let payload_str = serde_json::to_string(&ClipboardPayload {
+                inskea_clipboard: true,
+                elements: els,
+                groups,
+            });
+
+            if let Some(w) = web_sys::window() {
+                if let Some(text) = text_to_write {
+                    let _ = w.navigator().clipboard().write_text(&text);
+                } else if let Ok(json) = payload_str {
+                    let _ = w.navigator().clipboard().write_text(&json);
+                }
+            }
+        }
+    }
 }
 
 /// Remap a copied/seeded group's original member ids to their new clones.
@@ -204,6 +246,35 @@ pub fn ungroup_selection(
     removed
 }
 
+/// Insert elements centred on `target`, restoring groups among them.
+pub fn paste_elements(
+    scene: RwSignal<Scene>,
+    elements: Vec<Element>,
+    groups: &[Group],
+    selected_ids: RwSignal<Vec<ElementId>>,
+    push_snapshot: &Rc<dyn Fn()>,
+    target: Point,
+) {
+    if elements.is_empty() {
+        return;
+    }
+    let bounds = elements
+        .iter()
+        .fold(None::<Rect>, |acc, el| match acc {
+            Some(rect) => Some(rect.union(&el.bounds())),
+            None => Some(el.bounds()),
+        })
+        .expect("elements is non-empty");
+    let center = bounds.center();
+    let dx = target.x - center.x;
+    let dy = target.y - center.y;
+    let mut new_ids = Vec::new();
+    mutate_scene(scene, push_snapshot, |s| {
+        new_ids = insert_elements(s, elements, groups, dx, dy);
+    });
+    selected_ids.set(new_ids);
+}
+
 /// Insert all clipboard elements centred on the cursor and select the new
 /// elements. Pasting a copied group restores its grouping.
 pub fn paste_clipboard(
@@ -221,21 +292,50 @@ pub fn paste_clipboard(
         return;
     }
     let target = cursor_world.get();
-    let bounds = els
-        .iter()
-        .fold(None::<Rect>, |acc, el| match acc {
-            Some(rect) => Some(rect.union(&el.bounds())),
-            None => Some(el.bounds()),
-        })
-        .expect("clipboard is non-empty");
-    let center = bounds.center();
-    let dx = target.x - center.x;
-    let dy = target.y - center.y;
-    let mut new_ids = Vec::new();
-    mutate_scene(scene, push_snapshot, |s| {
-        new_ids = insert_elements(s, els, &groups, dx, dy);
-    });
-    selected_ids.set(new_ids);
+    paste_elements(scene, els, &groups, selected_ids, push_snapshot, target);
+}
+
+/// Create a new text element from raw text, sized and centered at `target`.
+pub fn paste_text_to_scene(
+    scene: &mut Scene,
+    text: &str,
+    target: Point,
+    default_style: crate::model::ElementStyle,
+) -> Option<ElementId> {
+    let text = text.replace("\r\n", "\n");
+    if text.trim().is_empty() {
+        return None;
+    }
+    let fs = default_style
+        .font_size
+        .max(crate::model::elements::text::MIN_FONT_SIZE);
+    let natural_w = crate::model::elements::text::natural_line_width(
+        &text,
+        fs,
+        crate::model::elements::text::FONT_FAMILY,
+    );
+    let width = if natural_w > 800.0 { 800.0 } else { natural_w };
+
+    let mut data = crate::model::ElementData::new(0);
+    data.world_point = target;
+    data.width = width;
+    data.style = default_style;
+
+    let mut text_elem = crate::model::Text {
+        data,
+        wrapped: crate::model::elements::text::WrappedText::new(&text),
+        align: crate::model::TextAlign::Left,
+    };
+    text_elem.recalc();
+
+    // Center around target point
+    text_elem.data.world_point = Point::new(
+        target.x - text_elem.data.width / 2.0,
+        target.y - text_elem.data.height / 2.0,
+    );
+
+    scene.add_element(Element::Text(text_elem));
+    Some(scene.next_id - 1)
 }
 
 /// Reorder the selection as one z-order block, including complete groups.
@@ -385,5 +485,49 @@ mod tests {
         assert_eq!(s.groups.len(), 2);
         let new_group = s.groups.iter().find(|g| !g.members.contains(&1)).unwrap();
         assert_eq!(new_group.members, vec![4, 5]);
+    }
+
+    #[test]
+    fn paste_text_creates_element_centered() {
+        let mut scene = Scene::new();
+        let target = Point::new(100.0, 200.0);
+        let id = paste_text_to_scene(
+            &mut scene,
+            "Hello World\nLine 2",
+            target,
+            crate::model::ElementStyle::default(),
+        )
+        .expect("text should be pasted");
+
+        let el = scene.element_by_id(id).expect("element exists");
+        let Element::Text(text) = el else {
+            panic!("expected text element");
+        };
+        assert_eq!(text.wrapped.raw.as_str(), "Hello World\nLine 2");
+        let bounds = text.bounds();
+        let center = bounds.center();
+        assert!((center.x - target.x).abs() < 1.0);
+        assert!((center.y - target.y).abs() < 1.0);
+    }
+
+    #[test]
+    fn paste_empty_or_whitespace_text_returns_none() {
+        let mut scene = Scene::new();
+        let target = Point::new(0.0, 0.0);
+        assert!(paste_text_to_scene(&mut scene, "", target, Default::default()).is_none());
+        assert!(paste_text_to_scene(&mut scene, "   \n\t  ", target, Default::default()).is_none());
+    }
+
+    #[test]
+    fn clipboard_payload_serialization_roundtrip() {
+        let payload = ClipboardPayload {
+            inskea_clipboard: true,
+            elements: vec![],
+            groups: vec![],
+        };
+        let json = serde_json::to_string(&payload).unwrap();
+        let decoded: ClipboardPayload = serde_json::from_str(&json).unwrap();
+        assert!(decoded.inskea_clipboard);
+        assert!(decoded.elements.is_empty());
     }
 }
