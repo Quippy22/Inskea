@@ -22,8 +22,8 @@ use crate::ui::{
     animate_snap_transition, detect_snap_zone, file_ops, grip_line_horizontal, grip_line_vertical,
     shapes_container_class, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab,
     ChartDataEditor, DraggedPanel, FrameReaderOverlay, FramesContext, FramesContextMenu,
-    PanelSnapHighlight, PanelZone, SaveSnippetDialog, SelectionContextMenu, SettingsPanel,
-    ThemePicker, ToolBar, UnsavedChangesDialog, WelcomeOverlay, WhatsNewModal,
+    OpeningScreen, PanelSnapHighlight, PanelZone, SaveSnippetDialog, SelectionContextMenu,
+    SettingsPanel, ThemePicker, ToolBar, UnsavedChangesDialog, WelcomeOverlay, WhatsNewModal,
 };
 use crate::util::window_size;
 use leptos::*;
@@ -1263,6 +1263,7 @@ pub fn App() -> impl IntoView {
                 push_snapshot=push_snapshot.clone()
             />
             <Toasts notifications=notifications />
+            <OpeningScreen loaded=initialized.into() />
 
             <div
                 node_ref=shapes_panel_ref

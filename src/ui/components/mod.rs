@@ -1,12 +1,15 @@
 pub mod color_picker;
 pub mod dropdown;
 pub mod icon_btn;
+pub mod logo_animation;
 pub mod number_slider;
 pub mod segmented;
 pub mod styling_panel;
 pub use color_picker::ColorPickerButton;
 pub use dropdown::{Dropdown, DropdownItem};
 pub use icon_btn::IconButton;
+pub use logo_animation::{LogoAnimation, OpeningScreen};
 pub use number_slider::NumberSlider;
 pub use segmented::SegmentedControl;
 pub use styling_panel::{StylingPanel, StylingPanelContext};
+

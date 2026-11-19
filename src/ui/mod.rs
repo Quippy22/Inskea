@@ -27,6 +27,8 @@ pub use catalogue::{
     CatalogueContext, CatalogueContextMenu, CatalogueTab, SaveSnippetDialog, SelectionContextMenu,
 };
 pub use chart_editor::ChartDataEditor;
+#[allow(unused_imports)]
+pub use components::{LogoAnimation, OpeningScreen};
 pub use frames::{FrameReaderOverlay, FramesContext, FramesContextMenu};
 #[allow(unused_imports)]
 pub use panel_zone::{
