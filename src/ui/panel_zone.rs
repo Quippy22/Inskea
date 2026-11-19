@@ -205,67 +205,67 @@ pub fn ghost_highlight_class(
     match panel {
         DraggedPanel::Toolbar => match target_zone {
             PanelZone::Top => {
-                "fixed top-4 left-1/2 -translate-x-1/2 z-30 w-[340px] h-10 rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex items-center justify-center"
+                "fixed top-4 left-1/2 -translate-x-1/2 z-30 w-[340px] h-10 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
             }
             PanelZone::Bottom => {
-                "fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[340px] h-10 rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex items-center justify-center"
+                "fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[340px] h-10 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
             }
             PanelZone::Left => {
-                "fixed left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-[320px] rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex flex-col items-center justify-center"
+                "fixed left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-[320px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
             }
             PanelZone::Right => {
-                "fixed right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-[320px] rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex flex-col items-center justify-center"
+                "fixed right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-[320px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
             }
         },
         DraggedPanel::Tools => match target_zone {
             PanelZone::Left => {
-                "fixed left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-[272px] rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex flex-col items-center justify-center"
+                "fixed left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-[272px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
             }
             PanelZone::Right => {
-                "fixed right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-[272px] rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex flex-col items-center justify-center"
+                "fixed right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-[272px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
             }
             PanelZone::Top => {
                 if other_zone == PanelZone::Top {
-                    "fixed top-16 left-[calc(50%-8.5rem)] -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex items-center justify-center"
+                    "fixed top-16 left-[calc(50%-8.5rem)] -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 } else {
-                    "fixed top-16 left-1/2 -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex items-center justify-center"
+                    "fixed top-16 left-1/2 -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 }
             }
             PanelZone::Bottom => {
                 if other_zone == PanelZone::Bottom {
-                    "fixed bottom-4 left-[calc(50%-8.5rem)] -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex items-center justify-center"
+                    "fixed bottom-4 left-[calc(50%-8.5rem)] -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 } else {
-                    "fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex items-center justify-center"
+                    "fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[272px] h-11 rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 }
             }
         },
         DraggedPanel::Shapes => match target_zone {
             PanelZone::Left => {
                 if other_zone == PanelZone::Left {
-                    "fixed left-[4.5rem] top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex flex-col items-center justify-center"
+                    "fixed left-[4.5rem] top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 } else {
-                    "fixed left-4 top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex flex-col items-center justify-center"
+                    "fixed left-4 top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 }
             }
             PanelZone::Right => {
                 if other_zone == PanelZone::Right {
-                    "fixed right-[4.5rem] top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex flex-col items-center justify-center"
+                    "fixed right-[4.5rem] top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 } else {
-                    "fixed right-4 top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex flex-col items-center justify-center"
+                    "fixed right-4 top-1/2 -translate-y-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 }
             }
             PanelZone::Top => {
                 if other_zone == PanelZone::Top {
-                    "fixed top-16 left-[calc(50%+8.5rem)] -translate-x-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex flex-col items-center justify-center"
+                    "fixed top-16 left-[calc(50%+8.5rem)] -translate-x-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 } else {
-                    "fixed top-16 left-1/2 -translate-x-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex flex-col items-center justify-center"
+                    "fixed top-16 left-1/2 -translate-x-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 }
             }
             PanelZone::Bottom => {
                 if other_zone == PanelZone::Bottom {
-                    "fixed bottom-4 left-[calc(50%+8.5rem)] -translate-x-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex flex-col items-center justify-center"
+                    "fixed bottom-4 left-[calc(50%+8.5rem)] -translate-x-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 } else {
-                    "fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-dashed border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse flex flex-col items-center justify-center"
+                    "fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[240px] h-[340px] rounded-lg border-2 border-accent bg-accent/15 backdrop-blur-sm shadow-lg pointer-events-none transition-all duration-200 animate-pulse"
                 }
             }
         },
@@ -289,17 +289,8 @@ pub fn PanelSnapHighlight(
                 DraggedPanel::Toolbar => tools_zone.get(),
             };
             let class = ghost_highlight_class(panel, target, other_zone);
-            let label = match panel {
-                DraggedPanel::Tools => "Tools",
-                DraggedPanel::Shapes => "Properties",
-                DraggedPanel::Toolbar => "Toolbar",
-            };
             Some(view! {
-                <div class=class>
-                    <span class="text-[11px] font-medium tracking-wide uppercase text-accent/80 select-none px-2 py-0.5 rounded bg-accent/10">
-                        {label}
-                    </span>
-                </div>
+                <div class=class></div>
             })
         }}
     }
