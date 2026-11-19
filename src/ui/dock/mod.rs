@@ -6,7 +6,7 @@ pub use drawing::Tool;
 use crate::canvas::CanvasMode;
 use crate::ui::icon;
 use crate::ui::panel_zone::{
-    animate_snap_transition, detect_snap_zone, grip_horizontal, grip_vertical,
+    animate_snap_transition, detect_snap_zone, grip_line_horizontal, grip_line_vertical,
     tools_container_class, DraggedPanel, PanelZone,
 };
 use crate::ui::styles;
@@ -172,15 +172,15 @@ pub fn Dock(
                 format!("{} p-0.5 {}", styles::PANEL, layout)
             }>
                 <div
-                    class="cursor-grab active:cursor-grabbing p-1 text-subtle/60 hover:text-fg select-none rounded flex items-center justify-center transition-colors"
+                    class="cursor-grab active:cursor-grabbing p-1.5 text-subtle/60 hover:text-fg select-none rounded flex items-center justify-center transition-colors group"
                     on:pointerdown=on_grip_pointerdown
                     title="Drag to move panel"
                 >
                     {move || {
                         if zone.get().is_horizontal() {
-                            grip_horizontal().into_view()
+                            grip_line_vertical().into_view()
                         } else {
-                            grip_vertical().into_view()
+                            grip_line_horizontal().into_view()
                         }
                     }}
                 </div>

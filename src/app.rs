@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::canvas::settings::{CanvasSettings, CenterStyle, GridSize, GridStyle, Theme};
+use crate::canvas::settings::CanvasSettings;
 use crate::canvas::{Canvas, CanvasMode, CropExportCallback, PendingPlacement, Viewport};
 use crate::document::{DocContext, PendingAction, RequestAction};
 use crate::edit_ops::Clipboard;
@@ -19,7 +19,7 @@ use crate::ui::notify::{self, Toasts};
 use crate::ui::settings::{from_toml, to_toml};
 use crate::ui::styles;
 use crate::ui::{
-    animate_snap_transition, detect_snap_zone, file_ops, grip_horizontal,
+    animate_snap_transition, detect_snap_zone, file_ops, grip_line_horizontal,
     shapes_container_class, CanvasStatus, CatalogueContext, CatalogueContextMenu, CatalogueTab,
     ChartDataEditor, DraggedPanel, FrameReaderOverlay, FramesContext, FramesContextMenu,
     PanelSnapHighlight, PanelZone, SaveSnippetDialog, SelectionContextMenu, SettingsPanel,
@@ -1147,11 +1147,11 @@ pub fn App() -> impl IntoView {
             >
                 <div class=styles::PANEL>
                     <div
-                        class="cursor-grab active:cursor-grabbing px-3 pt-1.5 pb-0.5 text-subtle/60 hover:text-fg select-none rounded-t-lg flex items-center justify-center transition-colors"
+                        class="cursor-grab active:cursor-grabbing px-3 pt-2 pb-1 text-subtle/60 hover:text-fg select-none rounded-t-lg flex items-center justify-center transition-colors group"
                         on:pointerdown=on_shapes_grip_pointerdown
                         title="Drag to move panel"
                     >
-                        {grip_horizontal()}
+                        {grip_line_horizontal()}
                     </div>
                     <div class="pb-2 px-3">
                         <StylingPanel context=StylingPanelContext {

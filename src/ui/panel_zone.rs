@@ -271,31 +271,17 @@ pub fn animate_snap_transition(
     });
 }
 
-/// Vertical grip dots icon for panel drag handles.
-pub fn grip_vertical() -> impl IntoView {
+/// Horizontal pill drag handle line.
+pub fn grip_line_horizontal() -> impl IntoView {
     view! {
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-subtle/60 hover:text-fg transition-colors">
-            <circle cx="9" cy="6" r="1.5" />
-            <circle cx="9" cy="12" r="1.5" />
-            <circle cx="9" cy="18" r="1.5" />
-            <circle cx="15" cy="6" r="1.5" />
-            <circle cx="15" cy="12" r="1.5" />
-            <circle cx="15" cy="18" r="1.5" />
-        </svg>
+        <div class="w-6 h-1 rounded-full bg-subtle/40 group-hover:bg-accent/80 transition-colors pointer-events-none" />
     }
 }
 
-/// Horizontal grip dots icon for panel drag handles.
-pub fn grip_horizontal() -> impl IntoView {
+/// Vertical pill drag handle line.
+pub fn grip_line_vertical() -> impl IntoView {
     view! {
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-subtle/60 hover:text-fg transition-colors">
-            <circle cx="6" cy="9" r="1.5" />
-            <circle cx="12" cy="9" r="1.5" />
-            <circle cx="18" cy="9" r="1.5" />
-            <circle cx="6" cy="15" r="1.5" />
-            <circle cx="12" cy="15" r="1.5" />
-            <circle cx="18" cy="15" r="1.5" />
-        </svg>
+        <div class="w-1 h-6 rounded-full bg-subtle/40 group-hover:bg-accent/80 transition-colors pointer-events-none" />
     }
 }
 

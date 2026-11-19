@@ -30,7 +30,7 @@ pub use chart_editor::ChartDataEditor;
 pub use frames::{FrameReaderOverlay, FramesContext, FramesContextMenu};
 #[allow(unused_imports)]
 pub use panel_zone::{
-    animate_snap_transition, detect_snap_zone, grip_horizontal, grip_vertical,
+    animate_snap_transition, detect_snap_zone, grip_line_horizontal, grip_line_vertical,
     shapes_container_class, tools_container_class, DraggedPanel, PanelSnapHighlight, PanelZone,
 };
 pub use settings::SettingsPanel;
