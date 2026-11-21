@@ -14,8 +14,8 @@ use crate::model::elements::connector::SNAP_SCREEN_PX;
 pub use crate::model::interaction::combined_bounds;
 use modes::{cancel_drawing, draw_pointer_down, draw_pointer_up, finish_freehand};
 use selection::{
-    begin_placement_move, cancel_drag, clear_drag_state, select_pointer_down,
-    select_pointer_move, select_pointer_up, shift_interaction_origin,
+    begin_placement_move, cancel_drag, clear_drag_state, handle_text_double_click,
+    select_pointer_down, select_pointer_move, select_pointer_up, shift_interaction_origin,
     translate_moving_shape_and_camera,
 };
 pub use state::CanvasInputs;
@@ -129,6 +129,11 @@ fn route_pointer_down(
         return;
     }
 
+    if detail >= 2 && handle_text_double_click(detail, world, st, props) {
+        props.canvas_mode.set(CanvasMode::Select);
+        return;
+    }
+
     match mode {
         CanvasMode::Pan => {
             st.pan_anchor.set(Some(client));
@@ -237,42 +242,60 @@ pub fn Canvas(
                 return;
             }
             let ids = st.selected_ids.get_untracked();
-            if ids.len() != 1 {
+            let target_id = if ids.len() == 1 {
+                Some(ids[0])
+            } else if ids.is_empty() {
+                let cursor = props.cursor_world.get_untracked();
+                let margin = crate::model::interaction::CLICK_MARGIN;
+                let nearby = scene.with_untracked(|scene| {
+                    scene.elements_in_view(Rect::new(
+                        cursor.x - margin,
+                        cursor.y - margin,
+                        margin * 2.0,
+                        margin * 2.0,
+                    ))
+                });
+                crate::model::interaction::hit_test_topmost(cursor, &nearby, margin)
+            } else {
+                None
+            };
+            let Some(id) = target_id else {
                 return;
-            }
-            let id = ids[0];
-            let eligible = scene.with_untracked(|scene| {
-                scene
-                    .element_by_id(id)
-                    .is_some_and(|element| element.supports_embedded_text())
-            });
-            if !eligible {
+            };
+            let element = scene.with_untracked(|scene| scene.element_by_id(id));
+            let Some(element) = element else {
                 return;
+            };
+
+            match element {
+                Element::Text(text_elem) => {
+                    ev.prevent_default();
+                    let text = text_elem.wrapped.raw.to_string();
+                    st.text_edit.editing_embedded.set(false);
+                    st.text_edit.editing_new.set(false);
+                    st.text_edit.edit_text.set(text);
+                    st.text_edit.editing_id.set(Some(id));
+                    st.selected_ids.set(vec![id]);
+                    props.canvas_mode.set(CanvasMode::Select);
+                }
+                element if element.supports_embedded_text() => {
+                    ev.prevent_default();
+                    let already_has_text = element.data().embedded_text.is_some();
+                    let text = element
+                        .data()
+                        .embedded_text
+                        .as_ref()
+                        .map(|label| label.wrapped.raw.to_string())
+                        .unwrap_or_default();
+                    st.text_edit.editing_embedded.set(true);
+                    st.text_edit.editing_new.set(!already_has_text);
+                    st.text_edit.edit_text.set(text);
+                    st.text_edit.editing_id.set(Some(id));
+                    st.selected_ids.set(vec![id]);
+                    props.canvas_mode.set(CanvasMode::Select);
+                }
+                _ => {}
             }
-            ev.prevent_default();
-            let already_has_text = scene.with_untracked(|scene| {
-                scene
-                    .element_by_id(id)
-                    .is_some_and(|element| element.data().embedded_text.is_some())
-            });
-            let text = scene.with_untracked(|scene| {
-                scene
-                    .element_by_id(id)
-                    .and_then(|element| {
-                        element
-                            .data()
-                            .embedded_text
-                            .as_ref()
-                            .map(|label| label.wrapped.raw.to_string())
-                    })
-                    .unwrap_or_default()
-            });
-            st.text_edit.editing_embedded.set(true);
-            st.text_edit.editing_new.set(!already_has_text);
-            st.text_edit.edit_text.set(text);
-            // `text_edit_overlay` tracks editing_id and reads the mode/content
-            // untracked, so publish the ID only after those values are ready.
-            st.text_edit.editing_id.set(Some(id));
         });
     }
 
@@ -645,8 +668,21 @@ pub fn Canvas(
             let editing = st.text_edit.editing_id.get().is_some();
             let mode = props.canvas_mode.get();
             let world = update_world(&ev);
-            let detail = ev.detail() as u32;
+            let mut detail = ev.detail() as u32;
             let client = (ev.client_x() as f64, ev.client_y() as f64);
+
+            let now = js_sys::Date::now();
+            if detail < 2 {
+                if let Some((last_time, last_pos)) = st.last_pointer_down.get_untracked() {
+                    let elapsed = now - last_time;
+                    let zoom = props.viewport.get_untracked().zoom.max(0.01);
+                    let dist = (world.x - last_pos.x).hypot(world.y - last_pos.y) * zoom;
+                    if elapsed < 450.0 && dist < 12.0 {
+                        detail = 2;
+                    }
+                }
+            }
+            st.last_pointer_down.set(Some((now, world)));
 
             // Capture the pointer so releasing outside the canvas (over the
             // toolbar or a panel) still ends the interaction instead of
@@ -1196,10 +1232,7 @@ pub fn Canvas(
         create_memo(move |_| {
             let editing = editing_id.get();
             let embedded = editing_embedded.get();
-            let view_rect = props
-                .viewport
-                .get()
-                .visible_rect(screen_size.get());
+            let view_rect = props.viewport.get().visible_rect(screen_size.get());
             let pad = (view_rect.w.min(view_rect.h) * 0.25).max(120.0);
             let visible = view_rect.padded(pad);
             props.scene.with(|scene| {
@@ -1220,6 +1253,27 @@ pub fn Canvas(
         })
     };
 
+    let on_double_click = {
+        let mut st = st;
+        let props = props.clone();
+        move |ev: ev::MouseEvent| {
+            if ev.button() != 0 {
+                return;
+            }
+            if st.text_edit.editing_id.get_untracked().is_some() {
+                return;
+            }
+            let screen = Point::new(ev.offset_x() as f64, ev.offset_y() as f64);
+            let world = props
+                .viewport
+                .get()
+                .screen_to_world(screen, st.screen_size.get());
+            if handle_text_double_click(2, world, &mut st, &props) {
+                props.canvas_mode.set(CanvasMode::Select);
+            }
+        }
+    };
+
     // ── Template ─────────────────────────────────────────────────────────
     let svg_ref = st.svg_ref;
     view! {
@@ -1235,6 +1289,7 @@ pub fn Canvas(
             on:pointermove=on_pointer_move
             on:pointerup=on_pointer_up
             on:pointercancel=on_pointer_cancel
+            on:dblclick=on_double_click
             on:contextmenu=on_context_menu
             on:wheel=on_wheel
         >

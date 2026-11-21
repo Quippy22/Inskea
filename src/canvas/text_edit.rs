@@ -152,7 +152,9 @@ pub fn guide_textarea(
     let _ = sty.set_property("font-size", &format!("{}px", font_size * zoom));
     let _ = sty.set_property("color", &fill);
 
-    let sized = text_elem.data.width > 0.0;
+    let hard_lines = text_elem.wrapped.raw.split('\n').count();
+    let was_soft_wrapped = text_elem.wrapped.lines.len() > hard_lines;
+    let sized = was_soft_wrapped && text_elem.data.width > 0.0;
     if sized {
         // Resized box: wrap at its chosen width, no panning.
         let _ = sty.set_property("white-space", "pre-wrap");
@@ -330,16 +332,17 @@ pub fn make_commit_edit(
                     let Element::Text(text_elem) = &mut *element else {
                         return;
                     };
-                    // Keep the wrap width of an already-sized box. A fresh box
-                    // is committed at its natural, unwrapped width — measured
-                    // from the model, not the clipped textarea — so the SVG
-                    // shows it full-size as a single flowing line.
+                    // Keep the wrap width of an already-sized box if it had soft line breaks.
+                    // An unwrapped box grows to its natural width so typing into it
+                    // does not wrap prematurely.
                     let fs = text_elem.data.style.font_size.max(MIN_FONT_SIZE);
-                    let wrap_w = text_elem.data.width;
-                    let new_w = if wrap_w > 0.0 {
-                        wrap_w
+                    let hard_lines = text_elem.wrapped.raw.split('\n').count();
+                    let was_soft_wrapped = text_elem.wrapped.lines.len() > hard_lines;
+                    let natural_w = natural_line_width(&text, fs, FONT_FAMILY);
+                    let new_w = if was_soft_wrapped && text_elem.data.width > 0.0 {
+                        text_elem.data.width
                     } else {
-                        natural_line_width(&text, fs, FONT_FAMILY)
+                        natural_w
                     };
                     text_elem.set_content(&text);
                     text_elem.data.width = new_w;
@@ -405,6 +408,8 @@ pub fn text_edit_overlay(
                         true,
                     ))
                 } else if let Element::Text(text) = element {
+                    let hard_lines = text.wrapped.raw.split('\n').count();
+                    let was_soft_wrapped = text.wrapped.lines.len() > hard_lines;
                     Some((
                         text.data.world_point,
                         text.data.width,
@@ -413,7 +418,7 @@ pub fn text_edit_overlay(
                         text.data.style.font_size.max(MIN_FONT_SIZE),
                         text.data.style.stroke_color.to_hex(),
                         text.align,
-                        text.data.width > 0.0,
+                        was_soft_wrapped && text.data.width > 0.0,
                     ))
                 } else {
                     None

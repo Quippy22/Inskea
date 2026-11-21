@@ -44,9 +44,9 @@ pub struct FramesContext {
 impl FramesContext {
     /// Zoom and pan the viewport so `frame_id` fits comfortably in the window.
     pub fn focus_frame(&self, frame_id: ElementId) {
-        let bounds = self.scene.with_untracked(|s| {
-            s.element_by_id(frame_id).map(|el| el.bounds())
-        });
+        let bounds = self
+            .scene
+            .with_untracked(|s| s.element_by_id(frame_id).map(|el| el.bounds()));
         if let Some(rect) = bounds {
             let screen = window_size();
             self.viewport
@@ -90,7 +90,8 @@ impl FramesContext {
         edit_ops::mutate_scene(self.scene, &self.push_snapshot, |s| {
             s.remove_by_id(frame_id);
         });
-        self.selected_ids.update(|ids| ids.retain(|&id| id != frame_id));
+        self.selected_ids
+            .update(|ids| ids.retain(|&id| id != frame_id));
     }
 
     /// Start inline renaming a frame.
@@ -339,12 +340,7 @@ pub fn FramesPanel(context: FramesContext) -> impl IntoView {
     }
 }
 
-fn frame_row(
-    idx: usize,
-    total: usize,
-    frame: Frame,
-    context: FramesContext,
-) -> impl IntoView {
+fn frame_row(idx: usize, total: usize, frame: Frame, context: FramesContext) -> impl IntoView {
     let id = frame.data.id;
     let display_name = if frame.name.trim().is_empty() {
         format!("Frame {}", idx + 1)
@@ -357,11 +353,7 @@ fn frame_row(
             crate::model::elements::frame::px_to_cm(frame.data.width.abs()),
             crate::model::elements::frame::px_to_cm(frame.data.height.abs())
         ),
-        preset => format!(
-            "{} · {}",
-            preset.label(),
-            frame.orientation.label()
-        ),
+        preset => format!("{} · {}", preset.label(), frame.orientation.label()),
     };
 
     let renaming_id = context.renaming_id;
@@ -656,29 +648,32 @@ pub fn FrameReaderOverlay(context: FramesContext) -> impl IntoView {
     // Escape -> exit Read Mode
     {
         let ctx = context.clone();
-        let _ = window_event_listener(leptos::ev::keydown, move |event: leptos::ev::KeyboardEvent| {
-            if ctx.read_mode_index.get_untracked().is_none() {
-                return;
-            }
-            match event.key().as_str() {
-                "ArrowRight" | "ArrowDown" | "PageDown" | " " => {
-                    event.prevent_default();
-                    event.stop_propagation();
-                    ctx.next_read_frame();
+        let _ = window_event_listener(
+            leptos::ev::keydown,
+            move |event: leptos::ev::KeyboardEvent| {
+                if ctx.read_mode_index.get_untracked().is_none() {
+                    return;
                 }
-                "ArrowLeft" | "ArrowUp" | "PageUp" => {
-                    event.prevent_default();
-                    event.stop_propagation();
-                    ctx.prev_read_frame();
+                match event.key().as_str() {
+                    "ArrowRight" | "ArrowDown" | "PageDown" | " " => {
+                        event.prevent_default();
+                        event.stop_propagation();
+                        ctx.next_read_frame();
+                    }
+                    "ArrowLeft" | "ArrowUp" | "PageUp" => {
+                        event.prevent_default();
+                        event.stop_propagation();
+                        ctx.prev_read_frame();
+                    }
+                    "Escape" => {
+                        event.prevent_default();
+                        event.stop_propagation();
+                        ctx.exit_read_mode();
+                    }
+                    _ => {}
                 }
-                "Escape" => {
-                    event.prevent_default();
-                    event.stop_propagation();
-                    ctx.exit_read_mode();
-                }
-                _ => {}
-            }
-        });
+            },
+        );
     }
 
     // Re-fit the active frame if the window is resized while in Read Mode.

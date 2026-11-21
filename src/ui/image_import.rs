@@ -117,8 +117,7 @@ impl ImageImport {
             let anchor = at.unwrap_or_else(|| this.view_centre());
             let mut images = Vec::new();
             for (index, data_url) in data_urls.into_iter().enumerate() {
-                let Some(((width, height), optimized_src)) =
-                    measure_and_optimize(&data_url).await
+                let Some(((width, height), optimized_src)) = measure_and_optimize(&data_url).await
                 else {
                     notify::error(
                         this.doc.notifications,
@@ -261,7 +260,8 @@ fn downscale_raster(
         .ok()?;
     ctx.draw_image_with_html_image_element_and_dw_and_dh(image, 0.0, 0.0, dw as f64, dh as f64)
         .ok()?;
-    let mime = if data_url.starts_with("data:image/jpeg") || data_url.starts_with("data:image/jpg") {
+    let mime = if data_url.starts_with("data:image/jpeg") || data_url.starts_with("data:image/jpg")
+    {
         "image/jpeg"
     } else if data_url.starts_with("data:image/webp") {
         "image/webp"

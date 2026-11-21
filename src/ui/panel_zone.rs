@@ -367,7 +367,10 @@ pub fn align_dragged_panel(
     let _ = style.set_property("top", "0px");
     let _ = style.set_property("right", "auto");
     let _ = style.set_property("bottom", "auto");
-    let _ = style.set_property("transform", &format!("translate3d({target_left}px, {target_top}px, 0)"));
+    let _ = style.set_property(
+        "transform",
+        &format!("translate3d({target_left}px, {target_top}px, 0)"),
+    );
     let _ = style.set_property("transition", "none");
     let _ = style.set_property("z-index", "60");
 }
@@ -388,10 +391,7 @@ pub fn clean_dragged_panel(panel_el: &web_sys::HtmlElement) -> web_sys::DomRect 
 
 /// Animates a panel smoothly from its current visual bounding box `from_rect`
 /// to its new layout position using GPU-accelerated CSS transform transition (FLIP).
-pub fn animate_snap_transition(
-    element: &web_sys::HtmlElement,
-    from_rect: &web_sys::DomRect,
-) {
+pub fn animate_snap_transition(element: &web_sys::HtmlElement, from_rect: &web_sys::DomRect) {
     let el = element.clone();
     let from_left = from_rect.left();
     let from_top = from_rect.top();
@@ -436,10 +436,13 @@ pub fn animate_snap_transition(
 
         let el_clone = el.clone();
         leptos::leptos_dom::helpers::request_animation_frame(move || {
+            let _ = el_clone.style().set_property(
+                "transition",
+                "transform 320ms cubic-bezier(0.16, 1, 0.3, 1)",
+            );
             let _ = el_clone
                 .style()
-                .set_property("transition", "transform 320ms cubic-bezier(0.16, 1, 0.3, 1)");
-            let _ = el_clone.style().set_property("transform", &target_transform);
+                .set_property("transform", &target_transform);
 
             #[cfg(target_arch = "wasm32")]
             leptos::set_timeout(
@@ -473,22 +476,34 @@ mod tests {
 
     #[test]
     fn test_detect_snap_zone_left() {
-        assert_eq!(detect_snap_zone(50.0, 400.0, 1000.0, 800.0), Some(PanelZone::Left));
+        assert_eq!(
+            detect_snap_zone(50.0, 400.0, 1000.0, 800.0),
+            Some(PanelZone::Left)
+        );
     }
 
     #[test]
     fn test_detect_snap_zone_right() {
-        assert_eq!(detect_snap_zone(950.0, 400.0, 1000.0, 800.0), Some(PanelZone::Right));
+        assert_eq!(
+            detect_snap_zone(950.0, 400.0, 1000.0, 800.0),
+            Some(PanelZone::Right)
+        );
     }
 
     #[test]
     fn test_detect_snap_zone_top() {
-        assert_eq!(detect_snap_zone(500.0, 50.0, 1000.0, 800.0), Some(PanelZone::Top));
+        assert_eq!(
+            detect_snap_zone(500.0, 50.0, 1000.0, 800.0),
+            Some(PanelZone::Top)
+        );
     }
 
     #[test]
     fn test_detect_snap_zone_bottom() {
-        assert_eq!(detect_snap_zone(500.0, 750.0, 1000.0, 800.0), Some(PanelZone::Bottom));
+        assert_eq!(
+            detect_snap_zone(500.0, 750.0, 1000.0, 800.0),
+            Some(PanelZone::Bottom)
+        );
     }
 
     #[test]
@@ -510,10 +525,12 @@ mod tests {
         let both_left = shapes_container_class(PanelZone::Left, PanelZone::Left, PanelZone::Top);
         assert!(both_left.contains("left-[4.5rem]"));
 
-        let shapes_only_left = shapes_container_class(PanelZone::Left, PanelZone::Right, PanelZone::Top);
+        let shapes_only_left =
+            shapes_container_class(PanelZone::Left, PanelZone::Right, PanelZone::Top);
         assert!(shapes_only_left.contains("left-4"));
 
-        let all_three_left = shapes_container_class(PanelZone::Left, PanelZone::Left, PanelZone::Left);
+        let all_three_left =
+            shapes_container_class(PanelZone::Left, PanelZone::Left, PanelZone::Left);
         assert!(all_three_left.contains("left-[7.5rem]"));
     }
 
@@ -550,10 +567,10 @@ mod tests {
         // Test vertical panel: user grabbed center of grip handle at (100, 200)
         let (left, top) = calculate_drag_target(
             100.0, 200.0, // cursor
-            90.0, 185.0,  // grip pos
-            20.0, 30.0,   // grip size
-            80.0, 180.0,  // panel pos
-            0.5, 0.5,     // grabbed center of grip
+            90.0, 185.0, // grip pos
+            20.0, 30.0, // grip size
+            80.0, 180.0, // panel pos
+            0.5, 0.5, // grabbed center of grip
         );
         assert_eq!(left, 80.0);
         assert_eq!(top, 180.0);
@@ -562,10 +579,10 @@ mod tests {
         // Suppose new horizontal panel has grip at relative (10.0, 12.0) with size (30.0, 20.0)
         let (rot_left, rot_top) = calculate_drag_target(
             100.0, 200.0, // same cursor position
-            10.0, 12.0,   // grip at panel-relative (10, 12)
-            30.0, 20.0,   // horizontal grip size
-            0.0, 0.0,     // panel origin
-            0.5, 0.5,     // grabbed center of grip
+            10.0, 12.0, // grip at panel-relative (10, 12)
+            30.0, 20.0, // horizontal grip size
+            0.0, 0.0, // panel origin
+            0.5, 0.5, // grabbed center of grip
         );
         // Grabbed point inside horizontal panel = 10 + 0.5*30 = 25, 12 + 0.5*20 = 22
         // Panel top-left should be cursor (100, 200) - (25, 22) = (75, 178)

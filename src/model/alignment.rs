@@ -12,7 +12,6 @@ pub enum Alignment {
     Bottom,
 }
 
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Distribution {
     Horizontal,
@@ -139,7 +138,9 @@ pub fn find_enclosing_frame(scene: &Scene, ids: &[ElementId]) -> Option<Frame> {
         .min_by(|a, b| {
             let area_a = a.bounds().w * a.bounds().h;
             let area_b = b.bounds().w * b.bounds().h;
-            area_a.partial_cmp(&area_b).unwrap_or(std::cmp::Ordering::Equal)
+            area_a
+                .partial_cmp(&area_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
 }
 

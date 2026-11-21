@@ -52,7 +52,10 @@ pub fn save_catalogue(content: &str) -> bool {
 
 /// The version of the app the user last saw the What's New modal for.
 pub fn load_last_seen_version() -> Option<String> {
-    local_storage()?.get_item(LAST_SEEN_VERSION_KEY).ok().flatten()
+    local_storage()?
+        .get_item(LAST_SEEN_VERSION_KEY)
+        .ok()
+        .flatten()
 }
 
 /// Save the current app version as the last seen version.
@@ -103,4 +106,3 @@ pub fn save_panel_zones(
         }
     }
 }
-

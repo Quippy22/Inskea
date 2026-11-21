@@ -438,12 +438,11 @@ impl Chart {
                     })
                     .collect()
             }
-            ChartKind::Line | ChartKind::Area | ChartKind::Sparkline => {
-                self.line_vertices(&plot, max_val)
-                    .into_iter()
-                    .enumerate()
-                    .collect()
-            }
+            ChartKind::Line | ChartKind::Area | ChartKind::Sparkline => self
+                .line_vertices(&plot, max_val)
+                .into_iter()
+                .enumerate()
+                .collect(),
             ChartKind::Donut => {
                 let (cx, cy, r_out, _) = self.donut_geometry(&plot);
                 let total: f64 = self.items.iter().map(|i| i.value.max(0.0)).sum();
@@ -610,7 +609,11 @@ impl Chart {
         let max_val = metrics.max_val;
 
         // Gridlines & Y-axis labels (for Bar, Line, Area)
-        if self.show_grid && matches!(self.kind, ChartKind::Bar | ChartKind::Line | ChartKind::Area)
+        if self.show_grid
+            && matches!(
+                self.kind,
+                ChartKind::Bar | ChartKind::Line | ChartKind::Area
+            )
         {
             let steps = if plot.h >= 110.0 { 4 } else { 2 };
             for step in 0..=steps {
@@ -1426,8 +1429,7 @@ mod tests {
     #[test]
     fn scene_graph_builds_primitives_for_every_chart_kind() {
         for kind in ChartKind::ALL {
-            let mut chart =
-                Chart::new_at(Point::new(150.0, 150.0), kind, Color::new(Color::WHITE));
+            let mut chart = Chart::new_at(Point::new(150.0, 150.0), kind, Color::new(Color::WHITE));
             chart.title = "Quarterly Overview".to_string();
             chart.show_legend = true;
             let graph = chart.scene_graph();

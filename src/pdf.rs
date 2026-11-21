@@ -7,12 +7,12 @@
 #![allow(clippy::write_with_newline)]
 
 use crate::canvas::settings::Theme;
-use crate::model::Color;
 use crate::model::elements::chart::ChartSceneGraph;
 use crate::model::elements::path::segment_cubic_bezier;
 use crate::model::elements::text::{MIN_FONT_SIZE, TEXT_ASCENT_RATIO};
 use crate::model::elements::utils::arrowhead_polyline;
 use crate::model::elements::{CurveMode, EdgeStyle, Element, StrokeStyle};
+use crate::model::Color;
 use crate::model::Rect;
 use std::io::Write;
 
@@ -56,8 +56,8 @@ fn helvetica_char_width(c: char) -> f64 {
         'a' | 'b' | 'd' | 'e' | 'g' | 'h' | 'n' | 'o' | 'p' | 'q' | 'u' | 'x' | 'y' => 0.556,
         '0'..='9' => 0.556,
         'w' | 'm' => 0.778,
-        'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'K' | 'N' | 'O' | 'P' | 'Q' | 'R'
-        | 'T' | 'U' | 'V' | 'X' | 'Y' | 'Z' => 0.667,
+        'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'K' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'T'
+        | 'U' | 'V' | 'X' | 'Y' | 'Z' => 0.667,
         'I' => 0.278,
         'J' => 0.500,
         'L' => 0.556,
@@ -143,7 +143,10 @@ fn tokenize_svg_path(d: &str) -> Vec<PathToken> {
         while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b'.') {
             i += 1;
         }
-        if let Ok(val) = std::str::from_utf8(&bytes[start..i]).unwrap_or("").parse::<f64>() {
+        if let Ok(val) = std::str::from_utf8(&bytes[start..i])
+            .unwrap_or("")
+            .parse::<f64>()
+        {
             tokens.push(PathToken::Num(val));
         }
     }
@@ -264,7 +267,8 @@ fn render_svg_path(d: &str, view: Rect, out: &mut Vec<u8>) {
                         PathToken::Num(y1),
                         PathToken::Num(x),
                         PathToken::Num(y),
-                    ) = (&tokens[i], &tokens[i + 1], &tokens[i + 2], &tokens[i + 3]) {
+                    ) = (&tokens[i], &tokens[i + 1], &tokens[i + 2], &tokens[i + 3])
+                    {
                         let c1_x = cur_x + (2.0 / 3.0) * (*x1 - cur_x);
                         let c1_y = cur_y + (2.0 / 3.0) * (*y1 - cur_y);
                         let c2_x = *x + (2.0 / 3.0) * (*x1 - *x);
@@ -473,10 +477,20 @@ impl PageBuilder {
                 let _ = write!(self.out, "[] 0 d\n");
             }
             StrokeStyle::Dashed => {
-                let _ = write!(self.out, "[{:.2} {:.2}] 0 d\n", px_to_pt(6.0), px_to_pt(3.0));
+                let _ = write!(
+                    self.out,
+                    "[{:.2} {:.2}] 0 d\n",
+                    px_to_pt(6.0),
+                    px_to_pt(3.0)
+                );
             }
             StrokeStyle::Dotted => {
-                let _ = write!(self.out, "[{:.2} {:.2}] 0 d\n", px_to_pt(2.0), px_to_pt(4.0));
+                let _ = write!(
+                    self.out,
+                    "[{:.2} {:.2}] 0 d\n",
+                    px_to_pt(2.0),
+                    px_to_pt(4.0)
+                );
             }
         }
     }
@@ -537,7 +551,11 @@ impl PageBuilder {
 
         let r = px_to_pt(roundness).min(w_pt / 2.0).min(h_pt / 2.0);
         if r <= 0.5 {
-            let _ = write!(self.out, "{:.2} {:.2} {:.2} {:.2} re\n", x_pt, y_pt, w_pt, h_pt);
+            let _ = write!(
+                self.out,
+                "{:.2} {:.2} {:.2} {:.2} re\n",
+                x_pt, y_pt, w_pt, h_pt
+            );
         } else {
             let k = 0.55228475;
             let rk = r * k;
@@ -776,10 +794,9 @@ fn render_element(el: &Element, b: &mut PageBuilder) {
                 .strip_prefix("data:image/jpeg;base64,")
                 .or_else(|| i.src.strip_prefix("data:image/jpg;base64,"));
             if let Some(base64_data) = base64_data {
-                if let Ok(bytes) = base64::Engine::decode(
-                    &base64::engine::general_purpose::STANDARD,
-                    base64_data,
-                ) {
+                if let Ok(bytes) =
+                    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, base64_data)
+                {
                     if let Some((w_px, h_px)) = jpeg_dimensions(&bytes) {
                         let img_id = b.images.len() + 1;
                         b.images.push(PdfImage {

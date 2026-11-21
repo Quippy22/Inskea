@@ -110,10 +110,9 @@ impl ChartImport {
                 let title_hint = file_stem_title(&name);
                 match read_file_text(&file).await {
                     Ok(text) => entries.push((text, title_hint)),
-                    Err(_) => notify::error(
-                        this.doc.notifications,
-                        format!("Could not read {name}."),
-                    ),
+                    Err(_) => {
+                        notify::error(this.doc.notifications, format!("Could not read {name}."))
+                    }
                 }
             }
             this.place_tabular_batch(entries, at);
@@ -243,10 +242,7 @@ impl ChartImport {
         self.doc.selected_ids.set(ids);
         self.canvas_mode.set(CanvasMode::Select);
         self.doc.show_welcome.set(false);
-        notify::info(
-            self.doc.notifications,
-            format!("Imported {count} charts."),
-        );
+        notify::info(self.doc.notifications, format!("Imported {count} charts."));
     }
 
     fn view_centre(&self) -> Point {
@@ -311,7 +307,10 @@ pub fn is_tabular_file(file: &web_sys::File) -> bool {
 }
 
 fn file_stem_title(path_or_name: &str) -> Option<String> {
-    let file_name = path_or_name.rsplit(['/', '\\']).next().unwrap_or(path_or_name);
+    let file_name = path_or_name
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(path_or_name);
     let stem = match file_name.rfind('.') {
         Some(idx) if idx > 0 => &file_name[..idx],
         _ => file_name,

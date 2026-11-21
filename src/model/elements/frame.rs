@@ -207,8 +207,7 @@ impl Frame {
         let prev_orientation = self.orientation;
         self.preset = preset;
         self.orientation = orientation;
-        let can_pivot_center =
-            self.data.id != 0 && self.data.width > 0.0 && self.data.height > 0.0;
+        let can_pivot_center = self.data.id != 0 && self.data.width > 0.0 && self.data.height > 0.0;
         if let Some((w, h)) = preset.size_px(orientation) {
             if can_pivot_center {
                 let cx = self.data.world_point.x + self.data.width / 2.0;
@@ -515,7 +514,10 @@ mod tests {
             FramePreset::B4.size_px(FrameOrientation::Portrait),
             Some((945.0, 1334.0))
         );
-        assert_eq!(FramePreset::Freehand.size_px(FrameOrientation::Portrait), None);
+        assert_eq!(
+            FramePreset::Freehand.size_px(FrameOrientation::Portrait),
+            None
+        );
     }
 
     #[test]

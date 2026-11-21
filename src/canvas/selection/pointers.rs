@@ -9,7 +9,7 @@ use crate::canvas::state::{CanvasInputs, CanvasState, DragOperation};
 use crate::model::elements::connector::{self, ConnectionEnd, RouteHandle, SNAP_SCREEN_PX};
 use crate::model::elements::path::segment_midpoint;
 use crate::model::elements::{
-    Bounds, Connector, ConnectorVariant, CurveMode, Offset, PathPoints, Resize, Rotate,
+    Bounds, Connector, ConnectorVariant, CurveMode, HitTest, Offset, PathPoints, Resize, Rotate,
 };
 use crate::model::interaction::{
     guide_bounds, guide_frame, guide_union_bounds, guide_union_frame, hit_test_topmost,
@@ -23,9 +23,9 @@ use crate::model::{Element, ElementId, Point, Rect, Scene};
 use crate::util::snap_value;
 use leptos::{ev, SignalGet, SignalSet, SignalUpdate, *};
 
-/// Enter text-edit mode on double-click of a Text element.
+/// Enter text-edit mode on double-click of a Text element or embedded text on a shape.
 #[inline]
-fn handle_text_double_click(
+pub(crate) fn handle_text_double_click(
     detail: u32,
     world: Point,
     st: &mut CanvasState,
@@ -34,15 +34,81 @@ fn handle_text_double_click(
     if detail < 2 {
         return false;
     }
+
+    // If an element is already selected (e.g. from the first click), check if double-click hits it.
+    let selected_ids = st.selected_ids.get_untracked();
+    if selected_ids.len() == 1 {
+        let single_id = selected_ids[0];
+        let single_el = props.scene.with(|s| s.element_by_id(single_id));
+        if let Some(element) = single_el {
+            if element.hit_test(world, CLICK_MARGIN) {
+                match &element {
+                    Element::Text(text_elem) => {
+                        st.text_edit.editing_embedded.set(false);
+                        st.text_edit.editing_new.set(false);
+                        st.text_edit
+                            .edit_text
+                            .set(text_elem.wrapped.raw.to_string());
+                        st.text_edit.editing_id.set(Some(single_id));
+                        return true;
+                    }
+                    Element::Chart(_) => {
+                        if let Some(label) = element.data().embedded_text.as_ref() {
+                            if let Some(layout) =
+                                crate::model::elements::embedded_text::layout_for_element(&element)
+                            {
+                                let local = Point::unrotate(
+                                    world,
+                                    layout.center.x,
+                                    layout.center.y,
+                                    layout.rotation,
+                                );
+                                if (local.x - layout.center.x).abs()
+                                    <= layout.width / 2.0 + CLICK_MARGIN
+                                    && (local.y - layout.center.y).abs()
+                                        <= layout.height / 2.0 + CLICK_MARGIN
+                                {
+                                    st.text_edit.editing_embedded.set(true);
+                                    st.text_edit.editing_new.set(false);
+                                    st.text_edit.edit_text.set(label.wrapped.raw.to_string());
+                                    st.text_edit.editing_id.set(Some(single_id));
+                                    return true;
+                                }
+                            }
+                        }
+                        st.selected_ids.set(vec![single_id]);
+                        st.chart_editing_id.set(Some(single_id));
+                        return true;
+                    }
+                    element if element.supports_embedded_text() => {
+                        let text = element
+                            .data()
+                            .embedded_text
+                            .as_ref()
+                            .map(|l| l.wrapped.raw.to_string())
+                            .unwrap_or_default();
+                        let already_has = element.data().embedded_text.is_some();
+                        st.text_edit.editing_embedded.set(true);
+                        st.text_edit.editing_new.set(!already_has);
+                        st.text_edit.edit_text.set(text);
+                        st.text_edit.editing_id.set(Some(single_id));
+                        return true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
     let nearby = props.scene.with(|scene| {
         scene.elements_in_view(Rect::new(
-            world.x - HIT_MARGIN,
-            world.y - HIT_MARGIN,
-            HIT_MARGIN * 2.0,
-            HIT_MARGIN * 2.0,
+            world.x - CLICK_MARGIN,
+            world.y - CLICK_MARGIN,
+            CLICK_MARGIN * 2.0,
+            CLICK_MARGIN * 2.0,
         ))
     });
-    let id = match hit_test_topmost(world, &nearby, HIT_MARGIN) {
+    let id = match hit_test_topmost(world, &nearby, CLICK_MARGIN) {
         Some(id) => id,
         None => return false,
     };
@@ -51,12 +117,13 @@ fn handle_text_double_click(
     };
     match element {
         Element::Text(text_elem) => {
-            st.text_edit.editing_id.set(Some(id));
             st.text_edit.editing_embedded.set(false);
             st.text_edit.editing_new.set(false);
             st.text_edit
                 .edit_text
                 .set(text_elem.wrapped.raw.to_string());
+            st.text_edit.editing_id.set(Some(id));
+            st.selected_ids.set(vec![id]);
             true
         }
         Element::Chart(_) => {
@@ -66,13 +133,14 @@ fn handle_text_double_click(
                 {
                     let local =
                         Point::unrotate(world, layout.center.x, layout.center.y, layout.rotation);
-                    if (local.x - layout.center.x).abs() <= layout.width / 2.0 + HIT_MARGIN
-                        && (local.y - layout.center.y).abs() <= layout.height / 2.0 + HIT_MARGIN
+                    if (local.x - layout.center.x).abs() <= layout.width / 2.0 + CLICK_MARGIN
+                        && (local.y - layout.center.y).abs() <= layout.height / 2.0 + CLICK_MARGIN
                     {
                         st.text_edit.editing_embedded.set(true);
                         st.text_edit.editing_new.set(false);
                         st.text_edit.edit_text.set(label.wrapped.raw.to_string());
                         st.text_edit.editing_id.set(Some(id));
+                        st.selected_ids.set(vec![id]);
                         return true;
                     }
                 }
@@ -90,8 +158,8 @@ fn handle_text_double_click(
                 return false;
             };
             let local = Point::unrotate(world, layout.center.x, layout.center.y, layout.rotation);
-            if (local.x - layout.center.x).abs() > layout.width / 2.0 + HIT_MARGIN
-                || (local.y - layout.center.y).abs() > layout.height / 2.0 + HIT_MARGIN
+            if (local.x - layout.center.x).abs() > layout.width / 2.0 + CLICK_MARGIN
+                || (local.y - layout.center.y).abs() > layout.height / 2.0 + CLICK_MARGIN
             {
                 return false;
             }
@@ -99,6 +167,7 @@ fn handle_text_double_click(
             st.text_edit.editing_new.set(false);
             st.text_edit.edit_text.set(label.wrapped.raw.to_string());
             st.text_edit.editing_id.set(Some(id));
+            st.selected_ids.set(vec![id]);
             true
         }
         _ => false,
@@ -624,8 +693,7 @@ fn detect_hovered_handle(
                     if let Element::Chart(chart) = el {
                         let chart_r = (HANDLE_RESIZE_RADIUS_PX + 2.0) * wpx;
                         for (idx, p) in chart.value_handles() {
-                            if ((local.x - p.x).powi(2) + (local.y - p.y).powi(2)).sqrt()
-                                <= chart_r
+                            if ((local.x - p.x).powi(2) + (local.y - p.y).powi(2)).sqrt() <= chart_r
                             {
                                 return Some(DragOperation::ChartValue(idx));
                             }
@@ -978,17 +1046,15 @@ fn do_chart_value_drag(
     let Some(&id) = st.selected_ids.get().first() else {
         return;
     };
-    let Some((base_max, base_item_value)) =
-        st.drag.drag_originals.with(|originals| {
-            originals.iter().find_map(|el| match el {
-                Element::Chart(chart) if chart.data.id == id => {
-                    let val = chart.items.get(idx).map(|item| item.value).unwrap_or(0.0);
-                    Some((chart.scale_max(), val))
-                }
-                _ => None,
-            })
+    let Some((base_max, base_item_value)) = st.drag.drag_originals.with(|originals| {
+        originals.iter().find_map(|el| match el {
+            Element::Chart(chart) if chart.data.id == id => {
+                let val = chart.items.get(idx).map(|item| item.value).unwrap_or(0.0);
+                Some((chart.scale_max(), val))
+            }
+            _ => None,
         })
-    else {
+    }) else {
         return;
     };
     props.scene.update(|s| {
@@ -1032,8 +1098,11 @@ fn do_move(world: Point, anchor: Point, st: &mut CanvasState, props: &mut Canvas
     };
     let raw_dx = world.x - anchor.x;
     let raw_dy = world.y - anchor.y;
-    let smart_enabled =
-        st.shift_pressed.get_untracked() && matches!(st.drag.drag_action.get_untracked(), Some(DragOperation::Move));
+    let smart_enabled = st.shift_pressed.get_untracked()
+        && matches!(
+            st.drag.drag_action.get_untracked(),
+            Some(DragOperation::Move)
+        );
     let (snap_dx, snap_dy, next_guides) = if smart_enabled {
         let viewport = props.viewport.get_untracked();
         let visible = viewport.visible_rect(st.screen_size.get_untracked());
@@ -1521,5 +1590,71 @@ mod tests {
             panic!("expected line");
         };
         assert_eq!(line.points[0], Point::new(10.0, 10.0));
+    }
+
+    #[test]
+    fn double_click_text_enters_text_edit_mode() {
+        let runtime = leptos::create_runtime();
+        let mut st = CanvasState::new();
+        let scene_sig = create_rw_signal(Scene::new());
+        let mut text = crate::model::Text {
+            data: crate::model::ElementData::new(1),
+            wrapped: crate::model::elements::text::WrappedText::new("Sample text"),
+            align: crate::model::TextAlign::Left,
+        };
+        text.data.world_point = Point::new(100.0, 100.0);
+        text.recalc();
+        scene_sig.update(|s| s.add_element(Element::Text(text)));
+
+        let props = CanvasInputs {
+            selected_ids: create_rw_signal(Vec::new()),
+            cursor_screen: create_rw_signal((0.0, 0.0)),
+            cursor_world: create_rw_signal(Point::new(0.0, 0.0)),
+            viewport: create_rw_signal(crate::canvas::Viewport::default()),
+            selected_tool: create_rw_signal(crate::ui::dock::Tool::Rectangle),
+            selected_color: create_rw_signal(crate::model::Color::new(crate::model::Color::WHITE)),
+            canvas_mode: create_rw_signal(crate::canvas::CanvasMode::Select),
+            scene: scene_sig,
+            eraser_active: create_rw_signal(false),
+            settings: create_rw_signal(crate::canvas::settings::CanvasSettings::default()),
+            hide_center: create_rw_signal(false),
+            push_snapshot: std::rc::Rc::new(|| ()),
+            discard_snapshot: std::rc::Rc::new(|| ()),
+            export_crop_active: create_rw_signal(false),
+            on_crop_export: create_rw_signal(None),
+            default_style: create_rw_signal(crate::model::ElementStyle::default()),
+            default_line_style: create_rw_signal(crate::model::LineStyle::default()),
+            default_connector_variant: create_rw_signal(ConnectorVariant::Direct),
+            default_chart_style: create_rw_signal(crate::model::ChartStyle::default()),
+            default_frame_style: create_rw_signal(crate::model::FrameStyle::default()),
+            chart_editing_id: create_rw_signal(None),
+            theme_open: create_rw_signal(false),
+            modal_open: Signal::derive(|| false),
+            on_context_menu: std::rc::Rc::new(|_, _| ()),
+            pending_placement: create_rw_signal(None),
+        };
+
+        // First click (detail = 1) does not enter edit mode:
+        assert!(!handle_text_double_click(
+            1,
+            Point::new(110.0, 105.0),
+            &mut st,
+            &props
+        ));
+        assert_eq!(st.text_edit.editing_id.get(), None);
+
+        // Double click (detail = 2) enters edit mode:
+        assert!(handle_text_double_click(
+            2,
+            Point::new(110.0, 105.0),
+            &mut st,
+            &props
+        ));
+        assert_eq!(st.text_edit.editing_id.get(), Some(1));
+        assert_eq!(st.text_edit.editing_embedded.get(), false);
+        assert_eq!(st.text_edit.editing_new.get(), false);
+        assert_eq!(st.text_edit.edit_text.get(), "Sample text");
+
+        runtime.dispose();
     }
 }

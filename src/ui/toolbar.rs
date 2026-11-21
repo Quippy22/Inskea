@@ -30,7 +30,7 @@ pub fn ToolBar<F1, F2>(
     request_action: RequestAction,
     viewport: RwSignal<Viewport>,
     canvas_mode: RwSignal<CanvasMode>,
-    selected_tool: RwSignal< crate::ui::dock::Tool>,
+    selected_tool: RwSignal<crate::ui::dock::Tool>,
     eraser_active: RwSignal<bool>,
     on_undo: F1,
     on_redo: F2,
@@ -200,8 +200,7 @@ where
                     return;
                 }
             };
-            let stem =
-                export::document_stem(doc.saved_path.get_untracked().as_deref(), "untitled");
+            let stem = export::document_stem(doc.saved_path.get_untracked().as_deref(), "untitled");
             let default_name = format!("{stem}.skea");
             if tauri {
                 spawn_local(async move {
@@ -251,8 +250,7 @@ where
             _close_menu();
             let notifications = _doc.notifications;
             let bg = settings.get_untracked().theme;
-            let stem =
-                export::document_stem(_doc.saved_path.get_untracked().as_deref(), "canvas");
+            let stem = export::document_stem(_doc.saved_path.get_untracked().as_deref(), "canvas");
 
             if matches!(scope, ExportScope::Crop) {
                 let scene = _doc.scene;
@@ -397,7 +395,9 @@ where
                 let target_id = selected
                     .iter()
                     .copied()
-                    .find(|&id| matches!(s.element_by_id(id), Some(crate::model::Element::Frame(_))))
+                    .find(|&id| {
+                        matches!(s.element_by_id(id), Some(crate::model::Element::Frame(_)))
+                    })
                     .or_else(|| s.frames_ordered().first().map(|f| f.data.id));
                 match target_id {
                     Some(fid) => {
@@ -437,7 +437,9 @@ where
                 let target_id = selected
                     .iter()
                     .copied()
-                    .find(|&id| matches!(s.element_by_id(id), Some(crate::model::Element::Frame(_))))
+                    .find(|&id| {
+                        matches!(s.element_by_id(id), Some(crate::model::Element::Frame(_)))
+                    })
                     .or_else(|| s.frames_ordered().first().map(|f| f.data.id));
                 match target_id {
                     Some(fid) => {
@@ -460,8 +462,7 @@ where
         let _on_crop_export = on_crop_export;
         move |scope: ExportScope| {
             close_menu();
-            let stem =
-                export::document_stem(doc.saved_path.get_untracked().as_deref(), "canvas");
+            let stem = export::document_stem(doc.saved_path.get_untracked().as_deref(), "canvas");
             let bg = settings.get_untracked().theme;
             let notifications = doc.notifications;
 

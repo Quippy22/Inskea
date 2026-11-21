@@ -1374,8 +1374,11 @@ impl Scene {
     /// Move `frame_id` to `new_index` (0-based) in the document's ordered frame list,
     /// renumbering `frame_order` (`1..=N`) across all frames.
     pub fn reorder_frame(&mut self, frame_id: ElementId, new_index: usize) {
-        let mut ordered_ids: Vec<ElementId> =
-            self.frames_ordered().into_iter().map(|f| f.data.id).collect();
+        let mut ordered_ids: Vec<ElementId> = self
+            .frames_ordered()
+            .into_iter()
+            .map(|f| f.data.id)
+            .collect();
         let Some(cur_index) = ordered_ids.iter().position(|&id| id == frame_id) else {
             return;
         };
@@ -1388,9 +1391,10 @@ impl Scene {
         for (idx, fid) in ordered_ids.into_iter().enumerate() {
             let desired_order = (idx as u32) + 1;
             let needs_update = self
-                .with_element(fid, |el, _| {
-                    matches!(el, Element::Frame(f) if f.frame_order != desired_order)
-                })
+                .with_element(
+                    fid,
+                    |el, _| matches!(el, Element::Frame(f) if f.frame_order != desired_order),
+                )
                 .unwrap_or(false);
             if needs_update {
                 if let Some(mut el) = self.element_by_id_mut(fid) {
@@ -2609,7 +2613,11 @@ mod tests {
 
         let ordered = s.elements();
         assert_eq!(ordered.len(), 3);
-        assert_eq!(ordered[0].id(), 3, "Frame should be at the farthest back layer");
+        assert_eq!(
+            ordered[0].id(),
+            3,
+            "Frame should be at the farthest back layer"
+        );
         assert_eq!(ordered[1].id(), 1);
         assert_eq!(ordered[2].id(), 2);
     }

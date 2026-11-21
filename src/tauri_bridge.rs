@@ -82,7 +82,9 @@ pub async fn pick_open_path(default_dir: Option<&str>) -> Option<String> {
 pub async fn pick_image_path(default_dir: Option<&str>) -> Option<String> {
     pick_open_path_with_filter(
         "Image",
-        &["png", "jpg", "jpeg", "jfif", "gif", "webp", "svg", "bmp", "avif"],
+        &[
+            "png", "jpg", "jpeg", "jfif", "gif", "webp", "svg", "bmp", "avif",
+        ],
         default_dir,
     )
     .await
@@ -90,8 +92,12 @@ pub async fn pick_image_path(default_dir: Option<&str>) -> Option<String> {
 
 /// Open a native open-file dialog for tabular chart data (CSV/TSV/TXT), or `None` if cancelled.
 pub async fn pick_csv_path(default_dir: Option<&str>) -> Option<String> {
-    pick_open_path_with_filter("Tabular Data (CSV / TSV)", &["csv", "tsv", "txt"], default_dir)
-        .await
+    pick_open_path_with_filter(
+        "Tabular Data (CSV / TSV)",
+        &["csv", "tsv", "txt"],
+        default_dir,
+    )
+    .await
 }
 
 async fn pick_open_path_with_filter(

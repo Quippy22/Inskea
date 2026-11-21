@@ -1,10 +1,12 @@
 use super::state::{CanvasInputs, CanvasState, DrawingState};
+use super::CanvasMode;
 use super::MIN_DRAG_DIST;
 use crate::model::elements::connector::SNAP_SCREEN_PX;
 use crate::model::elements::text::WrappedText;
+use crate::model::interaction::{hit_test_topmost, CLICK_MARGIN};
 use crate::model::{
     Chart, Color, ConnectionEnd, Connector, ConnectorVariant, Element, ElementData, Ellipse, Frame,
-    FramePreset, Freehand, FromDrag, Line, Point, Rectangle, Text, TextAlign, UpdateDrag,
+    FramePreset, Freehand, FromDrag, Line, Point, Rect, Rectangle, Text, TextAlign, UpdateDrag,
 };
 use crate::ui::dock::Tool;
 use leptos::{
@@ -180,6 +182,27 @@ pub fn draw_pointer_down(world: Point, st: &mut CanvasState, props: &mut CanvasI
     let color = props.selected_color.get();
 
     if tool == Tool::Text {
+        let nearby = props.scene.with(|scene| {
+            scene.elements_in_view(Rect::new(
+                world.x - CLICK_MARGIN,
+                world.y - CLICK_MARGIN,
+                CLICK_MARGIN * 2.0,
+                CLICK_MARGIN * 2.0,
+            ))
+        });
+        if let Some(id) = hit_test_topmost(world, &nearby, CLICK_MARGIN) {
+            if let Some(Element::Text(text_elem)) = nearby.iter().find(|e| e.id() == id) {
+                let text = text_elem.wrapped.raw.to_string();
+                st.text_edit.editing_embedded.set(false);
+                st.text_edit.editing_new.set(false);
+                st.text_edit.edit_text.set(text);
+                st.text_edit.editing_id.set(Some(id));
+                st.selected_ids.set(vec![id]);
+                props.canvas_mode.set(CanvasMode::Select);
+                return;
+            }
+        }
+
         (props.push_snapshot)();
         let mut data = ElementData::new(0);
         data.world_point = world;
@@ -194,10 +217,10 @@ pub fn draw_pointer_down(world: Point, st: &mut CanvasState, props: &mut CanvasI
                 align: TextAlign::Left,
             }));
         });
-        st.text_edit.editing_id.set(Some(id));
         st.text_edit.editing_embedded.set(false);
         st.text_edit.editing_new.set(true);
         st.text_edit.edit_text.set(String::new());
+        st.text_edit.editing_id.set(Some(id));
         return;
     }
 

@@ -125,7 +125,10 @@ pub fn register_hotkeys(ctx: HotkeysContext) {
         // Any plain mode or tool shortcut leaves the dock's eraser toggle.
         if !ctrl
             && !shift
-            && matches!(key, "s" | "a" | "d" | "e" | "1" | "2" | "3" | "4" | "5" | "f")
+            && matches!(
+                key,
+                "s" | "a" | "d" | "e" | "1" | "2" | "3" | "4" | "5" | "f"
+            )
         {
             ctx.eraser_active.set(false);
         }

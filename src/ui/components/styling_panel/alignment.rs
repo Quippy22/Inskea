@@ -104,7 +104,12 @@ pub fn alignment_section(
         }
     };
     let distribute_vertical = move || {
-        if edit_ops::distribute_selection(scene, selected_ids, Distribution::Vertical, &push_snapshot) {
+        if edit_ops::distribute_selection(
+            scene,
+            selected_ids,
+            Distribution::Vertical,
+            &push_snapshot,
+        ) {
             crate::ui::notify::info(notifications, "Distributed vertically");
         }
     };

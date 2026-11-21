@@ -26,11 +26,7 @@ pub fn notify(notifications: Notifications, kind: NoticeKind, message: impl Into
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
     notifications.update(|list| {
         list.retain(|notice| notice.message != message);
-        list.push(Notice {
-            id,
-            kind,
-            message,
-        });
+        list.push(Notice { id, kind, message });
         if list.len() > 4 {
             list.remove(0);
         }

@@ -612,7 +612,11 @@ impl Connector {
     }
 
     /// Arrowhead polylines given an already evaluated route polyline.
-    pub fn arrowheads_for_route(&self, route: &[Point], sw: f64) -> (Option<String>, Option<String>) {
+    pub fn arrowheads_for_route(
+        &self,
+        route: &[Point],
+        sw: f64,
+    ) -> (Option<String>, Option<String>) {
         let start = self
             .line_style
             .has_start_arrowhead

@@ -12,4 +12,3 @@ pub use logo_animation::{LogoAnimation, OpeningScreen};
 pub use number_slider::NumberSlider;
 pub use segmented::SegmentedControl;
 pub use styling_panel::{StylingPanel, StylingPanelContext};
-

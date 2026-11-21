@@ -262,15 +262,19 @@ pub fn import_drawing_from_str(
         return;
     }
     let count = elements.len();
-    let bounds = elements.iter().fold(None::<crate::model::Rect>, |acc, el| match acc {
-        Some(r) => Some(r.union(&el.bounds())),
-        None => Some(el.bounds()),
-    });
+    let bounds = elements
+        .iter()
+        .fold(None::<crate::model::Rect>, |acc, el| match acc {
+            Some(r) => Some(r.union(&el.bounds())),
+            None => Some(el.bounds()),
+        });
     let Some(bounds) = bounds else {
         return;
     };
     let target = at.unwrap_or_else(|| {
-        let visible = viewport.get_untracked().visible_rect(crate::util::window_size());
+        let visible = viewport
+            .get_untracked()
+            .visible_rect(crate::util::window_size());
         Point::new(visible.x + visible.w / 2.0, visible.y + visible.h / 2.0)
     });
     let center = bounds.center();

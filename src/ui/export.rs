@@ -451,14 +451,7 @@ fn el_svg(el: &Element) -> String {
                 let _ = write!(
                     inner,
                     r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}" stroke-dasharray="{}" opacity="{}"/>"#,
-                    l.x1,
-                    l.y1,
-                    l.x2,
-                    l.y2,
-                    l.stroke,
-                    l.stroke_width,
-                    l.stroke_dasharray,
-                    l.opacity,
+                    l.x1, l.y1, l.x2, l.y2, l.stroke, l.stroke_width, l.stroke_dasharray, l.opacity,
                 );
             }
             for r in sg.rects {
@@ -496,12 +489,7 @@ fn el_svg(el: &Element) -> String {
                 let _ = write!(
                     inner,
                     r#"<circle cx="{}" cy="{}" r="{}" fill="{}" stroke="{}" stroke-width="{}"/>"#,
-                    ci.cx,
-                    ci.cy,
-                    ci.r,
-                    ci.fill,
-                    ci.stroke,
-                    ci.stroke_width,
+                    ci.cx, ci.cy, ci.r, ci.fill, ci.stroke, ci.stroke_width,
                 );
             }
             for t in sg.texts {
@@ -749,7 +737,6 @@ async fn svg_to_png_blob(svg: &str) -> Option<web_sys::Blob> {
     web_sys::Url::revoke_object_url(&url).ok();
     png
 }
-
 
 pub fn download_png_from_svg(svg: String, filename: String, notifications: Notifications) {
     spawn_local(async move {
@@ -1259,7 +1246,10 @@ mod tests {
     #[test]
     fn frame_filename_stem_sanitizes_titles() {
         assert_eq!(frame_filename_stem("Frame 1", 1), "frame-1");
-        assert_eq!(frame_filename_stem("  Cover Page / Intro! ", 2), "cover-page-intro");
+        assert_eq!(
+            frame_filename_stem("  Cover Page / Intro! ", 2),
+            "cover-page-intro"
+        );
         assert_eq!(frame_filename_stem("", 3), "frame-3");
     }
 
@@ -1277,4 +1267,3 @@ mod tests {
         assert_eq!(document_stem(Some(".skea"), "canvas"), "canvas");
     }
 }
-

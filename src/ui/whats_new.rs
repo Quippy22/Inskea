@@ -362,7 +362,10 @@ mod tests {
     fn embedded_updates_md_is_valid() {
         let current_version = env!("CARGO_PKG_VERSION");
         let updates = parse_updates(UPDATES_MD, current_version);
-        assert!(!updates.is_empty(), "Embedded updates.md must contain releases");
+        assert!(
+            !updates.is_empty(),
+            "Embedded updates.md must contain releases"
+        );
         assert!(
             updates.iter().any(|u| u.is_current),
             "Embedded updates.md must contain an entry for current version {current_version}"

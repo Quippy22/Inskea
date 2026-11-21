@@ -176,13 +176,11 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
     });
     let has_single_selected_chart = Signal::derive(move || {
         let ids = selected_ids.get();
-        ids.len() == 1
-            && scene.with(|s| matches!(s.element_by_id(ids[0]), Some(Element::Chart(_))))
+        ids.len() == 1 && scene.with(|s| matches!(s.element_by_id(ids[0]), Some(Element::Chart(_))))
     });
     let has_single_selected_frame = Signal::derive(move || {
         let ids = selected_ids.get();
-        ids.len() == 1
-            && scene.with(|s| matches!(s.element_by_id(ids[0]), Some(Element::Frame(_))))
+        ids.len() == 1 && scene.with(|s| matches!(s.element_by_id(ids[0]), Some(Element::Frame(_))))
     });
 
     let (init_style, init_line_style) = scene.with_untracked(|scene| {
@@ -295,16 +293,10 @@ pub fn StylingPanel(context: StylingPanelContext) -> impl IntoView {
                         &ids,
                         default_connector_variant.get_untracked(),
                     );
-                    let chart_style = selected_chart_style(
-                        scene,
-                        &ids,
-                        default_chart_style.get_untracked(),
-                    );
-                    let frame_style = selected_frame_style(
-                        scene,
-                        &ids,
-                        default_frame_style.get_untracked(),
-                    );
+                    let chart_style =
+                        selected_chart_style(scene, &ids, default_chart_style.get_untracked());
+                    let frame_style =
+                        selected_frame_style(scene, &ids, default_frame_style.get_untracked());
                     (
                         style,
                         line_style,

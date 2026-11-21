@@ -43,4 +43,3 @@ pub use toolbar::ToolBar;
 pub use unsaved_dialog::UnsavedChangesDialog;
 pub use welcome::WelcomeOverlay;
 pub use whats_new::WhatsNewModal;
-

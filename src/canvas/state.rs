@@ -169,6 +169,8 @@ pub struct CanvasState {
     pub active_touches: RwSignal<Vec<(i32, Point)>>,
     pub touch_pinching: RwSignal<bool>,
     pub last_touch_pinch: RwSignal<Option<(f64, Point)>>,
+    /// Timestamp (ms) and world position of the previous pointer-down, used for software double-click detection.
+    pub last_pointer_down: RwSignal<Option<(f64, Point)>>,
     /// True while an added collection snippet is floating on the cursor, waiting for click-to-place.
     pub is_placing: RwSignal<bool>,
 }
@@ -194,6 +196,7 @@ impl CanvasState {
             active_touches: create_rw_signal(Vec::new()),
             touch_pinching: create_rw_signal(false),
             last_touch_pinch: create_rw_signal(None),
+            last_pointer_down: create_rw_signal(None),
             is_placing: create_rw_signal(false),
         }
     }

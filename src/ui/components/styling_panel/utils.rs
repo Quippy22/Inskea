@@ -48,11 +48,7 @@ pub fn selected_connector_variant(
 }
 
 /// Chart style of the first selected chart, or the draw-mode default.
-pub fn selected_chart_style(
-    scene: &Scene,
-    ids: &[ElementId],
-    default: ChartStyle,
-) -> ChartStyle {
+pub fn selected_chart_style(scene: &Scene, ids: &[ElementId], default: ChartStyle) -> ChartStyle {
     if let Some(id) = ids.first() {
         if let Some(Element::Chart(chart)) = scene.element_by_id(*id) {
             return chart.chart_style();
@@ -62,11 +58,7 @@ pub fn selected_chart_style(
 }
 
 /// Frame style (preset, orientation, opacity) of the first selected frame, or the draw-mode default.
-pub fn selected_frame_style(
-    scene: &Scene,
-    ids: &[ElementId],
-    default: FrameStyle,
-) -> FrameStyle {
+pub fn selected_frame_style(scene: &Scene, ids: &[ElementId], default: FrameStyle) -> FrameStyle {
     if let Some(id) = ids.first() {
         if let Some(Element::Frame(frame)) = scene.element_by_id(*id) {
             return FrameStyle {

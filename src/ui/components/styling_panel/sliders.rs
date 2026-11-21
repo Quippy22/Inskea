@@ -62,4 +62,3 @@ pub fn sliders_section(
         </div>
     }
 }
-

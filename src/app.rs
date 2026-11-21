@@ -571,7 +571,8 @@ pub fn App() -> impl IntoView {
                             );
                         }
                     }
-                }) as Box<dyn FnMut()>);
+                })
+                    as Box<dyn FnMut()>);
                 reader.set_onload(Some(on_load.as_ref().unchecked_ref()));
                 on_load.forget();
                 let _ = reader.read_as_text(&f);
@@ -658,7 +659,8 @@ pub fn App() -> impl IntoView {
                 let trimmed = text.trim();
                 if !trimmed.is_empty() {
                     // 2a. Check if it's serialized Inskea elements
-                    if let Ok(payload) = serde_json::from_str::<edit_ops::ClipboardPayload>(trimmed) {
+                    if let Ok(payload) = serde_json::from_str::<edit_ops::ClipboardPayload>(trimmed)
+                    {
                         if payload.inskea_clipboard && !payload.elements.is_empty() {
                             event.prevent_default();
                             edit_ops::paste_elements(
@@ -684,11 +686,15 @@ pub fn App() -> impl IntoView {
 
                     // 2c. Paste as a text element!
                     event.prevent_default();
-                    let new_id = edit_ops::mutate_scene(
-                        doc_paste.scene,
-                        &push_snapshot_paste,
-                        |s| edit_ops::paste_text_to_scene(s, &text, target_point, default_style_paste.get_untracked()),
-                    );
+                    let new_id =
+                        edit_ops::mutate_scene(doc_paste.scene, &push_snapshot_paste, |s| {
+                            edit_ops::paste_text_to_scene(
+                                s,
+                                &text,
+                                target_point,
+                                default_style_paste.get_untracked(),
+                            )
+                        });
                     if let Some(id) = new_id {
                         doc_paste.selected_ids.set(vec![id]);
                         canvas_mode_paste.set(CanvasMode::Select);
