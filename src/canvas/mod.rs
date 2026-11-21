@@ -403,6 +403,8 @@ pub fn Canvas(
         props.scene,
         props.push_snapshot.clone(),
         props.discard_snapshot.clone(),
+        props.canvas_mode,
+        props.settings,
     );
     on_text_commit.set(Some(commit_edit.clone()));
 

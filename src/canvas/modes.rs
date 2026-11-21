@@ -54,6 +54,8 @@ pub(crate) fn finish_freehand(
     if is_click {
         props.scene.update(|s| s.remove_by_id(id));
         (props.discard_snapshot)();
+    } else if props.settings.get_untracked().auto_return_to_pan {
+        props.canvas_mode.set(CanvasMode::Pan);
     }
 }
 
@@ -320,6 +322,9 @@ pub fn draw_pointer_up(
             s.add_element(el);
         });
         st.drawing.set(None);
+        if props.settings.get_untracked().auto_return_to_pan {
+            props.canvas_mode.set(CanvasMode::Pan);
+        }
     }
 }
 
@@ -370,5 +375,129 @@ mod tests {
         assert_eq!(connector.start_binding, None);
         assert_eq!(connector.end_binding, Some(ConnectionEnd::new(7, 4)));
         assert_eq!(connector.points[1], Point::new(100.0, 0.0));
+    }
+
+    #[test]
+    fn finish_freehand_returns_to_pan_when_enabled() {
+        use crate::model::Scene;
+        use leptos::{create_runtime, create_rw_signal, Signal};
+        let runtime = create_runtime();
+
+        let mut st = CanvasState::new();
+        let mut settings = crate::canvas::settings::CanvasSettings::default();
+        settings.auto_return_to_pan = true;
+
+        let scene_sig = create_rw_signal(Scene::new());
+        let mode_sig = create_rw_signal(CanvasMode::Draw);
+
+        let mut props = CanvasInputs {
+            selected_ids: create_rw_signal(Vec::new()),
+            cursor_screen: create_rw_signal((0.0, 0.0)),
+            cursor_world: create_rw_signal(Point::new(0.0, 0.0)),
+            viewport: create_rw_signal(crate::canvas::Viewport::default()),
+            selected_tool: create_rw_signal(Tool::Freehand),
+            selected_color: create_rw_signal(Color::new(Color::WHITE)),
+            canvas_mode: mode_sig,
+            scene: scene_sig,
+            eraser_active: create_rw_signal(false),
+            settings: create_rw_signal(settings),
+            hide_center: create_rw_signal(false),
+            push_snapshot: std::rc::Rc::new(|| ()),
+            discard_snapshot: std::rc::Rc::new(|| ()),
+            export_crop_active: create_rw_signal(false),
+            on_crop_export: create_rw_signal(None),
+            default_style: create_rw_signal(crate::model::ElementStyle::default()),
+            default_line_style: create_rw_signal(crate::model::LineStyle::default()),
+            default_connector_variant: create_rw_signal(ConnectorVariant::Direct),
+            default_chart_style: create_rw_signal(crate::model::ChartStyle::default()),
+            default_frame_style: create_rw_signal(crate::model::FrameStyle::default()),
+            chart_editing_id: create_rw_signal(None),
+            theme_open: create_rw_signal(false),
+            modal_open: Signal::derive(|| false),
+            on_context_menu: std::rc::Rc::new(|_, _| ()),
+            pending_placement: create_rw_signal(None),
+        };
+
+        let data = ElementData::new(1);
+        let fh = Freehand {
+            data,
+            points: vec![Point::new(0.0, 0.0), Point::new(10.0, 10.0)],
+        };
+        scene_sig.update(|s| s.add_element(Element::Freehand(fh)));
+
+        st.drawing.set(Some(DrawingState {
+            anchor: (0.0, 0.0),
+            tool: Tool::Freehand,
+            color: Color::new(Color::WHITE),
+            element_id: Some(1),
+            start_binding: None,
+        }));
+
+        finish_freehand(&mut st, &mut props, Some(Point::new(10.0, 10.0)));
+        assert_eq!(mode_sig.get(), CanvasMode::Pan);
+
+        runtime.dispose();
+    }
+
+    #[test]
+    fn finish_freehand_stays_in_draw_when_disabled() {
+        use crate::model::Scene;
+        use leptos::{create_runtime, create_rw_signal, Signal};
+        let runtime = create_runtime();
+
+        let mut st = CanvasState::new();
+        let mut settings = crate::canvas::settings::CanvasSettings::default();
+        settings.auto_return_to_pan = false;
+
+        let scene_sig = create_rw_signal(Scene::new());
+        let mode_sig = create_rw_signal(CanvasMode::Draw);
+
+        let mut props = CanvasInputs {
+            selected_ids: create_rw_signal(Vec::new()),
+            cursor_screen: create_rw_signal((0.0, 0.0)),
+            cursor_world: create_rw_signal(Point::new(0.0, 0.0)),
+            viewport: create_rw_signal(crate::canvas::Viewport::default()),
+            selected_tool: create_rw_signal(Tool::Freehand),
+            selected_color: create_rw_signal(Color::new(Color::WHITE)),
+            canvas_mode: mode_sig,
+            scene: scene_sig,
+            eraser_active: create_rw_signal(false),
+            settings: create_rw_signal(settings),
+            hide_center: create_rw_signal(false),
+            push_snapshot: std::rc::Rc::new(|| ()),
+            discard_snapshot: std::rc::Rc::new(|| ()),
+            export_crop_active: create_rw_signal(false),
+            on_crop_export: create_rw_signal(None),
+            default_style: create_rw_signal(crate::model::ElementStyle::default()),
+            default_line_style: create_rw_signal(crate::model::LineStyle::default()),
+            default_connector_variant: create_rw_signal(ConnectorVariant::Direct),
+            default_chart_style: create_rw_signal(crate::model::ChartStyle::default()),
+            default_frame_style: create_rw_signal(crate::model::FrameStyle::default()),
+            chart_editing_id: create_rw_signal(None),
+            theme_open: create_rw_signal(false),
+            modal_open: Signal::derive(|| false),
+            on_context_menu: std::rc::Rc::new(|_, _| ()),
+            pending_placement: create_rw_signal(None),
+        };
+
+        let data = ElementData::new(1);
+        let fh = Freehand {
+            data,
+            points: vec![Point::new(0.0, 0.0), Point::new(10.0, 10.0)],
+        };
+        scene_sig.update(|s| s.add_element(Element::Freehand(fh)));
+
+        st.drawing.set(Some(DrawingState {
+            anchor: (0.0, 0.0),
+            tool: Tool::Freehand,
+            color: Color::new(Color::WHITE),
+            element_id: Some(1),
+            start_binding: None,
+        }));
+
+        finish_freehand(&mut st, &mut props, Some(Point::new(10.0, 10.0)));
+        assert_eq!(mode_sig.get(), CanvasMode::Draw);
+
+        runtime.dispose();
     }
 }

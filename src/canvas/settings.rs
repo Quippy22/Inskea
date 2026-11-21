@@ -232,6 +232,7 @@ pub struct CanvasSettings {
     pub tools_zone: PanelZone,
     pub shapes_zone: PanelZone,
     pub toolbar_zone: PanelZone,
+    pub auto_return_to_pan: bool,
 }
 
 impl Default for CanvasSettings {
@@ -245,6 +246,7 @@ impl Default for CanvasSettings {
             tools_zone: PanelZone::Left,
             shapes_zone: PanelZone::Left,
             toolbar_zone: PanelZone::Top,
+            auto_return_to_pan: false,
         }
     }
 }

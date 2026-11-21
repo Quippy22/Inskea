@@ -1,4 +1,6 @@
 use super::viewport::Viewport;
+use crate::canvas::settings::CanvasSettings;
+use crate::canvas::CanvasMode;
 use crate::model::elements::text::{natural_line_width, FONT_FAMILY, FONT_STACK, MIN_FONT_SIZE};
 use crate::model::{Element, ElementId, EmbeddedText, Point, Scene};
 use leptos::*;
@@ -279,6 +281,8 @@ pub fn make_commit_edit(
     scene: RwSignal<Scene>,
     push_snapshot: Rc<dyn Fn()>,
     discard_snapshot: Rc<dyn Fn()>,
+    canvas_mode: RwSignal<CanvasMode>,
+    settings: RwSignal<CanvasSettings>,
 ) -> Rc<dyn Fn()> {
     Rc::new(move || {
         if let Some(id) = editing_id.get() {
@@ -357,6 +361,10 @@ pub fn make_commit_edit(
             editing_embedded.set(false);
             editing_new.set(false);
             edit_text.set(String::new());
+
+            if is_new && !text.is_empty() && settings.get_untracked().auto_return_to_pan {
+                canvas_mode.set(CanvasMode::Pan);
+            }
         }
     })
 }

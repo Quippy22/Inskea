@@ -42,6 +42,8 @@ struct PersistentSettings {
     shapes_zone: Option<PanelZone>,
     #[serde(default)]
     toolbar_zone: Option<PanelZone>,
+    #[serde(default)]
+    auto_return_to_pan: Option<bool>,
     /// Pre-theme settings stored a two-value canvas background. Read it only
     /// so old files keep their look after the upgrade.
     #[serde(default, skip_serializing)]
@@ -65,6 +67,7 @@ pub fn to_toml(
     tools_zone: PanelZone,
     shapes_zone: PanelZone,
     toolbar_zone: PanelZone,
+    auto_return_to_pan: bool,
 ) -> String {
     let s = PersistentSettings {
         center_style,
@@ -75,6 +78,7 @@ pub fn to_toml(
         tools_zone: Some(tools_zone),
         shapes_zone: Some(shapes_zone),
         toolbar_zone: Some(toolbar_zone),
+        auto_return_to_pan: Some(auto_return_to_pan),
         canvas_bg: None,
     };
     toml::to_string(&s).unwrap_or_default()
@@ -94,6 +98,7 @@ pub fn from_toml(
     PanelZone,
     PanelZone,
     PanelZone,
+    bool,
 )> {
     if content.is_empty() {
         return None;
@@ -111,6 +116,7 @@ pub fn from_toml(
     let tools_zone = s.tools_zone.unwrap_or(PanelZone::Left);
     let shapes_zone = s.shapes_zone.unwrap_or(PanelZone::Left);
     let toolbar_zone = s.toolbar_zone.unwrap_or(PanelZone::Top);
+    let auto_return_to_pan = s.auto_return_to_pan.unwrap_or(false);
     Some((
         s.center_style,
         s.grid_style,
@@ -120,6 +126,7 @@ pub fn from_toml(
         tools_zone,
         shapes_zone,
         toolbar_zone,
+        auto_return_to_pan,
     ))
 }
 
@@ -241,6 +248,7 @@ pub fn SettingsPanel(
     let grid_style = create_rw_signal(settings.get().grid_style);
     let grid_size = create_rw_signal(settings.get().grid_size.px());
     let autosave = create_rw_signal(settings.get().autosave);
+    let auto_return_to_pan = create_rw_signal(settings.get().auto_return_to_pan);
 
     create_effect(move |_| {
         let s = settings.get();
@@ -256,6 +264,9 @@ pub fn SettingsPanel(
         if autosave.get_untracked() != s.autosave {
             autosave.set(s.autosave);
         }
+        if auto_return_to_pan.get_untracked() != s.auto_return_to_pan {
+            auto_return_to_pan.set(s.auto_return_to_pan);
+        }
     });
 
     create_effect(move |_| {
@@ -269,6 +280,9 @@ pub fn SettingsPanel(
     });
     create_effect(move |_| {
         settings.update(|s| s.autosave = autosave.get());
+    });
+    create_effect(move |_| {
+        settings.update(|s| s.auto_return_to_pan = auto_return_to_pan.get());
     });
 
     let close = move || open.set(false);
@@ -402,6 +416,11 @@ pub fn SettingsPanel(
                                     <div class="flex items-center justify-between">
                                         <span class=styles::SETTINGS_LABEL>"Autosave"</span>
                                         <SegmentedControl options=toggle_opts active=autosave />
+                                    </div>
+
+                                    <div class="flex items-center justify-between mt-3">
+                                        <span class=styles::SETTINGS_LABEL>"Auto-return to Pan"</span>
+                                        <SegmentedControl options=toggle_opts active=auto_return_to_pan />
                                     </div>
 
                                     <div class="h-px bg-border/70 my-3"></div>
@@ -554,6 +573,7 @@ mod tests {
             PanelZone::Right,
             PanelZone::Bottom,
             PanelZone::Top,
+            true,
         );
         assert_eq!(
             from_toml(&content),
@@ -566,6 +586,7 @@ mod tests {
                 PanelZone::Right,
                 PanelZone::Bottom,
                 PanelZone::Top,
+                true,
             ))
         );
     }
@@ -590,6 +611,7 @@ canvas_bg = "Dark"
         assert_eq!(parsed.5, PanelZone::Left);
         assert_eq!(parsed.6, PanelZone::Left);
         assert_eq!(parsed.7, PanelZone::Top);
+        assert_eq!(parsed.8, false);
         assert_eq!(from_toml(&light).unwrap().4, Theme::Paper);
     }
 }

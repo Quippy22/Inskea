@@ -12,7 +12,7 @@ use leptos::*;
 use std::rc::Rc;
 
 /// Interaction mode of the canvas.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum CanvasMode {
     /// Select, move, resize, and edit existing elements.
     Select,

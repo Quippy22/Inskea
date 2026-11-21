@@ -941,7 +941,8 @@ pub fn App() -> impl IntoView {
         crate::fonts::ensure_fonts_installed();
         spawn_local(async move {
             if let Ok(content) = tauri_bridge::load_settings().await {
-                if let Some((cs, gs, gz, auto, theme, tz, sz, tb)) = from_toml(&content) {
+                if let Some((cs, gs, gz, auto, theme, tz, sz, tb, pan_return)) = from_toml(&content)
+                {
                     settings.set(CanvasSettings {
                         center_style: cs,
                         grid_style: gs,
@@ -951,6 +952,7 @@ pub fn App() -> impl IntoView {
                         tools_zone: tz,
                         shapes_zone: sz,
                         toolbar_zone: tb,
+                        auto_return_to_pan: pan_return,
                     });
                     tools_zone.set(tz);
                     shapes_zone.set(sz);
@@ -961,7 +963,7 @@ pub fn App() -> impl IntoView {
         });
     } else {
         if let Some(content) = crate::storage::load_settings() {
-            if let Some((cs, gs, gz, auto, theme, tz, sz, tb)) = from_toml(&content) {
+            if let Some((cs, gs, gz, auto, theme, tz, sz, tb, pan_return)) = from_toml(&content) {
                 settings.set(CanvasSettings {
                     center_style: cs,
                     grid_style: gs,
@@ -971,6 +973,7 @@ pub fn App() -> impl IntoView {
                     tools_zone: tz,
                     shapes_zone: sz,
                     toolbar_zone: tb,
+                    auto_return_to_pan: pan_return,
                 });
                 tools_zone.set(tz);
                 shapes_zone.set(sz);
@@ -1004,6 +1007,7 @@ pub fn App() -> impl IntoView {
                 s.tools_zone,
                 s.shapes_zone,
                 s.toolbar_zone,
+                s.auto_return_to_pan,
             );
             if is_tauri {
                 spawn_local(async move {
