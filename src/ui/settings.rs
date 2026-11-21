@@ -241,9 +241,6 @@ pub fn SettingsPanel(
     let grid_style = create_rw_signal(settings.get().grid_style);
     let grid_size = create_rw_signal(settings.get().grid_size.px());
     let autosave = create_rw_signal(settings.get().autosave);
-    let tools_zone = create_rw_signal(settings.get().tools_zone);
-    let shapes_zone = create_rw_signal(settings.get().shapes_zone);
-    let toolbar_zone = create_rw_signal(settings.get().toolbar_zone);
 
     create_effect(move |_| {
         let s = settings.get();
@@ -259,15 +256,6 @@ pub fn SettingsPanel(
         if autosave.get_untracked() != s.autosave {
             autosave.set(s.autosave);
         }
-        if tools_zone.get_untracked() != s.tools_zone {
-            tools_zone.set(s.tools_zone);
-        }
-        if shapes_zone.get_untracked() != s.shapes_zone {
-            shapes_zone.set(s.shapes_zone);
-        }
-        if toolbar_zone.get_untracked() != s.toolbar_zone {
-            toolbar_zone.set(s.toolbar_zone);
-        }
     });
 
     create_effect(move |_| {
@@ -281,15 +269,6 @@ pub fn SettingsPanel(
     });
     create_effect(move |_| {
         settings.update(|s| s.autosave = autosave.get());
-    });
-    create_effect(move |_| {
-        settings.update(|s| s.tools_zone = tools_zone.get());
-    });
-    create_effect(move |_| {
-        settings.update(|s| s.shapes_zone = shapes_zone.get());
-    });
-    create_effect(move |_| {
-        settings.update(|s| s.toolbar_zone = toolbar_zone.get());
     });
 
     let close = move || open.set(false);
@@ -338,13 +317,6 @@ pub fn SettingsPanel(
     ];
 
     let toggle_opts = &[(true, "On"), (false, "Off")];
-
-    let zone_opts = &[
-        (PanelZone::Left, "Left"),
-        (PanelZone::Right, "Right"),
-        (PanelZone::Top, "Top"),
-        (PanelZone::Bottom, "Bottom"),
-    ];
 
     view! {
         <div class="fixed top-4 right-4 z-50 pointer-events-none">
@@ -430,23 +402,6 @@ pub fn SettingsPanel(
                                     <div class="flex items-center justify-between">
                                         <span class=styles::SETTINGS_LABEL>"Autosave"</span>
                                         <SegmentedControl options=toggle_opts active=autosave />
-                                    </div>
-
-                                    <div class="h-px bg-border/70 my-3"></div>
-
-                                    <div class="flex items-center justify-between mb-3">
-                                        <span class=styles::SETTINGS_LABEL>"Toolbar"</span>
-                                        <SegmentedControl options=zone_opts active=toolbar_zone />
-                                    </div>
-
-                                    <div class="flex items-center justify-between mb-3">
-                                        <span class=styles::SETTINGS_LABEL>"Tools"</span>
-                                        <SegmentedControl options=zone_opts active=tools_zone />
-                                    </div>
-
-                                    <div class="flex items-center justify-between">
-                                        <span class=styles::SETTINGS_LABEL>"Shapes"</span>
-                                        <SegmentedControl options=zone_opts active=shapes_zone />
                                     </div>
 
                                     <div class="h-px bg-border/70 my-3"></div>
