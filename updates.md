@@ -1,5 +1,11 @@
 # What's New in Inskea
 
+## v3.2.1
+### Canvas & Text Editing Improvements
+- Text editing shortcuts: Double-click or press `Ctrl+T` to edit text elements on the canvas.
+- Auto-return to pan: Optional setting to automatically switch back to the pan tool after drawing or editing.
+- Streamlined settings: Removed redundant panel placement controls from the settings modal in favor of dock snapping.
+
 ## v3.2.0
 ### Modular Workspace & Snappable Panels
 - Freeform dock snapping: Drag and snap the Tools dock, Shapes styling panel, and Main Toolbar to any of the 4 screen zones (Top, Bottom, Left, Right).
