@@ -186,6 +186,7 @@ pub fn combined_bounds(ids: &[ElementId], elements: &[Element]) -> Option<Rect> 
 }
 
 /// Hit-test from front to back and return the topmost matching element.
+#[allow(dead_code)]
 pub fn hit_test_topmost(point: Point, elements: &[Element], margin: f64) -> Option<ElementId> {
     elements
         .iter()
@@ -195,6 +196,7 @@ pub fn hit_test_topmost(point: Point, elements: &[Element], margin: f64) -> Opti
 }
 
 /// Return whether a point is inside any element's padded interaction bounds.
+#[allow(dead_code)]
 pub fn point_inside_any_element(point: Point, elements: &[Element], margin: f64) -> bool {
     elements.iter().any(|el| {
         let b = el.bounds();
@@ -206,6 +208,7 @@ pub fn point_inside_any_element(point: Point, elements: &[Element], margin: f64)
 }
 
 /// Return whether the rectangle fully contains an element's bounds.
+#[allow(dead_code)]
 pub fn rect_fully_contains_element(rect: Rect, element: &Element) -> bool {
     rect.contains_rect(&layout_bounds(element))
 }

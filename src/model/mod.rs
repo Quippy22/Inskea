@@ -170,16 +170,6 @@ fn bounds_intersect(a: Rect, b: Rect) -> bool {
     a.x <= b.right() && a.right() >= b.x && a.y <= b.bottom() && a.bottom() >= b.y
 }
 
-fn chunk_has_visible(chunk: &SceneChunk, view: Rect) -> bool {
-    if !bounds_intersect(chunk.bounds, view) {
-        return false;
-    }
-    chunk
-        .elements
-        .iter()
-        .any(|stored| bounds_intersect(stored.bounds, view))
-}
-
 fn collect_visible_chunk<'a>(
     key: (i32, i32),
     chunk: &'a SceneChunk,
@@ -632,9 +622,13 @@ impl Scene {
         }
     }
 
-    /// True when at least one element intersects the view. Stops at the first
-    /// hit instead of collecting the visible set.
-    pub fn has_elements_in_view(&self, view: Rect) -> bool {
+    /// Visit every stored element whose chunk or oversized entry may intersect
+    /// `view`, stopping early if `f` returns `Some(value)`.
+    fn find_stored_in_view<'a, R>(
+        &'a self,
+        view: Rect,
+        mut f: impl FnMut(&'a StoredElement, Point) -> Option<R>,
+    ) -> Option<R> {
         let (x0, y0, x1, y1) = chunk_range(view);
         let (x0, y0, x1, y1) = (
             x0.saturating_sub(1),
@@ -644,37 +638,154 @@ impl Scene {
         );
 
         if chunk_count(x0, y0, x1, y1) > 4096 {
-            return self
-                .chunks
-                .iter()
-                .any(|(_, chunk)| chunk_has_visible(chunk, view));
+            for (&key, chunk) in &self.chunks {
+                if !bounds_intersect(chunk.bounds, view) {
+                    continue;
+                }
+                let origin = chunk_origin(key);
+                for stored in &chunk.elements {
+                    if let Some(hit) = f(stored, origin) {
+                        return Some(hit);
+                    }
+                }
+            }
+            return None;
         }
 
         for x in x0..=x1 {
             for y in y0..=y1 {
-                if let Some(chunk) = self.chunks.get(&(x, y)) {
-                    if chunk_has_visible(chunk, view) {
-                        return true;
+                let key = (x, y);
+                let Some(chunk) = self.chunks.get(&key) else {
+                    continue;
+                };
+                if !bounds_intersect(chunk.bounds, view) {
+                    continue;
+                }
+                let origin = chunk_origin(key);
+                for stored in &chunk.elements {
+                    if let Some(hit) = f(stored, origin) {
+                        return Some(hit);
                     }
                 }
             }
         }
 
-        self.oversized.iter().any(|id| {
+        for id in &self.oversized {
             let Some(&key) = self.locations.get(id) else {
-                return false;
+                continue;
             };
             if (x0..=x1).contains(&key.0) && (y0..=y1).contains(&key.1) {
-                return false;
+                continue;
             }
-            self.chunks.get(&key).is_some_and(|chunk| {
-                chunk
-                    .elements
-                    .iter()
-                    .find(|stored| stored.element.id() == *id)
-                    .is_some_and(|stored| bounds_intersect(stored.bounds, view))
-            })
+            if let Some(chunk) = self.chunks.get(&key) {
+                if let Some(stored) = chunk.elements.iter().find(|s| s.element.id() == *id) {
+                    if let Some(hit) = f(stored, chunk_origin(key)) {
+                        return Some(hit);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Borrow each element whose bounds intersect `view` together with its chunk
+    /// origin, without cloning or sorting.
+    pub fn for_each_visible_element<'a>(
+        &'a self,
+        view: Rect,
+        mut f: impl FnMut(&'a Element, Point),
+    ) {
+        let _ = self.find_stored_in_view(view, |stored, origin| {
+            if bounds_intersect(stored.bounds, view) {
+                f(&stored.element, origin);
+            }
+            None::<()>
+        });
+    }
+
+    /// Return the frontmost element hit by `point` within `margin` world units,
+    /// searching only nearby chunks and testing without cloning.
+    pub fn hit_test_topmost(&self, point: Point, margin: f64) -> Option<ElementId> {
+        let query = Rect::new(
+            point.x - margin,
+            point.y - margin,
+            margin * 2.0,
+            margin * 2.0,
+        );
+        // Frame header badges sit up to 24 world units above the frame rect
+        // (and rotate with the frame), so expand the chunk search by 24 units.
+        let search = query.padded(24.0);
+        let mut candidates: Vec<(&StoredElement, Point)> = Vec::new();
+        let _ = self.find_stored_in_view(search, |stored, origin| {
+            let candidate_rect = if matches!(stored.element, Element::Frame(_)) {
+                search
+            } else {
+                query
+            };
+            if bounds_intersect(stored.bounds, candidate_rect) {
+                candidates.push((stored, origin));
+            }
+            None::<()>
+        });
+        candidates.sort_by(|a, b| b.0.order.cmp(&a.0.order));
+        candidates.into_iter().find_map(|(stored, origin)| {
+            let local = Point::new(point.x - origin.x, point.y - origin.y);
+            stored
+                .element
+                .hit_test(local, margin)
+                .then(|| stored.element.id())
         })
+    }
+
+    /// True if `point` lies inside any element's padded bounds, searching only
+    /// nearby chunks without cloning.
+    pub fn point_inside_any_element(&self, point: Point, margin: f64) -> bool {
+        let query = Rect::new(
+            point.x - margin,
+            point.y - margin,
+            margin * 2.0,
+            margin * 2.0,
+        );
+        self.find_stored_in_view(query, |stored, origin| {
+            if !bounds_intersect(stored.bounds, query) {
+                return None;
+            }
+            let local = Point::new(point.x - origin.x, point.y - origin.y);
+            let b = stored.element.bounds();
+            let inside = local.x >= b.x - margin
+                && local.x <= b.x + b.w + margin
+                && local.y >= b.y - margin
+                && local.y <= b.y + b.h + margin;
+            inside.then_some(())
+        })
+        .is_some()
+    }
+
+    /// Return z-ordered IDs of elements whose layout bounds are fully contained
+    /// inside `rect`, querying only overlapping chunks without cloning.
+    pub fn elements_contained_in(&self, rect: Rect) -> Vec<ElementId> {
+        let mut contained: Vec<(u64, ElementId)> = Vec::new();
+        let _ = self.find_stored_in_view(rect, |stored, origin| {
+            if bounds_intersect(stored.bounds, rect) {
+                let local_rect = Rect::new(rect.x - origin.x, rect.y - origin.y, rect.w, rect.h);
+                if local_rect.contains_rect(&stored.element.bounds()) {
+                    contained.push((stored.order, stored.element.id()));
+                }
+            }
+            None::<()>
+        });
+        contained.sort_by_key(|(order, _)| *order);
+        contained.into_iter().map(|(_, id)| id).collect()
+    }
+
+    /// True when at least one element intersects the view. Stops at the first
+    /// hit instead of collecting the visible set.
+    pub fn has_elements_in_view(&self, view: Rect) -> bool {
+        self.find_stored_in_view(view, |stored, _| {
+            bounds_intersect(stored.bounds, view).then_some(())
+        })
+        .is_some()
     }
 
     /// Center of the element whose visual bounds are nearest to `point`.
@@ -2769,6 +2880,70 @@ mod tests {
         assert_eq!(
             s.nearest_element_center(Point::new(500.0, 500.0)),
             Some(Point::new(20.0, 20.0))
+        );
+    }
+
+    #[test]
+    fn spatial_hit_test_marquee_and_point_queries_match_full_scene() {
+        use crate::model::elements::frame::Frame;
+        use crate::model::elements::FromDrag;
+
+        let mut s = Scene::new();
+        let mut back = Rectangle::from_drag(
+            Point::new(10.0, 10.0),
+            Point::new(110.0, 110.0),
+            Color::default(),
+            false,
+        );
+        back.data.style.fill_color = Some(Color::new(Color::WHITE));
+        s.add_element(Element::Rectangle(back));
+
+        let mut front = Rectangle::from_drag(
+            Point::new(40.0, 40.0),
+            Point::new(140.0, 140.0),
+            Color::default(),
+            false,
+        );
+        front.data.style.fill_color = Some(Color::new(Color::BLUE));
+        s.add_element(Element::Rectangle(front));
+
+        let mut far = Rectangle::from_drag(
+            Point::new(5000.0, 5000.0),
+            Point::new(5050.0, 5050.0),
+            Color::default(),
+            false,
+        );
+        far.data.style.fill_color = Some(Color::new(Color::WHITE));
+        s.add_element(Element::Rectangle(far));
+
+        let mut frame = Frame::from_drag(
+            Point::new(300.0, 300.0),
+            Point::new(500.0, 500.0),
+            Color::default(),
+            false,
+        );
+        frame.name = "Artboard".to_string();
+        s.add_element(Element::Frame(frame));
+
+        // Overlap hits frontmost element (id 2).
+        assert_eq!(s.hit_test_topmost(Point::new(60.0, 60.0), 6.0), Some(2));
+        // Frame header badge sits above frame.y (300 - 15 = 285).
+        assert_eq!(s.hit_test_topmost(Point::new(320.0, 285.0), 6.0), Some(4));
+        // Empty space misses.
+        assert_eq!(s.hit_test_topmost(Point::new(2000.0, 2000.0), 6.0), None);
+
+        assert!(s.point_inside_any_element(Point::new(5010.0, 5010.0), 6.0));
+        assert!(!s.point_inside_any_element(Point::new(2000.0, 2000.0), 6.0));
+
+        // Marquee containing only `back` and `front` (not `far` or `frame`).
+        assert_eq!(
+            s.elements_contained_in(Rect::new(0.0, 0.0, 200.0, 200.0)),
+            vec![1, 2]
+        );
+        // Marquee partially overlapping `back` excludes it.
+        assert_eq!(
+            s.elements_contained_in(Rect::new(20.0, 20.0, 150.0, 150.0)),
+            vec![2]
         );
     }
 }

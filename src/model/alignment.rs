@@ -40,9 +40,9 @@ fn selection_items_with_bounds(
     let mut items = Vec::new();
     let mut grouped_ids = Vec::new();
 
-    for element in scene.elements() {
+    for element in scene.elements_for_ids(ids) {
         let id = element.id();
-        if !ids.contains(&id) || grouped_ids.contains(&id) {
+        if grouped_ids.contains(&id) {
             continue;
         }
 
@@ -148,18 +148,18 @@ pub fn find_enclosing_frame(scene: &Scene, ids: &[ElementId]) -> Option<Frame> {
 pub fn elements_inside_frame(scene: &Scene, frame: &Frame) -> Vec<ElementId> {
     let frame_bounds = frame.bounds();
     let frame_id = frame.data.id;
-    scene
-        .elements()
-        .iter()
-        .filter(|el| {
-            if el.id() == frame_id || matches!(el, Element::Frame(_)) {
-                return false;
-            }
-            let b = layout_bounds(el);
-            frame_bounds.contains_point(b.center()) || frame_bounds.intersects(&b)
-        })
-        .map(|el| el.id())
-        .collect()
+    let mut inside = Vec::new();
+    scene.for_each_visible_element(frame_bounds, |el, origin| {
+        if el.id() == frame_id || matches!(el, Element::Frame(_)) {
+            return;
+        }
+        let b = layout_bounds(el);
+        let world_b = Rect::new(b.x + origin.x, b.y + origin.y, b.w, b.h);
+        if frame_bounds.contains_point(world_b.center()) || frame_bounds.intersects(&world_b) {
+            inside.push(el.id());
+        }
+    });
+    inside
 }
 
 /// Returns whether the current selection can be aligned.

@@ -12,9 +12,8 @@ use crate::model::elements::{
     Bounds, Connector, ConnectorVariant, CurveMode, HitTest, Offset, PathPoints, Resize, Rotate,
 };
 use crate::model::interaction::{
-    guide_bounds, guide_frame, guide_union_bounds, guide_union_frame, hit_test_topmost,
-    point_inside_any_element, rect_fully_contains_element, visual_bounds, GuideFrame, CLICK_MARGIN,
-    HIT_MARGIN,
+    guide_bounds, guide_frame, guide_union_bounds, guide_union_frame, visual_bounds, GuideFrame,
+    CLICK_MARGIN, HIT_MARGIN,
 };
 use crate::model::resize::ResizeContext;
 use crate::model::resize::ResizeHandle;
@@ -100,22 +99,14 @@ pub(crate) fn handle_text_double_click(
         }
     }
 
-    let nearby = props.scene.with(|scene| {
-        scene.elements_in_view(Rect::new(
-            world.x - CLICK_MARGIN,
-            world.y - CLICK_MARGIN,
-            CLICK_MARGIN * 2.0,
-            CLICK_MARGIN * 2.0,
-        ))
-    });
-    let id = match hit_test_topmost(world, &nearby, CLICK_MARGIN) {
-        Some(id) => id,
-        None => return false,
-    };
-    let Some(element) = nearby.iter().find(|e| e.id() == id) else {
+    let Some(element) = props.scene.with(|scene| {
+        let id = scene.hit_test_topmost(world, CLICK_MARGIN)?;
+        scene.element_by_id(id)
+    }) else {
         return false;
     };
-    match element {
+    let id = element.id();
+    match &element {
         Element::Text(text_elem) => {
             st.text_edit.editing_embedded.set(false);
             st.text_edit.editing_new.set(false);
@@ -129,7 +120,7 @@ pub(crate) fn handle_text_double_click(
         Element::Chart(_) => {
             if let Some(label) = element.data().embedded_text.as_ref() {
                 if let Some(layout) =
-                    crate::model::elements::embedded_text::layout_for_element(element)
+                    crate::model::elements::embedded_text::layout_for_element(&element)
                 {
                     let local =
                         Point::unrotate(world, layout.center.x, layout.center.y, layout.rotation);
@@ -293,7 +284,6 @@ fn handle_path_move_icon(
     world: Point,
     st: &mut CanvasState,
     props: &CanvasInputs,
-    els: &[Element],
     el: &Element,
 ) -> bool {
     if el.path_points().is_none() {
@@ -312,7 +302,7 @@ fn handle_path_move_icon(
         st.drag.last_world.set(Some(world));
         st.drag.move_applied.set(Point::default());
         st.drag.drag_originals.set(vec![el.clone()]);
-        capture_smart_guide_targets(st, &[el.id()], els);
+        capture_smart_guide_targets(st, props, &[el.id()]);
         return true;
     }
     false
@@ -398,7 +388,7 @@ fn hit_move_handle(
                 .cloned()
                 .collect(),
         );
-        capture_smart_guide_targets(st, ids, els);
+        capture_smart_guide_targets(st, props, ids);
         return true;
     }
     false
@@ -508,17 +498,11 @@ fn handle_group_member_double_click(
     if detail < 2 {
         return false;
     }
-    let nearby = props.scene.with(|scene| {
-        scene.elements_in_view(Rect::new(
-            world.x - HIT_MARGIN,
-            world.y - HIT_MARGIN,
-            HIT_MARGIN * 2.0,
-            HIT_MARGIN * 2.0,
-        ))
-    });
-    let id = match hit_test_topmost(world, &nearby, HIT_MARGIN) {
-        Some(id) => id,
-        None => return false,
+    let Some(id) = props
+        .scene
+        .with(|scene| scene.hit_test_topmost(world, HIT_MARGIN))
+    else {
+        return false;
     };
     if let Some(group_id) = props
         .scene
@@ -534,15 +518,12 @@ fn handle_group_member_double_click(
 /// Select or Shift-toggle the topmost element under the pointer.
 /// Without Shift, also starts an immediate move drag on the newly selected element.
 #[inline]
-fn handle_element_selection(
-    world: Point,
-    st: &mut CanvasState,
-    props: &CanvasInputs,
-    els: &[Element],
-) -> bool {
-    let id = match hit_test_topmost(world, els, HIT_MARGIN) {
-        Some(id) => id,
-        None => return false,
+fn handle_element_selection(world: Point, st: &mut CanvasState, props: &CanvasInputs) -> bool {
+    let Some(id) = props
+        .scene
+        .with(|scene| scene.hit_test_topmost(world, HIT_MARGIN))
+    else {
+        return false;
     };
 
     let editing_group = st.group_editing.get();
@@ -558,12 +539,12 @@ fn handle_element_selection(
 
     let shift = st.shift_pressed.get();
     if st.group_editing.get().is_some() {
-        select_and_begin_move(world, st, props, els, &[id], shift);
+        select_and_begin_move(world, st, props, &[id], shift);
         return true;
     }
 
     let expanded = props.scene.with(|s| expand_ids(s, &[id]));
-    select_and_begin_move(world, st, props, els, &expanded, shift);
+    select_and_begin_move(world, st, props, &expanded, shift);
     true
 }
 
@@ -575,7 +556,6 @@ fn select_and_begin_move(
     world: Point,
     st: &mut CanvasState,
     props: &CanvasInputs,
-    els: &[Element],
     target: &[ElementId],
     shift: bool,
 ) {
@@ -592,22 +572,35 @@ fn select_and_begin_move(
         st.selected_ids.set(next.clone());
         next
     };
-    begin_move_drag(world, st, props, els, &moving);
+    let els = props.scene.with_untracked(|s| s.elements_for_ids(&moving));
+    begin_move_drag(world, st, props, &els, &moving);
 }
 
-/// Capture the elements the smart guides may snap against when a move starts.
+/// Capture the elements in view that smart guides may snap against when a move starts.
 #[inline]
-fn capture_smart_guide_targets(st: &mut CanvasState, ids: &[ElementId], els: &[Element]) {
-    st.drag.smart_guide_targets.set(
-        els.iter()
-            .filter(|el| !ids.contains(&el.id()))
-            .map(|el| GuideBox {
+fn capture_smart_guide_targets(st: &mut CanvasState, props: &CanvasInputs, ids: &[ElementId]) {
+    let view = props
+        .viewport
+        .get_untracked()
+        .visible_rect(st.screen_size.get_untracked())
+        .padded(2.0);
+    let targets = props.scene.with_untracked(|scene| {
+        let mut out = Vec::new();
+        scene.for_each_visible_element(view, |el, origin| {
+            if ids.contains(&el.id()) {
+                return;
+            }
+            let bounds = guide_bounds(el);
+            let frame = guide_frame(el);
+            out.push(GuideBox {
                 id: el.id(),
-                bounds: guide_bounds(el),
-                frame: guide_frame(el),
-            })
-            .collect(),
-    );
+                bounds: Rect::new(bounds.x + origin.x, bounds.y + origin.y, bounds.w, bounds.h),
+                frame: frame.translated(origin.x, origin.y),
+            });
+        });
+        out
+    });
+    st.drag.smart_guide_targets.set(targets);
 }
 
 /// Capture the drag originals, bounds, and operation for an element move.
@@ -628,39 +621,29 @@ fn begin_move_drag(
     st.drag.smart_guide_frame.set(guide_union_frame(ids, els));
     st.drag.last_world.set(Some(world));
     st.drag.move_applied.set(Point::default());
-    st.drag.drag_originals.set(
-        els.iter()
-            .filter(|el| ids.contains(&el.id()))
-            .cloned()
-            .collect(),
-    );
-    capture_smart_guide_targets(st, ids, els);
+    st.drag.drag_originals.set(els.to_vec());
+    capture_smart_guide_targets(st, props, ids);
 }
 
 /// Start an interactive move for a newly inserted collection snippet.
 pub(crate) fn begin_placement_move(
     world: Point,
     st: &mut CanvasState,
-    _props: &CanvasInputs,
-    els: &[Element],
+    props: &CanvasInputs,
     ids: &[ElementId],
 ) {
-    let Some(bounds) = guide_union_bounds(ids, els) else {
+    let els = props.scene.with_untracked(|s| s.elements_for_ids(ids));
+    let Some(bounds) = guide_union_bounds(ids, &els) else {
         return;
     };
     st.drag.drag_action.set(Some(DragOperation::Move));
     st.drag.moving_anchor.set(Some(world));
     st.drag.drag_bounds.set(Some(bounds));
-    st.drag.smart_guide_frame.set(guide_union_frame(ids, els));
+    st.drag.smart_guide_frame.set(guide_union_frame(ids, &els));
     st.drag.last_world.set(Some(world));
     st.drag.move_applied.set(Point::default());
-    st.drag.drag_originals.set(
-        els.iter()
-            .filter(|el| ids.contains(&el.id()))
-            .cloned()
-            .collect(),
-    );
-    capture_smart_guide_targets(st, ids, els);
+    st.drag.drag_originals.set(els);
+    capture_smart_guide_targets(st, props, ids);
 }
 
 /// Figure out which handle (if any) the cursor is hovering over.
@@ -1347,14 +1330,9 @@ fn complete_marquee_selection(world: Point, st: &mut CanvasState, props: &mut Ca
             let ry = anchor.y.min(world.y);
             let rw = (world.x - anchor.x).abs();
             let rh = (world.y - anchor.y).abs();
-            let els = props
+            let contained = props
                 .scene
-                .with(|scene| scene.elements_in_view(Rect::new(rx, ry, rw, rh)));
-            let contained: Vec<ElementId> = els
-                .iter()
-                .filter(|el| rect_fully_contains_element(Rect::new(rx, ry, rw, rh), el))
-                .map(|el| el.id())
-                .collect();
+                .with(|scene| scene.elements_contained_in(Rect::new(rx, ry, rw, rh)));
             let expanded = props.scene.with(|s| expand_ids(s, &contained));
             st.selected_ids
                 .set(normalize_ids(&props.scene.get_untracked(), &expanded));
@@ -1382,37 +1360,33 @@ pub fn select_pointer_down(
     }
 
     let ids = st.selected_ids.get();
-    // Hit testing and smart-guide targets need the elements around the
-    // pointer, not just the current selection: using the selection alone made
-    // an empty canvas impossible to click-select.
     let scene = props.scene;
-    let view = props
-        .viewport
-        .get_untracked()
-        .visible_rect(st.screen_size.get_untracked())
-        .padded(2.0);
-    let els = scene.with(|scene| scene.elements_in_view(view));
+    let selected_els = if ids.is_empty() {
+        Vec::new()
+    } else {
+        scene.with(|scene| scene.elements_for_ids(&ids))
+    };
 
     if ids.len() == 1 {
-        if let Some(el) = els.iter().find(|e| e.id() == ids[0]) {
+        if let Some(el) = selected_els.first() {
             if handle_chart_value_hit(world, st, props, el)
                 || handle_path_point_hit(world, st, props, el)
-                || handle_path_move_icon(world, st, props, &els, el)
+                || handle_path_move_icon(world, st, props, el)
             {
                 return;
             }
         }
     }
 
-    if !ids.is_empty() && handle_selection_handles(world, st, props, &ids, &els) {
+    if !ids.is_empty() && handle_selection_handles(world, st, props, &ids, &selected_els) {
         return;
     }
 
-    if handle_element_selection(world, st, props, &els) {
+    if handle_element_selection(world, st, props) {
         return;
     }
 
-    if point_inside_any_element(world, &els, CLICK_MARGIN) {
+    if scene.with(|s| s.point_inside_any_element(world, CLICK_MARGIN)) {
         st.group_editing.set(None);
         if !st.shift_pressed.get() {
             st.selected_ids.set(Vec::new());

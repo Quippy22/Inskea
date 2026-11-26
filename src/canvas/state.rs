@@ -1,6 +1,6 @@
 use crate::canvas::settings::CanvasSettings;
 use crate::canvas::smart_guides::{GuideBox, SmartGuideState};
-use crate::model::interaction::{hit_test_topmost, GuideFrame};
+use crate::model::interaction::GuideFrame;
 use crate::model::resize::ResizeHandle;
 use crate::model::Color;
 use crate::model::{
@@ -243,16 +243,7 @@ pub struct CanvasInputs {
 // ── Helper functions used by pointer event handlers ──────────────────────
 
 pub fn hit_and_erase(point: Point, scene: RwSignal<Scene>) {
-    let id = scene.with(|s| {
-        let margin = crate::model::interaction::HIT_MARGIN;
-        let nearby = s.elements_in_view(crate::model::Rect::new(
-            point.x - margin,
-            point.y - margin,
-            margin * 2.0,
-            margin * 2.0,
-        ));
-        hit_test_topmost(point, &nearby, margin)
-    });
+    let id = scene.with(|s| s.hit_test_topmost(point, crate::model::interaction::HIT_MARGIN));
     if let Some(id) = id {
         scene.update(|s| s.remove_by_id(id));
     }
@@ -263,7 +254,7 @@ mod tests {
     use super::*;
     use crate::model::elements::rect::Rectangle;
     use crate::model::elements::Bounds;
-    use crate::model::interaction::combined_bounds;
+    use crate::model::interaction::{combined_bounds, hit_test_topmost};
     use crate::model::ElementData;
 
     fn rectangle(id: ElementId, x: f64, y: f64, w: f64, h: f64) -> Element {

@@ -247,15 +247,7 @@ pub fn Canvas(
             } else if ids.is_empty() {
                 let cursor = props.cursor_world.get_untracked();
                 let margin = crate::model::interaction::CLICK_MARGIN;
-                let nearby = scene.with_untracked(|scene| {
-                    scene.elements_in_view(Rect::new(
-                        cursor.x - margin,
-                        cursor.y - margin,
-                        margin * 2.0,
-                        margin * 2.0,
-                    ))
-                });
-                crate::model::interaction::hit_test_topmost(cursor, &nearby, margin)
+                scene.with_untracked(|scene| scene.hit_test_topmost(cursor, margin))
             } else {
                 None
             };
@@ -581,15 +573,8 @@ pub fn Canvas(
                 props.canvas_mode.set(CanvasMode::Select);
                 st.selected_ids.set(ids.clone());
 
-                let view = props
-                    .viewport
-                    .get_untracked()
-                    .visible_rect(st.screen_size.get_untracked())
-                    .padded(100.0);
-                let els = props.scene.with_untracked(|s| s.elements_in_view(view));
-
                 let mut st = st;
-                begin_placement_move(origin, &mut st, &props, &els, &ids);
+                begin_placement_move(origin, &mut st, &props, &ids);
                 st.is_placing.set(true);
             }
         });
@@ -1194,14 +1179,7 @@ pub fn Canvas(
                 .screen_to_world(screen, st.screen_size.get_untracked());
 
             let hit = props.scene.with_untracked(|scene| {
-                let margin = crate::model::interaction::HIT_MARGIN;
-                let nearby = scene.elements_in_view(Rect::new(
-                    world.x - margin,
-                    world.y - margin,
-                    margin * 2.0,
-                    margin * 2.0,
-                ));
-                crate::model::interaction::hit_test_topmost(world, &nearby, margin)
+                scene.hit_test_topmost(world, crate::model::interaction::HIT_MARGIN)
             });
             let Some(id) = hit else {
                 return;
