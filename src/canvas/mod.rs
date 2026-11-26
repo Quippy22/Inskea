@@ -1209,26 +1209,19 @@ pub fn Canvas(
         let editing_id = st.text_edit.editing_id;
         let editing_embedded = st.text_edit.editing_embedded;
         let screen_size = st.screen_size;
-        create_memo(move |_| {
+        let cache = std::cell::RefCell::new(VisibleWindowCache::default());
+        create_memo(move |prev: Option<&Vec<(ElementId, u32, u64)>>| {
             let editing = editing_id.get();
             let embedded = editing_embedded.get();
             let view_rect = props.viewport.get().visible_rect(screen_size.get());
-            let pad = (view_rect.w.min(view_rect.h) * 0.25).max(120.0);
-            let visible = view_rect.padded(pad);
             props.scene.with(|scene| {
-                scene
-                    .visible_elements(visible)
-                    .into_iter()
-                    .filter(|visible| Some(visible.element.id()) != editing || embedded)
-                    .map(|visible| {
-                        let id = visible.element.id();
-                        (
-                            id,
-                            scene.render_generation(),
-                            scene.element_revision(id).unwrap_or(0),
-                        )
-                    })
-                    .collect::<Vec<_>>()
+                let mut cache = cache.borrow_mut();
+                if cache.is_valid(scene, view_rect, editing, embedded) {
+                    if let Some(prev) = prev {
+                        return prev.clone();
+                    }
+                }
+                cache.update(scene, view_rect, editing, embedded).to_vec()
             })
         })
     };
@@ -1392,5 +1385,113 @@ pub fn Canvas(
             st.screen_size,
             commit_edit,
         )}
+    }
+}
+
+/// Caches the overscan visible-element query so smooth panning inside the
+/// overscan margin skips spatial chunk lookups, sorting, and allocation.
+#[derive(Default)]
+struct VisibleWindowCache {
+    overscan: Option<Rect>,
+    scene_generation: u32,
+    scene_version: u64,
+    editing: Option<ElementId>,
+    embedded: bool,
+    scratch: Vec<VisibleKey>,
+    ids: Vec<(ElementId, u32, u64)>,
+}
+
+impl VisibleWindowCache {
+    fn is_valid(
+        &self,
+        scene: &Scene,
+        view_rect: Rect,
+        editing: Option<ElementId>,
+        embedded: bool,
+    ) -> bool {
+        self.overscan.is_some_and(|cached| {
+            self.scene_generation == scene.render_generation()
+                && self.scene_version == scene.mutation_version()
+                && self.editing == editing
+                && self.embedded == embedded
+                && cached.contains_rect(&view_rect)
+                && cached.w <= view_rect.w.max(1.0) * 2.5
+                && cached.h <= view_rect.h.max(1.0) * 2.5
+        })
+    }
+
+    fn update(
+        &mut self,
+        scene: &Scene,
+        view_rect: Rect,
+        editing: Option<ElementId>,
+        embedded: bool,
+    ) -> &[(ElementId, u32, u64)] {
+        let gen = scene.render_generation();
+        let ver = scene.mutation_version();
+        let pad = (view_rect.w.min(view_rect.h) * 0.25).max(120.0);
+        let visible = view_rect.padded(pad);
+        scene.visible_keys_into(visible, &mut self.scratch);
+        self.ids.clear();
+        self.ids.extend(
+            self.scratch
+                .iter()
+                .filter(|entry| Some(entry.id) != editing || embedded)
+                .map(|entry| (entry.id, gen, entry.revision)),
+        );
+        self.overscan = Some(visible);
+        self.scene_generation = gen;
+        self.scene_version = ver;
+        self.editing = editing;
+        self.embedded = embedded;
+        &self.ids
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::elements::rect::Rectangle;
+    use crate::model::elements::FromDrag;
+
+    #[test]
+    fn visible_window_cache_reuses_within_overscan_and_invalidates_on_mutation() {
+        let mut scene = Scene::new();
+        let r1 = Rectangle::from_drag(
+            Point::new(10.0, 10.0),
+            Point::new(60.0, 60.0),
+            Color::default(),
+            false,
+        );
+        let r2 = Rectangle::from_drag(
+            Point::new(800.0, 800.0),
+            Point::new(850.0, 850.0),
+            Color::default(),
+            false,
+        );
+        scene.add_element(Element::Rectangle(r1));
+        scene.add_element(Element::Rectangle(r2));
+
+        let mut cache = VisibleWindowCache::default();
+        let view1 = Rect::new(0.0, 0.0, 400.0, 400.0);
+        assert!(!cache.is_valid(&scene, view1, None, false));
+        let first: Vec<_> = cache.update(&scene, view1, None, false).to_vec();
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].0, 1);
+
+        // Small pan inside the overscan margin stays valid.
+        let view2 = Rect::new(20.0, 20.0, 400.0, 400.0);
+        assert!(cache.is_valid(&scene, view2, None, false));
+
+        // Any scene mutation invalidates the cache.
+        scene.translate_element(1, 5.0, 0.0);
+        assert!(!cache.is_valid(&scene, view2, None, false));
+
+        // Refreshing picks up the new revision; panning far brings r2 into view.
+        let _ = cache.update(&scene, view2, None, false);
+        let view3 = Rect::new(450.0, 450.0, 400.0, 400.0);
+        assert!(!cache.is_valid(&scene, view3, None, false));
+        let third = cache.update(&scene, view3, None, false);
+        assert_eq!(third.iter().map(|e| e.0).collect::<Vec<_>>(), vec![2]);
     }
 }

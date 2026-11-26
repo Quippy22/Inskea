@@ -186,6 +186,7 @@ fn collect_visible_chunk<'a>(
                 element: &stored.element,
                 origin,
                 order: stored.order,
+                revision: stored.revision,
                 bounds: stored.bounds,
             });
         }
@@ -365,6 +366,17 @@ pub struct VisibleElement<'a> {
     pub element: &'a Element,
     pub origin: Point,
     pub order: u64,
+    pub revision: u64,
+    pub bounds: Rect,
+}
+
+/// Lightweight spatial-query entry for render caching and LOD filtering without
+/// holding borrows into the scene or doing extra revision lookups.
+#[derive(Clone, Copy, Debug)]
+pub struct VisibleKey {
+    pub id: ElementId,
+    pub order: u64,
+    pub revision: u64,
     pub bounds: Rect,
 }
 
@@ -566,6 +578,7 @@ impl Scene {
                                 element: &stored.element,
                                 origin: chunk_origin(key),
                                 order: stored.order,
+                                revision: stored.revision,
                                 bounds: stored.bounds,
                             });
                         }
@@ -575,6 +588,24 @@ impl Scene {
         }
 
         out.sort_by_key(|element| element.order);
+    }
+
+    /// Populate `out` with z-ordered `VisibleKey`s intersecting `view`, reusing
+    /// `out`'s allocation across pan/zoom frames.
+    pub fn visible_keys_into(&self, view: Rect, out: &mut Vec<VisibleKey>) {
+        out.clear();
+        let _ = self.find_stored_in_view(view, |stored, _| {
+            if bounds_intersect(stored.bounds, view) {
+                out.push(VisibleKey {
+                    id: stored.element.id(),
+                    order: stored.order,
+                    revision: stored.revision,
+                    bounds: stored.bounds,
+                });
+            }
+            None::<()>
+        });
+        out.sort_by_key(|entry| entry.order);
     }
 
     /// Materialize just the elements intersecting the view.
