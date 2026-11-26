@@ -58,6 +58,9 @@ pub struct Scene {
     /// Distinguishes replacement scenes whose element ids and local revisions
     /// happen to match the previous document.
     render_generation: u32,
+    /// Bumped on every structural, geometric, or order mutation so caches can
+    /// tell whether the scene changed without walking chunks.
+    mutation_version: u64,
     pub(crate) next_id: u64,
     pub(crate) groups: Vec<Group>,
     pub(crate) next_group_id: GroupId,
@@ -79,6 +82,7 @@ impl Clone for Scene {
             next_order: self.next_order,
             next_revision: self.next_revision,
             render_generation: self.render_generation,
+            mutation_version: self.mutation_version,
             next_id: self.next_id,
             groups: self.groups.clone(),
             next_group_id: self.next_group_id,
@@ -95,7 +99,26 @@ impl Clone for Scene {
 
 #[derive(Clone, Debug)]
 struct SceneChunk {
+    bounds: Rect,
     elements: Vec<StoredElement>,
+}
+
+fn recompute_chunk_bounds(elements: &[StoredElement]) -> Rect {
+    let Some(first) = elements.first() else {
+        return Rect::new(0.0, 0.0, 0.0, 0.0);
+    };
+    let mut bounds = first.bounds;
+    for stored in &elements[1..] {
+        bounds = bounds.union(&stored.bounds);
+    }
+    bounds
+}
+
+fn touches_chunk_edge(chunk_bounds: Rect, elem_bounds: Rect) -> bool {
+    elem_bounds.x <= chunk_bounds.x
+        || elem_bounds.y <= chunk_bounds.y
+        || elem_bounds.right() >= chunk_bounds.right()
+        || elem_bounds.bottom() >= chunk_bounds.bottom()
 }
 
 const CHUNK_SIZE: f64 = 1024.0;
@@ -148,6 +171,9 @@ fn bounds_intersect(a: Rect, b: Rect) -> bool {
 }
 
 fn chunk_has_visible(chunk: &SceneChunk, view: Rect) -> bool {
+    if !bounds_intersect(chunk.bounds, view) {
+        return false;
+    }
     chunk
         .elements
         .iter()
@@ -157,11 +183,10 @@ fn chunk_has_visible(chunk: &SceneChunk, view: Rect) -> bool {
 fn collect_visible_chunk<'a>(
     key: (i32, i32),
     chunk: &'a SceneChunk,
-    seen: &mut std::collections::HashSet<(i32, i32)>,
     visible: &mut Vec<VisibleElement<'a>>,
     view: Rect,
 ) {
-    if !seen.insert(key) {
+    if !bounds_intersect(chunk.bounds, view) {
         return;
     }
     let origin = chunk_origin(key);
@@ -171,6 +196,7 @@ fn collect_visible_chunk<'a>(
                 element: &stored.element,
                 origin,
                 order: stored.order,
+                bounds: stored.bounds,
             });
         }
     }
@@ -349,6 +375,7 @@ pub struct VisibleElement<'a> {
     pub element: &'a Element,
     pub origin: Point,
     pub order: u64,
+    pub bounds: Rect,
 }
 
 /// Snapshot of one element's contribution to a scene change. `element: None`
@@ -424,6 +451,7 @@ impl Scene {
             next_order: 0,
             next_revision: 0,
             render_generation: NEXT_SCENE_RENDER_GENERATION.fetch_add(1, Ordering::Relaxed),
+            mutation_version: 0,
             next_id: 1,
             groups: Vec::new(),
             next_group_id: 1,
@@ -498,6 +526,15 @@ impl Scene {
     /// chunks; element geometry stays relative to each chunk origin, so the
     /// canvas can render it under a per-chunk translation without cloning.
     pub fn visible_elements(&self, view: Rect) -> Vec<VisibleElement<'_>> {
+        let mut visible = Vec::new();
+        self.visible_elements_into(view, &mut visible);
+        visible
+    }
+
+    /// Populate `out` with z-ordered elements intersecting `view`, reusing its
+    /// allocation across pan/zoom frames without intermediate `HashSet`s.
+    pub fn visible_elements_into<'a>(&'a self, view: Rect, out: &mut Vec<VisibleElement<'a>>) {
+        out.clear();
         // Elements no larger than one chunk are stored by their center. Search
         // one neighboring chunk in each direction to catch shapes crossing a
         // chunk edge; larger paths are kept in the small `oversized` list.
@@ -509,35 +546,45 @@ impl Scene {
             y1.saturating_add(1),
         );
 
-        let mut seen = std::collections::HashSet::new();
-        let mut visible = Vec::new();
-
         if chunk_count(x0, y0, x1, y1) > 4096 {
             // Zoomed far out: walk the chunks that exist instead of every
             // coordinate in the visible range.
-            for (key, chunk) in &self.chunks {
-                collect_visible_chunk(*key, chunk, &mut seen, &mut visible, view);
+            for (&key, chunk) in &self.chunks {
+                collect_visible_chunk(key, chunk, out, view);
             }
         } else {
             for x in x0..=x1 {
                 for y in y0..=y1 {
                     if let Some(chunk) = self.chunks.get(&(x, y)) {
-                        collect_visible_chunk((x, y), chunk, &mut seen, &mut visible, view);
+                        collect_visible_chunk((x, y), chunk, out, view);
                     }
                 }
             }
-            // A large shape can live in a chunk outside the search range.
+            // A large shape can live in a chunk outside the search range;
+            // skip any whose chunk was already visited above.
             for id in &self.oversized {
-                if let Some(key) = self.locations.get(id) {
-                    if let Some(chunk) = self.chunks.get(key) {
-                        collect_visible_chunk(*key, chunk, &mut seen, &mut visible, view);
+                let Some(&key) = self.locations.get(id) else {
+                    continue;
+                };
+                if (x0..=x1).contains(&key.0) && (y0..=y1).contains(&key.1) {
+                    continue;
+                }
+                if let Some(chunk) = self.chunks.get(&key) {
+                    if let Some(stored) = chunk.elements.iter().find(|s| s.element.id() == *id) {
+                        if bounds_intersect(stored.bounds, view) {
+                            out.push(VisibleElement {
+                                element: &stored.element,
+                                origin: chunk_origin(key),
+                                order: stored.order,
+                                bounds: stored.bounds,
+                            });
+                        }
                     }
                 }
             }
         }
 
-        visible.sort_by_key(|element| element.order);
-        visible
+        out.sort_by_key(|element| element.order);
     }
 
     /// Materialize just the elements intersecting the view.
@@ -614,12 +661,19 @@ impl Scene {
         }
 
         self.oversized.iter().any(|id| {
-            let Some(key) = self.locations.get(id) else {
+            let Some(&key) = self.locations.get(id) else {
                 return false;
             };
-            self.chunks
-                .get(key)
-                .is_some_and(|chunk| chunk_has_visible(chunk, view))
+            if (x0..=x1).contains(&key.0) && (y0..=y1).contains(&key.1) {
+                return false;
+            }
+            self.chunks.get(&key).is_some_and(|chunk| {
+                chunk
+                    .elements
+                    .iter()
+                    .find(|stored| stored.element.id() == *id)
+                    .is_some_and(|stored| bounds_intersect(stored.bounds, view))
+            })
         })
     }
 
@@ -627,6 +681,11 @@ impl Scene {
     pub fn nearest_element_center(&self, point: Point) -> Option<Point> {
         let mut nearest: Option<(f64, u64, Point)> = None;
         for chunk in self.chunks.values() {
+            if let Some((best, _, _)) = nearest {
+                if distance_to_bounds(chunk.bounds, point) > best {
+                    continue;
+                }
+            }
             for stored in &chunk.elements {
                 let distance = distance_to_bounds(stored.bounds, point);
                 let closer = nearest.is_none_or(|(best, best_order, _)| {
@@ -682,6 +741,11 @@ impl Scene {
         self.render_generation
     }
 
+    /// Counter incremented on every scene mutation (add, remove, geometry, reorder).
+    pub fn mutation_version(&self) -> u64 {
+        self.mutation_version
+    }
+
     pub fn element_by_id_mut(&mut self, id: ElementId) -> Option<ElementMut<'_>> {
         let order = self.element_order(id)?;
         let element = self.take_element(id)?;
@@ -727,20 +791,34 @@ impl Scene {
         self.record_before(id);
         let revision = self.next_revision;
         self.next_revision = self.next_revision.wrapping_add(1);
+        self.mutation_version = self.mutation_version.wrapping_add(1);
         if let Some(chunk) = self.chunks.get_mut(&key) {
+            let mut updated_bounds = None;
             if let Some(stored) = chunk
                 .elements
                 .iter_mut()
                 .find(|stored| stored.element.id() == id)
             {
+                let old_bounds = stored.bounds;
                 stored.element.offset(dx, dy);
-                stored.bounds = Rect::new(
-                    stored.bounds.x + dx,
-                    stored.bounds.y + dy,
-                    stored.bounds.w,
-                    stored.bounds.h,
+                let new_bounds = Rect::new(
+                    old_bounds.x + dx,
+                    old_bounds.y + dy,
+                    old_bounds.w,
+                    old_bounds.h,
                 );
+                stored.bounds = new_bounds;
                 stored.revision = revision;
+                updated_bounds = Some((old_bounds, new_bounds));
+            }
+            if let Some((old_bounds, new_bounds)) = updated_bounds {
+                if chunk.elements.len() == 1 {
+                    chunk.bounds = new_bounds;
+                } else if touches_chunk_edge(chunk.bounds, old_bounds) {
+                    chunk.bounds = recompute_chunk_bounds(&chunk.elements);
+                } else {
+                    chunk.bounds = chunk.bounds.union(&new_bounds);
+                }
             }
         }
     }
@@ -1035,11 +1113,16 @@ impl Scene {
                 .iter()
                 .position(|stored| stored.element.id() == id)?;
             let stored = chunk.elements.remove(index);
-            (stored, chunk.elements.is_empty())
+            let empty = chunk.elements.is_empty();
+            if !empty && touches_chunk_edge(chunk.bounds, stored.bounds) {
+                chunk.bounds = recompute_chunk_bounds(&chunk.elements);
+            }
+            (stored, empty)
         };
         if empty {
             self.chunks.remove(&key);
         }
+        self.mutation_version = self.mutation_version.wrapping_add(1);
         let oversized = is_oversized(stored.bounds);
         let origin = chunk_origin(key);
         let mut element = stored.element;
@@ -1068,18 +1151,20 @@ impl Scene {
         element.translate_storage(-origin.x, -origin.y);
         let revision = self.next_revision;
         self.next_revision = self.next_revision.wrapping_add(1);
-        self.chunks
-            .entry(home)
-            .or_insert_with(|| SceneChunk {
-                elements: Vec::new(),
-            })
-            .elements
-            .push(StoredElement {
-                order,
-                bounds,
-                revision,
-                element,
-            });
+        self.mutation_version = self.mutation_version.wrapping_add(1);
+        let chunk = self.chunks.entry(home).or_insert_with(|| SceneChunk {
+            bounds,
+            elements: Vec::new(),
+        });
+        if !chunk.elements.is_empty() {
+            chunk.bounds = chunk.bounds.union(&bounds);
+        }
+        chunk.elements.push(StoredElement {
+            order,
+            bounds,
+            revision,
+            element,
+        });
         self.locations.insert(id, home);
         self.next_order = self.next_order.max(order.saturating_add(1));
 
@@ -1110,6 +1195,7 @@ impl Scene {
         }
         if found {
             self.next_order = self.next_order.max(order.saturating_add(1));
+            self.mutation_version = self.mutation_version.wrapping_add(1);
         }
     }
 
@@ -1125,6 +1211,7 @@ impl Scene {
         self.oversized.clear();
         self.bindings.clear();
         self.next_order = 0;
+        self.mutation_version = self.mutation_version.wrapping_add(1);
         for element in elements {
             let order = self.next_order;
             self.put_element_raw(element, order);
@@ -2620,5 +2707,68 @@ mod tests {
         );
         assert_eq!(ordered[1].id(), 1);
         assert_eq!(ordered[2].id(), 2);
+    }
+
+    #[test]
+    fn visible_elements_into_reuses_buffer_and_dedups_oversized_in_range() {
+        let mut s = Scene::new();
+        let mut wide = Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        });
+        wide.data_mut().world_point = Point::new(0.0, 0.0);
+        wide.data_mut().width = 2500.0;
+        wide.data_mut().height = 50.0;
+        s.add_element(wide);
+
+        let mut small = Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        });
+        small.data_mut().world_point = Point::new(100.0, 100.0);
+        small.data_mut().width = 40.0;
+        small.data_mut().height = 40.0;
+        s.add_element(small);
+
+        let mut buf = Vec::new();
+        // View covers the oversized shape's home chunk as well as the small one.
+        s.visible_elements_into(Rect::new(0.0, 0.0, 2500.0, 200.0), &mut buf);
+        assert_eq!(buf.len(), 2);
+        assert_eq!(buf[0].element.id(), 1);
+        assert_eq!(buf[1].element.id(), 2);
+
+        // Reusing the buffer for a narrower view clears previous entries.
+        s.visible_elements_into(Rect::new(2200.0, 0.0, 100.0, 100.0), &mut buf);
+        assert_eq!(buf.len(), 1);
+        assert_eq!(buf[0].element.id(), 1);
+    }
+
+    #[test]
+    fn chunk_bounds_stay_tight_after_translate_and_remove() {
+        let mut s = Scene::new();
+        let mut a = Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        });
+        a.data_mut().world_point = Point::new(10.0, 10.0);
+        a.data_mut().width = 20.0;
+        a.data_mut().height = 20.0;
+        s.add_element(a);
+
+        let mut b = Element::Rectangle(Rectangle {
+            data: ElementData::new(0),
+        });
+        b.data_mut().world_point = Point::new(400.0, 400.0);
+        b.data_mut().width = 20.0;
+        b.data_mut().height = 20.0;
+        s.add_element(b);
+
+        s.translate_element(2, 100.0, 100.0);
+        assert!(s.has_elements_in_view(Rect::new(505.0, 505.0, 10.0, 10.0)));
+        assert!(!s.has_elements_in_view(Rect::new(405.0, 405.0, 10.0, 10.0)));
+
+        s.remove_by_id(2);
+        assert!(!s.has_elements_in_view(Rect::new(505.0, 505.0, 10.0, 10.0)));
+        assert_eq!(
+            s.nearest_element_center(Point::new(500.0, 500.0)),
+            Some(Point::new(20.0, 20.0))
+        );
     }
 }
