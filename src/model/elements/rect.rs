@@ -40,17 +40,17 @@ impl UpdateDrag for Rectangle {
 }
 
 impl Render for Rectangle {
-    fn render(&self, _zoom: f64) -> leptos::View {
-        self.render_inner(true)
+    fn render(&self, zoom: f64) -> leptos::View {
+        self.render_inner(true, zoom)
     }
 
     fn render_label_mask(&self) -> leptos::View {
-        self.render_inner(false)
+        self.render_inner(false, 1.0)
     }
 }
 
 impl Rectangle {
-    fn render_inner(&self, show_label: bool) -> leptos::View {
+    fn render_inner(&self, show_label: bool, zoom: f64) -> leptos::View {
         let x = self.data.world_point.x;
         let y = self.data.world_point.y;
         let w = self.data.width;
@@ -116,6 +116,9 @@ impl Rectangle {
         let Some(layout) = super::embedded_text::layout_rectangle(&self.data) else {
             return shape;
         };
+        if !super::embedded_text::should_render_label(layout.font_size, zoom) {
+            return shape;
+        }
         let text = super::embedded_text::render_label(label, &layout, opacity);
         leptos::view! { <g>{shape}{text}</g> }.into_view()
     }

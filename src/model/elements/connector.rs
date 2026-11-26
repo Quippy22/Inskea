@@ -670,12 +670,12 @@ impl UpdateDrag for Connector {
 }
 
 impl Render for Connector {
-    fn render(&self, _zoom: f64) -> leptos::View {
-        self.render_inner(true)
+    fn render(&self, zoom: f64) -> leptos::View {
+        self.render_inner(true, zoom)
     }
 
     fn render_label_mask(&self) -> leptos::View {
-        self.render_inner(false)
+        self.render_inner(false, 1.0)
     }
 
     fn render_with_label_layout(
@@ -687,17 +687,22 @@ impl Render for Connector {
 }
 
 impl Connector {
-    fn render_inner(&self, show_label: bool) -> leptos::View {
+    fn render_inner(&self, show_label: bool, zoom: f64) -> leptos::View {
         let Some(label) = self.data.embedded_text.as_ref() else {
             return self.shape();
         };
-        if label.wrapped.raw.is_empty() {
+        if label.wrapped.raw.is_empty()
+            || !super::embedded_text::should_render_label(label.font_size, zoom)
+        {
             return self.shape();
         }
         let route = self.route_points();
         let Some(layout) = super::embedded_text::layout_path(&self.data, &route) else {
             return self.shape();
         };
+        if !super::embedded_text::should_render_label(layout.font_size, zoom) {
+            return self.shape();
+        }
         self.render_masked(&layout, show_label.then_some(label))
     }
 

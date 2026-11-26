@@ -321,6 +321,77 @@ pub trait Render {
     }
 }
 
+/// Discrete render-detail tiers derived from viewport zoom.
+///
+/// Keeping a small number of tiers means panning and minor zoom ticks never
+/// re-render DOM nodes while zoomed-out views simplify tiny elements, text,
+/// and dense freehand strokes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum LodTier {
+    /// Zoom >= 0.65: full SVG detail.
+    Full = 0,
+    /// 0.30 <= zoom < 0.65: hide tiny labels, light freehand decimation.
+    Medium = 1,
+    /// 0.15 <= zoom < 0.30: placeholder text blocks, simplified freehand & charts.
+    Low = 2,
+    /// zoom < 0.15: polyline freehand, minimal detail.
+    Minimal = 3,
+}
+
+impl LodTier {
+    /// Minimum screen-space extent (in pixels) for an element to remain visible
+    /// when zoomed out below full detail.
+    pub const MIN_VISIBLE_PX: f64 = 0.75;
+
+    pub fn from_zoom(zoom: f64) -> Self {
+        let zoom = if zoom.is_finite() && zoom > 0.0 {
+            zoom
+        } else {
+            1.0
+        };
+        if zoom >= 0.65 {
+            Self::Full
+        } else if zoom >= 0.30 {
+            Self::Medium
+        } else if zoom >= 0.15 {
+            Self::Low
+        } else {
+            Self::Minimal
+        }
+    }
+
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            1 => Self::Medium,
+            2 => Self::Low,
+            3 => Self::Minimal,
+            _ => Self::Full,
+        }
+    }
+
+    /// Representative zoom passed to `Render::render` so elements simplify
+    /// deterministically per tier without re-rendering on intermediate ticks.
+    pub fn render_zoom(self) -> f64 {
+        match self {
+            Self::Full => 1.0,
+            Self::Medium => 0.45,
+            Self::Low => 0.22,
+            Self::Minimal => 0.12,
+        }
+    }
+
+    pub fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    /// True when `bounds` shrinks below `MIN_VISIBLE_PX` in both dimensions at
+    /// a zoomed-out `zoom`.
+    pub fn is_subpixel(bounds: Rect, zoom: f64) -> bool {
+        zoom < 0.65 && bounds.w.max(bounds.h) * zoom < Self::MIN_VISIBLE_PX
+    }
+}
+
 /// Hit-testing: check if a world-space point intersects the element within a margin.
 pub trait HitTest {
     /// Returns `true` if `point` lies on/near this element within `margin` world-space units.

@@ -1010,9 +1010,41 @@ impl Chart {
         out
     }
 
-    fn render_inner(&self, show_label: bool) -> leptos::View {
-        let graph = self.scene_graph();
+    fn render_inner(&self, show_label: bool, zoom: f64) -> leptos::View {
         let opacity = self.data.style.opacity;
+        if zoom < 0.65 && (self.data.width * zoom < 28.0 || self.data.height * zoom < 28.0) {
+            let x = self.data.world_point.x;
+            let y = self.data.world_point.y;
+            let w = self.data.width;
+            let h = self.data.height;
+            let fill = super::utils::fill_paint(&self.data.style.fill_color);
+            let stroke = self.data.style.stroke_color.to_hex();
+            let sw = self.data.style.stroke_width;
+            let body = view! {
+                <rect
+                    x=x
+                    y=y
+                    width=w
+                    height=h
+                    fill=fill
+                    stroke=stroke
+                    stroke-width=sw
+                    opacity=opacity
+                />
+            }
+            .into_view();
+            return if self.data.rotation == 0.0 {
+                body
+            } else {
+                let cx = x + w / 2.0;
+                let cy = y + h / 2.0;
+                let deg = self.data.rotation.to_degrees();
+                view! { <g transform=format!("rotate({} {} {})", deg, cx, cy)>{body}</g> }
+                    .into_view()
+            };
+        }
+
+        let graph = self.scene_graph();
 
         let card_view = graph.card.map(|c| {
             view! {
@@ -1112,6 +1144,7 @@ impl Chart {
         let texts_view: Vec<_> = graph
             .texts
             .into_iter()
+            .filter(|t| super::embedded_text::should_render_label(t.font_size, zoom))
             .map(|t| {
                 let weight = if t.bold { "600" } else { "400" };
                 view! {
@@ -1168,6 +1201,9 @@ impl Chart {
         let Some(layout) = super::embedded_text::layout_rectangle(&self.data) else {
             return rotated;
         };
+        if !super::embedded_text::should_render_label(layout.font_size, zoom) {
+            return rotated;
+        }
         let text = super::embedded_text::render_label(label, &layout, opacity);
         view! { <g>{rotated}{text}</g> }.into_view()
     }
@@ -1294,12 +1330,12 @@ impl UpdateDrag for Chart {
 }
 
 impl Render for Chart {
-    fn render(&self, _zoom: f64) -> leptos::View {
-        self.render_inner(true)
+    fn render(&self, zoom: f64) -> leptos::View {
+        self.render_inner(true, zoom)
     }
 
     fn render_label_mask(&self) -> leptos::View {
-        self.render_inner(false)
+        self.render_inner(false, 1.0)
     }
 }
 

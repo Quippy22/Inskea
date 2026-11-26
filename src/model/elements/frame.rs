@@ -248,82 +248,101 @@ impl Frame {
         let stroke = self.data.style.stroke_color.to_hex();
         let opacity = self.data.style.opacity;
 
-        // Keep the frame title readable across zoom levels without growing huge when zoomed in.
-        let eff_zoom = zoom.clamp(0.15, 4.0);
-        let badge_font_size = (12.0 / eff_zoom).clamp(8.0, 28.0);
-        let badge_offset_y = (6.0 / eff_zoom).clamp(4.0, 16.0);
-        let header_text = self.header_label();
-
-        // Corner ticks subtly distinguish a Frame / Artboard from an ordinary rectangle.
-        let tick = (10.0 / eff_zoom).clamp(4.0, 24.0).min(w / 4.0).min(h / 4.0);
-        let tick_sw = (1.25 / eff_zoom).clamp(0.75, 3.0);
-        let ticks_d = format!(
-            "M {} {} L {} {} L {} {} \
-             M {} {} L {} {} L {} {} \
-             M {} {} L {} {} L {} {} \
-             M {} {} L {} {} L {} {}",
-            x,
-            y + tick,
-            x,
-            y,
-            x + tick,
-            y,
-            x + w - tick,
-            y,
-            x + w,
-            y,
-            x + w,
-            y + tick,
-            x,
-            y + h - tick,
-            x,
-            y + h,
-            x + tick,
-            y + h,
-            x + w - tick,
-            y + h,
-            x + w,
-            y + h,
-            x + w,
-            y + h - tick,
-        );
-
-        let frame_body = leptos::view! {
-            <g opacity=opacity>
+        let simplified = zoom < 0.65 && (w * zoom < 24.0 || h * zoom < 24.0);
+        let frame_body = if simplified {
+            leptos::view! {
                 <rect
                     x=x
                     y=y
                     width=w
                     height=h
                     fill=fill
-                    stroke=stroke.clone()
+                    stroke=stroke
                     stroke-width=sw
                     stroke-linejoin="miter"
+                    opacity=opacity
                     pointer-events="stroke"
                 />
-                <path
-                    d=ticks_d
-                    fill="none"
-                    stroke=stroke.clone()
-                    stroke-width=tick_sw
-                    stroke-linecap="square"
-                    opacity="0.65"
-                />
-                <text
-                    x=x
-                    y=y - badge_offset_y
-                    fill=stroke
-                    font-size=badge_font_size
-                    font-family="sans-serif"
-                    font-weight="600"
-                    style="user-select: none; pointer-events: none;"
-                    opacity="0.85"
-                >
-                    {header_text}
-                </text>
-            </g>
-        }
-        .into_view();
+            }
+            .into_view()
+        } else {
+            // Keep the frame title readable across zoom levels without growing huge when zoomed in.
+            let eff_zoom = zoom.clamp(0.15, 4.0);
+            let badge_font_size = (12.0 / eff_zoom).clamp(8.0, 28.0);
+            let badge_offset_y = (6.0 / eff_zoom).clamp(4.0, 16.0);
+            let header_text = self.header_label();
+
+            // Corner ticks subtly distinguish a Frame / Artboard from an ordinary rectangle.
+            let tick = (10.0 / eff_zoom).clamp(4.0, 24.0).min(w / 4.0).min(h / 4.0);
+            let tick_sw = (1.25 / eff_zoom).clamp(0.75, 3.0);
+            let ticks_d = format!(
+                "M {} {} L {} {} L {} {} \
+                 M {} {} L {} {} L {} {} \
+                 M {} {} L {} {} L {} {} \
+                 M {} {} L {} {} L {} {}",
+                x,
+                y + tick,
+                x,
+                y,
+                x + tick,
+                y,
+                x + w - tick,
+                y,
+                x + w,
+                y,
+                x + w,
+                y + tick,
+                x,
+                y + h - tick,
+                x,
+                y + h,
+                x + tick,
+                y + h,
+                x + w - tick,
+                y + h,
+                x + w,
+                y + h,
+                x + w,
+                y + h - tick,
+            );
+
+            leptos::view! {
+                <g opacity=opacity>
+                    <rect
+                        x=x
+                        y=y
+                        width=w
+                        height=h
+                        fill=fill
+                        stroke=stroke.clone()
+                        stroke-width=sw
+                        stroke-linejoin="miter"
+                        pointer-events="stroke"
+                    />
+                    <path
+                        d=ticks_d
+                        fill="none"
+                        stroke=stroke.clone()
+                        stroke-width=tick_sw
+                        stroke-linecap="square"
+                        opacity="0.65"
+                    />
+                    <text
+                        x=x
+                        y=y - badge_offset_y
+                        fill=stroke
+                        font-size=badge_font_size
+                        font-family="sans-serif"
+                        font-weight="600"
+                        style="user-select: none; pointer-events: none;"
+                        opacity="0.85"
+                    >
+                        {header_text}
+                    </text>
+                </g>
+            }
+            .into_view()
+        };
 
         let shape = if self.data.rotation == 0.0 {
             frame_body
@@ -348,6 +367,9 @@ impl Frame {
         let Some(layout) = super::embedded_text::layout_rectangle(&self.data) else {
             return shape;
         };
+        if !super::embedded_text::should_render_label(layout.font_size, zoom) {
+            return shape;
+        }
         let text = super::embedded_text::render_label(label, &layout, opacity);
         leptos::view! { <g>{shape}{text}</g> }.into_view()
     }

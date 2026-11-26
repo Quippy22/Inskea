@@ -186,8 +186,6 @@ fn collect_visible_chunk<'a>(
                 element: &stored.element,
                 origin,
                 order: stored.order,
-                revision: stored.revision,
-                bounds: stored.bounds,
             });
         }
     }
@@ -366,8 +364,6 @@ pub struct VisibleElement<'a> {
     pub element: &'a Element,
     pub origin: Point,
     pub order: u64,
-    pub revision: u64,
-    pub bounds: Rect,
 }
 
 /// Lightweight spatial-query entry for render caching and LOD filtering without
@@ -578,8 +574,6 @@ impl Scene {
                                 element: &stored.element,
                                 origin: chunk_origin(key),
                                 order: stored.order,
-                                revision: stored.revision,
-                                bounds: stored.bounds,
                             });
                         }
                     }
@@ -873,6 +867,7 @@ impl Scene {
 
     /// A counter that changes whenever `id`'s payload is written. Returns
     /// `None` for an element that is not in the scene.
+    #[cfg(test)]
     pub fn element_revision(&self, id: ElementId) -> Option<u64> {
         self.stored_element(id).map(|stored| stored.revision)
     }

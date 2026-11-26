@@ -508,8 +508,16 @@ impl UpdateDrag for Text {
     }
 }
 
+impl Text {
+    /// True when zoomed out far enough that glyphs fall below readable pixel
+    /// height and should render as a lightweight placeholder block instead.
+    pub(crate) fn is_simplified_lod(font_size: f64, zoom: f64) -> bool {
+        zoom < 0.65 && font_size * zoom < 3.5
+    }
+}
+
 impl Render for Text {
-    fn render(&self, _zoom: f64) -> leptos::View {
+    fn render(&self, zoom: f64) -> leptos::View {
         let font_size = self.data.style.font_size.max(MIN_FONT_SIZE);
         let font_family = FONT_STACK;
         let lines = &self.wrapped.lines;
@@ -521,6 +529,34 @@ impl Render for Text {
         // default style, but it is meaningless for glyphs and used to make
         // the swatches look dead.)
         let fill = self.data.style.stroke_color.to_hex();
+
+        if Self::is_simplified_lod(font_size, zoom) {
+            let vb = self.visual_bounds();
+            let bw = vb.w.max(2.0);
+            let bh = vb.h.max(2.0);
+            let rect_view = leptos::view! {
+                <rect
+                    x=vb.x
+                    y=vb.y
+                    width=bw
+                    height=bh
+                    rx=2.0
+                    fill=fill
+                    opacity=opacity * 0.45
+                    pointer-events="none"
+                />
+            }
+            .into_view();
+            return if self.data.rotation == 0.0 {
+                rect_view
+            } else {
+                let cx = x + self.data.width / 2.0;
+                let cy = self.data.world_point.y + self.data.height / 2.0;
+                let deg = self.data.rotation.to_degrees();
+                leptos::view! { <g transform=format!("rotate({} {} {})", deg, cx, cy)>{rect_view}</g> }
+                    .into_view()
+            };
+        }
 
         // Alignment anchors each line inside the box column: lines of
         // different widths drift against `anchor_x` per `text-anchor`.
@@ -1143,5 +1179,14 @@ mod tests {
         assert_eq!(first, measure_text_width("wrap me", 18.0, FONT_FAMILY));
         let extent = measure_text_extent("wrap me", 18.0, FONT_FAMILY);
         assert_eq!(extent.0, first);
+    }
+
+    #[test]
+    fn text_uses_simplified_lod_only_when_zoomed_out_below_readable_height() {
+        assert!(!Text::is_simplified_lod(16.0, 1.0));
+        assert!(!Text::is_simplified_lod(16.0, 0.45));
+        assert!(!Text::is_simplified_lod(3.0, 1.0));
+        assert!(Text::is_simplified_lod(12.0, 0.2));
+        assert!(Text::is_simplified_lod(20.0, 0.12));
     }
 }

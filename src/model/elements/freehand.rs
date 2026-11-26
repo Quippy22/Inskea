@@ -45,6 +45,36 @@ impl Freehand {
     }
 }
 
+/// Decimate dense strokes when zoomed out so sub-pixel vertices are omitted
+/// from the rendered SVG path without mutating the stored geometry.
+pub(crate) fn render_points_for_zoom<'a>(
+    points: &'a [Point],
+    zoom: f64,
+) -> std::borrow::Cow<'a, [Point]> {
+    if zoom >= 0.65 || points.len() <= 6 {
+        return std::borrow::Cow::Borrowed(points);
+    }
+    let eff_zoom = zoom.max(0.05);
+    let epsilon = (0.75 / eff_zoom).max(1.0);
+    let min_step = epsilon * 0.5;
+    let mut decimated = Vec::with_capacity(points.len() / 2 + 2);
+    decimated.push(points[0]);
+    let mut last = points[0];
+    for &p in &points[1..points.len() - 1] {
+        if (p.x - last.x).hypot(p.y - last.y) >= min_step {
+            decimated.push(p);
+            last = p;
+        }
+    }
+    if let Some(&end) = points.last() {
+        decimated.push(end);
+    }
+    if decimated.len() <= 2 {
+        return std::borrow::Cow::Owned(decimated);
+    }
+    std::borrow::Cow::Owned(simplify_points(&decimated, epsilon))
+}
+
 // ── Ramer–Douglas–Peucker simplification ───────────────────────────────
 
 fn simplify_points(points: &[Point], epsilon: f64) -> Vec<Point> {
@@ -129,17 +159,29 @@ impl UpdateDrag for Freehand {
 }
 
 impl Render for Freehand {
-    fn render(&self, _zoom: f64) -> leptos::View {
+    fn render(&self, zoom: f64) -> leptos::View {
         let sw = self.data.style.stroke_width;
         let stroke = self.data.style.stroke_color.to_hex();
-        let dash = self.data.style.stroke_style.stroke_dasharray();
+        let dash = if zoom < 0.25 {
+            ""
+        } else {
+            self.data.style.stroke_style.stroke_dasharray()
+        };
         let linejoin = self.data.style.edge_style.stroke_linejoin();
         let linecap = match self.data.style.edge_style {
             super::EdgeStyle::Sharp => "butt",
             super::EdgeStyle::Rounded => "round",
         };
         let opacity = self.data.style.opacity;
-        let d = build_smooth_path(&self.points);
+        let pts = render_points_for_zoom(&self.points, zoom);
+        let d = if zoom < 0.25 {
+            crate::model::elements::path::path_d(
+                &pts,
+                crate::model::elements::path::CurveMode::Straight,
+            )
+        } else {
+            build_smooth_path(&pts)
+        };
         leptos::view! {
             <path
                 d=d
@@ -331,5 +373,20 @@ mod tests {
             Point::new(20.0, 0.0),
         ]);
         assert_eq!(path, "M0 0 L5 10 Q10 20 15 10 L20 0");
+    }
+
+    #[test]
+    fn render_points_for_zoom_decimates_dense_strokes_only_when_zoomed_out() {
+        let dense: Vec<Point> = (0..100)
+            .map(|i| Point::new(i as f64 * 0.5, (i as f64 * 0.2).sin() * 0.2))
+            .collect();
+
+        let full = render_points_for_zoom(&dense, 1.0);
+        assert_eq!(full.len(), dense.len());
+
+        let low = render_points_for_zoom(&dense, 0.12);
+        assert!(low.len() < dense.len() / 2);
+        assert_eq!(low.first(), dense.first());
+        assert_eq!(low.last(), dense.last());
     }
 }

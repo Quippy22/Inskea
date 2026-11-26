@@ -1200,28 +1200,32 @@ pub fn Canvas(
         }
     };
 
-    // The visible set is keyed by both identity and revision. Changing the key
-    // replaces only the SVG node whose payload changed, including every member
-    // of a multi-element transform. This keeps unchanged visible nodes intact
-    // without depending on nested child memos to observe a batch scene write.
+    // The visible set is keyed by identity, revision, and discrete LOD tier.
+    // Changing the key replaces only the SVG node whose payload or LOD tier
+    // changed, including every member of a multi-element transform. This keeps
+    // unchanged visible nodes intact during panning and intra-tier zooming.
     let visible_ids = {
         let props = props.clone();
         let editing_id = st.text_edit.editing_id;
         let editing_embedded = st.text_edit.editing_embedded;
         let screen_size = st.screen_size;
         let cache = std::cell::RefCell::new(VisibleWindowCache::default());
-        create_memo(move |prev: Option<&Vec<(ElementId, u32, u64)>>| {
+        create_memo(move |prev: Option<&Vec<(ElementId, u32, u64, u8)>>| {
             let editing = editing_id.get();
             let embedded = editing_embedded.get();
-            let view_rect = props.viewport.get().visible_rect(screen_size.get());
+            let vp = props.viewport.get();
+            let zoom = vp.effective_zoom();
+            let view_rect = vp.visible_rect(screen_size.get());
             props.scene.with(|scene| {
                 let mut cache = cache.borrow_mut();
-                if cache.is_valid(scene, view_rect, editing, embedded) {
+                if cache.is_valid(scene, view_rect, zoom, editing, embedded) {
                     if let Some(prev) = prev {
                         return prev.clone();
                     }
                 }
-                cache.update(scene, view_rect, editing, embedded).to_vec()
+                cache
+                    .update(scene, view_rect, zoom, editing, embedded)
+                    .to_vec()
             })
         })
     };
@@ -1280,12 +1284,13 @@ pub fn Canvas(
                 view! {
                     <For
                         each=move || visible_ids.get()
-                        key=|(id, generation, revision)| (*id, *generation, *revision)
-                        children=move |(id, _generation, _revision): (ElementId, u32, u64)| {
+                        key=|(id, generation, revision, lod)| (*id, *generation, *revision, *lod)
+                        children=move |(id, _generation, _revision, lod): (ElementId, u32, u64, u8)| {
                             let props = props.clone();
                             let editing_id = editing_id;
                             let editing_embedded = editing_embedded;
                             let edit_text = edit_text;
+                            let lod_zoom = crate::model::elements::LodTier::from_u8(lod).render_zoom();
                             view! {
                                 {move || {
                                     let editing = editing_id.get() == Some(id);
@@ -1341,7 +1346,7 @@ pub fn Canvas(
                                                     };
                                                     view! {
                                                         <g transform=transform pointer-events="none">
-                                                            {element.render(1.0)}
+                                                            {element.render(lod_zoom)}
                                                         </g>
                                                     }
                                                         .into_view()
@@ -1395,10 +1400,12 @@ struct VisibleWindowCache {
     overscan: Option<Rect>,
     scene_generation: u32,
     scene_version: u64,
+    lod_tier: u8,
+    subpixel_zoom: f64,
     editing: Option<ElementId>,
     embedded: bool,
     scratch: Vec<VisibleKey>,
-    ids: Vec<(ElementId, u32, u64)>,
+    ids: Vec<(ElementId, u32, u64, u8)>,
 }
 
 impl VisibleWindowCache {
@@ -1406,11 +1413,21 @@ impl VisibleWindowCache {
         &self,
         scene: &Scene,
         view_rect: Rect,
+        zoom: f64,
         editing: Option<ElementId>,
         embedded: bool,
     ) -> bool {
+        let lod = crate::model::elements::LodTier::from_zoom(zoom).as_u8();
+        let zoom_ok = if zoom >= 0.65 {
+            self.lod_tier == lod
+        } else {
+            self.lod_tier == lod
+                && self.subpixel_zoom > 0.0
+                && (zoom - self.subpixel_zoom).abs() / self.subpixel_zoom <= 0.12
+        };
         self.overscan.is_some_and(|cached| {
-            self.scene_generation == scene.render_generation()
+            zoom_ok
+                && self.scene_generation == scene.render_generation()
                 && self.scene_version == scene.mutation_version()
                 && self.editing == editing
                 && self.embedded == embedded
@@ -1424,11 +1441,13 @@ impl VisibleWindowCache {
         &mut self,
         scene: &Scene,
         view_rect: Rect,
+        zoom: f64,
         editing: Option<ElementId>,
         embedded: bool,
-    ) -> &[(ElementId, u32, u64)] {
+    ) -> &[(ElementId, u32, u64, u8)] {
         let gen = scene.render_generation();
         let ver = scene.mutation_version();
+        let lod = crate::model::elements::LodTier::from_zoom(zoom).as_u8();
         let pad = (view_rect.w.min(view_rect.h) * 0.25).max(120.0);
         let visible = view_rect.padded(pad);
         scene.visible_keys_into(visible, &mut self.scratch);
@@ -1436,12 +1455,19 @@ impl VisibleWindowCache {
         self.ids.extend(
             self.scratch
                 .iter()
-                .filter(|entry| Some(entry.id) != editing || embedded)
-                .map(|entry| (entry.id, gen, entry.revision)),
+                .filter(|entry| {
+                    if Some(entry.id) == editing {
+                        return embedded;
+                    }
+                    !crate::model::elements::LodTier::is_subpixel(entry.bounds, zoom)
+                })
+                .map(|entry| (entry.id, gen, entry.revision, lod)),
         );
         self.overscan = Some(visible);
         self.scene_generation = gen;
         self.scene_version = ver;
+        self.lod_tier = lod;
+        self.subpixel_zoom = zoom;
         self.editing = editing;
         self.embedded = embedded;
         &self.ids
@@ -1474,24 +1500,53 @@ mod tests {
 
         let mut cache = VisibleWindowCache::default();
         let view1 = Rect::new(0.0, 0.0, 400.0, 400.0);
-        assert!(!cache.is_valid(&scene, view1, None, false));
-        let first: Vec<_> = cache.update(&scene, view1, None, false).to_vec();
+        assert!(!cache.is_valid(&scene, view1, 1.0, None, false));
+        let first: Vec<_> = cache.update(&scene, view1, 1.0, None, false).to_vec();
         assert_eq!(first.len(), 1);
         assert_eq!(first[0].0, 1);
 
         // Small pan inside the overscan margin stays valid.
         let view2 = Rect::new(20.0, 20.0, 400.0, 400.0);
-        assert!(cache.is_valid(&scene, view2, None, false));
+        assert!(cache.is_valid(&scene, view2, 1.0, None, false));
 
         // Any scene mutation invalidates the cache.
         scene.translate_element(1, 5.0, 0.0);
-        assert!(!cache.is_valid(&scene, view2, None, false));
+        assert!(!cache.is_valid(&scene, view2, 1.0, None, false));
 
         // Refreshing picks up the new revision; panning far brings r2 into view.
-        let _ = cache.update(&scene, view2, None, false);
+        let _ = cache.update(&scene, view2, 1.0, None, false);
         let view3 = Rect::new(450.0, 450.0, 400.0, 400.0);
-        assert!(!cache.is_valid(&scene, view3, None, false));
-        let third = cache.update(&scene, view3, None, false);
+        assert!(!cache.is_valid(&scene, view3, 1.0, None, false));
+        let third = cache.update(&scene, view3, 1.0, None, false);
         assert_eq!(third.iter().map(|e| e.0).collect::<Vec<_>>(), vec![2]);
+    }
+
+    #[test]
+    fn visible_window_cache_skips_subpixel_elements_at_low_zoom() {
+        let mut scene = Scene::new();
+        let tiny = Rectangle::from_drag(
+            Point::new(10.0, 10.0),
+            Point::new(13.0, 13.0),
+            Color::default(),
+            false,
+        );
+        let large = Rectangle::from_drag(
+            Point::new(50.0, 50.0),
+            Point::new(250.0, 250.0),
+            Color::default(),
+            false,
+        );
+        scene.add_element(Element::Rectangle(tiny));
+        scene.add_element(Element::Rectangle(large));
+
+        let mut cache = VisibleWindowCache::default();
+        let view = Rect::new(0.0, 0.0, 2000.0, 2000.0);
+        // At 1.0x zoom both are visible.
+        assert_eq!(cache.update(&scene, view, 1.0, None, false).len(), 2);
+        // At 0.1x zoom, the 3x3 tiny rect (0.3px on screen) is culled.
+        let low = cache.update(&scene, view, 0.1, None, false);
+        assert_eq!(low.len(), 1);
+        assert_eq!(low[0].0, 2);
+        assert_eq!(low[0].3, crate::model::elements::LodTier::Minimal.as_u8());
     }
 }
