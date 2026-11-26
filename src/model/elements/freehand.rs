@@ -51,11 +51,11 @@ pub(crate) fn render_points_for_zoom<'a>(
     points: &'a [Point],
     zoom: f64,
 ) -> std::borrow::Cow<'a, [Point]> {
-    if zoom >= 0.65 || points.len() <= 6 {
+    if zoom >= super::LodTier::FULL_DETAIL_ZOOM || points.len() <= 6 {
         return std::borrow::Cow::Borrowed(points);
     }
     let eff_zoom = zoom.max(0.05);
-    let epsilon = (0.75 / eff_zoom).max(1.0);
+    let epsilon = (1.5 / eff_zoom).max(1.5);
     let min_step = epsilon * 0.5;
     let mut decimated = Vec::with_capacity(points.len() / 2 + 2);
     decimated.push(points[0]);
@@ -162,7 +162,7 @@ impl Render for Freehand {
     fn render(&self, zoom: f64) -> leptos::View {
         let sw = self.data.style.stroke_width;
         let stroke = self.data.style.stroke_color.to_hex();
-        let dash = if zoom < 0.25 {
+        let dash = if zoom < 0.45 {
             ""
         } else {
             self.data.style.stroke_style.stroke_dasharray()
@@ -174,7 +174,7 @@ impl Render for Freehand {
         };
         let opacity = self.data.style.opacity;
         let pts = render_points_for_zoom(&self.points, zoom);
-        let d = if zoom < 0.25 {
+        let d = if zoom < 0.45 {
             crate::model::elements::path::path_d(
                 &pts,
                 crate::model::elements::path::CurveMode::Straight,

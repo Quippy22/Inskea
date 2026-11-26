@@ -248,7 +248,8 @@ impl Frame {
         let stroke = self.data.style.stroke_color.to_hex();
         let opacity = self.data.style.opacity;
 
-        let simplified = zoom < 0.65 && (w * zoom < 24.0 || h * zoom < 24.0);
+        let simplified =
+            zoom < super::LodTier::FULL_DETAIL_ZOOM && (w * zoom < 48.0 || h * zoom < 48.0);
         let frame_body = if simplified {
             leptos::view! {
                 <rect

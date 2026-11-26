@@ -512,13 +512,22 @@ impl Text {
     /// True when zoomed out far enough that glyphs fall below readable pixel
     /// height and should render as a lightweight placeholder block instead.
     pub(crate) fn is_simplified_lod(font_size: f64, zoom: f64) -> bool {
-        zoom < 0.65 && font_size * zoom < 3.5
+        zoom < super::LodTier::FULL_DETAIL_ZOOM && font_size * zoom < 8.5
+    }
+
+    /// True when zoomed out so far that even a placeholder block is too tiny
+    /// to contribute anything visible (< 2.5px tall on screen).
+    pub(crate) fn is_culled_lod(font_size: f64, zoom: f64) -> bool {
+        zoom < super::LodTier::FULL_DETAIL_ZOOM && font_size * zoom < 2.5
     }
 }
 
 impl Render for Text {
     fn render(&self, zoom: f64) -> leptos::View {
         let font_size = self.data.style.font_size.max(MIN_FONT_SIZE);
+        if Self::is_culled_lod(font_size, zoom) {
+            return ().into_view();
+        }
         let font_family = FONT_STACK;
         let lines = &self.wrapped.lines;
         let x = self.data.world_point.x;
@@ -1184,9 +1193,11 @@ mod tests {
     #[test]
     fn text_uses_simplified_lod_only_when_zoomed_out_below_readable_height() {
         assert!(!Text::is_simplified_lod(16.0, 1.0));
-        assert!(!Text::is_simplified_lod(16.0, 0.45));
+        assert!(!Text::is_simplified_lod(24.0, 0.50));
+        assert!(Text::is_simplified_lod(16.0, 0.50));
         assert!(!Text::is_simplified_lod(3.0, 1.0));
-        assert!(Text::is_simplified_lod(12.0, 0.2));
-        assert!(Text::is_simplified_lod(20.0, 0.12));
+        assert!(Text::is_simplified_lod(16.0, 0.25));
+        assert!(!Text::is_culled_lod(16.0, 0.25));
+        assert!(Text::is_culled_lod(16.0, 0.12));
     }
 }

@@ -1012,7 +1012,9 @@ impl Chart {
 
     fn render_inner(&self, show_label: bool, zoom: f64) -> leptos::View {
         let opacity = self.data.style.opacity;
-        if zoom < 0.65 && (self.data.width * zoom < 28.0 || self.data.height * zoom < 28.0) {
+        if zoom < super::LodTier::FULL_DETAIL_ZOOM
+            && (self.data.width * zoom < 64.0 || self.data.height * zoom < 64.0)
+        {
             let x = self.data.world_point.x;
             let y = self.data.world_point.y;
             let w = self.data.width;

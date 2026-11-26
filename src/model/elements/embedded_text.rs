@@ -11,12 +11,12 @@ const SHAPE_HEIGHT_RATIO: f64 = 0.8;
 const ELLIPSE_WIDTH_RATIO: f64 = 0.68;
 const ELLIPSE_HEIGHT_RATIO: f64 = 0.68;
 const MIN_EMBEDDED_FONT_SIZE: f64 = 6.0;
-const MIN_READABLE_TEXT_PX: f64 = 3.5;
+const MIN_READABLE_TEXT_PX: f64 = 8.5;
 
 /// False when zoomed out far enough that an embedded label's glyphs are too
 /// small on screen to read, allowing renderers to skip text & label masks.
 pub fn should_render_label(font_size: f64, zoom: f64) -> bool {
-    zoom >= 0.65 || font_size * zoom >= MIN_READABLE_TEXT_PX
+    zoom >= super::LodTier::FULL_DETAIL_ZOOM || font_size * zoom >= MIN_READABLE_TEXT_PX
 }
 
 /// Resolved position and wrapping for a label in the host element's current

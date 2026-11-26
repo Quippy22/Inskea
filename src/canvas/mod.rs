@@ -1418,7 +1418,7 @@ impl VisibleWindowCache {
         embedded: bool,
     ) -> bool {
         let lod = crate::model::elements::LodTier::from_zoom(zoom).as_u8();
-        let zoom_ok = if zoom >= 0.65 {
+        let zoom_ok = if zoom >= crate::model::elements::LodTier::FULL_DETAIL_ZOOM {
             self.lod_tier == lod
         } else {
             self.lod_tier == lod

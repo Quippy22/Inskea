@@ -329,20 +329,22 @@ pub trait Render {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum LodTier {
-    /// Zoom >= 0.65: full SVG detail.
+    /// Zoom >= 0.85: full SVG detail.
     Full = 0,
-    /// 0.30 <= zoom < 0.65: hide tiny labels, light freehand decimation.
+    /// 0.45 <= zoom < 0.85: simplify small text, hide small labels, light freehand decimation.
     Medium = 1,
-    /// 0.15 <= zoom < 0.30: placeholder text blocks, simplified freehand & charts.
+    /// 0.20 <= zoom < 0.45: placeholder text blocks, polyline freehand & simplified charts/frames.
     Low = 2,
-    /// zoom < 0.15: polyline freehand, minimal detail.
+    /// zoom < 0.20: aggressive culling and minimal detail.
     Minimal = 3,
 }
 
 impl LodTier {
+    /// Zoom below which LOD simplifications and sub-pixel culling become active.
+    pub const FULL_DETAIL_ZOOM: f64 = 0.85;
     /// Minimum screen-space extent (in pixels) for an element to remain visible
     /// when zoomed out below full detail.
-    pub const MIN_VISIBLE_PX: f64 = 0.75;
+    pub const MIN_VISIBLE_PX: f64 = 2.0;
 
     pub fn from_zoom(zoom: f64) -> Self {
         let zoom = if zoom.is_finite() && zoom > 0.0 {
@@ -350,11 +352,11 @@ impl LodTier {
         } else {
             1.0
         };
-        if zoom >= 0.65 {
+        if zoom >= Self::FULL_DETAIL_ZOOM {
             Self::Full
-        } else if zoom >= 0.30 {
+        } else if zoom >= 0.45 {
             Self::Medium
-        } else if zoom >= 0.15 {
+        } else if zoom >= 0.20 {
             Self::Low
         } else {
             Self::Minimal
@@ -375,8 +377,8 @@ impl LodTier {
     pub fn render_zoom(self) -> f64 {
         match self {
             Self::Full => 1.0,
-            Self::Medium => 0.45,
-            Self::Low => 0.22,
+            Self::Medium => 0.50,
+            Self::Low => 0.25,
             Self::Minimal => 0.12,
         }
     }
@@ -388,7 +390,7 @@ impl LodTier {
     /// True when `bounds` shrinks below `MIN_VISIBLE_PX` in both dimensions at
     /// a zoomed-out `zoom`.
     pub fn is_subpixel(bounds: Rect, zoom: f64) -> bool {
-        zoom < 0.65 && bounds.w.max(bounds.h) * zoom < Self::MIN_VISIBLE_PX
+        zoom < Self::FULL_DETAIL_ZOOM && bounds.w.max(bounds.h) * zoom < Self::MIN_VISIBLE_PX
     }
 }
 
