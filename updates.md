@@ -1,5 +1,11 @@
 # What's New in Inskea
 
+## v3.3.0
+### Spatial Indexing & Zoomed-Out Performance
+- Zoomed-out Level-of-Detail (LOD): Automatically culls sub-pixel elements and tiny text, replaces small text with lightweight placeholders, decimates dense freehand strokes, and simplifies miniature frames and charts when zoomed out.
+- Faster spatial queries: Hit-testing, marquee selection, frame containment, and smart-guide target collection query spatial chunks directly without cloning elements.
+- Smoother panning: Cached chunk bounds, overscan visible-window caching, and buffer reuse eliminate per-frame allocations during pan and zoom.
+
 ## v3.2.1
 ### Canvas & Text Editing Improvements
 - Text editing shortcuts: Double-click or press `Ctrl+T` to edit text elements on the canvas.
